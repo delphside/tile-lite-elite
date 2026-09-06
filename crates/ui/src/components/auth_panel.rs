@@ -74,7 +74,7 @@ fn submit_login_or_register(
     let stay = stay_logged_in();
 
     if name.is_empty() || password_value.is_empty() {
-        error_message.set(Some("Display name and password are required".to_string()));
+        error_message.set(Some("User ID and password are required".to_string()));
         return;
     }
     if mode_value == AuthMode::Register && email_value.is_empty() {
@@ -222,7 +222,7 @@ pub fn AuthPanel(
                         div { class: "edit-details-section",
                             input {
                                 class: "auth-input",
-                                placeholder: "Display name",
+                                placeholder: "User ID",
                                 value: "{edit_display_name_input}",
                                 oninput: move |event| edit_display_name_input.set(event.value()),
                             }
@@ -262,7 +262,7 @@ pub fn AuthPanel(
                                             let new_email = edit_email_input().trim().to_string();
 
                                             if new_display_name.is_empty() || new_email.is_empty() {
-                                                edit_details_error.set(Some("Display name and email cannot be blank".to_string()));
+                                                edit_details_error.set(Some("User ID and email cannot be blank".to_string()));
                                                 return;
                                             }
 
@@ -469,7 +469,7 @@ pub fn AuthPanel(
                 },
                 input {
                     class: "auth-input",
-                    placeholder: "Display name",
+                    placeholder: "User ID",
                     autocomplete: "username",
                     value: "{display_name}",
                     oninput: move |event| display_name.set(event.value()),
@@ -494,7 +494,7 @@ pub fn AuthPanel(
 
                 label {
                     class: "auth-checkbox-label",
-                    title: "Pre-fills your display name next time you log in. Doesn't keep you signed in or store your password.",
+                    title: "Pre-fills your User ID next time you log in. Doesn't keep you signed in or store your password.",
                     input {
                         r#type: "checkbox",
                         checked: remember_me(),

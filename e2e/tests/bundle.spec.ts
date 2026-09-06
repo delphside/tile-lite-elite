@@ -54,7 +54,7 @@ test('an idle tab notices a new bundle as soon as it interacts', async ({ page, 
 
   // The interaction. Registering is the first thing that talks to the server.
   await page.locator('.auth-panel-tabs button', { hasText: 'Register' }).click();
-  await page.getByPlaceholder('Display name').fill(uniqueName('b67'));
+  await page.getByPlaceholder('User ID').fill(uniqueName('b67'));
   await page.getByPlaceholder('Email').fill('b67@e2e.test');
   await page.getByPlaceholder('Password', { exact: true }).fill(TEST_PASSWORD);
   await page.locator('form.auth-form').getByRole('button', { name: 'Register', exact: true }).click();
