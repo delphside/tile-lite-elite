@@ -10,7 +10,7 @@ pub(crate) async fn register_player(
     let email = request.email.trim();
     if display_name.is_empty() || email.is_empty() || request.password.is_empty() {
         return Err(ApiProblem::bad_request(
-            "Display name, email, and password are all required",
+            "User ID, email, and password are all required",
         ));
     }
 
@@ -19,9 +19,7 @@ pub(crate) async fn register_player(
         .map_err(ApiProblem::from_sqlx)?
         .is_some()
     {
-        return Err(ApiProblem::bad_request(
-            "That display name is already taken",
-        ));
+        return Err(ApiProblem::bad_request("That User ID is already taken"));
     }
 
     let password_hash = hash_password_bounded(&state, &request.password).await?;
@@ -269,7 +267,7 @@ pub(crate) async fn update_player_details(
         .as_deref()
         .is_some_and(|value| value.trim().is_empty())
     {
-        return Err(ApiProblem::bad_request("Display name cannot be blank"));
+        return Err(ApiProblem::bad_request("User ID cannot be blank"));
     }
     if request
         .email
@@ -293,9 +291,7 @@ pub(crate) async fn update_player_details(
             .map_err(ApiProblem::from_sqlx)?
         && existing.id != player_id
     {
-        return Err(ApiProblem::bad_request(
-            "That display name is already taken",
-        ));
+        return Err(ApiProblem::bad_request("That User ID is already taken"));
     }
 
     persistence::update_player_details(&state.db, &player_id, display_name, email)

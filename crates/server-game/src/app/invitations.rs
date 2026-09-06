@@ -96,7 +96,7 @@ pub(crate) async fn invite_player_to_game(
 
     if request.invited_display_name.is_some() && request.invited_email.is_some() {
         return Err(ApiProblem::bad_request(
-            "An invitation can target a display name or an email, not both",
+            "An invitation can target a User ID or an email, not both",
         ));
     }
 

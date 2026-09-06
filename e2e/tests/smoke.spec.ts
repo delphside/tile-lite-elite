@@ -178,7 +178,7 @@ test('the auth modal comes back empty when a session ends', async ({ page }) => 
 
   await expect(page.getByPlaceholder('Password', { exact: true })).toHaveValue('');
   // "Remember me" was never ticked, so nothing is asking the name to stay.
-  await expect(page.getByPlaceholder('Display name')).toHaveValue('');
+  await expect(page.getByPlaceholder('User ID')).toHaveValue('');
   // Email exists only on the Register tab, which the reset also returns from.
   await authTab(page, 'Register').click();
   await expect(page.getByPlaceholder('Email')).toHaveValue('');
