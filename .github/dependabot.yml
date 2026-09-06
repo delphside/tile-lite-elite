@@ -1,0 +1,19 @@
+# Watches the GitHub Actions we pin, and nothing else — #297 R2.
+#
+# **The `cargo` ecosystem is deliberately absent.** R2 asks about actions that
+# have moved on without us. Dependabot on crates would open pull requests for
+# routine version drift nobody asked for, and crates are watched by
+# `.github/workflows/advisories.yml`, which reports on advisories rather than on
+# newness. Two mechanisms, one question each.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      # CI refuses a subject without both versions (docs/3.3 §2.7.1). Dependabot
+      # cannot know them, so the prefix is fixed here and the versions are
+      # corrected by whoever takes the pull request.
+      prefix: "app 0.0.0 api 0.0"
+    open-pull-requests-limit: 3
