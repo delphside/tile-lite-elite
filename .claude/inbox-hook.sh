@@ -47,9 +47,35 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
   }
 ')"
 
-[[ -z "$SUMMARY" ]] && exit 0
+# **What is waiting on Claude, and what does not add up** — #347 R2. The two
+# tools that answer this were wired to nothing: `actions.py --claude` was in no
+# hook at all, and `check-transitions.sh` was reachable only by hand or through
+# `verify.sh`, where it is a `note` and `CLAUDE.md`:82 says to trust the exit
+# status rather than read the output. Following the process exactly meant never
+# seeing either.
+#
+# **In parallel**, because three sequential calls measured 16s against a 30s
+# timeout and a slow GitHub would eat the margin. Each is separately guarded:
+# one failing leaves the others, and all of them failing leaves the inbox
+# summary, which is what this hook did before.
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+( timeout 20 ./scripts/actions.py --claude 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' > "$TMP/actions" ) &
+( timeout 20 ./scripts/check-transitions.sh 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' > "$TMP/trans" ) &
+wait
 
-printf '%s' "$SUMMARY" | python3 -c '
+# Only the findings. A clean run says "every open issue has done the work its
+# field claims", which is worth nothing in context and would be repeated into
+# every later turn of the session.
+TRANS="$(grep -E '^\s+#[0-9]+' "$TMP/trans" 2>/dev/null | head -20 || true)"
+ACTIONS="$(sed '/^\s*$/d' "$TMP/actions" 2>/dev/null | head -40 || true)"
+
+EXTRA=""
+[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/actions.py --claude for the detail):"$'\n'"$ACTIONS"
+[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Further along than their content supports (./scripts/check-transitions.sh):"$'\n'"$TRANS"
+
+[[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
+
+printf '%s' "$SUMMARY$EXTRA" | python3 -c '
 import sys, json
 t = sys.stdin.read().strip()
 if t:

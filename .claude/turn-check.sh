@@ -34,7 +34,13 @@ RESEED=0
 BODIES_ONLY=0
 PRINT_FILTER=0
 [[ "${1:-}" == "--reseed" ]] && RESEED=1
-[[ "${1:-}" == "--reseed-bodies" ]] && { RESEED=1; BODIES_ONLY=1; }
+# Records everything Claude may have changed during a turn — pull request
+# bodies *and* issue fields — without touching the comment clock. Both have the
+# same failure if they are not recorded here: Claude sets a `Decision State`,
+# and the next turn reports it back as though the owner had. The name is kept
+# because `settings.json` is gitignored and invoking it differently would mean
+# a by-hand change on every machine.
+[[ "${1:-}" == "--reseed-bodies" || "${1:-}" == "--reseed-fields" ]] && { RESEED=1; BODIES_ONLY=1; }
 [[ "${1:-}" == "--print-filter" ]] && PRINT_FILTER=1
 
 NOW="$(date -u +%s)"
@@ -100,15 +106,98 @@ if [[ -f "$HASHES" && -n "$CURRENT" ]]; then
 fi
 [[ -n "$CURRENT" ]] && printf '%s\n' "$CURRENT" > "$HASHES"
 
-# --reseed-bodies stops here: the hashes are recorded, the comment clock is not
-# touched, and nothing is reported.
+# **Fields, because a field is how the owner says it is Claude's turn.** On
+# 2026-09-07 he moved #332 to `Decided` and #337 to `Feedback Provided` while
+# Claude worked, and neither was noticed: this script watched comments and
+# bodies, and reported PR #341's body twice the same afternoon. `Decision State`
+# is a field, and a field change produces no comment and no body edit. #347 R1.
+#
+# Only the two that say *whose turn it is*. `Workstream` or `Priority` moving is
+# bookkeeping; `Decision State` reaching `Decided` means applying is due.
+FIELDS=".claude/.field-state"
+NWO="$(cat .claude/.gh-repo 2>/dev/null)"
+if [[ -z "$NWO" ]]; then
+  NWO="$(timeout 10 gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)"
+  [[ -n "$NWO" ]] && printf '%s' "$NWO" > .claude/.gh-repo
+fi
+
+FIELDS_NOW=""
+if [[ -n "$NWO" ]]; then
+  FIELDS_NOW="$(timeout 15 gh api graphql -f query="{repository(owner:\"${NWO%%/*}\",name:\"${NWO##*/}\"){issues(first:100,states:OPEN){nodes{number issueFieldValues(first:20){nodes{... on IssueFieldSingleSelectValue{field{... on IssueFieldSingleSelect{name}} name}}}}}}}" \
+    --jq '.data.repository.issues.nodes[]
+          | . as $i
+          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Decision State")|.name][0] // "-") as $d
+          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Phase")|.name][0] // "-") as $p
+          | "\($i.number)\t\($d)\t\($p)"' 2>/dev/null)"
+fi
+
+MOVED=""
+if [[ -f "$FIELDS" && -n "$FIELDS_NOW" ]]; then
+  while IFS=$'\t' read -r num d p; do
+    [[ -n "$num" ]] || continue
+    old_line="$(grep -P "^$num\t" "$FIELDS" 2>/dev/null || true)"
+    # A new issue has no previous line. Reporting it as a transition would
+    # announce every issue Claude just raised, so absence is not a change.
+    [[ -n "$old_line" ]] || continue
+    old_d="$(printf '%s' "$old_line" | cut -f2)"
+    old_p="$(printf '%s' "$old_line" | cut -f3)"
+    [[ "$old_d" != "$d" ]] && MOVED="$MOVED  #$num  Decision State: $old_d -> $d"$'\n'
+    [[ "$old_p" != "$p" ]] && MOVED="$MOVED  #$num  Phase: $old_p -> $p"$'\n'
+  done <<< "$FIELDS_NOW"
+fi
+[[ -n "$FIELDS_NOW" ]] && printf '%s\n' "$FIELDS_NOW" > "$FIELDS"
+
+# **The long-session sweep** — #347 R3. `SessionStart` runs the full sweep once,
+# and a session that lasts hours would otherwise never look again. Today's ran
+# from morning to evening.
+#
+# **A pointer, not a payload.** What was missing is the *trigger to look*, so
+# this emits two counts and the command to run. Repeating the full listing every
+# two hours would put the same wall of text into context repeatedly, which is
+# the failure `inbox-hook.sh`'s own summary was written to avoid.
+#
+# **Guarded to 12s and silent on timeout.** It runs alongside the calls above
+# against the hook's own budget, and a sweep that could delay a turn is worse
+# than one that occasionally skips: the next turn past the interval tries again.
+SWEEP=".claude/.sweep-state"
+SWEEP_EVERY="${TURN_CHECK_SWEEP_SECS:-7200}"
+SWEPT=""
+if (( ! RESEED && ! PRINT_FILTER )); then
+  LAST_SWEEP=0
+  [[ -f "$SWEEP" ]] && LAST_SWEEP="$(stat -c %Y "$SWEEP" 2>/dev/null || echo 0)"
+  if (( NOW - LAST_SWEEP >= SWEEP_EVERY )); then
+    SDIR="$(mktemp -d)"
+    ( timeout 12 ./scripts/actions.py --claude 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' \
+        | grep -cE '^ +-' > "$SDIR/a" ) 2>/dev/null &
+    ( timeout 12 ./scripts/check-transitions.sh 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' \
+        | grep -cE '^\s+#[0-9]+' > "$SDIR/t" ) 2>/dev/null &
+    wait
+    A="$(cat "$SDIR/a" 2>/dev/null || echo 0)"; T="$(cat "$SDIR/t" 2>/dev/null || echo 0)"
+    rm -rf "$SDIR"
+    # Only when there is something. A sweep that reports "0 and 0" every two
+    # hours is noise with a schedule.
+    if [[ "$A" =~ ^[0-9]+$ && "$T" =~ ^[0-9]+$ ]] && (( A + T > 0 )); then
+      SWEPT="  $A action(s) waiting on you, $T issue(s) further along than their content supports"$'\n'
+      SWEPT="$SWEPT  ./scripts/actions.py --claude   ./scripts/check-transitions.sh"$'\n'
+    fi
+    touch "$SWEEP"
+  fi
+fi
+
+# --reseed-bodies stops here: bodies and fields are recorded, the comment clock
+# is not touched, and nothing is reported.
 (( BODIES_ONLY )) && exit 0
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$STATE"
 
 (( RESEED )) && exit 0
-[[ -z "$NEW" && -z "$EDITED" ]] && exit 0
+[[ -z "$NEW" && -z "$EDITED" && -z "$MOVED" && -z "$SWEPT" ]] && exit 0
 
 echo "New on GitHub since the last check (Steve's, not yours) — reply where it was said, not here:"
 [[ -n "$NEW" ]] && echo "$NEW"
 [[ -n "$EDITED" ]] && printf '%s' "$EDITED"
+# Last, and labelled, because it is the one that calls for an act rather than a
+# reply: `Decided` means applying is due, `Feedback Provided` means a response
+# and the written decision are owed.
+[[ -n "$MOVED" ]] && { echo "Fields moved — this is the owner saying it is your turn:"; printf '%s' "$MOVED"; }
+[[ -n "$SWEPT" ]] && { echo "Periodic sweep:"; printf '%s' "$SWEPT"; }
