@@ -14,23 +14,27 @@ name: Docs
 # It needs no secrets. `GITHUB_TOKEN` is enough, and Actions minutes are free
 # on a public repository.
 #
-# **One footgun, in the third job.** `issue_comment` workflows always run the
-# copy of this file on the **default branch**, never the one in the pull
-# request. Changes to the command handling take effect only after they merge —
-# so a command tested on a branch will appear not to work, and the branch is
-# not the reason.
+# **There was a third job, handling comment commands, and an `issue_comment`
+# trigger for it.** Both were removed; the trigger was left behind and fired a
+# workflow run on every comment in which every job skipped, because the one
+# remaining job requires a `pull_request` event. Removed 2026-09-07 — #339 R4.
+#
+# The reason that job was awkward is worth keeping and now lives in
+# `docs/3.3` §2.5.2: `issue_comment` workflows always run the copy of the file
+# on the **default branch**, never the one in the pull request.
 
 on:
+  # **No `paths:` filter, deliberately.** There was one, listing `docs/**` and
+  # `*.md`, left from when this file also ran lint, links and placement. Those
+  # moved to CI and the filter stayed — so a pull request touching only
+  # `crates/` or `scripts/` got **no `review-checklist` run at all**: not a
+  # pass, no run. A review checklist is about the pull request *body*, which
+  # has nothing to do with which files changed. #339 R3.
+  #
+  # It never showed because every pull request to date happened to touch
+  # `docs/`. That is luck, not design.
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
-    paths:
-      - 'docs/**'
-      - '*.md'
-      - '.markdownlint.jsonc'
-      - 'scripts/check-doc*'
-      - '.github/workflows/docs.yml'
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: read
