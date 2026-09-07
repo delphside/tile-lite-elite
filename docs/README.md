@@ -68,6 +68,30 @@ can't drift the way a hand-maintained list would.
 - [4.8 Artefacts](4.8-artefacts.md) — the register of things under change control that leave no trace in git: host files, cloud resources, GitHub objects. Also the answer to *what else was on that box?*
 - [4.9 Delivery log](4.9-delivery-log.md) — one row per delivery: what changed in production and when. Starts at #174; earlier deliveries are recoverable from the `prod-*` tags.
 
+## Who each group is for
+
+**Every section has an audience and a use case, and they decide what belongs in
+it.** The test for a sentence is not *is this true* — it is *would this reader
+do the wrong thing without it*.
+
+| group | who is reading | what they are doing | so it carries | and leaves out |
+| --- | --- | --- | --- | --- |
+| **1.x** | somebody new to the system, or deciding scope | working out what the thing is and where it is going | the current shape, and the direction | how it came to be this way |
+| **2.x** | whoever is about to change a subsystem | making a change without rediscovering the model | the model, its constraints, and what the constraints cost | step-by-step instructions, which belong in 3.x |
+| **3.x** | whoever is at a process step **now** — and a future project reusing the process | doing the next step correctly, under time pressure | the command or the rule first, the reasoning below it | anything that delays the reader in a hurry. The portable rule stays separable from this project's answer to it |
+| **4.x** | somebody who already knows what they want | looking one fact up and leaving | every value, complete and current, with a freshness stamp | reasoning of any kind |
+
+**The one that is easiest to get wrong is 3.x**, because the same document
+serves somebody shipping in ten minutes and somebody deciding whether the
+process is right. `docs/3.3` splits them by part — *what to type*, then *the
+process and why it is shaped this way*, then *notes and incidents* — rather
+than by mixing them paragraph to paragraph.
+
+**Brevity is not a style preference here, it is the use case.** A reader in the
+middle of a release pays for every sentence between them and the command. That
+is why reasoning is gathered below rather than threaded through, and why an
+adjective is usually cheaper than the sentence explaining it.
+
 ## How these documents are written
 
 **Write first for somebody who needs to do something quickly and wants

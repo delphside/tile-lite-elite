@@ -41,8 +41,36 @@ subject's words, not yours). Then say which of these it is:
 | **the structure is wrong** | it exists but under a heading nobody would look for | rename or move the section, and say so in the commit |
 | **there is a gap** | genuinely nothing owns this subject | create the section in the document that *should* own it, and say why in the commit |
 
-**Never a fourth outcome.** "I could not find it so I put it here" is what this
+**5 · If you still cannot place it, ask.** Owner, 2026-09-07: *"And if you
+can't find the right place, ask me."* All three diagnoses above change the
+shape of the documents — renaming a section, moving one, creating one — and
+that is a judgement about structure, not a tidy-up. It is the same rule as
+triage: joint, never alone.
+
+**Never a sixth outcome.** "I could not find it so I put it here" is what this
 whole procedure exists to prevent.
+
+## What belongs in it, once you have the right section
+
+**The guidelines are written down already, in
+[`docs/README.md`](../../../docs/README.md) under *How these documents are
+written*.** Read them there rather than from a copy here — that is this skill's
+own rule applied to itself. In short: the command or the rule first and the
+reasoning below it; reference says *what is there* and *what to type*, never
+*why*; imply the rationale rather than narrating it; say what we do rather than
+what we rejected; say what is rather than what should be.
+
+**Every section has an audience and a use case**, and they decide what belongs.
+`docs/README.md` states them per group. The test for a sentence is not *is this
+true* but *would this reader do the wrong thing without it* — history earns its
+place only when a rule would otherwise look arbitrary and get tidied away by
+somebody who has never been bitten.
+
+**One guideline is currently contradicted by the documents themselves.**
+`README` says *no issue numbers*; `docs/3.6` holds 87 and `docs/3.3` holds 42.
+The process has since been rebuilt around issues as the record of argument, so
+the rule may be stale or the documents may be wrong. **Unresolved — ask before
+adding more, and do not take the existing ones as licence.**
 
 ## Which document owns what
 
