@@ -117,3 +117,4 @@ one of them has a defect: fix it, don't work around it.
 | workstreams and what each owns | docs/3.7 |
 | artefacts, and the strings tooling matches | docs/4.8 |
 | daily state | scripts/inbox.sh, scripts/status.sh, scripts/actions.py |
+| where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
