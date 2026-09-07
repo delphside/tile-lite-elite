@@ -39,9 +39,14 @@ one of them has a defect: fix it, don't work around it.
 
 ## Changes
 
-- A branch exists to hold a change back. Branch only when the old version is
-  needed while the work is in progress; otherwise commit straight to main,
-  which is what pre-approved means. A document-only change never takes a
+- A Production Release always takes a branch, a pull request, a semver
+  milestone and a row in the delivery log. The pull request is what gives the
+  review its mechanics, and a release committed straight to main cannot be
+  guaranteed to work and blocks every other release until it does, because
+  main is what gets deployed.
+- Otherwise a branch exists to hold a change back. Branch only when the old
+  version is needed while the work is in progress; otherwise commit straight
+  to main, which is what pre-approved means. A document-only change never takes a
   branch: they live too long, main moves, and the review does not happen. Approval is
   the `pre-approved` milestone; anything else, including none, means not pre-approved. One branch per project, and everything
   the project touches goes on it, documentation included.
