@@ -134,9 +134,20 @@ arbitrary and get tidied away by someone who has never been bitten. Keep it
 then, and keep it short. The test: would a reader do the wrong thing without
 this? If it only makes the decision feel justified, cut it.
 
-**No issue numbers.** `#42` means nothing once the tracker has moved on, and
-these documents outlive it. Provenance belongs in commit messages, which are
-permanent and carry their own context; the document carries current truth.
+**Issue numbers, rarely and for a reason.** These documents describe **what is
+there, not how it got there**, so a number is usually noise — it dates a fact
+for somebody willing to go and look it up, and provenance already lives in
+commit messages, which are permanent and carry their own context.
+
+Two exceptions, and both are about **guiding a future change** rather than
+recording a past one. A design note explaining *why* something is as it is may
+cite the issue that argued it, when a later change would otherwise undo the
+reasoning without knowing it existed. And a link to the project that introduced
+a thing can orient somebody who needs the fuller story.
+
+**The test is not *is this where it came from*. It is *would a reader change
+this wrongly without it*.** Project documents are different: they are about a
+change, so they name it.
 
 **Say what we do, not what we rejected.** Options considered and dropped
 belong to the discussion, not the document. "We change the dates in the
