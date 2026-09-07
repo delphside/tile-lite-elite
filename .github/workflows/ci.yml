@@ -19,9 +19,15 @@ on:
 # release commit landed — against an e2e job that takes 4-10 minutes — so the
 # deploy cancelled the CI run for the commit it had just released. The minutes
 # saved were the minutes that would have caught it.
+#
+# **And except on a release branch, for the same reason** — #344 R7. Projects
+# merge into a release branch one after another, and `merge-to-release.sh` gates
+# each merge on the branch tip's own run. Two merges in quick succession would
+# cancel the first run, leaving the commit it judged with no verdict at all:
+# the same failure as 0.5.0's, reached by merging rather than by deploying.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release/') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -177,10 +183,18 @@ jobs:
     name: e2e (Playwright · preview stack)
     runs-on: ubuntu-latest
     needs: check
+    # A release branch is included with `main` — #344 R2. A pull request into a
+    # release branch already runs e2e, because `pull_request` matches whatever
+    # the base is; what it does not cover is the **push** that the merge makes.
+    # Without this the branch tip's run is green because e2e did not run, not
+    # because it passed — which is the blind window #144 was raised for, and
+    # the run `merge-to-release.sh` reads before the next merge.
     if: >
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/')))
     steps:
       - uses: actions/checkout@v7
 
