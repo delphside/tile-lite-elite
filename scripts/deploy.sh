@@ -1106,10 +1106,13 @@ fi
 # Gating a rehearsal on another environment is circular — the rehearsal is
 # what the gate is *for*.
 #
-# The preview environment is deliberately *not* a gate. A gate can only
-# check that the bits were present somewhere, never that you looked at them
-# and were happy, so gating on preview adds friction while proving nothing
-# the rehearsal does not already prove better.
+# **Preview used to be deliberately not a gate**, on the argument that a gate
+# can check the bits were present somewhere and never that anybody looked at
+# them and was happy. That paragraph outlived the code: a preview gate was
+# added below and this comment sat directly above it, saying the opposite, and
+# `note_gate preview` counts it. The argument survives as the honest limit on
+# what the gate proves — see the block below — rather than as a reason it does
+# not exist.
 if (( ! IS_RELEASE )); then
   echo "==> Skipping the rehearsal gate: this deploy is the rehearsal"
 else
