@@ -134,6 +134,27 @@ arbitrary and get tidied away by someone who has never been bitten. Keep it
 then, and keep it short. The test: would a reader do the wrong thing without
 this? If it only makes the decision feel justified, cut it.
 
+**Reasoning ages; evidence does not.** The usual argument for keeping the
+original logic is so the decision can be reviewed later — and that argument
+mostly fails, because by then the world has moved and the old reasoning rests
+on facts that may no longer hold. **A decision is better reviewed from the
+current state than from the case once made for it.**
+
+So keep the **evidence**, not the argument: a fact somebody would otherwise
+have to go and re-acquire. Usually one of four kinds —
+
+- **a measurement** that was expensive to take, or is not repeatable now
+- **a negative result** — what was tried and did not work. The current state
+  shows what is there, never what was ruled out
+- **an outside constraint** the artefact does not reveal: what a service will
+  not do, what a tool does when you get it wrong
+- **the failure a guard exists to prevent**, without which the guard looks
+  like caution and gets removed
+
+Everything else is the case for a decision that has already been made, and it
+rots quietly: the fact stays true, the reasoning around it stops being. That
+is how a note comes to describe the world before a fix it asks for.
+
 **Issue numbers, rarely and for a reason.** These documents describe **what is
 there, not how it got there**, so a number is usually noise — it dates a fact
 for somebody willing to go and look it up, and provenance already lives in
