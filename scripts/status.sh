@@ -247,8 +247,15 @@ else
       # "functional change in a patch bump" warning for a release that carried
       # no functionality at all.
       already="$(shipped_already "$num")"
+      # **The label says which it is.** Both facts were printed on one line —
+      # `ships` in the first column and `already shipped in 0.7.2` in the last
+      # — which contradicts itself, and the first column is the one that is
+      # scanned. A change delivered by an earlier release is `live`: still
+      # worth showing, because a commit in this range references it and its
+      # absence would be the puzzle, but not part of what this release ships.
+      label="ships"; [[ -n "$already" ]] && label="live"
       printf '    %-12s #%-4s %-40s %-16s %s\n' \
-        "ships" "$num" "$(printf '%.40s' "$title")" "$toc" "${already:-$reach}"
+        "$label" "$num" "$(printf '%.40s' "$title")" "$toc" "${already:-$reach}"
       if [[ -z "$already" && "$reach" == "reaches users" ]]; then
         case "$toc" in functional) FUNCTIONAL="yes" ;; esac
       fi
