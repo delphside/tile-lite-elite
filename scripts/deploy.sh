@@ -427,7 +427,24 @@ prune_artifacts() {
 }
 
 settle_issue() {
-  local issue="$1" kind phase node
+  local issue="$1" kind phase node pkgs
+
+  # **A parent's milestone is ignored** — D51, and the owner on 2026-09-08:
+  # *"as with Route a parent does not need a milestone, but one can be set. It
+  # should be ignored."* #71 carries `1.0.0` as a target while its work packages
+  # carry the deliveries, so a 1.0.0 release would otherwise comment "released"
+  # on a parent that shipped nothing and advance it to Post-deployment — a
+  # phase D51 says oversight never reaches.
+  #
+  # Read before anything is written, because the comment is not undoable.
+  # The REST sub-issues endpoint, not GraphQL: `{owner}` and `{repo}` expand in
+  # a REST path and not in a GraphQL document, and deploy.sh resolves neither.
+  pkgs="$(gh api "repos/{owner}/{repo}/issues/$issue/sub_issues" \
+    --jq '[.[] | select(.type.name == "Project")] | length' 2>/dev/null || echo 0)"
+  if [[ "${pkgs:-0}" != "0" ]]; then
+    echo "    skipped #$issue — a parent, whose milestone is a target and not a delivery"
+    return
+  fi
 
   gh issue comment "$issue" \
     --body "Released in $DEPLOY_TAG — production is running $DEPLOYED_VERSION+$TARGET_SHA." \

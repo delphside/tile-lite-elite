@@ -33,6 +33,10 @@ case "$*" in
   *"milestones?state=open"*)   echo "${MILESTONE_NUMBER:-7}" ;;
   *"milestones?state=all"*)    printf '%s\n' ${EXISTING_MILESTONES:-} ;;
   *"issue list"*)              printf '%s\n' ${MILESTONE_ISSUES:-} ;;
+  # Keyed on the number in the path, so one milestone can hold a parent and a
+  # work package and the assertion can tell which was skipped.
+  *"/sub_issues"*)             n="$*"; n="${n#*/issues/}"; n="${n%%/*}"
+                               case " ${PARENT_ISSUES:-} " in *" $n "*) echo 1 ;; *) echo 0 ;; esac ;;
   *"--json issueType"*)        echo "${ISSUE_TYPE-Project}" ;;
   *"--json issueFieldValues"*) echo "${ISSUE_PHASE-Deployment}" ;;
   *"--json id"*)               echo "I_node_${RANDOM}" ;;
@@ -56,6 +60,7 @@ STUB
   # Reset per case, or a scenario's issue type leaks into the next one — which
   # it did while these were being written, turning a project into a requirement
   # and closing it.
+  PARENT_ISSUES=""; export PARENT_ISSUES
   unset DEPLOY_SKIP_BUMP ISSUE_TYPE ISSUE_PHASE PHASE_SET_EXIT || true
 }
 teardown() { rm -rf "$DIR"; }
@@ -124,6 +129,35 @@ setup
 MILESTONE_ISSUES=""; EXISTING_MILESTONES="0.7.1 0.7.2"; export MILESTONE_ISSUES EXISTING_MILESTONES
 settle_milestone > /dev/null
 check "an existing next milestone is not created again" "0" "$(calls_matching 'title=0.7.2')"
+teardown
+
+# --- a parent's milestone is a target, not a delivery -------------------------
+# D51: the parent owns the requirements and the design, and its packages carry
+# the deliveries. Owner, 2026-09-08: *"as with Route a parent does not need a
+# milestone, but one can be set. It should be ignored."* #71 carries 1.0.0 while
+# #269-#272 carry the work, so a 1.0.0 release would have commented "released"
+# on a parent that shipped nothing and advanced it to Post-deployment — a phase
+# D51 says oversight never reaches.
+setup
+MILESTONE_ISSUES="71"; PARENT_ISSUES="71"; export MILESTONE_ISSUES PARENT_ISSUES
+out="$(settle_milestone)"
+check "a parent is not advanced"          "0" "$(calls_matching 'setIssueFieldValue')"
+check "and is not told it was released"   "0" "$(calls_matching 'issue comment')"
+check "and is not closed"                 "0" "$(calls_matching 'issue close')"
+check "and says why it was skipped"       "yes" \
+  "$(case "$out" in *"a parent, whose milestone is a target"*) echo yes ;; *) echo "$out" ;; esac)"
+check "the milestone still closes"        "1" "$(calls_matching 'milestones/7')"
+teardown
+
+# --- a parent and its package in one milestone -------------------------------
+# The package is the thing that shipped, so it settles normally beside a parent
+# that does not. Asserting the counts alone would pass if both were skipped.
+setup
+MILESTONE_ISSUES="71 269"; PARENT_ISSUES="71"; export MILESTONE_ISSUES PARENT_ISSUES
+settle_milestone > /dev/null
+check "the package is advanced"                "1" "$(calls_matching 'setIssueFieldValue')"
+check "and it is the package that was told"    "1" "$(calls_matching 'issue comment 269')"
+check "and the parent was not"                 "0" "$(calls_matching 'issue comment 71')"
 teardown
 
 # --- DEPLOY_SKIP_BUMP means the version did not move -------------------------
