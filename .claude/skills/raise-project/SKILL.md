@@ -42,6 +42,9 @@ both:
 
 ```markdown
 ## Requirements
+
+**Source requirements**: #nnn, #nnn.
+
 | | from | |
 | --- | --- | --- |
 | R1 | #nnn | what must be true when this is done |
@@ -72,6 +75,30 @@ both:
 | requirement | how the check is done | |
 | --- | --- | --- |
 ```
+
+**The source requirements are listed as well as parented.** Owner, 2026-09-08:
+*"a project should list its source requirements as well as parenting them. This
+is separate from the requirements table because that might move on during project
+scoping."*
+
+| | is | changes when |
+| --- | --- | --- |
+| **Source requirements** | the issues this project took, by number | a requirement moves in or out. It matches the `Requirement` sub-issues exactly |
+| the **Requirements table** | R1…Rn, what must be true when this is done | scoping restructures them — two sources merge into one R, one splits into three, a source is dropped as out of scope |
+
+**The `from` column is not a substitute.** It says which source produced an R,
+which is useful and which stops being complete the moment scoping merges or drops
+one. The source list is provenance and does not move; the table is the current
+statement of the work and does.
+
+**A project raised directly says so** rather than leaving the line out — `none —
+raised directly as a project, so R1 and R2 are its own`. An absent line cannot be
+told from an unanswered one, which is the same reason a test approach that does
+not apply says *"None."*
+
+**The two must agree with the sub-issues.** A requirement parented here but not
+listed, or listed but parented elsewhere, is the defect that put #130 and #151
+under #294 while #290 claimed them.
 
 **A work package is a sub-project; a delivery is a milestone** (D51, refined
 2026-09-08). A work package is a `Project` whose parent is this one, carrying its
