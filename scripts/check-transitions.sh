@@ -31,13 +31,14 @@ ROWS="$(printf '%s' "$ISSUES" | jq -r '
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Priority")|.name][0] // "-") as $pri
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Effort")|.name][0] // "-") as $eff
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Decision State")|.name][0] // "-") as $dstate
+  | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Route")|.name][0] // "-") as $route
   # A parent is a project with **Project** children. `subIssues` also holds
   # folded requirements and the decisions a project owns, so counting them all
   # made every project with a folded source look like a parent — #295, #297 and
   # #301 were all reported as parents that must not build.
   | ([$i.subIssues.nodes[]? | select(.issueType.name == "Project")] | length) as $pkgs
   | (if $i.parent then "sub" elif $pkgs > 0 then "parent" else "solo" end) as $role
-  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $role,
+  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $route, $role,
      (($i.body // "") | @base64),
      (($i.body // "") | gsub("[\n\r]"; " "))] | @tsv')"
 
@@ -102,9 +103,9 @@ decision_has_actions_heading() {
 # character: bash collapses a run of them, so a genuinely empty field would
 # merge with the next and shift the body out of reach. That failure is silent —
 # the check simply stops finding anything.
-while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate role b64 body; do
+while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role b64 body; do
   [ -n "$num" ] || continue
-  for v in stage phase ws toc pri eff dstate; do
+  for v in stage phase ws toc pri eff dstate route; do
     [ "${!v}" = "-" ] && printf -v "$v" '%s' ""
   done
   case "$kind" in
@@ -144,6 +145,27 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate role b64 body
             # absent link is the defect here — the parent is unreachable from
             # the thing being built.
             printf '%s' "$body" | grep -qE "#[0-9]+" || report "$num" "$phase" "a work package with no link to its parent's design"
+          fi
+          ;;
+      esac
+      # **Route, from `Design and Test Approach`** — #346 R3. By that phase the
+      # design is done, so how the change reaches its users is knowable, and
+      # `Route` is what `status.sh` answers "does this reach users?" from. It
+      # can be known earlier and often is: the owner, 2026-09-08, on #71's work
+      # packages — *"all the #71 work packages are Project Release, even if we
+      # haven't written the scope yet."* This is the latest it may be unset,
+      # not the earliest it may be set.
+      #
+      # **A parent is not asked.** Owner, same day: *"It may be better to say
+      # parents don't need a route. You could derive one from the sub-projects,
+      # but it would just be for information."*
+      #
+      # Nothing checked this until 2026-09-08, when a hand scan found twenty
+      # projects with no route.
+      case "$phase" in
+        "Design and Test Approach"|Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
+          if [ "$role" != "parent" ]; then
+            [ -n "$route" ] || report "$num" "$phase" "no route, so nothing can say whether this reaches users"
           fi
           ;;
       esac
