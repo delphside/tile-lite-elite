@@ -97,6 +97,11 @@ one of them has a defect: fix it, don't work around it.
   check is shown to fail before it ships.
 - A decision is applied in the same commit that marks it answered, or an
   issue is raised and named in the decision.
+- A decision is not a change vehicle. It routes work: raise a requirement, add
+  one to a project, update a project or the documents, or close something. It
+  may make a pre-approved change only where no suitable requirement or project
+  exists. So it takes no semver and no letter milestone, and no delivery-log
+  row.
 
 ## Documentation
 
