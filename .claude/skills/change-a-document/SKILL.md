@@ -66,11 +66,11 @@ true* but *would this reader do the wrong thing without it* — history earns it
 place only when a rule would otherwise look arbitrary and get tidied away by
 somebody who has never been bitten.
 
-**One guideline is currently contradicted by the documents themselves.**
-`README` says *no issue numbers*; `docs/3.6` holds 87 and `docs/3.3` holds 42.
-The process has since been rebuilt around issues as the record of argument, so
-the rule may be stale or the documents may be wrong. **Unresolved — ask before
-adding more, and do not take the existing ones as licence.**
+**Issue numbers are the one to watch**, because they are the easiest thing to
+add while writing and the hardest to justify later. Owner, 2026-09-07: *"mainly
+we are describing what is there, not how it got there."* A number earns its
+place only when a reader would **change the thing wrongly without it** — not
+because it is where the fact came from. `README` has the full rule.
 
 ## Which document owns what
 
