@@ -154,7 +154,7 @@ type_of_issue() {
                     value field { ... on IssueFieldCommon { name } } } } } } } }" \
     --jq '.data.repository.issue
           | [ .title,
-              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "") ]
+              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-") ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -362,8 +362,8 @@ issues_with_type() {
     --jq '.data.repository.issues.nodes[]
           | [ .number,
               .title,
-              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // ""),
-              (.milestone.title // "") ]
+              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
+              (.milestone.title // "-") ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -485,6 +485,14 @@ if [[ -z "$ISSUES" ]]; then
 else
   while IFS=$'\t' read -r num title toc milestone; do
     [[ -z "$num" ]] && continue
+    # `-` is the placeholder the query emits for an empty field. Tab is IFS
+    # whitespace, so bash collapses a run of them: an unset `Type of change`
+    # merged with the next field and the **milestone** was printed in the type
+    # column — #269 read `1.0.0`. The same failure is documented in
+    # `check-transitions.sh`, which has guarded against it since it was found
+    # there.
+    [[ "$toc" == "-" ]] && toc=""
+    [[ "$milestone" == "-" ]] && milestone=""
     TYPE="$(type_of "$toc")"
     state="$(state_of_issue "$num" "$TYPE")"
     [[ -n "$milestone" ]] && state="$state · $milestone"
@@ -505,7 +513,7 @@ AWAITING="$(gh api graphql -f query='{ repository(owner: "'"$REPO_OWNER"'", name
                           value field { ... on IssueFieldCommon { name } } } } } } } } }' \
   --jq '.data.repository.issues.nodes[] | select(.milestone != null)
         | [ .number, .title, .milestone.title,
-            ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "") ]
+            ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-") ]
         | @tsv' 2>/dev/null || true)"
 
 OPEN_MILESTONES="$(gh api "repos/{owner}/{repo}/milestones?state=open" \
@@ -515,6 +523,8 @@ FOUND=0
 if [[ -n "$AWAITING" && -n "$OPEN_MILESTONES" ]]; then
   while IFS=$'\t' read -r num title milestone toc; do
     [[ -z "$num" ]] && continue
+    [[ "$toc" == "-" ]] && toc=""
+    [[ "$milestone" == "-" ]] && milestone=""
     # An open milestone alone is not enough. The release-attribute milestones —
     # patch, minor, major, no-release — never close, that being what makes them
     # queues rather than releases, so
