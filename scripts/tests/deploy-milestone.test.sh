@@ -165,22 +165,22 @@ check "a non-project is closed"          "1" "$(calls_matching 'issue close')"
 check "and is not given a phase"         "0" "$(calls_matching 'setIssueFieldValue')"
 teardown
 
-# --- a Project Delivery is closed, not advanced -------------------------------
-# A delivery is one unit of work: when the release that carries it ships, it is
-# done, and there is no review to wait for. Only a Project has a phase to be
-# advanced into.
+# --- a work package is advanced, like any project ----------------------------
+# **This asserted the opposite until 2026-09-08.** A delivery had its own type,
+# `Project Delivery`, and `settle_issue` closed anything not exactly `Project`
+# on the reasoning that a delivery is one unit of work with no review to wait
+# for.
 #
-# The behaviour already existed — `settle_issue` closes anything whose type is
-# not exactly `Project` — but it was written before the Project Delivery type
-# existed, so it was right by accident. docs/4.8 records that these type names
-# are matched literally, which is the reason to pin it: renaming the type would
-# silently change what a deploy does to a delivery. #283 R2.
+# D51 inverted that premise: a delivery is a **sub-project**, and it carries its
+# own post-deployment checks precisely because a check is answered per delivery.
+# So there *is* a review to wait for, and it advances like any project. The type
+# was deleted the same day, so the old case tested a value that cannot occur.
 setup
-MILESTONE_ISSUES="202"; ISSUE_TYPE="Project Delivery"
+MILESTONE_ISSUES="202"; ISSUE_TYPE="Project"
 export MILESTONE_ISSUES ISSUE_TYPE
 out="$(settle_milestone 2>&1)"
-check "a Project Delivery is closed"       "1" "$(calls_matching 'issue close')"
-check "and is not advanced to a phase"     "0" "$(calls_matching 'setIssueFieldValue')"
+check "a work package is advanced"         "1" "$(calls_matching 'setIssueFieldValue')"
+check "and is not closed"                  "0" "$(calls_matching 'issue close')"
 teardown
 
 # --- a phase that cannot be set does NOT fall back to closing -----------------

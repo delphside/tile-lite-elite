@@ -56,10 +56,15 @@ document that holds it, never both:
 | --- | --- | --- |
 ```
 
-**A delivery's steps live in one place.** An earlier delivery with its own
-Project Delivery issue keeps its runbook there and is linked from the table; the
-last delivery has no issue, so its runbook goes under the table. Never both
-(#283 R3).
+**Every delivery is a sub-project** (D51) — a `Project` whose parent is this
+one, carrying its own milestone, artefacts, test approach and post-deployment
+checks. The parent owns the requirements, the design and the documents, carries
+no milestone, and lists its deliveries: each row names a sub-project or says
+`pre-approved`. A pre-approved delivery has no issue and no milestone, and its
+runbook sits under that list.
+
+**A delivery's steps live in one place** — in its sub-project, or under the
+parent's list for a pre-approved one. Never both.
 
 **The design starts with the as-is.** How the thing works today, then how it
 will work. Owner, 2026-09-03: *"sometimes, especially with the scripts, I don't
@@ -100,7 +105,6 @@ gh api graphql -f query='mutation($i:ID!,$t:ID!){updateIssue(input:{id:$i,issueT
 | --- | --- |
 | Requirement | `IT_kwDOEyOvmc4yo-D-` |
 | Project | `IT_kwDOEyOvmc4yo-D_` |
-| Project Delivery | `IT_kwDOEyOvmc4zAnNB` |
 
 ## Setting fields
 

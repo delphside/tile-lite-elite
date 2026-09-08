@@ -16,7 +16,7 @@ set -euo pipefail
 command -v gh >/dev/null || { echo "check-transitions: no 'gh' on PATH" >&2; exit 2; }
 command -v jq >/dev/null || { echo "check-transitions: no 'jq' on PATH" >&2; exit 2; }
 
-Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
+Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} parent{number} subIssues(first:30){nodes{issueType{name}}} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
 ISSUES="$(gh api graphql -f query="$Q" 2>/dev/null)" || {
   echo "check-transitions: could not read the issues" >&2; exit 2; }
 
@@ -31,7 +31,13 @@ ROWS="$(printf '%s' "$ISSUES" | jq -r '
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Priority")|.name][0] // "-") as $pri
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Effort")|.name][0] // "-") as $eff
   | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Decision State")|.name][0] // "-") as $dstate
-  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate,
+  # A parent is a project with **Project** children. `subIssues` also holds
+  # folded requirements and the decisions a project owns, so counting them all
+  # made every project with a folded source look like a parent — #295, #297 and
+  # #301 were all reported as parents that must not build.
+  | ([$i.subIssues.nodes[]? | select(.issueType.name == "Project")] | length) as $pkgs
+  | (if $i.parent then "sub" elif $pkgs > 0 then "parent" else "solo" end) as $role
+  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $role,
      (($i.body // "") | @base64),
      (($i.body // "") | gsub("[\n\r]"; " "))] | @tsv')"
 
@@ -96,7 +102,7 @@ decision_has_actions_heading() {
 # character: bash collapses a run of them, so a genuinely empty field would
 # merge with the next and shift the body out of reach. That failure is silent —
 # the check simply stops finding anything.
-while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate b64 body; do
+while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate role b64 body; do
   [ -n "$num" ] || continue
   for v in stage phase ws toc pri eff dstate; do
     [ "${!v}" = "-" ] && printf -v "$v" '%s' ""
@@ -121,18 +127,47 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate b64 body; do
           ;;
       esac
       ;;
-    Project|"Project Delivery")
+    Project)
+      # **A parent and a work package are both `Project` and owe different
+      # things** — D51. The parent owns the requirements, the design and the
+      # documents; a package links to them and owes what is its own. Told apart
+      # by the parent link: a Project with a parent is a package, one with
+      # children is a parent. Requiring the same seven of both would force a
+      # one-commit delivery to carry a Requirements table.
       case "$phase" in
         "Design and Test Approach"|Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
-          printf '%s' "$body" | grep -q "## Requirements" || report "$num" "$phase" "no requirements heading"
-          printf '%s' "$body" | grep -q "## Design"       || report "$num" "$phase" "no design heading"
+          if [ "$role" != "sub" ]; then
+            printf '%s' "$body" | grep -q "## Requirements" || report "$num" "$phase" "no requirements heading"
+            printf '%s' "$body" | grep -q "## Design"       || report "$num" "$phase" "no design heading"
+          else
+            # A package must point at the design rather than restate it, so an
+            # absent link is the defect here — the parent is unreachable from
+            # the thing being built.
+            printf '%s' "$body" | grep -qE "#[0-9]+" || report "$num" "$phase" "a work package with no link to its parent's design"
+          fi
           ;;
       esac
+      # **A parent never reaches these.** Oversight is a design role: it holds
+      # the requirements and the design while packages are built against them,
+      # and never acquires a delivery role. `Post-deployment` is allowed, for a
+      # requirement no single delivery satisfies, and `Project Closedown` to
+      # close.
+      if [ "$role" = "parent" ]; then
+        case "$phase" in
+          Development|"User testing"|Deployment)
+            report "$num" "$phase" "a parent does not build or ship — that is a work package phase" ;;
+        esac
+      fi
+      # **Not asked of a parent.** A test approach and an artefact list belong to
+      # the thing being built, and a parent builds nothing — D51. It owns the
+      # requirements, the design and the documents; the package owns these.
       case "$phase" in
         Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
-          printf '%s' "$body" | grep -q "## Test approach"       || report "$num" "$phase" "no test approach"
-          printf '%s' "$body" | grep -q "Technical tests"        || report "$num" "$phase" "test approach has no Preview/Rehearsal lists"
-          printf '%s' "$body" | grep -q "## Impacted artefacts"  || report "$num" "$phase" "no impacted artefacts"
+          if [ "$role" != "parent" ]; then
+            printf '%s' "$body" | grep -q "## Test approach"       || report "$num" "$phase" "no test approach"
+            printf '%s' "$body" | grep -q "Technical tests"        || report "$num" "$phase" "test approach has no Preview/Rehearsal lists"
+            printf '%s' "$body" | grep -q "## Impacted artefacts"  || report "$num" "$phase" "no impacted artefacts"
+          fi
           ;;
       esac
       case "$phase" in
@@ -143,6 +178,10 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate b64 body; do
       esac
       case "$phase" in
         "Project Closedown")
+          # **A work package may delegate lessons learnt to the parent** (D51),
+          # and says so — `Delegated to #<parent>` — so one project does not
+          # produce four sections saying the same thing. The delegation is
+          # written rather than implied, or this reads an omission as an answer.
           printf '%s' "$body" | grep -qi "lessons learnt" || report "$num" "$phase" "closing down with no lessons learnt"
           ;;
       esac

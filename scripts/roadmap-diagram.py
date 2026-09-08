@@ -198,7 +198,7 @@ def main() -> None:
         return (i.get("issueType") or {}).get("name", "")
 
     wanted = issues if args.all else [i for i in issues
-                                      if kind(i) in ("Project", "Project Delivery")]
+                                      if kind(i) == "Project"]
     if args.parent:
         wanted = [i for i in wanted
                   if (i.get("parent") or {}).get("number") == args.parent
@@ -213,7 +213,8 @@ def main() -> None:
     for i in sorted(wanted, key=lambda x: PHASE_ORDER.index(ph.get(x["number"], "Scope"))
                     if ph.get(x["number"]) in PHASE_ORDER else 0):
         text = '"' + label(i, ph.get(i["number"])) + '"'
-        shape = f"([{text}])" if kind(i) == "Project Delivery" else f"[{text}]"
+        # A work package is drawn as a stadium, a parent or solo project as a box.
+        shape = f"([{text}])" if i.get("parent") else f"[{text}]"
         print(f'  n{i["number"]}{shape}')
 
     edges = 0

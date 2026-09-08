@@ -75,11 +75,18 @@ one of them has a defect: fix it, don't work around it.
   them, or a branch, a pull request, a delivery, a letter milestone and a row.
 - Every project delivery has a milestone, recorded in the delivery log: the
   release semver if it includes a release, otherwise the previous semver with
-  a letter appended. The project issue sits in its last delivery's milestone.
-  An earlier delivery gets a Project Delivery issue if it is a release, so it
-  can be planned and show in the release view, or if its pre-approved answer
-  differs from its project's, so that answer has somewhere to live. Other
-  earlier deliveries get none.
+  a letter appended. Deliveries released together share one.
+- A delivery is a sub-project, or it is pre-approved. A project with work to
+  deliver lists its deliveries; each row names a sub-project or says
+  pre-approved, and a pre-approved one has no issue and no milestone.
+- The parent owns the requirements, the design and the documents; a work
+  package links to them and carries its own artefacts, test approach and
+  post-deployment checks, because a check is answered per delivery. The parent
+  carries no milestone: it has no delivery role.
+- The parent runs Scope, the queue, and Design and Test Approach, then stops —
+  oversight is a design role. It may reach Post-deployment for a requirement no
+  single delivery satisfies, and Project Closedown to close. A work package may
+  delegate lessons learnt to the parent, and says so.
 - A release milestone is a shipping list. The deploy settles everything in
   it, so move out what is not shipping before deploying.
 - `no-release` is provisional. Resolve it to `pre-approved` or a letter
