@@ -117,7 +117,8 @@ one of them has a defect: fix it, don't work around it.
   goes in the decision log (the process-definition glossary), then in the
   one place where that part of the process is documented.
 - docs/N.N numbering: 1.x product, 2.x design, 3.x lifecycle, 4.x reference.
-  A change document lives in its issue's folder under docs/changes/.
+  A change document lives in its issue's folder under docs/changes/, named
+  for the parent project — a work package has no folder of its own.
 
 ## Where the detail is
 
