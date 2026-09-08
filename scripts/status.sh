@@ -155,14 +155,15 @@ reach_of() {
 # One issue's title and Type of change, tab separated.
 type_of_issue() {
   gh api graphql -f query="{ repository(owner: \"$REPO_OWNER\", name: \"$REPO_NAME\") {
-      issue(number: $1) { title
+      issue(number: $1) { title issueType { name }
         issueFieldValues(first: 10) {
           nodes { ... on IssueFieldSingleSelectValue {
                     value field { ... on IssueFieldCommon { name } } } } } } } }" \
     --jq '.data.repository.issue
           | [ .title,
               ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
-              ([.issueFieldValues.nodes[]? | select(.field.name == "Route") | .value] | first // "-") ]
+              ([.issueFieldValues.nodes[]? | select(.field.name == "Route") | .value] | first // "-"),
+              (.issueType.name // "-") ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -233,33 +234,50 @@ else
   if [[ -z "$SHIPPING" ]]; then
     printf '    %-12s %s\n' "issues" "none — nothing on main references an issue"
   else
+    # **A release delivers work packages. Everything else in this range is
+    # context.** The list used to be one flat set of every issue a commit
+    # mentioned, labelled afterwards — so a decision that ships nothing and an
+    # issue already live in 0.7.2 sat under "would ship" beside the thing that
+    # actually ships. Grouped by what it means for *this* release instead.
     FUNCTIONAL=""
+    DELIVERS=""; LIVE=""; DECISIONS=""; ATMERGE=""; UNSET=""
     while read -r num; do
       [[ -z "$num" ]] && continue
-      IFS=$'\t' read -r title toc route <<< "$(type_of_issue "$num")"
-      [[ -z "$title" ]] && { title="(could not read issue)"; toc="-"; route="-"; }
-      [[ "$toc" == "-" ]] && toc=""
-      [[ "$route" == "-" ]] && route=""
-      reach="$(reach_of "$route")"
-      # A change already delivered by an earlier release can still be
-      # referenced by later commits — its design note being retired, say. It is
-      # not part of what this release delivers, and counting it produced a
-      # "functional change in a patch bump" warning for a release that carried
-      # no functionality at all.
+      IFS=$'\t' read -r title toc route kind <<< "$(type_of_issue "$num")"
+      [[ -z "$title" ]] && { title="(could not read issue)"; toc="-"; route="-"; kind="-"; }
+      for v in toc route kind; do [[ "${!v}" == "-" ]] && printf -v "$v" '%s' ""; done
       already="$(shipped_already "$num")"
-      # **The label says which it is.** Both facts were printed on one line —
-      # `ships` in the first column and `already shipped in 0.7.2` in the last
-      # — which contradicts itself, and the first column is the one that is
-      # scanned. A change delivered by an earlier release is `live`: still
-      # worth showing, because a commit in this range references it and its
-      # absence would be the puzzle, but not part of what this release ships.
-      label="ships"; [[ -n "$already" ]] && label="live"
-      printf '    %-12s #%-4s %-40s %-16s %s\n' \
-        "$label" "$num" "$(printf '%.40s' "$title")" "$toc" "${already:-$reach}"
-      if [[ -z "$already" && "$reach" == "reaches users" ]]; then
-        case "$toc" in functional) FUNCTIONAL="yes" ;; esac
+      row="$(printf '#%-4s %-42s %s' "$num" "$(printf '%.42s' "$title")" "${toc:-unclassified}")"
+
+      if [[ -n "$already" ]]; then
+        LIVE="$LIVE      $row  — $already"$'\n'
+      elif [[ "$kind" == "Decision" ]]; then
+        # A decision routes work; it never ships. `docs/3.6`.
+        DECISIONS="$DECISIONS      $row"$'\n'
+      else
+        case "$(reach_of "$route")" in
+          "reaches users")
+            DELIVERS="$DELIVERS    $(printf '%-12s %s' ships "$row")"$'\n'
+            case "$toc" in functional) FUNCTIONAL="yes" ;; esac ;;
+          "route not set")
+            UNSET="$UNSET      $row"$'\n' ;;
+          *)
+            ATMERGE="$ATMERGE      $row"$'\n' ;;
+        esac
       fi
     done <<< "$SHIPPING"
+
+    if [[ -n "$DELIVERS" ]]; then printf '%s' "$DELIVERS"
+    else printf '    %-12s %s\n' "ships" "nothing — no change in this range reaches users"; fi
+
+    if [[ -n "$LIVE$DECISIONS$ATMERGE$UNSET" ]]; then
+      echo
+      echo "    also referenced by these commits, and not delivered by this release"
+      [[ -n "$LIVE" ]]      && { echo "    already live"; printf '%s' "$LIVE"; }
+      [[ -n "$ATMERGE" ]]   && { echo "    live at merge — repository changes"; printf '%s' "$ATMERGE"; }
+      [[ -n "$DECISIONS" ]] && { echo "    decisions — they route work and ship nothing"; printf '%s' "$DECISIONS"; }
+      [[ -n "$UNSET" ]]     && { echo "    route not set — cannot say, and that is the thing to fix"; printf '%s' "$UNSET"; }
+    fi
 
     # The same judgement check-release-version.sh makes at deploy time, made
     # here instead — before the work of a preview and a rehearsal, rather than
