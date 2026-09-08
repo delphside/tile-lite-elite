@@ -20,8 +20,25 @@ fine — edit its body into the seven headings and change its type.
 
 ## The seven headings
 
-Every project body carries these, each holding the content or a link to the
-document that holds it, never both:
+**A parent and a work package owe different halves of these** — D51. A project
+with no work packages is a parent that happens to have one delivery, and carries
+all seven.
+
+| heading | parent | work package |
+| --- | --- | --- |
+| Requirements | **owns** | links |
+| Design | **owns** | links, adding only what is its own |
+| Impacted artefacts | — | **owns** |
+| Test approach | — | **owns** |
+| Dependencies and related work | **owns** | links |
+| Deliveries | **owns** — the list, each row a sub-project or `pre-approved` | its own steps |
+| Post-deployment checks | only for a requirement no delivery satisfies | **owns** — a check is answered per delivery |
+
+**`check-transitions.sh` asks each for what it owes**, telling them apart by the
+parent link, so a one-commit delivery is not made to carry a Requirements table.
+
+Each heading holds the content or a link to the document that holds it, never
+both:
 
 ```markdown
 ## Requirements

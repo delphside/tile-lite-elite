@@ -42,9 +42,11 @@ than a list.
 | --- | --- |
 | a **requirement**, ordinarily | **none.** It is not a thing that ships |
 | a **requirement** done directly, no project raised | **`pre-approved`** |
-| a **project**, pre-approved | **`pre-approved`** |
-| a **project** delivering without an image | the previous semver **plus a letter** |
-| a **project** shipping in a release | the **semver** |
+| a **parent project** | **none.** It has no delivery role |
+| a **work package** delivering without an image | the previous semver **plus a letter** |
+| a **work package** shipping in a release | the **semver** |
+| work packages **released together** | **the same** milestone |
+| a **pre-approved** delivery | **none**, and no issue — the row in the parent's delivery list is the record |
 | a **decision** | **none.** It routes work; it carries none |
 
 **`no-release` is provisional and must not survive the close.** It says *not a
@@ -53,7 +55,11 @@ release* before anybody knows how the change will reach `main`. Resolve it to
 that change was delivered is lost. `check-transitions.sh` reports one that got
 through.
 
-**Which of the two, for a project:** did it have a **branch**? Then a letter —
+**A delivery is a sub-project** (D51), so *project* above means the thing that
+delivers. A project with a single delivery is its own package; a project with
+several has one sub-project each.
+
+**Which of the two, for a delivery:** did it have a **branch**? Then a letter —
 it delivered, and the delivery needs a name and a row in
 [`4.9`](../../../docs/4.9-delivery-log.md). No branch means it went straight to
 `main`, which is `pre-approved` and makes no delivery.
