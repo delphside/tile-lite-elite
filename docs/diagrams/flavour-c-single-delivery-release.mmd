@@ -1,0 +1,65 @@
+---
+config:
+  layout: elk
+  elk:
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart TB
+    %% Flavour C — a release carrying one delivery. docs/3.3, the flavours
+    %% table: 1.1, 1.2, 1.3, 1.4, 1.5, then 1.9, then 1.6, 1.7, 1.10.
+    %% .
+    %% Arrow numbers are docs/3.3 part 1 section numbers, so 1.9 sitting
+    %% between 1.5 and 1.6 is not a mistake in the numbering — it is the
+    %% point of the flavour. The release is proved on the branch, then main
+    %% takes it by fast-forward, and production deploys main.
+    %% .
+    %% Why that order: main is what gets deployed, so an unproven release
+    %% commit on main blocks every other release until it is proven or
+    %% removed. docs/3.6 section 2.2.
+    %% .
+    %% Preview does not feed the gate, and this is deliberate rather than an
+    %% omission — but there IS a preview gate, counted by note_gate preview
+    %% in deploy.sh. What preview cannot answer is whether somebody looked
+    %% and was happy; what it does answer is whether the bits stood up.
+    %% .
+    %% 1.5 and 1.6 start at local git rather than Dev on purpose: both
+    %% scripts check the commit out into a throwaway worktree and build
+    %% that, so the working tree cannot reach either environment.
+    DEV["Dev<br/>working tree"]
+    LG["local git<br/>commit history"]
+    subgraph GH["GitHub"]
+        BR["delivery branch<br/>NNN-short-name"]
+        PR{{"pull request<br/>reviewed and approved"}}
+        MAIN["repo · main"]
+        ACT["Actions"]
+    end
+    STG["Preview<br/>:8081 · docker"]
+    REH["Rehearsal<br/>&lt;ip&gt;.sslip.io · docker"]
+    PROD["Production<br/>tileliteelite.com"]
+
+    DEV -->|"`1.1 · **$ cargo test**, **$ git commit**`"| LG
+    LG -->|"`1.2.1 · **$ git push -u** the branch`"| BR
+    BR -->|"1.2.2 · CI runs (automatic)"| ACT
+    ACT -.->|"`1.2.3 · **$ ci-status.sh --wait**`"| LG
+    BR -->|"`**$ gh pr create --reviewer**`"| PR
+    PR -.->|"the owner ticks and approves"| BR
+    LG -->|"`1.3 · **$ deploy-preview.sh**`"| STG
+    STG -.->|"`1.4 · **user test**`"| STG
+    LG -->|"`1.5 · **$ deploy-rehearsal.sh**`"| REH
+    BR -->|"`1.9 · **$ git rebase**, then **$ git merge --ff-only**`"| MAIN
+    MAIN -->|"`1.6.1 · **$ deploy.sh**`"| GATE{"gate"}
+    ACT -.->|"1.6.2 · CI green for this commit?"| GATE
+    REH -.->|"1.6.3 · rehearsal on this commit?"| GATE
+    GATE -->|"1.6.4 · ships the image"| PROD
+    PROD -.->|"`1.7 · **$ verify.sh**`"| PROD
+    MAIN -->|"`1.10 · **$ git push --delete**`"| BR
+
+    classDef gate fill:#fbe9dc,stroke:#b06a2c,color:#7a4318
+    classDef env fill:#e4eff8,stroke:#39698c,color:#12303f
+    classDef repo fill:#f7efe0,stroke:#96763f,color:#3a2c12
+    classDef branch fill:#eef3ea,stroke:#5c7a4a,color:#243418
+    class DEV,STG,REH,PROD env
+    class LG,MAIN,ACT repo
+    class BR branch
+    class PR,GATE gate
+    style GH fill:#fdf9f1,stroke:#96763f,color:#3a2c12

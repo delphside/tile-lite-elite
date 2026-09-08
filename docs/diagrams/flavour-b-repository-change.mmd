@@ -1,0 +1,54 @@
+---
+config:
+  layout: elk
+  elk:
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart TB
+    %% Flavour B — a repository change with a branch. docs/3.3, the flavours
+    %% table. Runs 1.1, 1.2, then 1.9 and 1.10.
+    %% .
+    %% Arrow numbers are docs/3.3 part 1 section numbers.
+    %% .
+    %% Why a branch at all, when a document-only change never takes one: B is
+    %% for a change that must be held back while the old version is still
+    %% needed. The branch exists to delay, not to review.
+    %% .
+    %% Nothing is deployed. It is live when it lands on main, which is what
+    %% 'Repository Change' means — the artefacts are compiled into nothing.
+    %% .
+    %% 1.9 is drawn as two arrows because it is two commands and the order
+    %% matters: rebase first, so the SHA changes while it still can, then
+    %% merge --ff-only, which must not change it.
+    DEV["Dev<br/>working tree"]
+    LG["local git<br/>commit history"]
+    subgraph GH["GitHub"]
+        BR["branch<br/>NNN-short-name"]
+        PR{{"pull request<br/>reviewed and approved"}}
+        MAIN["repo · main"]
+        ACT["Actions"]
+    end
+    LIVE(["live at the merge"])
+
+    DEV -->|"`1.1.1 · **$ cargo test**`"| DEV
+    DEV -->|"`1.1.2 · **$ git commit**`"| LG
+    LG -->|"`1.2.1 · **$ git push -u** the branch`"| BR
+    BR -->|"1.2.2 · CI runs (automatic)"| ACT
+    ACT -.->|"`1.2.3 · **$ ci-status.sh --wait**`"| LG
+    BR -->|"`**$ gh pr create --reviewer**`"| PR
+    PR -.->|"the owner ticks and approves"| BR
+    BR -->|"`1.9.1 · **$ git rebase** origin/main
+**$ git push --force-with-lease**`"| BR
+    BR -->|"`1.9.2 · **$ git merge --ff-only**`"| MAIN
+    MAIN --> LIVE
+    MAIN -->|"`1.10 · **$ git push --delete**`"| BR
+
+    classDef gate fill:#fbe9dc,stroke:#b06a2c,color:#7a4318
+    classDef env fill:#e4eff8,stroke:#39698c,color:#12303f
+    classDef repo fill:#f7efe0,stroke:#96763f,color:#3a2c12
+    classDef branch fill:#eef3ea,stroke:#5c7a4a,color:#243418
+    class DEV env
+    class LG,MAIN,ACT repo
+    class BR,LIVE branch
+    class PR gate
+    style GH fill:#fdf9f1,stroke:#96763f,color:#3a2c12

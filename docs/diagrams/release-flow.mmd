@@ -27,10 +27,17 @@ flowchart TB
     %%          is tested before it continues. Checks feed into it.
     %% .
     %% .
-    %% Preview deliberately does not feed the gate. It is where you look at a
-    %% change; the gate asks whether the release *mechanism* worked, which is
-    %% what the rehearsal host answers. A gate can check that bits were
-    %% present somewhere, never that somebody looked at them and was happy.
+    %% Preview DOES feed the gate, and this comment said the opposite until
+    %% 2026-09-09. A preview gate exists in deploy.sh, counted by
+    %% `note_gate preview`, and refuses when preview is running a different
+    %% commit. deploy.sh carried the identical stale paragraph directly above
+    %% its own gate and was corrected in bb0f376; the diagram was not.
+    %% .
+    %% What survives of the old argument is the honest limit rather than the
+    %% conclusion: the gate proves this commit was *deployed* to preview, and
+    %% cannot prove anybody looked at it and was happy. Whether a person formed
+    %% a judgement is not observable from here. So it is a prompt, and the only
+    %% one available for the question.
     %% .
     %% The gate is a decision on the *action*, not a property of production:
     %% it happens inside deploy.sh, before anything ships, and the two
@@ -79,6 +86,7 @@ flowchart TB
     LG -->|"`1.6.1 · **$ deploy.sh**`"| GATE{"gate"}
     GATE -->|"1.6.4 · ships the image"| PROD
     ACT -.->|"1.6.2 · CI green for this commit?"| GATE
+    STG -.->|"1.6.2a · preview on this commit?"| GATE
     REH -.->|"1.6.3 · rehearsal on this commit?"| GATE
     LG -->|"1.6.5 · tag + version bump"| REPO
     PROD -.->|"`1.7 · **$ deploy-preview.sh verify**`"| STG
