@@ -390,13 +390,40 @@ WPQ="$(cat <<'JQEOF'
 JQEOF
 )"
 WPFINDINGS="$(gh issue list --state all --limit 500 \
-  --json number,title,milestone,parent,issueType 2>/dev/null \
+  --json number,title,state,milestone,parent,issueType 2>/dev/null \
   | jq -r "$WPQ" 2>/dev/null || true)"
 if [ -n "$WPFINDINGS" ]; then
   while IFS=$'\t' read -r num label msg; do
     [ -n "$num" ] || continue
     report "$num" "$label" "$msg"
   done <<< "$WPFINDINGS"
+fi
+
+
+# --- a closed work package with no milestone -----------------------------------
+ABSQ="$(cat <<'JQEOF'
+# A closed work package that never carried a milestone.
+#
+# A work package exists to deliver, so a closed one has a milestone naming the
+# delivery it went out in. A closed package with none either delivered and was
+# never recorded, or was never a work package at all — the shape #294 had on
+# 2026-09-06, when a `Project` was absorbed into #290 using the requirement fold:
+# made a sub-issue, closed, and left claiming to be a package that would ship.
+[ .[] | select(.issueType.name == "Project") | select(.parent != null)
+      | select(.state == "CLOSED")
+      | select((.milestone // null) == null)
+      | [.number, "closed", "a closed work package of #\(.parent.number) with no milestone — it delivered and was not recorded, or it was absorbed and should not be a sub-issue"] ]
+| .[] | @tsv
+JQEOF
+)"
+ABSFINDINGS="$(gh issue list --state all --limit 500 \
+  --json number,title,state,milestone,parent,issueType 2>/dev/null \
+  | jq -r "$ABSQ" 2>/dev/null || true)"
+if [ -n "$ABSFINDINGS" ]; then
+  while IFS=$'\t' read -r num label msg; do
+    [ -n "$num" ] || continue
+    report "$num" "$label" "$msg"
+  done <<< "$ABSFINDINGS"
 fi
 
 echo

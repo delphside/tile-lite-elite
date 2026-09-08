@@ -234,6 +234,8 @@ gh api graphql -f query='{repository(owner:"delphside",name:"tile-lite-elite"){i
 
 ## Folding the requirements it takes
 
+**Requirements only.** A `Project` absorbed into another follows the section below instead.
+
 For each one: make it a sub-issue, label it `folded`, close it as completed with
 a comment naming the project.
 
@@ -246,6 +248,30 @@ gh issue close NNN --reason completed --comment "Folded into #$NUM, which owns t
 ```
 
 `addSubIssue` takes `replaceParent:true` to move one that already has a parent.
+
+## Absorbing a project is not folding, and the steps differ
+
+**A `Project` taken into another project must not go through the sequence
+above.** #294 did on 2026-09-06, and all three steps were wrong for it:
+
+| the fold step | why it is wrong for a project |
+| --- | --- |
+| make it a **sub-issue** | a sub-issue of a project is a **work package** (D51) — it claims work still to be done under that parent, with its own milestone and delivery. #294 was reported as a malformed work package by the title check until the parent was removed |
+| label it **`folded`** | `folded` marks a requirement that a project now owns. A project is not folded into anything |
+| close it **completed** | nothing was completed. #294's two requirements are unstarted today, and the wrong comment they exist to fix is still in `app.rs` |
+
+**What to do instead**, three steps and no parent link:
+
+1. **Re-home the requirements** into the absorbing project's table, naming both
+   sources — `#294 · #130`, so the trail survives the closure.
+2. **Close it as a duplicate.** `gh issue close NNN --reason "not planned"` with
+   a comment, or mark it duplicate in the browser. It delivered nothing, and
+   *completed* would say it did.
+3. **No `addSubIssue`, and no `folded` label.**
+
+**The distinction is what the closed issue claims.** A folded requirement says
+*somebody now owns this*. An absorbed project says *this was the same work seen
+twice*. Only the second is a duplicate, and only the first is a fold.
 
 ## Afterwards
 
