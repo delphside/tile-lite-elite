@@ -257,7 +257,16 @@ project that takes it, once. Nothing else is folded.
 **A requirement can move on afterwards**, from one project to another. Document
 the move in **both** — the receiving project names the source (`#294 · #130`, so
 the trail survives), the losing project records that it has gone and where.
-There is no label and no link; the two bodies are the record.
+
+**Move the sub-issue link with it**, using `replaceParent:true`. A folded
+requirement is a sub-issue of the project that owns it, so leaving the link
+behind puts the requirement under a project whose body no longer claims it —
+which is where #130 and #151 sat until 2026-09-08, parented to #294 while #290
+carried them as R5 and R6.
+
+```bash
+gh api graphql -f query='mutation($p:ID!,$c:ID!){addSubIssue(input:{issueId:$p,subIssueId:$c,replaceParent:true}){issue{number}}}' -f p="$pid" -f c="$cid"
+```
 
 **A project whose requirements have all moved out can be closed.** It owns
 nothing, so it has nothing left to do. Say in the comment which projects took
@@ -270,7 +279,7 @@ enough."*
 
 | | why |
 | --- | --- |
-| `addSubIssue` | a sub-issue of a project is a **work package** (D51) — it claims work still to come under that parent, with its own milestone and delivery. The title check reported #294 as a malformed package until the parent was removed |
+| `addSubIssue` on the project itself | **a `Project` sub-issue means a work package, and nothing else** — owner, 2026-09-08. It claims work still to come under that parent, with its own milestone and delivery. The title check reported #294 as a malformed package until the parent was removed. A `Requirement` sub-issue is a fold and is fine; a `Project` one is a structural claim |
 | the `folded` label, and closing as **completed** | `folded` marks a requirement, and nothing was completed. #294's two requirements are unstarted today, and the wrong comment they exist to fix is still in `app.rs` |
 
 ## Afterwards
