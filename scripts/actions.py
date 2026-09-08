@@ -213,13 +213,23 @@ def post_deployment_days(owner: str, repo: str, numbers: list[int]) -> dict[int,
 def branches() -> set[int]:
     """Issue numbers with a branch of their own, local or on the remote.
 
-    The same signal `status.sh` uses: a branch named `issue-<n>-…` means somebody
+    The same signal `status.sh` uses: a branch named `<n>-…` means somebody
     started. Without it "not started" and "in progress" look identical from the
     issue alone, and the difference is the whole point of the distinction.
+
+    **Both spellings.** Branches were `issue-<n>-…` until 2026-09-05 and are
+    `<n>-…` since; the `commit-msg` hook has always accepted either. This
+    matched only the old one, so every branch cut after that date read as no
+    branch at all.
+
+    Anchored to the start of the branch name, after an optional `origin/`, so a
+    number inside a slug cannot match — `release/0.7.3` and `main` match
+    nothing, which is right: neither belongs to an issue.
     """
     out = subprocess.run(["git", "branch", "-a", "--format=%(refname:short)"],
                          capture_output=True, text=True).stdout
-    return {int(m.group(1)) for m in re.finditer(r"issue-(\d+)-", out)}
+    return {int(m.group(1))
+            for m in re.finditer(r"^(?:origin/)?(?:issue-)?(\d+)-", out, re.M)}
 
 
 def gh(*args: str) -> str:
@@ -355,7 +365,12 @@ def main() -> int:
     pr_for: dict[int, list[dict]] = {}
     homeless: list[dict] = []
     for pr in prs:
-        m = re.match(r"issue-(\d+)-", pr["headRefName"])
+        # Both spellings — see `branches()`. Matching only `issue-<n>-` sent
+        # every pull request opened after 2026-09-05 to `homeless`, which is
+        # printed under `--all` and nowhere else: a pull request awaiting the
+        # owner's review was invisible in the view that exists to show him what
+        # is waiting.
+        m = re.match(r"(?:issue-)?(\d+)-", pr["headRefName"])
         (pr_for.setdefault(int(m.group(1)), []).append(pr) if m else homeless.append(pr))
 
     started = branches()

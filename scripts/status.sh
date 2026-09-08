@@ -25,7 +25,7 @@ set -euo pipefail
 #
 # The cost of deriving rather than recording is that the view is only as good
 # as the convention: a change with neither a `Refs #N` trailer nor an
-# `issue-<N>-*` branch still reads "not started". That is deliberate. A view
+# `<N>-*` branch still reads "not started". That is deliberate. A view
 # that papered over a missing trailer would remove the one signal that the
 # convention had slipped.
 #
@@ -260,11 +260,11 @@ echo
 # working in) over its remote copy. Printed in the "in progress" line so a
 # mis-named or forgotten branch is visible rather than merely absent.
 branch_for_issue() {
-  git branch --list "issue-$1-*" --format='%(refname:short)' 2>/dev/null | head -1 \
+  git branch --list "issue-$1-*" "$1-*" --format='%(refname:short)' 2>/dev/null | head -1 \
     || true
 }
 remote_branch_for_issue() {
-  git branch --remotes --list "origin/issue-$1-*" --format='%(refname:short)' 2>/dev/null \
+  git branch --remotes --list "origin/issue-$1-*" "origin/$1-*" --format='%(refname:short)' 2>/dev/null \
     | head -1 || true
 }
 
@@ -534,7 +534,7 @@ echo
 echo "    Types: docs/3.3, \"The six types of change\"."
 echo "    State comes from \"Refs #N\" in the commits, so a branch covering"
 echo "    several issues shows under each. A change with neither a Refs"
-echo "    trailer nor an issue-<N>-* branch reads \"not started\"."
+echo "    trailer nor a <N>-* branch reads \"not started\"."
 
 # --- the documents, as a check rather than a gate ---------------------------
 #
