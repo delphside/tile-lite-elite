@@ -240,7 +240,7 @@ else
     # issue already live in 0.7.2 sat under "would ship" beside the thing that
     # actually ships. Grouped by what it means for *this* release instead.
     FUNCTIONAL=""
-    DELIVERS=""; LIVE=""; DECISIONS=""; ATMERGE=""; UNSET=""
+    DELIVERS=""; LIVE=""; DECISIONS=""; ATMERGE=""; UNSET=""; REQS=""; UNTYPED=""
     while read -r num; do
       [[ -z "$num" ]] && continue
       IFS=$'\t' read -r title toc route kind <<< "$(type_of_issue "$num")"
@@ -254,6 +254,20 @@ else
       elif [[ "$kind" == "Decision" ]]; then
         # A decision routes work; it never ships. `docs/3.6`.
         DECISIONS="$DECISIONS      $row"$'\n'
+      elif [[ "$kind" == "Requirement" ]]; then
+        # **A requirement carries no route, and asking it for one is a defect
+        # in this report rather than in the issue.** `Route` says how a change
+        # reaches its users, and a requirement is not a change vehicle — the
+        # project that takes it answers that. Until 2026-09-09 three of them
+        # (#339, #340, #346) sat under *"route not set — cannot say, and that
+        # is the thing to fix"*, which named the wrong thing to fix.
+        REQS="$REQS      $row"$'\n'
+      elif [[ -z "$kind" ]]; then
+        # **Untyped is its own finding.** Twenty issues carry no issue type at
+        # all, left by an earlier type retirement. Without a type nothing can
+        # say whether a route is owed, so reporting the missing route names a
+        # symptom of the missing type.
+        UNTYPED="$UNTYPED      $row"$'\n'
       else
         case "$(reach_of "$route")" in
           "reaches users")
@@ -270,12 +284,14 @@ else
     if [[ -n "$DELIVERS" ]]; then printf '%s' "$DELIVERS"
     else printf '    %-12s %s\n' "ships" "nothing — no change in this range reaches users"; fi
 
-    if [[ -n "$LIVE$DECISIONS$ATMERGE$UNSET" ]]; then
+    if [[ -n "$LIVE$DECISIONS$ATMERGE$UNSET$REQS$UNTYPED" ]]; then
       echo
       echo "    also referenced by these commits, and not delivered by this release"
       [[ -n "$LIVE" ]]      && { echo "    already live"; printf '%s' "$LIVE"; }
       [[ -n "$ATMERGE" ]]   && { echo "    live at merge — repository changes"; printf '%s' "$ATMERGE"; }
       [[ -n "$DECISIONS" ]] && { echo "    decisions — they route work and ship nothing"; printf '%s' "$DECISIONS"; }
+      [[ -n "$REQS" ]]      && { echo "    requirements — a project carries the route, not these"; printf '%s' "$REQS"; }
+      [[ -n "$UNTYPED" ]]   && { echo "    no issue type — that is the thing to fix, not the route"; printf '%s' "$UNTYPED"; }
       [[ -n "$UNSET" ]]     && { echo "    route not set — cannot say, and that is the thing to fix"; printf '%s' "$UNSET"; }
     fi
 
