@@ -16,7 +16,7 @@ set -euo pipefail
 command -v gh >/dev/null || { echo "check-transitions: no 'gh' on PATH" >&2; exit 2; }
 command -v jq >/dev/null || { echo "check-transitions: no 'jq' on PATH" >&2; exit 2; }
 
-Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} parent{number} subIssues(first:30){nodes{issueType{name}}} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
+Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} parent{number} subIssues(first:30){nodes{number issueType{name}}} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
 ISSUES="$(gh api graphql -f query="$Q" 2>/dev/null)" || {
   echo "check-transitions: could not read the issues" >&2; exit 2; }
 
@@ -38,7 +38,10 @@ ROWS="$(printf '%s' "$ISSUES" | jq -r '
   # #301 were all reported as parents that must not build.
   | ([$i.subIssues.nodes[]? | select(.issueType.name == "Project")] | length) as $pkgs
   | (if $i.parent then "sub" elif $pkgs > 0 then "parent" else "solo" end) as $role
+  | ([$i.subIssues.nodes[]? | select(.issueType.name == "Requirement") | .number]
+     | sort | map(tostring) | join(",")) as $reqkids
   | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $route, $role,
+     (if $reqkids == "" then "-" else $reqkids end),
      (($i.body // "") | @base64),
      (($i.body // "") | gsub("[\n\r]"; " "))] | @tsv')"
 
@@ -103,9 +106,9 @@ decision_has_actions_heading() {
 # character: bash collapses a run of them, so a genuinely empty field would
 # merge with the next and shift the body out of reach. That failure is silent —
 # the check simply stops finding anything.
-while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role b64 body; do
+while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role reqkids b64 body; do
   [ -n "$num" ] || continue
-  for v in stage phase ws toc pri eff dstate route; do
+  for v in stage phase ws toc pri eff dstate route reqkids; do
     [ "${!v}" = "-" ] && printf -v "$v" '%s' ""
   done
   case "$kind" in
@@ -145,6 +148,56 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role b6
             # absent link is the defect here — the parent is unreachable from
             # the thing being built.
             printf '%s' "$body" | grep -qE "#[0-9]+" || report "$num" "$phase" "a work package with no link to its parent's design"
+          fi
+          ;;
+      esac
+      # **The source requirements are listed as well as parented** — owner,
+      # 2026-09-08: *"a project should list its source requirements as well as
+      # parenting them. This is separate from the requirements table because
+      # that might move on during project scoping."*
+      #
+      # So there are two records of provenance and they must agree. The `from`
+      # column stops being complete the moment scoping merges two sources into
+      # one R or drops one; the list does not move. The sub-issues are the third
+      # record, and it was the three disagreeing that put #130 and #151 under
+      # #294 while #290 carried them as R5 and R6.
+      #
+      # A project raised directly writes `none`, which is why an absent line and
+      # an empty one are different findings — the same reason a test approach
+      # that does not apply says "None." rather than being removed.
+      case "$phase" in
+        "Design and Test Approach"|Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
+          # **Not asked of a work package** — D51. The parent owns the
+          # requirements and therefore their provenance; a package links to them
+          # and would otherwise be made to restate a list it does not own.
+          srcline="$(printf '%s' "$b64" | base64 -d 2>/dev/null \
+            | grep -m1 -iE '^\*\*Source requirements\*\*' || true)"
+          if [ "$role" = "sub" ]; then
+            :
+          elif [ -z "$srcline" ]; then
+            report "$num" "$phase" "no 'Source requirements' line, so provenance rests on a table that scoping rewrites"
+          else
+            # **Its own number is not a source it can parent.** A project
+            # converted from a requirement *is* that requirement — #252 says so
+            # in its line — and nothing can be its own sub-issue.
+            # **`|| true` on both, because `grep` exits 1 on no match and this
+            # script runs under `pipefail`.** #288 lists `none — raised directly`
+            # and has no numbers at all, so the pipeline failed, the script died
+            # before its summary, and it reported *nothing* while exiting 1. The
+            # fifth time a grep in a pipeline has silently broken a check here.
+            listed="$(printf '%s' "$srcline" | grep -oE '#[0-9]+' | tr -d '#' \
+              | grep -vx "$num" | sort -un | tr '\n' ' ' || true)"
+            held="$(printf '%s' "$reqkids" | tr ',' '\n' | grep . | sort -un | tr '\n' ' ' || true)"
+            for r in $listed; do
+              case " $held " in *" $r "*) : ;;
+                *) report "$num" "$phase" "lists #$r as a source but does not parent it" ;;
+              esac
+            done
+            for r in $held; do
+              case " $listed " in *" $r "*) : ;;
+                *) report "$num" "$phase" "parents #$r but does not list it as a source" ;;
+              esac
+            done
           fi
           ;;
       esac
