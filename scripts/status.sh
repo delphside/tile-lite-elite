@@ -344,8 +344,18 @@ state_of_issue() {
   # did for three issues the moment they were merged. `Refs #N` is in every
   # commit by convention, and unlike a branch it is permanent. The trailing
   # guard stops #1 matching "Refs #19".
-  if git log origin/main -E --grep="Refs #${num}([^0-9]|\$)" \
-       --format=%h 2>/dev/null | grep -q .; then
+  # **`rev-list --count`, not `git log … | grep -q .`.** The pipe is the defect,
+  # and this is the fourth place it has been found: `grep -q` exits on its first
+  # match, `git log` takes SIGPIPE, and under `set -o pipefail` the *pipeline*
+  # reports 141 — so inside an `if` it takes the else branch, and an issue that
+  # is mentioned reads "not started" precisely because it was found.
+  #
+  # `deploy.sh`, `verify.sh` and `issue-mentions.sh` were each fixed for this;
+  # this line was not, and #252 read "not started" on 2026-09-08 with five
+  # `Refs #252` commits on `main`. It is a **race**, so it inverted for #252 and
+  # not for #288, #310 or #339 in the same run — which is what makes it worse
+  # than a plain bug: the same code gives different answers per issue.
+  if [[ "$(git rev-list --count origin/main -E --grep="Refs #${num}([^0-9]|\$)" 2>/dev/null || echo 0)" != "0" ]]; then
     # Only what ships in a release waits for one. Documentation and tooling
     # are usually finished at merge, so say so as an action rather than
     # leaving them looking blocked on something. Route answers this properly
