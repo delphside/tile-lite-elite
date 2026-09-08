@@ -136,12 +136,19 @@ REPO_NAME="${REPO_NWO##*/}"
 # An exact value since 2026-08-26, for the same reason as `type_of`: these were
 # substring matches against a comma-joined label string.
 reach_of() {
+  # **Route, not Type of change.** It answered from the type until 2026-09-08,
+  # where `documentation` and `tooling` meant "live at merge" and *everything
+  # else* — including an unset type — meant "reaches users". Seven rows claimed
+  # to reach users on the day it changed: five decisions, a closed defect about
+  # a pre-commit rule, and a change to one documentation file. `Route` is the
+  # field that answers this.
+  #
+  # An unset route says so rather than guessing. Guessing produced the seven.
   case "$1" in
-    # Answered from Type of change until Route is read here instead: a
-    # repository change is live at merge, a production release is not, and that
-    # is what the Route field now says. Tracked on #303.
-    documentation|tooling)          echo "live at merge, unless it ships in the image" ;;
-    *)                              echo "reaches users" ;;
+    "Production Release") echo "reaches users" ;;
+    "Repository Change")  echo "live at merge" ;;
+    "Other")              echo "applied by hand" ;;
+    *)                    echo "route not set" ;;
   esac
 }
 
@@ -154,7 +161,8 @@ type_of_issue() {
                     value field { ... on IssueFieldCommon { name } } } } } } } }" \
     --jq '.data.repository.issue
           | [ .title,
-              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-") ]
+              ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
+              ([.issueFieldValues.nodes[]? | select(.field.name == "Route") | .value] | first // "-") ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -228,11 +236,11 @@ else
     FUNCTIONAL=""
     while read -r num; do
       [[ -z "$num" ]] && continue
-      meta="$(type_of_issue "$num")"
-      title="${meta%%$'\t'*}"
-      toc="${meta#*$'\t'}"
-      [[ -z "$meta" ]] && { title="(could not read issue)"; toc=""; }
-      reach="$(reach_of "$toc")"
+      IFS=$'\t' read -r title toc route <<< "$(type_of_issue "$num")"
+      [[ -z "$title" ]] && { title="(could not read issue)"; toc="-"; route="-"; }
+      [[ "$toc" == "-" ]] && toc=""
+      [[ "$route" == "-" ]] && route=""
+      reach="$(reach_of "$route")"
       # A change already delivered by an earlier release can still be
       # referenced by later commits — its design note being retired, say. It is
       # not part of what this release delivers, and counting it produced a
@@ -513,7 +521,8 @@ AWAITING="$(gh api graphql -f query='{ repository(owner: "'"$REPO_OWNER"'", name
                           value field { ... on IssueFieldCommon { name } } } } } } } } }' \
   --jq '.data.repository.issues.nodes[] | select(.milestone != null)
         | [ .number, .title, .milestone.title,
-            ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-") ]
+            ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
+            ([.issueFieldValues.nodes[]? | select(.field.name == "Route") | .value] | first // "-") ]
         | @tsv' 2>/dev/null || true)"
 
 OPEN_MILESTONES="$(gh api "repos/{owner}/{repo}/milestones?state=open" \
@@ -521,10 +530,11 @@ OPEN_MILESTONES="$(gh api "repos/{owner}/{repo}/milestones?state=open" \
 
 FOUND=0
 if [[ -n "$AWAITING" && -n "$OPEN_MILESTONES" ]]; then
-  while IFS=$'\t' read -r num title milestone toc; do
+  while IFS=$'\t' read -r num title milestone toc route; do
     [[ -z "$num" ]] && continue
     [[ "$toc" == "-" ]] && toc=""
     [[ "$milestone" == "-" ]] && milestone=""
+    [[ "$route" == "-" ]] && route=""
     # An open milestone alone is not enough. The release-attribute milestones —
     # patch, minor, major, no-release — never close, that being what makes them
     # queues rather than releases, so
@@ -533,7 +543,18 @@ if [[ -n "$AWAITING" && -n "$OPEN_MILESTONES" ]]; then
     # And a change that never reaches users has nothing to wait for. It went
     # live when it merged, so listing it as "not yet released" is wrong rather
     # than merely noisy — it invents a queue that does not exist.
-    [[ "$(reach_of "$toc")" == "reaches users" ]] || continue
+    # **Only a delivery milestone can be waiting.** `pre-approved` and
+    # `no-release` never close — that is what makes them answers rather than
+    # queues — so an open-milestone test passes for everything closed against
+    # one. `reach_of` used to carry that filter by accident, because it read
+    # `Type of change` and tooling meant "live at merge"; reading `Route`
+    # instead exposed it, and nine already-live changes appeared here.
+    #
+    # A delivery milestone is a semver, or a semver plus a letter. Nothing else
+    # ships.
+    [[ "$milestone" =~ ^[0-9]+\.[0-9]+\.[0-9]+[a-z]*$ ]] || continue
+    # And of those, only what reaches users is waiting on a release.
+    case "$(reach_of "$route")" in "live at merge"|"applied by hand") continue ;; esac
     printf "    %-4s %s %s\n" "$num" "$(fit_title "$title")" "$milestone"
     FOUND=1
   done <<< "$AWAITING"
