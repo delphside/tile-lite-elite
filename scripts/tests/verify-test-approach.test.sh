@@ -38,6 +38,14 @@ run_approach() {
 
   cat > "$work/bin/gh" <<STUB
 #!/usr/bin/env bash
+# The sub-issues call decides whether the issue is a parent. Answered from
+# PARENTS so one case can mix a parent and a package; 0 for everything else,
+# which is what every case written before D51 expects.
+case "\$*" in
+  *"/sub_issues"*) n="\$*"; n="\${n#*/issues/}"; n="\${n%%/*}"
+                   case " \${PARENTS:-} " in *" \$n "*) echo 1 ;; *) echo 0 ;; esac
+                   exit 0 ;;
+esac
 for a in "\$@"; do
   [[ "\$a" == "view" ]] && { cat "$work/body"; exit 0; }
 done
@@ -50,7 +58,7 @@ STUB
     cd "$HERE"
     PATH="$work/bin:$PATH"
     # shellcheck disable=SC1090
-    source <(sed -n '/^section_boxes()/,/^}/p;/^check_approach()/,/^}/p' scripts/verify.sh)
+    source <(sed -n '/^section_boxes()/,/^}/p;/^is_parent()/,/^}/p;/^check_approach()/,/^}/p' scripts/verify.sh)
     # Both take a third argument, the detail lines. The first version of this
     # stub dropped it, and two cases failed for want of output the check was
     # producing — a harness that does not mirror the real signature tests
@@ -111,6 +119,34 @@ out="$(run_approach "282${TAB}The bot plays the plural" \
 - [ ] the list has 2678 lines
 ')"
 check "unticked post-deployment rows are not counted as tests" "PASS" "$(awk '{print $1; exit}' <<< "$out")"
+
+# 3b — a parent owns no test approach, so it is not asked for one
+# D51: the parent owns the requirements, the design and the documents; the work
+# packages own the artefacts, the test approach and the post-deployment checks.
+# `check-transitions.sh` has exempted a parent since D51 landed and this check
+# did not, so the two tools disagreed about the same issue. The body here is a
+# real parent's shape — requirements and design, and no test approach at all.
+PARENTS="71"; export PARENTS
+out="$(run_approach "71${TAB}Rebuild the client" \
+'## Requirements
+
+| | from | |
+| --- | --- | --- |
+| R1 | #123 | the client is on a supported major version |
+
+## Design
+
+See the design document.
+
+## Deliveries
+
+| # | what it delivers | milestone |
+| --- | --- | --- |
+| 1 | #269 Core Client UI | 1.0.0 |
+')"
+check "a parent with no test approach passes" "PASS" "$(awk '{print $1; exit}' <<< "$out")"
+check "and is named as a parent, not counted" "1" "$(grep -c 'a parent' <<< "$out")"
+unset PARENTS
 
 # 4 — a project with no headings at all is reported, and differently
 out="$(run_approach "999${TAB}A project written before the headings existed" \

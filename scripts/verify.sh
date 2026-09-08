@@ -271,6 +271,27 @@ check_rehearsal() {
   esac
 }
 
+# **A parent is not a delivery** — D51. It owns the requirements, the design and
+# the documents while its work packages carry the artefacts, the test approach
+# and the commits. The owner, 2026-09-08: *"as with Route a parent does not need
+# a milestone, but one can be set. It should be ignored."*
+#
+# So a parent in a shipping list has no commits of its own and no test approach
+# of its own, and both checks below would have called that a defect. #71 carries
+# `1.0.0` as a target while #269-#272 carry the deliveries.
+#
+# The REST sub-issues endpoint, because `{owner}` and `{repo}` expand in a REST
+# path and not in a GraphQL document. A project with `Project` children is a
+# parent; folded requirements and owned decisions are children too, which is why
+# the type is filtered — counting them all made #295, #297 and #301 read as
+# parents in `check-transitions.sh` once.
+is_parent() {
+  local n
+  n="$(gh api "repos/{owner}/{repo}/issues/$1/sub_issues" \
+    --jq '[.[] | select(.type.name == "Project")] | length' 2>/dev/null || echo 0)"
+  [[ "${n:-0}" != "0" ]]
+}
+
 LABEL[milestone]="Milestone carries only built work"
 check_milestone() {
   local version ms unbuilt="" lines=""
@@ -293,6 +314,10 @@ check_milestone() {
     # `set -o pipefail` the pipeline reports failure — so an issue that *is*
     # mentioned reported "no commit mentions this" once the history was long
     # enough. `deploy.sh` carried the identical line and returned 141 on #174.
+    if is_parent "$num"; then
+      lines+="#$num ${kind:0:11} ${title:0:46} (a parent — its packages carry the commits)"$'\n'
+      continue
+    fi
     mentions="$(commits_mentioning HEAD "$num")"
     if (( mentions > 0 )); then
       lines+="#$num ${kind:0:11} ${title:0:46} ($mentions commits)"$'\n'
@@ -353,6 +378,10 @@ check_approach() {
   fi
   while IFS=$'\t' read -r num title; do
     [[ -z "$num" ]] && continue
+    if is_parent "$num"; then
+      lines+="#$num ${title:0:46} (a parent — its packages own the test approach)"$'\n'
+      continue
+    fi
     body="$(gh issue view "$num" --json body --jq .body 2>/dev/null || true)"
     local functional technical
     # Sectioned deliberately: an unticked box under Post-deployment checks is a
