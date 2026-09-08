@@ -249,29 +249,29 @@ gh issue close NNN --reason completed --comment "Folded into #$NUM, which owns t
 
 `addSubIssue` takes `replaceParent:true` to move one that already has a parent.
 
-## Absorbing a project is not folding, and the steps differ
+## Moving requirements between projects
 
-**A `Project` taken into another project must not go through the sequence
-above.** #294 did on 2026-09-06, and all three steps were wrong for it:
+**`fold` is a requirement word and stays one.** A requirement is folded into the
+project that takes it, once. Nothing else is folded.
 
-| the fold step | why it is wrong for a project |
+**A requirement can move on afterwards**, from one project to another. Document
+the move in **both** — the receiving project names the source (`#294 · #130`, so
+the trail survives), the losing project records that it has gone and where.
+There is no label and no link; the two bodies are the record.
+
+**A project whose requirements have all moved out can be closed.** It owns
+nothing, so it has nothing left to do. Say in the comment which projects took
+what, and pick whatever close reason fits — *duplicate* where it was genuinely
+the same work seen twice, *not planned* otherwise. Owner, 2026-09-08: *"just
+closing it because the requirements have moved to other named projects is
+enough."*
+
+**What must not happen to it**, both of which did to #294 on 2026-09-06:
+
+| | why |
 | --- | --- |
-| make it a **sub-issue** | a sub-issue of a project is a **work package** (D51) — it claims work still to be done under that parent, with its own milestone and delivery. #294 was reported as a malformed work package by the title check until the parent was removed |
-| label it **`folded`** | `folded` marks a requirement that a project now owns. A project is not folded into anything |
-| close it **completed** | nothing was completed. #294's two requirements are unstarted today, and the wrong comment they exist to fix is still in `app.rs` |
-
-**What to do instead**, three steps and no parent link:
-
-1. **Re-home the requirements** into the absorbing project's table, naming both
-   sources — `#294 · #130`, so the trail survives the closure.
-2. **Close it as a duplicate.** `gh issue close NNN --reason "not planned"` with
-   a comment, or mark it duplicate in the browser. It delivered nothing, and
-   *completed* would say it did.
-3. **No `addSubIssue`, and no `folded` label.**
-
-**The distinction is what the closed issue claims.** A folded requirement says
-*somebody now owns this*. An absorbed project says *this was the same work seen
-twice*. Only the second is a duplicate, and only the first is a fold.
+| `addSubIssue` | a sub-issue of a project is a **work package** (D51) — it claims work still to come under that parent, with its own milestone and delivery. The title check reported #294 as a malformed package until the parent was removed |
+| the `folded` label, and closing as **completed** | `folded` marks a requirement, and nothing was completed. #294's two requirements are unstarted today, and the wrong comment they exist to fix is still in `app.rs` |
 
 ## Afterwards
 
