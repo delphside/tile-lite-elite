@@ -82,7 +82,9 @@ one of them has a defect: fix it, don't work around it.
 - The parent owns the requirements, the design and the documents; a work
   package links to them and carries its own artefacts, test approach and
   post-deployment checks, because a check is answered per delivery. The parent
-  carries no milestone: it has no delivery role.
+  needs no milestone and no Route: it has no delivery role, and both answer how
+  a change reaches its users. One could be derived from the packages, but it
+  would be information rather than a fact about the parent.
 - The parent runs Scope, the queue, and Design and Test Approach, then stops —
   oversight is a design role. It may reach Post-deployment for a requirement no
   single delivery satisfies, and Project Closedown to close. A work package may
