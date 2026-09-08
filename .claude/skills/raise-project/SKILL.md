@@ -91,6 +91,12 @@ which is useful and which stops being complete the moment scoping merges or drop
 one. The source list is provenance and does not move; the table is the current
 statement of the work and does.
 
+**A decision is not a source requirement.** It routes work — it raises or adds
+requirements and is then closed — so it is named in the `from` column of the
+rows it produced, never in the source list. #301 listed decision #332 there on
+2026-09-09 and `check-transitions.sh` reported it as a source with no parent
+link, which is exactly right: nothing folds a decision.
+
 **A project raised directly says so** rather than leaving the line out — `none —
 raised directly as a project, so R1 and R2 are its own`. An absent line cannot be
 told from an unanswered one, which is the same reason a test approach that does
