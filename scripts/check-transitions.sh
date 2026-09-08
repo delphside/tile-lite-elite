@@ -20,7 +20,7 @@ Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states
 ISSUES="$(gh api graphql -f query="$Q" 2>/dev/null)" || {
   echo "check-transitions: could not read the issues" >&2; exit 2; }
 
-echo "==> Open issues, against what their stage or phase claims"
+echo "==> Issues, against what their fields and titles claim"
 
 ROWS="$(printf '%s' "$ISSUES" | jq -r '
   .data.repository.issues.nodes[] | . as $i
@@ -322,9 +322,86 @@ if [ -n "$STALE" ]; then
   done <<< "$STALE"
 fi
 
+
+# --- a work package title, against the milestones of its siblings --------------
+#
+# **The delivery is the milestone, so every count in a title is derivable.** A
+# title reads `#N WP A Del 1 of 2, pt 1 of 2:` — which package, which delivery
+# carries it, and its share of that delivery. All three are readable from the
+# siblings, so none of them has to be trusted.
+#
+# Owner, 2026-09-08: *"of course the number of deliveries may change, but it is
+# still better to have it."* The counts are kept knowing they go stale; this is
+# what makes the staleness report itself instead of waiting to be noticed. Six
+# titles were wrong the day before this was written.
+#
+# `gh issue list --json` carries `parent`, so one call covers every project in
+# either state — the GraphQL query above reads open issues only, and a parent
+# routinely has closed packages.
+#
+# **A quoted heredoc, not a single-quoted string.** The jq program has
+# apostrophes in its comments, and embedding it in `'...'` ended the string
+# mid-program — the same defect that broke this file once before.
+WPQ="$(cat <<'JQEOF'
+# Every work package title, judged against the milestones of its siblings.
+[ .[] | select(.issueType.name == "Project") | select(.parent != null)
+      | {num: .number, title: .title, parent: .parent.number,
+         ms: (.milestone.title // "")} ]
+| group_by(.parent)
+| map(
+    . as $kids
+    | ([$kids[].ms] | map(select(. != "")) | unique) as $dels
+    | ($dels | length) as $ndel
+    # **The delivery count is only knowable once every package has a milestone.**
+    # An unset milestone is a delivery not yet decided, not a delivery that does
+    # not exist: #214 has two by design while #355 is unscoped, so counting
+    # distinct milestones gives one and would call a correct title wrong.
+    # Gates every count, `pt` included. #71's five packages all carry `1.0.0`,
+    # which is a *target* rather than a settled delivery — the owner, 2026-09-08:
+    # a milestone on an unscoped project says intent, not grouping. Demanding
+    # `pt 1 of 5` there would write a grouping into five titles that the design
+    # has not yet made.
+    | ([$kids[] | select(.ms == "")] | length == 0) as $settled
+    | $kids[]
+    | . as $k
+    # `// null`, because a non-matching `capture` yields *empty*, not null — so
+    # binding it directly made the whole branch produce nothing and the
+    # unrecognised-title check could never fire. Found by the synthetic case.
+    | (($k.title | capture("^#(?<par>[0-9]+) WP (?<wp>[A-Z]+)(?: Del (?<dk>[0-9]+) of (?<dj>[0-9]+))?(?:, pt (?<pp>[0-9]+) of (?<pq>[0-9]+))?:")) // null) as $c
+    | ([$kids[] | select(.ms == $k.ms and .ms != "")] | length) as $share
+    | [
+        (if $c == null then [$k.num, "title", "does not follow '#N WP A Del K of J: what it delivers'"] else empty end),
+        (if $c != null and ($c.par | tonumber) != $k.parent
+           then [$k.num, "title", "names #\($c.par) but its parent is #\($k.parent)"] else empty end),
+        (if $c != null and $c.dj == null and $settled and $ndel > 0
+           then [$k.num, "title", "no 'Del K of J', but its siblings' milestones give \($ndel) deliver\(if $ndel == 1 then "y" else "ies" end)"] else empty end),
+        (if $c != null and $c.dj != null and $settled and ($c.dj | tonumber) != $ndel
+           then [$k.num, "title", "says 'of \($c.dj)' deliveries; the milestones give \($ndel)"] else empty end),
+        (if $c != null and $settled and $share > 1 and $c.pq == null
+           then [$k.num, "title", "shares milestone '\($k.ms)' with \($share - 1) other, so it needs 'pt P of \($share)'"] else empty end),
+        (if $c != null and $settled and $share == 1 and $c.pq != null
+           then [$k.num, "title", "carries 'pt' but is alone in milestone '\($k.ms)'"] else empty end),
+        (if $c != null and $settled and $c.pq != null and ($c.pq | tonumber) != $share
+           then [$k.num, "title", "says 'pt of \($c.pq)'; \($share) package(s) share milestone '\($k.ms)'"] else empty end)
+      ][]
+  )
+| .[]
+| @tsv
+JQEOF
+)"
+WPFINDINGS="$(gh issue list --state all --limit 500 \
+  --json number,title,milestone,parent,issueType 2>/dev/null \
+  | jq -r "$WPQ" 2>/dev/null || true)"
+if [ -n "$WPFINDINGS" ]; then
+  while IFS=$'\t' read -r num label msg; do
+    [ -n "$num" ] || continue
+    report "$num" "$label" "$msg"
+  done <<< "$WPFINDINGS"
+fi
+
 echo
 if [ "$FAILURES" -gt 0 ]; then
-  echo "  $FAILURES issue(s) are further along than their content supports."
+  echo "  $FAILURES finding(s): content that does not support the field, or a title that disagrees with the milestones."
   exit 1
 fi
-echo "  every open issue has done the work its field claims"
+echo "  every issue has done the work its fields claim, and every title agrees"

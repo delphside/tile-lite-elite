@@ -99,12 +99,14 @@ one delivery — the parent and the child would say the same thing.
 | | form |
 | --- | --- |
 | a parent | `#N MAIN PROJECT: <what it is>` |
-| a work package | `#N WP A Del 1 of 2, pt 1 of 2: <what it delivers>` |
+| a work package, alone in its delivery | `#N WP A Del 1 of 2: <what it delivers>` |
+| a work package sharing its delivery | `#N WP A Del 1 of 2, pt 1 of 2: <what it delivers>` |
 | a work package whose deliveries are not yet decided | `#N WP A: <what it delivers>` |
 
 `WP A` is which package, lettered so it never reads as a delivery number.
 `Del 1 of 2` is which delivery carries it. `pt 1 of 2` is its share of that
-delivery, which is what makes a shared delivery visible from a listing.
+delivery and **is omitted when the delivery carries one package** — `pt 1 of 1`
+says nothing. It is what makes a shared delivery visible from a listing.
 
 The parent's number is repeated in every child so a title sort groups the family.
 
