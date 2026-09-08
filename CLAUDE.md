@@ -82,6 +82,12 @@ one of them has a defect: fix it, don't work around it.
   earlier deliveries get none.
 - A release milestone is a shipping list. The deploy settles everything in
   it, so move out what is not shipping before deploying.
+- `no-release` is provisional. Resolve it to `pre-approved` or a letter
+  milestone before the issue closes, or the record of how the change reached
+  main is lost. `pre-approved` is closed by hand; no deploy settles it.
+- A requirement carries no milestone, unless the change is made directly
+  without raising a project, when it carries `pre-approved`. Any other change
+  needs a project, and the project carries the milestone.
 - Deploys build a fresh worktree at the target commit, never the working
   tree. The image goes Preview, then Rehearsal, then Production.
 - After deploying, run verify.sh and trust exit status, not read output.

@@ -237,6 +237,30 @@ if [ -n "$CLOSED" ]; then
     | [$i.number, $ds, (($i.body // "") | @base64)] | @tsv')"
 fi
 
+# --- a `no-release` milestone nobody came back to ------------------------------
+#
+# `no-release` is provisional: it says *not a release* before anybody knows how
+# the change will actually reach `main`. It must become `pre-approved` or a
+# letter milestone before the issue closes, or the record of how that change
+# was delivered is lost — owner, 2026-09-08, and `docs/3.6`.
+#
+# **Only from 2026-09-04.** `pre-approved` became a milestone that day
+# (`66b10c3`); before it, `no-release` had nothing to resolve *to*, so the
+# thirty issues closed against it between 13 and 30 August broke no rule that
+# existed. Judging them by it would make this report thirty lines long on its
+# first run, which is how a check stops being read.
+RULE_FROM="2026-09-04"
+STALE="$(gh issue list --milestone no-release --state closed \
+  --json number,closedAt,title --limit 100 2>/dev/null \
+  | jq -r --arg from "$RULE_FROM" \
+      '.[] | select(.closedAt >= $from) | [.number, (.title[0:44])] | @tsv' 2>/dev/null || true)"
+if [ -n "$STALE" ]; then
+  while IFS=$'\t' read -r num title; do
+    [ -n "$num" ] || continue
+    report "$num" "closed" "closed still on 'no-release' — resolve to pre-approved or a letter"
+  done <<< "$STALE"
+fi
+
 echo
 if [ "$FAILURES" -gt 0 ]; then
   echo "  $FAILURES issue(s) are further along than their content supports."
