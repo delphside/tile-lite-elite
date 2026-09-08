@@ -73,12 +73,22 @@ one of them has a defect: fix it, don't work around it.
   and no row in the delivery log; its record is the closed issue and the
   commits. The two shapes are exclusive: either straight to main with none of
   them, or a branch, a pull request, a delivery, a letter milestone and a row.
-- Every project delivery has a milestone, recorded in the delivery log: the
-  release semver if it includes a release, otherwise the previous semver with
-  a letter appended. Deliveries released together share one.
-- A delivery is a sub-project, or it is pre-approved. A project with work to
-  deliver lists its deliveries; each row names a sub-project or says
-  pre-approved, and a pre-approved one has no issue and no milestone.
+- Every delivery has a milestone, recorded in the delivery log: the release
+  semver if it includes a release, otherwise the previous semver with a letter
+  appended.
+- A work package is a sub-project; a delivery is a milestone. The delivery is
+  the set of work packages going live together, identified by their shared
+  milestone, and it never has an issue of its own. A project with one work
+  package and one delivery needs no sub-project at all — it is the work package
+  and carries the milestone. A parent with work to deliver lists its
+  deliveries; each row names the work packages it carries or says pre-approved,
+  and a pre-approved one has no issue and no milestone. The four cases are in
+  docs/3.6.
+- A work package is titled `#N WP A Del 1 of 2: what it delivers`, a parent
+  `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
+  carries more than one package. The counts go stale and are kept anyway: a
+  title saying `Del 1 of 2` is wrong loudly where `Del 1` is silently
+  incomplete, and check-transitions.sh derives all of them from the milestones.
 - The parent owns the requirements, the design and the documents; a work
   package links to them and carries its own artefacts, test approach and
   post-deployment checks, because a check is answered per delivery. The parent
