@@ -73,12 +73,40 @@ both:
 | --- | --- | --- |
 ```
 
-**Every delivery is a sub-project** (D51) — a `Project` whose parent is this
-one, carrying its own milestone, artefacts, test approach and post-deployment
-checks. The parent owns the requirements, the design and the documents, carries
-no milestone, and lists its deliveries: each row names a sub-project or says
-`pre-approved`. A pre-approved delivery has no issue and no milestone, and its
-runbook sits under that list.
+**A work package is a sub-project; a delivery is a milestone** (D51, refined
+2026-09-08). A work package is a `Project` whose parent is this one, carrying its
+own milestone, artefacts, test approach and post-deployment checks. A **delivery**
+is the set of work packages going live together, identified by their shared
+milestone — it never has an issue of its own. The parent owns the requirements,
+the design and the documents, carries no milestone, and lists its deliveries:
+each row names the work packages it carries, or says `pre-approved`.
+
+**Four cases decide whether a sub-project is needed at all** — the owner's, and
+`docs/3.6` carries them:
+
+| | work packages | sub-projects |
+| --- | --- | --- |
+| **A** | one, one delivery | **none.** The parent is the work package and carries the milestone |
+| **B** | two, going live together | two, **the same** milestone; the parent lists one delivery carrying both |
+| **C** | two, going live separately | two, **different** milestones; two deliveries |
+| **D** | three, two together | three; two deliveries, one carrying two packages |
+
+**Case A is the common shape.** Do not create a sub-project for a project with
+one delivery — the parent and the child would say the same thing.
+
+## Naming
+
+| | form |
+| --- | --- |
+| a parent | `#N MAIN PROJECT: <what it is>` |
+| a work package | `#N WP A Del 1 of 2, pt 1 of 2: <what it delivers>` |
+| a work package whose deliveries are not yet decided | `#N WP A: <what it delivers>` |
+
+`WP A` is which package, lettered so it never reads as a delivery number.
+`Del 1 of 2` is which delivery carries it. `pt 1 of 2` is its share of that
+delivery, which is what makes a shared delivery visible from a listing.
+
+The parent's number is repeated in every child so a title sort groups the family.
 
 **A delivery's steps live in one place** — in its sub-project, or under the
 parent's list for a pre-approved one. Never both.
