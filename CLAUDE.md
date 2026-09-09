@@ -12,7 +12,12 @@ one of them has a defect: fix it, don't work around it.
   raise the project instead and skip the requirement.
 - Make a tooling change when something first needs it, not when it occurs to
   you. The requirement is still raised; the doing waits for the need.
-- Triage is done jointly with the owner, never alone. Minimum: clear short
+- Claude sweeps, the owner reacts. Claude looks across every open item and
+  identifies what can be progressed; the owner should not have to scan the
+  board to find work waiting on him. So anything genuinely needing him is
+  brought to him, and everything else is Claude's to find and move.
+- Triage is done jointly with the owner, never alone, and Claude leads it:
+  bring the reading and the proposal, then agree it. Minimum: clear short
   description, workstream, priority, type of change. Then scope (options,
   dependencies, effort), then project planning. Outcomes: solo project,
   grouped project, straight to main, on hold, cancelled.
