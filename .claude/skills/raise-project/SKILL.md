@@ -191,6 +191,19 @@ is answered `passed`, `cannot be tested`, or `failed`.
 say what each constrains; once one is chosen only it survives in the body, and
 the reasoning goes in a comment.
 
+## Writing the body
+
+**Never hard-wrap a paragraph in an issue body.** GitHub Flavoured Markdown
+renders a single newline as a line break, so a paragraph wrapped at 76 characters
+comes out ragged and half the width — unlike the repository's documents, where
+markdownlint requires the wrapping. One paragraph is one line, however long.
+
+Structural lines are unaffected and keep their own line: headings, table rows,
+list items, block quotes and fenced code.
+
+**Found 2026-09-09**, by the owner reading a paragraph that would not fill the
+width. Nine issue bodies had been written document-style and needed unwrapping.
+
 ## Creating it
 
 Always `--body-file`. A body passed with `--body` has its backticks evaluated by
