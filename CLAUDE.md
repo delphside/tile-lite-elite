@@ -80,10 +80,16 @@ one of them has a defect: fix it, don't work around it.
   including document updates. A release is a new version of the application,
   delivered to production with a new semver. Projects define their
   deliveries with the updated assets and the route.
-- A pre-approved change makes no delivery, so it takes no letter milestone
-  and no row in the delivery log; its record is the closed issue and the
-  commits. The two shapes are exclusive: either straight to main with none of
-  them, or a branch, a pull request, a delivery, a letter milestone and a row.
+- There is always a delivery, because the change has to reach main. What a
+  change applied straight to main does not have is a **milestone**: it is not
+  assumed to be a single point in time, so it does not fit the strict sequence
+  the milestones are. It takes no branch, no pull request, no letter milestone
+  and no delivery-log row. Its record is the commit, which references the
+  requirement or project it serves — possibly more than one.
+- So the two shapes are: straight to main, recorded by its commits; or held
+  back on a branch, which then owes a pull request, a milestone and a row. The
+  branch is what makes a delivery a point in time, and the milestone is what
+  places that point in the sequence.
 - Every delivery has a milestone, recorded in the delivery log: the release
   semver if it includes a release, otherwise **production's current version**
   with a letter appended. Production's, not the development version, because
