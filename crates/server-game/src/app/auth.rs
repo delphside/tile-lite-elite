@@ -80,7 +80,16 @@ pub(crate) async fn login_player(
         // an account at all, so there is nothing here that identifies anybody.
         // `reason` is what makes the line useful.
         tracing::warn!(reason, "login rejected");
-        ApiProblem::bad_request("Incorrect name or password")
+        // **"User ID", not "name"** — the form asks for a User ID (D48), and an
+        // error a player reads is UI text. This was the fifth player-facing
+        // message and the one this project first missed, because it says "name"
+        // rather than "display name" and so matched no search for the old
+        // wording. Found by the owner reading the login form on preview.
+        //
+        // The vagueness is untouched and must stay: the same error is returned
+        // whether the account is unknown or the password is wrong, and this
+        // wording is equally silent about which half failed.
+        ApiProblem::bad_request("Incorrect User ID or password")
     };
 
     let player = persistence::get_player_by_name(&state.db, &display_name)

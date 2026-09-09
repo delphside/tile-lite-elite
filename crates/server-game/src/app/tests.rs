@@ -5360,6 +5360,58 @@ async fn admin_can_reset_a_password() {
     assert_eq!(new_password_login.status(), StatusCode::OK);
 }
 
+/// **Every player-facing auth message calls the field a User ID** — D48, and the
+/// reason this project exists. Nothing asserted these strings, which is how
+/// "Incorrect name or password" survived a change that moved four of its
+/// siblings: it says *name*, not *display name*, so it matched no search for the
+/// old wording. The owner found it by reading the login form on preview.
+///
+/// Asserting the text is the point. A test checking only the status code would
+/// have passed throughout, and would pass again if the wording regressed.
+#[tokio::test]
+async fn auth_errors_name_the_field_the_form_asks_for() {
+    let database_url = test_database_url();
+    let state = create_test_state(&database_url).await;
+    let app = build_router(state);
+    let _alice = register_player(app.clone(), "Alice").await;
+
+    // A wrong password and an account that does not exist must give the *same*
+    // message — the endpoint may not reveal which accounts are registered. So
+    // both are checked, and both against the same string.
+    for (name, password) in [("Alice", "wrong-password"), ("Nobody", "any-password")] {
+        let response = send_json(
+            app.clone(),
+            Method::POST,
+            "/auth/login",
+            &LoginPlayerRequest {
+                display_name: name.to_string(),
+                password: password.to_string(),
+                stay_logged_in: false,
+            },
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = String::from_utf8(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        assert!(
+            body.contains("Incorrect User ID or password"),
+            "login failure for {name} should name the User ID, got: {body}"
+        );
+    }
+
+    // **The invitation flow's wording is not asserted here**, and that is a
+    // judgement rather than an oversight. Its endpoint needs a signed-in player,
+    // a real game and a `ConnectInfo` peer, so covering one string costs a whole
+    // fixture. The strings it uses — `Player to invite`, `a player or an email`,
+    // `No player named '<x>'` — are checked by eye on the form, which is how the
+    // inconsistency was found in the first place.
+}
+
 #[tokio::test]
 async fn admin_can_list_and_delete_games() {
     let database_url = test_database_url();

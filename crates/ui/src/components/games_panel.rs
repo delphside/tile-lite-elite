@@ -505,7 +505,7 @@ pub fn GamesPanel(
                                     },
                                     server_url: server_url.clone(),
                                     token: token.clone(),
-                                    placeholder: "User to invite".to_string(),
+                                    placeholder: "Player to invite".to_string(),
                                 }
                             } else if draft.kind == AdditionalSeatKind::Email {
                                 input {
@@ -1468,7 +1468,7 @@ fn add_seat_row(
                     on_change: move |value| name.set(value),
                     server_url: server_url.clone(),
                     token: token.clone(),
-                    placeholder: "User to invite".to_string(),
+                    placeholder: "Player to invite".to_string(),
                 }
             } else if kind() == AdditionalSeatKind::Email {
                 input {
