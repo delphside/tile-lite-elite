@@ -75,9 +75,13 @@ cannot be guaranteed to work and blocks every other release until it is.*
 work is in progress. A document-only change never takes one: they live too long,
 `main` moves, and the review does not happen.*
 
-*One branch serves the delivery, not one per row — everything the delivery
-touches goes on it, documentation included. Where a Production Release row is
-yes, the other rows ride the same branch and the same pull request.*
+*The branch and PR columns answer **yes or no first**, then say which — `yes —
+rides the same branch`, `yes — rides #341`. A cell that only explains has not
+answered the question the column asks.*
+
+*One branch serves the delivery, not one per row. Where a Production Release row
+is yes, the other rows are **also yes**, riding that same branch and pull
+request — everything the delivery touches goes on it, documentation included.*
 
 ## Test approach
 
