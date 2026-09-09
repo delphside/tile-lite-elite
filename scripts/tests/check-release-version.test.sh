@@ -77,6 +77,11 @@ done
 case "$*" in
   *"repo view"*) printf '%s\n' "delphside/tile-lite-elite" ;;
   *graphql*)
+    # Record the query, so a case can assert on what was *asked* and not only
+    # on how the answer was parsed. Without this the stub proves the code can
+    # read a response it is handed, which is how a query returning nothing
+    # passed every case here for a fortnight.
+    [[ -n "${QUERY_LOG:-}" ]] && printf '%s\n' "$*" >> "$QUERY_LOG"
     if [[ -n "$filter" ]]; then jq -r "$filter" < "$ANSWER_FILE"
     else cat "$ANSWER_FILE"; fi ;;
   *) : ;;
@@ -179,6 +184,27 @@ check_exit "a patch carrying only tooling passes" 0 \
   run_with_gh "0.4.26" "0.4.25" "$TOOLING_ANSWER"
 check_says "and says a patch is right" "a patch release is right" \
   run_with_gh "0.4.26" "0.4.25" "$TOOLING_ANSWER"
+
+# --- the query itself, not only the parsing -----------------------------------
+#
+# **`is:issue` is load-bearing and its absence made this gate blind.** Measured
+# against the live repository on 2026-09-09: `repo:… milestone:"0.7.3"` returns
+# **0** issues where `repo:… is:issue milestone:"0.7.3"` returns **5**. So the
+# check reported *nothing functional* for every release it ever ran on, because
+# it always found nothing to judge.
+#
+# Every other case here stubs the answer, which is why none of them could catch
+# it. This one asserts what was asked.
+QUERY_LOG="$(mktemp)"; export QUERY_LOG
+run_with_gh "0.4.26" "0.4.25" "$EMPTY_ANSWER" > /dev/null 2>&1 || true
+check_says_literal() {
+  local what="$1" want="$2"
+  if grep -q -- "$want" "$QUERY_LOG"; then printf '  ok   %s\n' "$what"
+  else printf '  FAIL %s\n       the query was: %s\n' "$what" "$(cat "$QUERY_LOG")"; failures=$((failures+1)); fi
+}
+check_says_literal "the search asks for is:issue" "is:issue"
+check_says_literal "and still filters by the milestone" "milestone:"
+rm -f "$QUERY_LOG"
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed" >&2

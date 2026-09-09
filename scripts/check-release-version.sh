@@ -89,6 +89,18 @@ fi
 # below rather than aborting — the check exists to catch a mistake, not to add
 # a dependency to shipping.
 #
+# **`is:issue` is load-bearing, and its absence made this gate blind.** Without
+# it the milestone qualifier matches nothing at all: measured 2026-09-09 against
+# milestone 0.7.3, which holds five issues — `repo:… milestone:"0.7.3"` returns
+# **0**, and `repo:… is:issue milestone:"0.7.3"` returns **5**. `type: ISSUE` in
+# the GraphQL argument is not the same filter and does not substitute for it.
+#
+# So this check reported *nothing functional* for every release it has ever run
+# on, because it always found nothing to judge. It could not fail. The unit
+# tests did not catch it because they stub `gh` and feed the parser a canned
+# response — they prove the code can read an answer it is handed, never that the
+# query returns one.
+#
 # **GraphQL, because REST cannot see an issue field.** The type of change moved
 # from a label to a field on 2026-08-26, and `gh api repos/.../issues` returns
 # labels and nothing else. Search filters by milestone server-side; the field
@@ -96,7 +108,7 @@ fi
 # depends on a label spelling.
 NWO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
 ISSUES="$(gh api graphql -f query="{
-  search(query: \"repo:$NWO milestone:\\\"$VERSION\\\"\", type: ISSUE, first: 100) {
+  search(query: \"repo:$NWO is:issue milestone:\\\"$VERSION\\\"\", type: ISSUE, first: 100) {
     nodes { ... on Issue { number title
       issueFieldValues(first: 10) {
         nodes { ... on IssueFieldSingleSelectValue {
