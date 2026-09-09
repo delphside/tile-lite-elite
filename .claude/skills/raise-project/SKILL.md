@@ -28,7 +28,7 @@ all seven.
 | --- | --- | --- |
 | Requirements | **owns** | links |
 | Design | **owns** | links, adding only what is its own |
-| Impacted artefacts | — | **owns** |
+| Impacted artefacts | — | **owns**, and the parent repeats each package's table under its Deliveries list |
 | Test approach | — | **owns** |
 | Dependencies and related work | **owns** | links |
 | Deliveries | **owns** — the list, each row a sub-project or `pre-approved` | its own steps |
@@ -52,8 +52,32 @@ both:
 ## Design
 
 ## Impacted artefacts
-| artefact | new or modified | route |
-| --- | --- | --- |
+
+*One table per delivery, three rows, one per route. `Route` is a property of the
+artefact (`docs/4.8`), so a delivery is the mixture of routes it touches — and
+that mixture is what decides the process it follows. Say `no` and a dash rather
+than dropping a row: an absent row and an empty one read the same, and only one
+of them means "nothing here".*
+
+### Delivery 1 — <what it delivers>
+
+| route | in this delivery | artefacts | branch | PR |
+| --- | --- | --- | --- | --- |
+| **Production Release** | yes/no | | **always yes** | **always yes** |
+| **Other** | yes/no | | | |
+| **Repository Change** | yes/no | | | |
+
+*A **Production Release** row set to yes forces a branch and a pull request for
+the whole delivery — `main` is what gets deployed, so a release commit there
+cannot be guaranteed to work and blocks every other release until it is.*
+
+*The other two rows take a branch only where the old version is needed while the
+work is in progress. A document-only change never takes one: they live too long,
+`main` moves, and the review does not happen.*
+
+*One branch serves the delivery, not one per row — everything the delivery
+touches goes on it, documentation included. Where a Production Release row is
+yes, the other rows ride the same branch and the same pull request.*
 
 ## Test approach
 
