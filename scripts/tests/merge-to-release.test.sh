@@ -24,7 +24,11 @@ cat > "$BIN/gh" <<'STUB'
 #!/usr/bin/env bash
 case "$1 $2" in
   "pr view")   cat "$STUB_DIR/pr.json" ;;
-  "pr merge")  echo "merged" > "$STUB_DIR/MERGED" ;;
+  # Records the whole call, not just that it happened. The strategy is the
+  # thing that matters and was unasserted until 2026-09-09: `--rebase` rewrites
+  # the commits, so the tested SHA is not the landed SHA and the commit stamp
+  # breaks after the merge, where nothing can see it.
+  "pr merge")  printf '%s\n' "$*" > "$STUB_DIR/MERGED" ;;
   "api "*)     cat "$STUB_DIR/baseref" ;;
   "run list")  cat "$STUB_DIR/runs" ;;
   *)           echo "unexpected gh: $*" >&2; exit 9 ;;
@@ -124,5 +128,28 @@ reset; run notanumber
 check "a non-numeric argument is a usage error"   "2"   "$rc"
 
 echo
+# --- the merge strategy, which decides whether the tested SHA is the landed one
+#
+# `--rebase` rewrites the pull request's commits onto the base. #338 was tested
+# as `21d40b2` and landed as `fa25f7a` with a different tree, so its run proved
+# a commit that never existed on the release branch — and the rewritten commit
+# then failed `check-commit-stamp.sh`, because the stamp is read from the tree
+# at that commit and the rebase had moved it onto a newer one.
+#
+# A merge preserves each commit's tree, so stamps survive and project branches
+# stay on `main` rather than being rebased onto the release branch, which is
+# what made descoping one package expensive.
+#
+# `MERGED` records the whole call so the strategy can be asserted. It recorded
+# only that a merge happened until 2026-09-09, which is why the wrong strategy
+# went unnoticed.
+reset; run 9
+check "the merge is a merge"                      "yes" \
+  "$(grep -q -- '--merge' "$DIR/MERGED" && echo yes || echo "no — got: $(cat "$DIR/MERGED")")"
+check "and never a rebase"                        "yes" \
+  "$(grep -q -- '--rebase' "$DIR/MERGED" && echo 'no — a rebase rewrites the tested commit' || echo yes)"
+check "and the branch is still deleted"           "yes" \
+  "$(grep -q -- '--delete-branch' "$DIR/MERGED" && echo yes || echo no)"
+
 if (( failures > 0 )); then echo "$failures failed"; exit 1; fi
 echo "all passed"

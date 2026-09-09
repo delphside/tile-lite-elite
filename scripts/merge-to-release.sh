@@ -136,6 +136,34 @@ fi
 # Rebase, not fast-forward. The byte-for-byte guarantee belongs to the *release
 # branch's* merge into `main` (#344 R8) — here the tip is going to be rehearsed
 # afterwards anyway, so a linear history is worth more than a preserved SHA.
+# **A merge, not a rebase, and the difference is not cosmetic.** `--rebase`
+# rewrites the pull request's commits onto the base, which does three things this
+# flow cannot afford:
+#
+#   1. **The commit CI passed is not the commit that lands.** #338 was tested as
+#      `21d40b2` and landed as `fa25f7a`, with a different tree. Its run proved a
+#      commit that never existed on the release branch.
+#   2. **It breaks the commit stamp.** `check-commit-stamp.sh` reads the version
+#      from the tree *at that commit*, so a branch cut when `main` was `0.7.3` is
+#      self-consistent until a rebase drops it onto a `0.8.0` tree — at which
+#      point its subject is wrong, and wrong only after the merge, where no test
+#      can see it. That is exactly what `fa25f7a` did.
+#   3. **It forces project branches to sit on the release branch**, because only
+#      then is the rebase a no-op. That couples them: descoping one package means
+#      untangling it from the history of every package rebased after it.
+#
+# A merge preserves each commit's own tree, so the stamps stay valid, the tested
+# SHA is the landed SHA, and project branches stay on `main` — independent, and
+# descopable by recreating the release branch without them.
+#
+# Measured 2026-09-09: a commit stamped `app 0.7.9` over its own tree, merged
+# `--no-ff` into a `0.8.0` branch, still passes `check-commit-stamp.sh`.
+#
+# The cost is a merge commit on the release branch, and therefore on `main` after
+# the fast-forward. `--ff-only` is unaffected: `main` remains an ancestor.
+#
+# `--delete-branch` stays. The branch has served its purpose once the release
+# branch carries it, and leaving it invites a second merge of the same work.
 echo "==> Merging #$PR into $BASE_REF"
-gh pr merge "$PR" -R "$REPO_NWO" --rebase --delete-branch
+gh pr merge "$PR" -R "$REPO_NWO" --merge --delete-branch
 echo "==> Merged. $BASE_REF now has a new tip — its run is what the next merge is judged against."
