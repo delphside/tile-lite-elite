@@ -85,8 +85,11 @@ one of them has a defect: fix it, don't work around it.
   commits. The two shapes are exclusive: either straight to main with none of
   them, or a branch, a pull request, a delivery, a letter milestone and a row.
 - Every delivery has a milestone, recorded in the delivery log: the release
-  semver if it includes a release, otherwise the previous semver with a letter
-  appended.
+  semver if it includes a release, otherwise **production's current version**
+  with a letter appended. Production's, not the development version, because
+  the development version is intent and can change — 0.7.3 became 0.8.0 on
+  2026-09-09, and a letter pinned to it would have named a release that never
+  existed.
 - A work package is a sub-project; a delivery is a milestone. The delivery is
   the set of work packages going live together, identified by their shared
   milestone, and it never has an issue of its own. A project with one work
