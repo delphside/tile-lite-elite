@@ -91,6 +91,10 @@ one of them has a defect: fix it, don't work around it.
   the development version, because the development version is intent and can
   change — 0.7.3 became 0.8.0 on 2026-09-09, and a letter pinned to it would
   have named a release that never existed.
+- `Route` belongs to the **artefact**, not to the change. A delivery combines
+  artefacts with different routes, and the issue field is a summary of them —
+  the heaviest one. What shape the change needs follows from that combination
+  and not from the summary alone.
 - So there are two shapes: straight to main, recorded by its commits; or held
   back on a branch, which then owes a pull request, a milestone and a row in
   the delivery log. The branch is what makes a delivery a point in time; the
@@ -166,6 +170,6 @@ one of them has a defect: fix it, don't work around it.
 | what to type: release, rollback, emergency | docs/3.3 |
 | the lifecycle in full, and why | docs/3.6 |
 | workstreams and what each owns | docs/3.7 |
-| artefacts, and the strings tooling matches | docs/4.8 |
+| artefacts, their routes, and the strings tooling matches | docs/4.8 |
 | daily state | scripts/inbox.sh, scripts/status.sh, scripts/actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
