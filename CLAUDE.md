@@ -76,33 +76,31 @@ one of them has a defect: fix it, don't work around it.
 
 ## Deliveries and releases
 
-- A delivery is any update to a programme asset delivered to its users,
-  including document updates. A release is a new version of the application,
-  delivered to production with a new semver. Projects define their
-  deliveries with the updated assets and the route.
-- There is always a delivery, because the change has to reach main. What a
-  change applied straight to main does not have is a **milestone**: it is not
-  assumed to be a single point in time, so it does not fit the strict sequence
-  the milestones are. It takes no branch, no pull request, no letter milestone
-  and no delivery-log row. Its record is the commit, which references the
-  requirement or project it serves — possibly more than one.
-- So the two shapes are: straight to main, recorded by its commits; or held
-  back on a branch, which then owes a pull request, a milestone and a row. The
-  branch is what makes a delivery a point in time, and the milestone is what
-  places that point in the sequence.
-- Every delivery has a milestone, recorded in the delivery log: the release
-  semver if it includes a release, otherwise **production's current version**
-  with a letter appended. Production's, not the development version, because
-  the development version is intent and can change — 0.7.3 became 0.8.0 on
-  2026-09-09, and a letter pinned to it would have named a release that never
-  existed.
-- A work package is a sub-project; a delivery is a milestone. The delivery is
-  the set of work packages going live together, identified by their shared
-  milestone, and it never has an issue of its own. A project with one work
-  package and one delivery needs no sub-project at all — it is the work package
-  and carries the milestone. A parent with work to deliver lists its
-  deliveries; each row names the work packages it carries or says pre-approved,
-  and a pre-approved one has no issue and no milestone. The four cases are in
+- A **delivery** is a change reaching its users — any update to a programme
+  asset, documents included. **Every change has one**, because it has to reach
+  main. A **release** is a new version of the application, delivered to
+  production with a new semver.
+- **Not every delivery has a milestone.** A change applied straight to main is
+  not assumed to be a single point in time, so it has no place in the sequence
+  the milestones are: no branch, no pull request, no milestone, no
+  delivery-log row. Its record is the commit, which references the requirement
+  or project it serves — possibly more than one.
+- **A milestone marks a delivery made at one point in time**, and places it in
+  the sequence: the release semver where it includes a release, otherwise
+  **production's current version** with a letter appended. Production's, not
+  the development version, because the development version is intent and can
+  change — 0.7.3 became 0.8.0 on 2026-09-09, and a letter pinned to it would
+  have named a release that never existed.
+- So there are two shapes: straight to main, recorded by its commits; or held
+  back on a branch, which then owes a pull request, a milestone and a row in
+  the delivery log. The branch is what makes a delivery a point in time; the
+  milestone is what places that point in the sequence.
+- A **work package** is a sub-project. Work packages sharing a milestone are
+  delivered together, and that grouping has no issue of its own — the milestone
+  is what identifies it. A project with one work package and one milestone
+  needs no sub-project at all: it is the work package and carries the
+  milestone. A parent lists what it delivers, each row naming the work packages
+  that share a milestone or saying straight to main. The four cases are in
   docs/3.6.
 - A work package is titled `#N WP A Del 1 of 2: what it delivers`, a parent
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery

@@ -106,11 +106,12 @@ not apply says *"None."*
 listed, or listed but parented elsewhere, is the defect that put #130 and #151
 under #294 while #290 claimed them.
 
-**A work package is a sub-project; a delivery is a milestone** (D51, refined
-2026-09-08). A work package is a `Project` whose parent is this one, carrying its
-own milestone, artefacts, test approach and post-deployment checks. A **delivery**
-is the set of work packages going live together, identified by their shared
-milestone — it never has an issue of its own. The parent owns the requirements,
+**A work package is a sub-project; a milestone is what groups them** (D51). A
+work package is a `Project` whose parent is this one, carrying its own milestone,
+artefacts, test approach and post-deployment checks. **Every change has a
+delivery** — it has to reach main — but only a delivery made at one point in
+time takes a **milestone**, and packages sharing one go live together. The
+milestone never has an issue of its own. The parent owns the requirements,
 the design and the documents, carries no milestone, and lists its deliveries:
 each row names the work packages it carries, or says `pre-approved`.
 
