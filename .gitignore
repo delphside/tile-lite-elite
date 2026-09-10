@@ -87,3 +87,14 @@ artifacts/
 
 # Python bytecode from importing scripts/actions.py as a module
 __pycache__/
+
+# Per-move benchmark detail, one file per run, named <epoch>-<host>.csv by
+# engine_timing_bench.rs. They are run artefacts: the summary row in
+# engine_timing_results.csv is the record that is kept, and these exist to be
+# read once while judging it. Left untracked and unignored they made the tree
+# dirty after every rehearsal benchmark, which is a release step, so
+# verify.sh's clean-tree check failed for a reason nobody had to act on.
+#
+# The digit prefix is what distinguishes them: moves/wide-5x5-c2281dc.csv is
+# tracked deliberately, for the analysis in docs/2.3.
+crates/server-game/examples/moves/[0-9]*.csv
