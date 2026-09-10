@@ -62,16 +62,29 @@ classify_target() {
 
 ENV_NAME="$(classify_target "$TARGET")"
 
+# **Exit `1`, which is fatal** — D46, and `docs/4.8`. This was `3` until
+# 2026-09-10, and `3` in the scheme means *it went wrong and the run continued*.
+# This refusal is the opposite: it is the strongest stop the script has, it
+# carries on with nothing, and it is the reason the script exists at all.
+#
+# The distinction a caller wants — refused because wrong environment, rather
+# than failed for some other reason — lives in the **message**, which D46 placed
+# there deliberately so the status could stay a severity. Both messages below
+# say which case fired and why.
+#
+# The collision was mine: D46's survey read `deploy.sh`, `verify.sh`,
+# `ci-status.sh` and `check-release-version.sh`, and not this file, then
+# reported a clean field. #330.
 case "$ENV_NAME" in
   production)
     echo "clean-test-accounts: refusing to run against production." >&2
     echo "  A cleaner that deletes accounts by prefix must never be pointed at real users." >&2
-    exit 3
+    exit 1
     ;;
   unknown)
     echo "clean-test-accounts: cannot tell which environment '$TARGET' is." >&2
     echo "  Refusing rather than guessing — a wrong guess deletes from the wrong place." >&2
-    exit 3
+    exit 1
     ;;
 esac
 

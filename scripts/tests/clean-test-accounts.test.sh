@@ -47,10 +47,19 @@ status_of() { local s=0; "$@" > /dev/null 2>&1 || s=$?; echo "$s"; }
 
 # --- the safety rule -----------------------------------------------------------
 setup
-check "production is refused, by name"   "3" "$(status_of "$CLEAN" --prefix e2e- --target production)"
-check "production is refused, by URL"    "3" "$(status_of "$CLEAN" --prefix e2e- --target https://tileliteelite.com)"
+# **`1`, not `3`** — D46, and #330. The refusal is the strongest stop this script
+# has: it carries on with nothing and deletes nothing, which is `fatal` in the
+# scheme. `3` means *it went wrong and the run continued*, which is the opposite.
+#
+# The caller's need to tell "refused because wrong environment" from any other
+# failure is met by the message, which D46 put there deliberately rather than in
+# the status. Nothing read the `3`: `e2e-clean.sh` execs and passes the status
+# through, and Playwright's teardown catches any non-zero and warns without
+# failing the suite.
+check "production is refused, by name"   "1" "$(status_of "$CLEAN" --prefix e2e- --target production)"
+check "production is refused, by URL"    "1" "$(status_of "$CLEAN" --prefix e2e- --target https://tileliteelite.com)"
 check "an unrecognised target is refused rather than guessed" \
-                                         "3" "$(status_of "$CLEAN" --prefix e2e- --target https://example.invalid)"
+                                         "1" "$(status_of "$CLEAN" --prefix e2e- --target https://example.invalid)"
 check "nothing was deleted while refusing" "0" "$(grep -c . "$CALLS" || true)"
 teardown
 
