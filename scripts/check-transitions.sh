@@ -351,6 +351,40 @@ if [ -n "$CLOSED" ]; then
     | [$i.number, $ds, (($i.body // "") | @base64)] | @tsv')"
 fi
 
+# --- two decisions carrying the same number -----------------------------------
+#
+# The `D` number is typed into the title by hand, read off a list of the ones
+# that already exist, and nothing compares them. #333 and #337 were both **D48**
+# on 2026-09-06, and it was found only by reading a pull request body that cited
+# D48 and meant the other one — #339 R2.
+#
+# **What it costs is a citation.** A decision number is a link: `docs/3.3` and a
+# dozen issue bodies say "D42 decided this". Two decisions with one number make
+# every such reference ambiguous, including the ones already written, and the
+# damage is retrospective — #335's body was correct when written and is not now.
+#
+# Nothing else in this script can see it, because the number is not a field.
+# `--limit 500` rather than a bare list: `gh issue list` paginates internally up
+# to the limit, and #377 was an unpaginated read that went stale the moment the
+# collection outgrew one page.
+DECS="$(gh issue list --state all --limit 500 --json number,title,issueType \
+  --jq '.[] | select(.issueType.name == "Decision") | [.number, .title] | @tsv' 2>/dev/null || true)"
+if [ -n "$DECS" ]; then
+  # First `D<digits>` in the title. "[Decision]:" cannot match — its D is
+  # followed by a letter — so the first hit is the number itself.
+  DUPES="$(printf '%s\n' "$DECS" | awk -F'\t' '
+    { if (match($2, /D[0-9]+/)) {
+        d = substr($2, RSTART, RLENGTH); seen[d] = seen[d] " #" $1; count[d]++ } }
+    END { for (d in count) if (count[d] > 1) print d "\t" seen[d] }')"
+  if [ -n "$DUPES" ]; then
+    while IFS=$'\t' read -r dnum issues; do
+      [ -n "$dnum" ] || continue
+      first="$(printf '%s' "$issues" | awk '{ print $1 }' | tr -d '#')"
+      report "$first" "duplicate" "$dnum is used by$issues — renumber the later one and fix its citations"
+    done <<< "$DUPES"
+  fi
+fi
+
 # --- a `no-release` milestone nobody came back to ------------------------------
 #
 # `no-release` is provisional: it says *not a release* before anybody knows how

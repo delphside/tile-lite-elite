@@ -61,6 +61,13 @@ jobs:
   #    A gate that silently does not apply is worse than no gate, since the
   #    green tick is read as an answer.
   #
+  #    **And no heading at all now fails**, since 2026-09-10. That was the same
+  #    defect one step further out: widening the pattern fixed the wrong heading
+  #    and left the missing one exiting 0, so #334 and #335 sat green and
+  #    awaiting review with nothing to tick. Noticed only because #338 went red
+  #    beside them — #339 R1. A change needing no review says so under the
+  #    heading; that sentence is evidence, and an absent section is not.
+  #
   #    **Advisory until a ruleset makes it required** — `main` is unprotected, so
   #    a red check here is a red X somebody can merge past. That is deliberate
   #    for now and worth revisiting with the ruleset question on #183.
@@ -88,8 +95,21 @@ jobs:
           # next heading of any level, so a checklist followed by `### Not in
           # this change` stops there rather than swallowing it.
           if ! grep -qiE '^#{1,6} +Review' /tmp/pr-body.md; then
-            echo "No review section — nothing to check."
-            exit 0
+            echo "::error::No review heading in the pull request body."
+            echo "The body is the review surface (CLAUDE.md), so a pull request with no"
+            echo "review section gives the reviewer nothing to tick. This check used to"
+            echo "call that success — which is how #334 and #335 sat green and awaiting"
+            echo "review with nothing to act on, noticed only because #338 went red"
+            echo "beside them."
+            echo
+            echo "Add a heading at any level whose first word is Review. A change that"
+            echo "genuinely needs no review still has to say so, because a sentence"
+            echo "somebody wrote is evidence and a missing section is not:"
+            echo
+            echo "    ## Review"
+            echo
+            echo "    None — this is a documentation move and the diff is the whole of it."
+            exit 1
           fi
           SECTION="$(sed -n '/^#\{1,6\} \+[Rr]eview/,/^#\{1,6\} /{ /^#\{1,6\} \+[Rr]eview/!{ /^#\{1,6\} /q }; p }' /tmp/pr-body.md)"
           UNTICKED="$(printf '%s\n' "$SECTION" | grep -c '^\s*- \[ \]' || true)"

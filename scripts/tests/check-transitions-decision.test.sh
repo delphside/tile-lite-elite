@@ -177,6 +177,54 @@ run "a requirement is not judged as a decision"        0 "" \
   '{"number":920,"title":"r","body":"","issueType":{"name":"Requirement"},"issueFieldValues":{"nodes":[]}}' ""
 
 echo
+echo "duplicate decision numbers:"
+
+# #339 R2. The number is typed into the title by hand and nothing compared them,
+# so #333 and #337 were both D48 on 2026-09-06. Its own stub, because this rule
+# reads `gh issue list` rather than the two graphql queries above.
+#
+# The quiet case is asserted as well as the loud one: a check that reports
+# nothing is indistinguishable from a broken one unless the silence is pinned.
+run_dupes() {
+  local desc="$1" want_exit="$2" want_text="$3" titles="$4"
+  cat > "$BIN/gh" <<EOF
+#!/usr/bin/env bash
+case "\$*" in
+  *"issue list"*)
+    printf '%b' '$titles'
+    exit 0 ;;
+esac
+for a in "\$@"; do
+  case "\$a" in
+    *states:CLOSED*) echo '{"data":{"repository":{"issues":{"nodes":[]}}}}'; exit 0 ;;
+  esac
+done
+echo '{"data":{"repository":{"issues":{"nodes":[]}}}}'
+EOF
+  chmod +x "$BIN/gh"
+  local out got=0
+  out="$(PATH="$BIN:$PATH" "$HERE/check-transitions.sh" 2>&1)" || got=$?
+  if [ "$got" -ne "$want_exit" ]; then
+    echo "  FAILED   $desc (expected exit $want_exit, got $got)"; failures=$((failures+1)); return
+  fi
+  if [ -n "$want_text" ] && ! grep -qF "$want_text" <<< "$out"; then
+    echo "  FAILED   $desc (exit $got, but no line matched '$want_text')"
+    printf '%s\n' "$out" | sed 's/^/           /'; failures=$((failures+1)); return
+  fi
+  if [ -z "$want_text" ] && grep -q '^  #' <<< "$out"; then
+    echo "  FAILED   $desc (expected nothing reported)"
+    printf '%s\n' "$out" | sed 's/^/           /'; failures=$((failures+1)); return
+  fi
+  echo "  ok       $desc"
+}
+
+DISTINCT='333\t[Decision]: D48 · one\n337\t[Decision]: D49 · two\n376\t[Decision]: D53 · three\n'
+CLASHING='333\t[Decision]: D48 · one\n337\t[Decision]: D48 · two\n376\t[Decision]: D53 · three\n'
+
+run_dupes "distinct numbers report nothing"        0 ""                       "$DISTINCT"
+run_dupes "two decisions on one number is reported" 1 "D48 is used by #333 #337" "$CLASHING"
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "$failures failed"; exit 1
 fi
