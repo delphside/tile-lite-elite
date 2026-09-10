@@ -102,6 +102,16 @@ decision_has_actions_heading() {
   grep -qE '^#+[[:space:]]*Open actions' <<< "$1"
 }
 
+# Unticked boxes under a heading, by substring. `verify.sh` has the same shape
+# in `section_boxes`; this counts rather than prints, because the caller only
+# ever asks *how many*.
+unticked_under() {
+  awk -v h="$2" '
+    /^#+[[:space:]]/ { inside = index($0, h) > 0 ? 1 : 0; next }
+    inside && /^[[:space:]]*-[[:space:]]*\[[[:space:]]*\]/ { n++ }
+    END { print n + 0 }' <<< "$1"
+}
+
 # Every field is emitted as "-" when empty, because tab is an IFS whitespace
 # character: bash collapses a run of them, so a genuinely empty field would
 # merge with the next and shift the body out of reach. That failure is silent —
@@ -339,6 +349,12 @@ done <<< "$ROWS"
 # Scoped to Decisions and to the most recent hundred, because the archive of
 # D1–D38 lives in the glossary and predates the type entirely.
 CQ='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:CLOSED,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{number issueType{name} body issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
+# **`first:100` is a page, and there are 265 closed issues.** Ordered by
+# `UPDATED_AT` so the page holds what moved most recently, which is what the
+# Decision rules want. The closed-project rule below wants the opposite — an old
+# project closed with a box unticked is exactly the one nobody has looked at —
+# so it reads its own list through `gh issue list --limit`, which paginates.
+# #377 is the same defect one collection along.
 CLOSED="$(gh api graphql -f query="$CQ" 2>/dev/null || true)"
 if [ -n "$CLOSED" ]; then
   while IFS=$'\t' read -r num cstate cb64; do
@@ -360,6 +376,54 @@ if [ -n "$CLOSED" ]; then
     | . as $i
     | ([$i.issueFieldValues.nodes[]? | select(.field.name=="Decision State")|.name][0] // "-") as $ds
     | [$i.number, $ds, (($i.body // "") | @base64)] | @tsv')"
+fi
+
+# --- a closed project with an unticked box --------------------------------------
+#
+# **A project can close carrying an undone action and nothing says so** — #357.
+# #174 closed on 2026-08-24 with an open action that its *own* Delivery 1 had
+# unblocked two days earlier; it surfaced a fortnight later as #356.
+#
+# Nothing covered it. `verify.sh` reads open projects **in the current
+# milestone** only, the rules above read **open** issues, and the closed sweep
+# above reads Decisions. So a project's boxes stop being read the moment it
+# closes, which is the moment nobody is looking.
+#
+# **`## Open actions` is read as well as the two test headings.** It is the
+# section that held the lost action and was invisible to everything — the
+# Decision rules read it, and nothing read it for a project.
+#
+# **Reported, never refused**, per #346 R6: a box is ticked in a browser and
+# nothing can stand in front of that. An unticked box is not always wrong —
+# #240 carries a documented untested item with the reason written beside it,
+# which is a legitimate answer. This does not try to tell the two apart, and
+# that is deliberate: the defect #357 names is that **neither** was reported, so
+# reporting both is the fix. Judging which is which is a content question and
+# belongs with #346.
+#
+# `--limit 500` paginates, unlike the `first:100` above. The oldest closed
+# project is the one least likely to have been looked at.
+CLOSED_PROJECTS="$(gh issue list --state closed --limit 500 \
+  --json number,title,issueType,body \
+  --jq '.[] | select(.issueType.name == "Project") | [.number, (.title[0:44]), (.body // "" | @base64)] | @tsv' \
+  2>/dev/null || true)"
+if [ -n "$CLOSED_PROJECTS" ]; then
+  while IFS=$'\t' read -r num title cb64; do
+    [ -n "$num" ] || continue
+    CBODY="$(printf '%s' "$cb64" | base64 -d 2>/dev/null || true)"
+    [ -n "$CBODY" ] || continue
+    FN="$(unticked_under "$CBODY" "Functional user tests")"
+    TE="$(unticked_under "$CBODY" "Technical tests")"
+    OA="$(unticked_under "$CBODY" "Open actions")"
+    TOTAL=$(( FN + TE + OA ))
+    if [ "$TOTAL" != "0" ]; then
+      WHERE=""
+      [ "$FN" != "0" ] && WHERE="$WHERE ${FN} preview"
+      [ "$TE" != "0" ] && WHERE="$WHERE ${TE} rehearsal"
+      [ "$OA" != "0" ] && WHERE="$WHERE ${OA} open action(s)"
+      report "$num" "closed" "closed with unticked boxes —$WHERE. Tick them, or write the answer beside each"
+    fi
+  done <<< "$CLOSED_PROJECTS"
 fi
 
 # --- two decisions carrying the same number -----------------------------------
