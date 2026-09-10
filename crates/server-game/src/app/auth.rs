@@ -10,7 +10,7 @@ pub(crate) async fn register_player(
     let email = request.email.trim();
     if display_name.is_empty() || email.is_empty() || request.password.is_empty() {
         return Err(ApiProblem::bad_request(
-            "Display name, email, and password are all required",
+            "User ID, email, and password are all required",
         ));
     }
 
@@ -19,9 +19,7 @@ pub(crate) async fn register_player(
         .map_err(ApiProblem::from_sqlx)?
         .is_some()
     {
-        return Err(ApiProblem::bad_request(
-            "That display name is already taken",
-        ));
+        return Err(ApiProblem::bad_request("That User ID is already taken"));
     }
 
     let password_hash = hash_password_bounded(&state, &request.password).await?;
@@ -82,7 +80,16 @@ pub(crate) async fn login_player(
         // an account at all, so there is nothing here that identifies anybody.
         // `reason` is what makes the line useful.
         tracing::warn!(reason, "login rejected");
-        ApiProblem::bad_request("Incorrect name or password")
+        // **"User ID", not "name"** — the form asks for a User ID (D48), and an
+        // error a player reads is UI text. This was the fifth player-facing
+        // message and the one this project first missed, because it says "name"
+        // rather than "display name" and so matched no search for the old
+        // wording. Found by the owner reading the login form on preview.
+        //
+        // The vagueness is untouched and must stay: the same error is returned
+        // whether the account is unknown or the password is wrong, and this
+        // wording is equally silent about which half failed.
+        ApiProblem::bad_request("Incorrect User ID or password")
     };
 
     let player = persistence::get_player_by_name(&state.db, &display_name)
@@ -269,7 +276,7 @@ pub(crate) async fn update_player_details(
         .as_deref()
         .is_some_and(|value| value.trim().is_empty())
     {
-        return Err(ApiProblem::bad_request("Display name cannot be blank"));
+        return Err(ApiProblem::bad_request("User ID cannot be blank"));
     }
     if request
         .email
@@ -293,9 +300,7 @@ pub(crate) async fn update_player_details(
             .map_err(ApiProblem::from_sqlx)?
         && existing.id != player_id
     {
-        return Err(ApiProblem::bad_request(
-            "That display name is already taken",
-        ));
+        return Err(ApiProblem::bad_request("That User ID is already taken"));
     }
 
     persistence::update_player_details(&state.db, &player_id, display_name, email)

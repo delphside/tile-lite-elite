@@ -79,7 +79,7 @@ export async function register(
   const password = opts.password ?? TEST_PASSWORD;
   await page.goto('/');
   await authTab(page, 'Register').click();
-  await page.getByPlaceholder('Display name').fill(name);
+  await page.getByPlaceholder('User ID').fill(name);
   // Register requires an email (client-side validation rejects a blank one).
   await page.getByPlaceholder('Email').fill(`${name}@e2e.test`);
   await page.getByPlaceholder('Password', { exact: true }).fill(password);
@@ -92,7 +92,7 @@ export async function register(
 
 export async function logIn(page: Page, name: string, password = TEST_PASSWORD) {
   await authTab(page, 'Log in').click();
-  await page.getByPlaceholder('Display name').fill(name);
+  await page.getByPlaceholder('User ID').fill(name);
   await page.getByPlaceholder('Password', { exact: true }).fill(password);
   await authSubmit(page, 'Log in').click();
   await expectSignedIn(page);
