@@ -224,8 +224,22 @@ teardown
 # would have looked right.
 
 stub_gh() {   # $1 = "<num>:<type>:<milestone> ..." — milestone may be empty
+              # $2 = optional space-separated issue numbers that are parents
   cat > "$WORK/bin/gh" <<STUB
 #!/usr/bin/env bash
+# **Dispatch on the endpoint**, per this file's own rule. \`is_parent\` asks
+# \`sub_issues\` and reads a count; the issue view asks for the type and the
+# milestone and reads a TSV row. Answering the first with the second made every
+# issue look like a parent, so the report named nothing and three checks passed
+# by reporting nothing — found 2026-09-10 when the parent exemption landed.
+case "\$*" in
+  *sub_issues*)
+    sub="\${*}"; sub="\${sub##*issues/}"; sub="\${sub%%/sub_issues*}"
+    for p in ${2:-}; do
+      [[ "\$p" == "\$sub" ]] && { printf '1\n'; exit 0; }
+    done
+    printf '0\n'; exit 0 ;;
+esac
 num=""
 for a in "\$@"; do case "\$a" in [0-9]*) num="\$a"; break ;; esac; done
 for spec in $1; do
@@ -258,6 +272,14 @@ out="$(report_plan_disagreement "$HEAD_SHA" 0.1.0 2>&1 || true)"
 check "an earlier milestone counts as filed" "" "$out"
 
 # A Requirement cannot carry a milestone at all — docs/3.6 1.1.
+# A parent, for the same reason as the Requirement below: `CLAUDE.md` says it
+# needs no milestone and one set is ignored, so asking for one asks for
+# something the process forbids. #370 — the 0.8.0 rehearsal and deploy both
+# named #301, #344 and #297, all parents.
+stub_gh "901:Project:" "901"
+out="$(report_plan_disagreement "$HEAD_SHA" 0.1.0 2>&1 || true)"
+check "a parent is never asked for a milestone" "0" "$(grep -c '901' <<< "$out")"
+
 stub_gh "901:Requirement:"
 out="$(report_plan_disagreement "$HEAD_SHA" 0.1.0 2>&1 || true)"
 check "a requirement is never asked for a milestone" "" "$out"
