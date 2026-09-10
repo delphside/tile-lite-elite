@@ -99,13 +99,16 @@ one of them has a defect: fix it, don't work around it.
   back on a branch, which then owes a pull request, a milestone and a row in
   the delivery log. The branch is what makes a delivery a point in time; the
   milestone is what places that point in the sequence.
-- A **work package** is a sub-project. Work packages sharing a milestone are
+- **Every delivery is a work package.** Work packages sharing a milestone are
   delivered together, and that grouping has no issue of its own — the milestone
-  is what identifies it. A project with one work package and one milestone
-  needs no sub-project at all: it is the work package and carries the
-  milestone. A parent lists what it delivers, each row naming the work packages
-  that share a milestone or saying straight to main. The four cases are in
-  docs/3.6.
+  is what identifies it. A parent lists what it delivers, each row naming the
+  work packages that share a milestone or saying straight to main. The four
+  cases are in docs/3.6.
+- **The sub-project issue can be saved, and only where nothing needs it.** A
+  project with **one delivery** needs none: the parent is the work package and
+  carries the milestone. Two deliveries need two, even where one goes straight
+  to main carrying no milestone — a delivery with no milestone still has a
+  phase, and one `Phase` cannot say delivered and not built at once. D53.
 - A work package is titled `#N WP A Del 1 of 2: what it delivers`, a parent
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
   carries more than one package. The counts go stale and are kept anyway: a
