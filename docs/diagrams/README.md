@@ -68,6 +68,14 @@ Two things about `mermaid-config.json` that are not incidental:
   pre-rendered and embedded rather than written inline as ```` ```mermaid ````
   blocks.
 
+**A `gitGraph` branch name starting with a digit must be quoted.** Every project
+branch here is `<issue>-short-name`, so every one of them does:
+`branch "297-lockfile"`, not `branch 297-lockfile`, which is a parse error. And
+`merge` takes an `id:` **or** a `tag:`, never both — that is a second parse
+error, and mermaid reports both the same way: a bomb icon reading *Syntax error
+in text*, with no line number and nothing on stderr. Bisecting is the only way
+to find which line it meant.
+
 Diagrams that *are* simple enough for dagre stay inline in the docs, where
 GitHub renders them from source — see the sequence diagram in
 [3.3](../3.3-testing-ci-and-release.md). Inline is preferable when it works:
