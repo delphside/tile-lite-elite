@@ -6,9 +6,9 @@ two it was originally decided for.
 
 | folder | workstream |
 | --- | --- |
-| `process-definition/` | #188 — the rules, and the documents that state them |
-| `delivery-tooling/` | #204 — the machinery that carries a change to a running environment |
-| `operations/` | #189 — the service once it is live |
+| `process-definition/` | the rules, and the documents that state them |
+| `delivery-tooling/` | the machinery that carries a change to a running environment |
+| `operations/` | the service once it is live |
 
 Inside each: documents the **workstream** owns at the top level, and a folder per
 issue or project that has documents of its own, named `<number>-<name>`.
@@ -20,6 +20,6 @@ is still cheap — the same principle as the issue form asking for type and rout
 at the moment an issue is raised.
 
 **`delivery-tooling/` is empty**, and that is accurate rather than an oversight —
-workstream #204 was created on 2026-08-24 and its projects have not been raised
+delivery tooling was made a workstream on 2026-08-24 and its projects have not been raised
 yet. The folder exists so the three areas are visible here as they are
 everywhere else.
