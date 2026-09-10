@@ -84,7 +84,28 @@ run_gates() {
     echo 'exit 7'
   } > "$bin/curl"
 
-  chmod +x "$bin/gh" "$bin/curl"
+  # `git fetch` is the one real network call deploy.sh makes under
+  # DEPLOY_GATES_ONLY (line 837, before the on-remote gate reads
+  # `git branch -r --contains`). This suite runs deploy.sh about thirty times,
+  # so that was thirty fetches over the network inside a run that is otherwise
+  # fully stubbed — and one slow one blew the `timeout 60` below, killing
+  # deploy.sh part-way through its output. The suite then reported that a gate
+  # had not run, which is the one thing it must never say wrongly.
+  #
+  # Measured before the fix, three consecutive runs on the same tree: the
+  # failure moved from the production version gate, to the rehearsal one, to
+  # passing. #369.
+  #
+  # `fetch` alone, forwarded by absolute path so this cannot recurse. Everything
+  # else is the real git, including the `branch -r --contains` the gate under
+  # test actually depends on.
+  {
+    echo '#!/usr/bin/env bash'
+    echo '[[ "$1" == "fetch" ]] && exit 0'
+    printf 'exec %s "$@"\n' "$(command -v git)"
+  } > "$bin/git"
+
+  chmod +x "$bin/gh" "$bin/curl" "$bin/git"
 
   # `timeout` so a case that waits fails instead of hanging the suite. The CI
   # gate polls with `--wait`, which is right for a deploy — a run may not have
