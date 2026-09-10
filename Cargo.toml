@@ -18,6 +18,6 @@ inherits = "dev"
 
 [workspace.package]
 edition="2024"
-version = "0.8.0"
+version = "0.8.1"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/delphside/tile-lite-elite"
