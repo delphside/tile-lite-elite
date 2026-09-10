@@ -338,21 +338,28 @@ check_milestone() {
     if (( mentions > 0 )); then
       lines+="#$num ${kind:0:11} ${title:0:46} ($mentions commits)"$'\n'
     else
-      # Nothing names it. Before calling it unbuilt, ask whether its parent is
-      # named instead — a package split out after its commits landed carries the
-      # parent's number, and cannot be made to carry its own. Reported as where
-      # the commits are rather than counted as its own, so a package that
-      # genuinely has none is still caught: two packages of one parent do not
-      # both go quiet because the parent was mentioned once.
+      # Nothing names it. A package split out after its commits landed carries
+      # the parent's number and cannot be made to carry its own — #373 was split
+      # from #297 the day after `1036e1c` said `Refs #297`.
+      #
+      # **It still counts as unbuilt, and the parent's commits are reported as a
+      # fact rather than as credit.** Crediting them was tried on 2026-09-10 and
+      # was wrong: #363 is delivery 2 of #301 and unstarted, and #301's
+      # delivery-1 commits made it read as merged. A parent with two packages
+      # cannot say which of them a commit belongs to, so claiming is a guess and
+      # the guess exonerates the very case the check exists for.
+      #
+      # So the reader gets the one fact they need to answer in a second, and the
+      # check keeps stopping. #375.
       par="$(parent_of "$num")"
       parmentions=0
       [[ -n "$par" ]] && parmentions="$(commits_mentioning HEAD "$par")"
       if [[ -n "$par" ]] && (( parmentions > 0 )); then
-        lines+="#$num ${kind:0:11} ${title:0:46} (built under #$par, $parmentions commits)"$'\n'
+        lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this (parent #$par has $parmentions)"$'\n'
       else
         lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this"$'\n'
-        unbuilt="$unbuilt #$num"
       fi
+      unbuilt="$unbuilt #$num"
     fi
   done <<< "$ms"
   if [[ -n "$unbuilt" ]]; then

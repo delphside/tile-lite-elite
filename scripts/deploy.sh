@@ -1096,23 +1096,30 @@ else
       if (( MENTIONS > 0 )); then
         printf '    #%-5s %-12s %s   (%s commits)\n' "$NUM" "$KIND" "${TITLE:0:52}" "$MENTIONS"
       else
-        # Before calling it unbuilt, ask whether its parent is named instead.
-        # 0.8.0 stopped at this prompt over #373, which was built by `1036e1c`
-        # saying `Refs #297` — the number that existed when the commit was
-        # written, three lines above a manifest marking that same commit as
-        # reaching the image. Reported as *where* the commits are rather than
-        # counted as the package's own, so a package with none anywhere is
-        # still caught.
+        # A package split out after its commits landed carries the parent's
+        # number and cannot be made to carry its own. 0.8.0 stopped at this
+        # prompt over #373, built by `1036e1c` saying `Refs #297`, three lines
+        # above a manifest marking that same commit as reaching the image.
+        #
+        # **The parent's commits are a fact here, not credit.** Crediting them
+        # was tried on 2026-09-10 and was wrong: a parent with two packages
+        # cannot say which of them a commit belongs to, so #363 — delivery 2 of
+        # #301, unstarted — read as merged on delivery 1's commits. A guess that
+        # exonerates is worse than a prompt, because this prompt is the last
+        # thing between an unbuilt issue and a milestone that closes it.
+        #
+        # So it still counts as unbuilt and the operator gets the one fact that
+        # answers the prompt in a second. #375.
         PAR="$(parent_of "$NUM")"
         PARMENTIONS=0
         [[ -n "$PAR" ]] && PARMENTIONS="$(commits_mentioning "$TARGET_FULL_SHA" "$PAR")"
         if [[ -n "$PAR" ]] && (( PARMENTIONS > 0 )); then
-          printf '    #%-5s %-12s %s   (built under #%s, %s commits)\n' \
+          printf '    #%-5s %-12s %s   <-- NO COMMIT MENTIONS THIS (parent #%s has %s)\n' \
             "$NUM" "$KIND" "${TITLE:0:52}" "$PAR" "$PARMENTIONS"
         else
           printf '    #%-5s %-12s %s   <-- NO COMMIT MENTIONS THIS\n' "$NUM" "$KIND" "${TITLE:0:52}"
-          UNBUILT="$UNBUILT #$NUM"
         fi
+        UNBUILT="$UNBUILT #$NUM"
       fi
       # A milestone is a release, and a release is made of project deliveries —
       # so a milestone should contain projects and nothing else (docs/3.6 §1.1).
