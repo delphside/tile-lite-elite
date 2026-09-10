@@ -1,0 +1,85 @@
+# Reports a dependency that has acquired a known advisory, without anybody
+# remembering to look — #297.
+#
+# **The criterion is reachability, not severity.** `cargo audit` reads
+# `Cargo.lock`, which carries crates no feature combination builds, so most
+# findings here cannot reach us at all. `.cargo/audit.toml` holds the ones that
+# cannot, with a reason each; everything left is something somebody can act on,
+# which is why this runs with `--deny warnings` rather than the default.
+#
+# Measured on 2026-09-06: severity got reachability exactly backwards — both
+# vulnerabilities were unreachable and both findings inside the server binary
+# were warnings.
+#
+# **Nightly, not per-push.** The advisory database changes; `Cargo.lock` mostly
+# does not.
+name: Advisories
+
+on:
+  schedule:
+    # 06:15 UTC. Off the hour, because everything else in the world runs at :00.
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Pinned rather than floating: this job's whole job is to notice change,
+      # so it should not change underneath itself. `--locked` uses the tool's
+      # own lockfile, not ours.
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+
+      # `tee` keeps the output for the issue body while the exit status still
+      # decides the run. `pipefail` is what makes that true — without it the
+      # status is `tee`'s, which is always zero.
+      - name: Audit
+        id: audit
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo audit --deny warnings 2>&1 | tee /tmp/audit.txt
+
+      # Only on a failing audit. `always()` is deliberate: without it a failed
+      # step ends the job and the report never reaches anybody, which is the
+      # whole point of the workflow.
+      - name: Open or update the report
+        if: always() && steps.audit.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Dependency advisories need review"
+        run: |
+          set -euo pipefail
+          {
+            printf 'A scheduled `cargo audit` found something that reaches us.\n\n'
+            printf 'Raised by `.github/workflows/advisories.yml` ([run](%s/%s/actions/runs/%s)).\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'Everything unreachable is filtered by `.cargo/audit.toml`, so each\n'
+            printf 'finding below is one somebody can act on. Untriaged — #297 R3.\n\n'
+            printf '```\n'
+            cat /tmp/audit.txt
+            printf '```\n'
+          } > /tmp/body.md
+
+          # Matched locally rather than through `--search`, whose index lags by
+          # minutes and would open a second issue for the same finding.
+          existing="$(gh issue list --state open --limit 200 --json number,title \
+                        --jq "[.[] | select(.title == \"$TITLE\") | .number] | first // empty")"
+
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body-file /tmp/body.md
+            echo "updated #$existing"
+          else
+            gh issue create --title "$TITLE" --body-file /tmp/body.md
+          fi

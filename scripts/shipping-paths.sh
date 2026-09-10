@@ -20,7 +20,13 @@
 # a test exists to hold an artefact to its behaviour and is delivered with it.
 
 # shellcheck disable=SC2034  # consumed by the sourcing script
-NON_SHIPPING='^(docs/|scripts/|e2e/|\.github/|\.githooks/|\.claude/|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$)'
+# `.cargo/audit.toml` and not `.cargo/` — the file, deliberately. It configures
+# `cargo audit` and is read by nothing else, so it cannot reach a build.
+# `.cargo/config.toml` sets rustflags, the target directory and registries, and
+# would change the bytes; a directory-wide exception would let that onto `main`
+# with no branch. Added 2026-09-10, when the image rule refused #374 and was
+# right to ask. `docs/4.8` carries the same split.
+NON_SHIPPING='^(docs/|scripts/|e2e/|\.github/|\.githooks/|\.claude/|\.cargo/audit\.toml$|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$)'
 
 # touches_image <commit-ish> -> 0 if any path it changed reaches the image.
 #
