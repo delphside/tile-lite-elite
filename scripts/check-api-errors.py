@@ -40,13 +40,27 @@ CALL = re.compile(r'ApiProblem::(\w+)\(\s*"([^"]+)"')
 SKIP = {"tests.rs"}
 
 
+# A Rust string literal broken with a trailing `\` continues on the next line,
+# and the compiler drops the backslash, the newline and the leading whitespace.
+# So the *source* holds formatting the caller never sees. Comparing the raw
+# capture against a document could therefore never match, and two long admin
+# messages read as undocumented no matter what was written. Found 2026-09-11
+# while documenting them.
+CONT = re.compile(r"\\\s*\n\s*")
+
+
+def runtime_text(raw: str) -> str:
+    """The string a caller receives, from the literal as it appears in source."""
+    return CONT.sub("", raw)
+
+
 def literals() -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
     for f in sorted(SRC.rglob("*.rs")):
         if f.name in SKIP:
             continue
         for m in CALL.finditer(f.read_text()):
-            found.setdefault(m.group(2), set()).add(f"{f.relative_to(ROOT)}")
+            found.setdefault(runtime_text(m.group(2)), set()).add(f"{f.relative_to(ROOT)}")
     return found
 
 

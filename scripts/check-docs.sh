@@ -75,6 +75,14 @@ else
   echo "  every change document is in an issue or release folder"
 fi
 
+# 4. API errors — a **check**, not a gate, so it never sets FAILED. An error the
+# document does not carry is a documentation debt, and a build must not go red
+# over writing that has not happened yet (#329). It prints and exits 0; the
+# number is what makes the debt visible.
+echo
+bold "4. API errors"
+"$HERE/scripts/check-api-errors.py" 2>&1 | sed -n '2,$p' | sed 's/^/  /'
+
 echo
 if (( FAILED )); then
   bold "FAILED"
