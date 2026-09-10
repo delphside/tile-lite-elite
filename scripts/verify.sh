@@ -285,6 +285,22 @@ check_rehearsal() {
 # parent; folded requirements and owned decisions are children too, which is why
 # the type is filtered — counting them all made #295, #297 and #301 read as
 # parents in `check-transitions.sh` once.
+# The number of the issue this one is a work package of, or empty.
+#
+# A package built before it existed carries its parent's number in the commit
+# trailer, because that is the number that existed when the commit was written.
+# #373 was split out of #297 on 2026-09-10, after `1036e1c` had already landed
+# saying `Refs #297`, and no rewrite can fix that — the commit is the one being
+# deployed. So the answer is not to count the parent's commits as the package's,
+# which would make every package of a parent look built. It is to say *where*
+# the commits are, and let the reader judge. #375.
+parent_of() {
+  # `gh issue view --json parent`, not the REST issue object: REST carries
+  # `parent_issue_url` and no `parent.number`, so the obvious REST read returns
+  # empty for every issue and the check silently reverts to its old behaviour.
+  gh issue view "$1" --json parent --jq '.parent.number // ""' 2>/dev/null || true
+}
+
 is_parent() {
   local n
   n="$(gh api "repos/{owner}/{repo}/issues/$1/sub_issues" \
@@ -294,7 +310,7 @@ is_parent() {
 
 LABEL[milestone]="Milestone carries only built work"
 check_milestone() {
-  local version ms unbuilt="" lines=""
+  local version ms unbuilt="" lines="" par parmentions
   version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
   if ! command -v gh > /dev/null; then
     fail milestone "milestone $version not read — no 'gh' on PATH"; return
@@ -322,8 +338,21 @@ check_milestone() {
     if (( mentions > 0 )); then
       lines+="#$num ${kind:0:11} ${title:0:46} ($mentions commits)"$'\n'
     else
-      lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this"$'\n'
-      unbuilt="$unbuilt #$num"
+      # Nothing names it. Before calling it unbuilt, ask whether its parent is
+      # named instead — a package split out after its commits landed carries the
+      # parent's number, and cannot be made to carry its own. Reported as where
+      # the commits are rather than counted as its own, so a package that
+      # genuinely has none is still caught: two packages of one parent do not
+      # both go quiet because the parent was mentioned once.
+      par="$(parent_of "$num")"
+      parmentions=0
+      [[ -n "$par" ]] && parmentions="$(commits_mentioning HEAD "$par")"
+      if [[ -n "$par" ]] && (( parmentions > 0 )); then
+        lines+="#$num ${kind:0:11} ${title:0:46} (built under #$par, $parmentions commits)"$'\n'
+      else
+        lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this"$'\n'
+        unbuilt="$unbuilt #$num"
+      fi
     fi
   done <<< "$ms"
   if [[ -n "$unbuilt" ]]; then

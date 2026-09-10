@@ -446,6 +446,16 @@ prune_artifacts() {
 # `verify.sh` holds a third copy. Left there deliberately for now: merging the
 # three means a shared file and a new artefact to register, which is a larger
 # change than the defect warrants — recorded against #370 R3 instead.
+# The number of the issue this one is a work package of, or empty. See the twin
+# in verify.sh: a package split out after its commits landed carries its
+# parent's number in the trailer and cannot be made to carry its own. #375.
+parent_of() {
+  # `gh issue view --json parent`, not the REST issue object: REST carries
+  # `parent_issue_url` and no `parent.number`, so the obvious REST read returns
+  # empty for every issue and the check silently reverts to its old behaviour.
+  gh issue view "$1" --json parent --jq '.parent.number // ""' 2>/dev/null || true
+}
+
 is_parent() {
   local n
   n="$(gh api "repos/{owner}/{repo}/issues/$1/sub_issues" \
@@ -1086,8 +1096,23 @@ else
       if (( MENTIONS > 0 )); then
         printf '    #%-5s %-12s %s   (%s commits)\n' "$NUM" "$KIND" "${TITLE:0:52}" "$MENTIONS"
       else
-        printf '    #%-5s %-12s %s   <-- NO COMMIT MENTIONS THIS\n' "$NUM" "$KIND" "${TITLE:0:52}"
-        UNBUILT="$UNBUILT #$NUM"
+        # Before calling it unbuilt, ask whether its parent is named instead.
+        # 0.8.0 stopped at this prompt over #373, which was built by `1036e1c`
+        # saying `Refs #297` — the number that existed when the commit was
+        # written, three lines above a manifest marking that same commit as
+        # reaching the image. Reported as *where* the commits are rather than
+        # counted as the package's own, so a package with none anywhere is
+        # still caught.
+        PAR="$(parent_of "$NUM")"
+        PARMENTIONS=0
+        [[ -n "$PAR" ]] && PARMENTIONS="$(commits_mentioning "$TARGET_FULL_SHA" "$PAR")"
+        if [[ -n "$PAR" ]] && (( PARMENTIONS > 0 )); then
+          printf '    #%-5s %-12s %s   (built under #%s, %s commits)\n' \
+            "$NUM" "$KIND" "${TITLE:0:52}" "$PAR" "$PARMENTIONS"
+        else
+          printf '    #%-5s %-12s %s   <-- NO COMMIT MENTIONS THIS\n' "$NUM" "$KIND" "${TITLE:0:52}"
+          UNBUILT="$UNBUILT #$NUM"
+        fi
       fi
       # A milestone is a release, and a release is made of project deliveries —
       # so a milestone should contain projects and nothing else (docs/3.6 §1.1).
@@ -1123,8 +1148,9 @@ else
       echo
       echo "    Nothing in this release mentions:$UNBUILT" >&2
       echo "    An issue with no commit was not built. Move it to another" >&2
-      echo "    milestone before deploying, or it will be closed claiming it" >&2
-      echo "    shipped." >&2
+      echo "    milestone before deploying, or it will be settled as though" >&2
+      echo "    it shipped: a Project is advanced to Post-deployment and left" >&2
+      echo "    open for a review it cannot answer; anything else is closed." >&2
     fi
 
     # Gates-only exists to exercise refusals cheaply, and a prompt it cannot
