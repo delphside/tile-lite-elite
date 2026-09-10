@@ -404,6 +404,11 @@ report_plan_disagreement() {
               </dev/null 2>/dev/null || true)"
     [[ "$(cut -f1 <<< "$meta")" == "Requirement" ]] && continue
     [[ -n "$(cut -f2 <<< "$meta")" ]] && continue
+    # A parent, for the same reason as the Requirement above: the process says
+    # it needs no milestone, so asking for one asks for something forbidden.
+    # Checked last because it costs a second API call, and only issues that got
+    # this far — not a Requirement, and carrying no milestone — can reach it.
+    is_parent "$num" && continue
     unfiled="$unfiled $num"
   done < <(git -C "$REPO_DIR" log --format=%B "$range" </dev/null 2>/dev/null \
              | grep -oE '(Refs|Closes) #[0-9]+' | grep -oE '[0-9]+' | sort -un || true)
@@ -426,8 +431,30 @@ prune_artifacts() {
   done < <(ls -1t "$ARTIFACT_DIR"/*.tar.gz 2>/dev/null | tail -n "+$((keep + 1))")
 }
 
+# Does this issue have work packages of its own? A parent has no delivery role,
+# so it carries no milestone and none is expected of it — `CLAUDE.md`, and D51.
+#
+# **One definition, used by both places in this file that ask.** `settle_issue`
+# was given the parent exemption on 2026-09-09 and
+# `report_plan_disagreement` was not, so the 0.8.0 rehearsal and deploy both
+# asked #301, #344 and #297 for a milestone the process says they must not need
+# — #370. Two copies of a rule is how one of them comes to be wrong.
+#
+# The REST sub-issues endpoint, not GraphQL: `{owner}` and `{repo}` expand in a
+# REST path and not in a GraphQL document, and deploy.sh resolves neither.
+#
+# `verify.sh` holds a third copy. Left there deliberately for now: merging the
+# three means a shared file and a new artefact to register, which is a larger
+# change than the defect warrants — recorded against #370 R3 instead.
+is_parent() {
+  local n
+  n="$(gh api "repos/{owner}/{repo}/issues/$1/sub_issues" \
+    --jq '[.[] | select(.type.name == "Project")] | length' 2>/dev/null || echo 0)"
+  [[ "${n:-0}" != "0" ]]
+}
+
 settle_issue() {
-  local issue="$1" kind phase node pkgs
+  local issue="$1" kind phase node
 
   # **A parent's milestone is ignored** — D51, and the owner on 2026-09-08:
   # *"as with Route a parent does not need a milestone, but one can be set. It
@@ -437,11 +464,7 @@ settle_issue() {
   # phase D51 says oversight never reaches.
   #
   # Read before anything is written, because the comment is not undoable.
-  # The REST sub-issues endpoint, not GraphQL: `{owner}` and `{repo}` expand in
-  # a REST path and not in a GraphQL document, and deploy.sh resolves neither.
-  pkgs="$(gh api "repos/{owner}/{repo}/issues/$issue/sub_issues" \
-    --jq '[.[] | select(.type.name == "Project")] | length' 2>/dev/null || echo 0)"
-  if [[ "${pkgs:-0}" != "0" ]]; then
+  if is_parent "$issue"; then
     echo "    skipped #$issue — a parent, whose milestone is a target and not a delivery"
     return
   fi
