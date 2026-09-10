@@ -406,16 +406,22 @@ def main() -> int:
     # a set of container issues existing only to be parents. What survives is
     # the *parent link*, which now means one thing: this requirement belongs to
     # that project.
-    # Only a **project's** sub-issues are "drawn under their parent". The
-    # workstream issues still exist until #232's step 5 and still have
-    # sub-issues, and counting those would hide every issue in the listing —
-    # which is exactly what happened the first time this was run.
-    parents = [i for i in issues.values()
-               if i["subIssues"]["nodes"]
-               and (i.get("issueType") or {}).get("name") not in ("Workstream", "Index")]
+    # Only a **project's** sub-issues are "drawn under their parent". This used
+    # to exclude the ten workstream and index container issues, which had
+    # sub-issues of their own, and counting those hid every issue in the listing
+    # the first time it was run.
+    #
+    # **The exclusion went dead before it was removed.** The `Workstream` and
+    # `Index` types were deleted from the repository, so those issues became
+    # untyped and this comparison stopped matching anything — a filter that
+    # looked like it was working and had quietly stopped. The issues themselves
+    # were deleted 2026-09-10 (#361), and their bodies are archived at
+    # `docs/changes/workstreams/historic-workstream-issues.md`. Nothing needs
+    # excluding now: every parent with sub-issues is a project or a work package.
+    parents = [i for i in issues.values() if i["subIssues"]["nodes"]]
     children = {c["number"] for p in parents for c in p["subIssues"]["nodes"]}
     def level(num: int) -> str:
-        """Requirement, Project, Workstream or Index — GitHub's own issue type.
+        """Requirement, Project or Decision — GitHub's own issue type.
 
         **Read rather than derived, since 2026-08-26.** It used to be inferred
         from the sub-issue graph: *a parent that is itself somebody's sub-issue
@@ -606,8 +612,6 @@ def main() -> int:
     order = workstream_order(repo_owner)
     grouped: dict[str, list[dict]] = {}
     for i in issues.values():
-        if (i.get("issueType") or {}).get("name") in ("Workstream", "Index"):
-            continue  # a container, until #232's step 5 removes them
         if i["number"] in children:
             continue  # drawn under its project, below
         grouped.setdefault(field(i, "Workstream") or NO_WORKSTREAM, []).append(i)
