@@ -503,7 +503,13 @@ settle_milestone() {
     # after printing that it would not. Introduced by 89f249a when the emergency
     # path was added, and first bit on 0.6.0, whose eleven issues and milestone
     # were closed by hand afterwards.
-    MILESTONE="$(gh api "repos/{owner}/{repo}/milestones?state=open" \
+    # `--paginate` on both milestone reads. One page is 30 and this repository
+    # passed that before 0.8.0 — see #377, where the unpaginated `state=all`
+    # read below could not see `0.8.1` on page 2, tried to create it, and was
+    # refused 422. Only 8 milestones are open today so this call was correct,
+    # but it is the same latent bug and a release should not depend on the
+    # count staying under a page.
+    MILESTONE="$(gh api --paginate "repos/{owner}/{repo}/milestones?state=open" \
       --jq ".[] | select(.title == \"$DEPLOYED_VERSION\") | .number" 2>/dev/null || true)"
     if [[ -n "$MILESTONE" ]]; then
       echo "==> Settling milestone $DEPLOYED_VERSION — projects advance to Post-deployment"
@@ -521,13 +527,26 @@ settle_milestone() {
     # belongs to that release. Creating it now means an issue never has to
     # wait for a milestone to exist before it can be filed.
     if [[ "${DEPLOY_SKIP_BUMP:-}" != "1" ]] \
-      && ! gh api "repos/{owner}/{repo}/milestones?state=all" \
+      && ! gh api --paginate "repos/{owner}/{repo}/milestones?state=all" \
         --jq '.[].title' 2>/dev/null | grep -qx "$NEXT_VERSION"; then
-      gh api repos/{owner}/{repo}/milestones -f title="$NEXT_VERSION" \
-        -f description="Changes on main not yet in production." > /dev/null 2>&1 \
-        && echo "    opened milestone $NEXT_VERSION for what comes next"
+      # Reported either way. Previously the `&& echo` was the last statement in
+      # this function, so a creation that failed made the whole settle step
+      # report exit 1 — which is how 0.8.0 ended by printing three remedies
+      # that were already done. A failure here is worth saying out loud; it is
+      # not worth claiming the milestone was not settled.
+      if gh api repos/{owner}/{repo}/milestones -f title="$NEXT_VERSION" \
+        -f description="Changes on main not yet in production." > /dev/null 2>&1; then
+        echo "    opened milestone $NEXT_VERSION for what comes next"
+      else
+        echo "    warning: could not open milestone $NEXT_VERSION" >&2
+      fi
     fi
   fi
+
+  # The settle step succeeded if it got here: every failure above is reported as
+  # a warning and none of them means the release was not settled. Without this
+  # the status is whatever the last `if` happened to leave behind. #377 R2.
+  return 0
 }
 # The post-deployment checks that were waiting for exactly this.
 #
