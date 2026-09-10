@@ -111,6 +111,17 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role re
   for v in stage phase ws toc pri eff dstate route reqkids; do
     [ "${!v}" = "-" ] && printf -v "$v" '%s' ""
   done
+  # **No stage means Triage.** Owner, 2026-09-10. An unset field and the first
+  # value of a field are the same thing here: a requirement nobody has classified
+  # yet. Treating them differently is what let #313, #326, #328, #329, #330 and
+  # #336 sit outside every rule — they were typed on 2026-09-10 and still matched
+  # no branch below, because the branches key on a stage none of them had.
+  #
+  # This is the same defect as the untyped one #361 is about, one field along:
+  # a rule that reads a field silently exempts every issue where it is empty,
+  # and the exemption looks exactly like a pass.
+  [ -n "$stage" ] || { [ "$kind" = "Requirement" ] && stage="Triage"; }
+
   case "$kind" in
     Requirement)
       case "$stage" in

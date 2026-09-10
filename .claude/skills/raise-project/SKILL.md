@@ -209,14 +209,29 @@ width. Nine issue bodies had been written document-style and needed unwrapping.
 Always `--body-file`. A body passed with `--body` has its backticks evaluated by
 the shell, which has silently swallowed whole spans twice.
 
+**Set `--type` at creation.** It is a flag on `gh issue create`, so there is no
+window in which the issue exists untyped:
+
 ```bash
-NUM=$(gh issue create -R delphside/tile-lite-elite \
+NUM=$(gh issue create -R delphside/tile-lite-elite --type Project \
         --title "..." --body-file /tmp/body.md | grep -o '[0-9]*$')
 id=$(gh api graphql -f query="{repository(owner:\"delphside\",name:\"tile-lite-elite\"){issue(number:$NUM){id}}}" \
        -q '.data.repository.issue.id')
 ```
 
-Then set the type — a project is not a project until this is done:
+`--type Requirement` for a requirement. The name, not the id — `gh` resolves it.
+
+**This used to be a second step and that is how twenty issues came to be
+untyped**, found by #361 on 2026-09-09. A `updateIssue` mutation after creation
+works, but it is a separate action that can be forgotten, interrupted or fail
+quietly, and an issue with no type is skipped by every rule keyed on type rather
+than reported — `check-transitions.sh` branches on the three names and judges an
+untyped issue by nothing at all. Worse, a typed filter drops it silently: the
+source-requirements check reported *"#252 parents no requirements"* while #331
+**was** parented, because `select(.issueType.name == "Requirement")` excluded it.
+
+To change the type of an issue that already exists — converting a requirement to
+a project — the mutation is still the way:
 
 ```bash
 gh api graphql -f query='mutation($i:ID!,$t:ID!){updateIssue(input:{id:$i,issueTypeId:$t}){issue{number}}}' \
@@ -240,7 +255,14 @@ gh api graphql -f query='mutation($i:ID!){setIssueFieldValue(input:{issueId:$i,i
 ```
 
 A new project takes `Workstream`, `Phase` (usually `Scope`), `Effort` and
-`Priority`. `Route` when it is known. Approval is the `pre-approved` **milestone**, not a field — there is no `Pre-approved` field, it was deleted on 2026-09-04.
+`Priority`. `Route` when it is known.
+
+**Set the stage or the phase in the same call as the rest.** An issue with
+neither is invisible in the same way an untyped one is: the Requirement rules key
+on `Stage` and the Project rules on `Phase`, so an issue with no stage is asked
+for nothing. Typing the ten untyped issues on 2026-09-10 surfaced no findings at
+all until they were given `Triage` as well — one silence exchanged for another.
+A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. Approval is the `pre-approved` **milestone**, not a field — there is no `Pre-approved` field, it was deleted on 2026-09-04.
 
 | `Workstream` | `IFSS_kgDOAsE6Iw` |
 | … Application & Game Architecture | `IFSSO_kgDOBNJpRg` |
