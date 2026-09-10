@@ -75,12 +75,31 @@ else
   echo "  every change document is in an issue or release folder"
 fi
 
-# 4. API errors — a **check**, not a gate, so it never sets FAILED. An error the
+# 4. the document map is derived, so a stale one is always wrong and always
+# fixed by regenerating. A **gate**, unlike step 5: there is no judgement in it
+# and no writing to do, only `document-map.py --write`.
+#
+# It was wired into nothing until 2026-09-11 — not this script, not the
+# pre-commit hook, not CI, not verify.sh — so `docs/1.6` went stale silently.
+# Found by ticking #349's own box asking whether the map lists every heading:
+# it did not, because the commit before it added ten and did not regenerate.
+# A derived artefact with no check is the shape #326 and #340 are also about.
+echo
+bold "4. the document map"
+if "$HERE/scripts/document-map.py" --check > /dev/null 2>&1; then
+  echo "  docs/1.6 lists every heading in every document"
+else
+  echo "  STALE   docs/1.6-document-map.md"
+  echo "          → run ./scripts/document-map.py --write and commit it"
+  FAILED=1
+fi
+
+# 5. API errors — a **check**, not a gate, so it never sets FAILED. An error the
 # document does not carry is a documentation debt, and a build must not go red
 # over writing that has not happened yet (#329). It prints and exits 0; the
 # number is what makes the debt visible.
 echo
-bold "4. API errors"
+bold "5. API errors"
 "$HERE/scripts/check-api-errors.py" 2>&1 | sed -n '2,$p' | sed 's/^/  /'
 
 echo
