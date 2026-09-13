@@ -50,6 +50,47 @@ jobs:
           set -o pipefail
           cargo audit --deny warnings 2>&1 | tee /tmp/audit.txt
 
+      # **What a green run suppressed.** Measured on the first two scheduled
+      # runs, 2026-09-11 and 2026-09-12: the audit prints four lines and says
+      # nothing about the ignore list, so a run that quieted seventeen findings
+      # is indistinguishable from one with nothing to find. That is the shape
+      # #339 exists for, and #297 R3 predicted it before merge — *"judge it on
+      # the first scheduled run and, if it reads as expected, print the ignored
+      # ids and their reasons beside the audit."* It read as expected.
+      #
+      # `always()` so it prints whether the audit passed or failed: on a failure
+      # the question *what else is being held back* is more pressing, not less.
+      #
+      # An entry with no reason is named as such. The file's own header calls
+      # that a defect — it is indistinguishable from something nobody looked at.
+      - name: What the ignore list is holding back
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import re, pathlib
+          src = pathlib.Path(".cargo/audit.toml").read_text().splitlines()
+          inside, comment, out = False, [], []
+          for line in src:
+              s = line.strip()
+              if s.startswith("ignore"):
+                  inside = True; comment = []; continue
+              if not inside:
+                  continue
+              if s.startswith("]"):
+                  break
+              if s.startswith("#"):
+                  comment.append(s.lstrip("# ").rstrip()); continue
+              m = re.match(r'"(RUSTSEC-[\d-]+)"', s)
+              if m:
+                  out.append((m.group(1), " ".join(comment)))
+              if not s:
+                  comment = []
+          print(f"{len(out)} advisories are deliberately quieted by .cargo/audit.toml:")
+          for rid, why in out:
+              print(f"  {rid}  {why or '** NO REASON RECORDED — see the file header **'}")
+          EOF
+
       # Only on a failing audit. `always()` is deliberate: without it a failed
       # step ends the job and the report never reaches anybody, which is the
       # whole point of the workflow.
