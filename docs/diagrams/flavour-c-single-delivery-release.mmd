@@ -17,6 +17,12 @@ flowchart TB
     %% commit on main blocks every other release until it is proven or
     %% removed. docs/3.6 section 2.2.
     %% .
+    %% Since D55 (#388), 1.6 need not follow 1.9 immediately. main is the
+    %% accumulating next release, so it may already carry other proven
+    %% deliveries and one deploy ships them together. Nothing in the order
+    %% below changes -- what changes is that the dashed wait between 1.9 and
+    %% 1.6 may be days, and this is the default flavour rather than D.
+    %% .
     %% Preview does not feed the gate, and this is deliberate rather than an
     %% omission — but there IS a preview gate, counted by note_gate preview
     %% in deploy.sh. What preview cannot answer is whether somebody looked
@@ -47,7 +53,7 @@ flowchart TB
     STG -.->|"`1.4 · **user test**`"| STG
     LG -->|"`1.5 · **$ deploy-rehearsal.sh**`"| REH
     BR -->|"`1.9 · **$ git rebase**, then **$ git merge --ff-only**`"| MAIN
-    MAIN -->|"`1.6.1 · **$ deploy.sh**`"| GATE{"gate"}
+    MAIN -->|"`1.6.1 · **$ deploy.sh** — now or with a later release`"| GATE{"gate"}
     ACT -.->|"1.6.2 · CI green for this commit?"| GATE
     REH -.->|"1.6.3 · rehearsal on this commit?"| GATE
     GATE -->|"1.6.4 · ships the image"| PROD

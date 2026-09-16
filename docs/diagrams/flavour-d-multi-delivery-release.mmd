@@ -5,6 +5,15 @@ config:
     nodePlacementStrategy: BRANDES_KOEPF
 ---
 flowchart TB
+    %% Since D55 (#388) this is the EXCEPTION, not the default.
+    %% A release branch is for a release that must stabilise while main
+    %% moves on -- several projects proven as a set, or a release held
+    %% while other work continues. A single proven delivery uses flavour
+    %% C and fast-forwards main directly, because main accumulates.
+    %% .
+    %% The cost this avoids is 1.8: keeping a release branch current
+    %% against a main that moves constantly with documentation and
+    %% tooling changes.
     %% Flavour D — a release carrying several deliveries. docs/3.3, the
     %% flavours table: 1.1 and 1.2 per delivery, then 1.8.1 to merge each in,
     %% 1.8 to sync, then 1.3, 1.4, 1.5, 1.9, 1.6, 1.7, 1.10.
