@@ -88,13 +88,11 @@ flowchart TD
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change that reaches nothing in the image, that is around seven minutes proving a document has not broken the game.
 
-**This lane has a hazard for image changes, and the diagram above draws it as legitimate — #387.** Owner, 2026-09-16:
+**Since D55 (#388) this lane is the default for an image change, not an exception.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
-> It shouldn't really be merged to main, but go via a release branch, otherwise any emergency release will ship it.
+> Releases are simpler if we have a next release branch that accumulates changes. Because of doc and tooling changes it is easier if that is `main`.
 
-`main` is the deploy source, so merging an image change into it is not *finished*, it is **queued for whoever deploys next** — including an emergency release cut to restore service, whose author is in no position to audit what else has accumulated. Lane 3 exists partly to avoid this and nothing obliges an image change to use it.
-
-Until #387 settles that, the honest reading of this lane is: **safe for a repository change, and a deliberate decision for an image one.**
+**What makes it safe is not in this lane, it is in the emergency one.** `main` now carries tested-but-unshipped image changes, so an emergency release cut from `main` ships all of them. `docs/3.3` now says to cut from the last released tag instead. Nothing enforces that yet — #387 R2 for the report, R3 for the enforcement — so it is a documented procedure and not a gate.
 
 ### Lane 3 — a project into a release branch
 
