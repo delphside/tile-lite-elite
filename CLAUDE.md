@@ -46,9 +46,16 @@ one of them has a defect: fix it, don't work around it.
 
 - A Production Release always takes a branch, a pull request, a semver
   milestone and a row in the delivery log. The pull request is what gives the
-  review its mechanics, and a release committed straight to main cannot be
-  guaranteed to work and blocks every other release until it does, because
-  main is what gets deployed.
+  review its mechanics, and a release commit that reaches main *unproven*
+  cannot be guaranteed to work and blocks every other release until it does,
+  because main is what gets deployed.
+- **Proven and unshipped is different, and is the normal state.** A release
+  change merges to main once preview, user testing and rehearsal have passed
+  against its branch tip; shipping may follow immediately or later. So main is
+  the accumulating next release, and a release branch is for a release that
+  must stabilise while main moves on, not for one delivery. D55. The condition
+  that makes this safe lives in the emergency path: cut an emergency from the
+  last released tag, never from main.
 - Otherwise a branch exists to hold a change back. Branch only when the old
   version is needed while the work is in progress; otherwise commit straight
   to main, which is what pre-approved means. A document-only change never takes a
