@@ -5,7 +5,7 @@ For #383. Owner, 2026-09-16:
 
 > I would like to see flow charts with information flows, checks and gates detailed. What conditions are we checking when? That would have a table of checks and get methods. **This becomes the interface between Claude and Steve for tooling changes.**
 
-So this document is the contract. A tooling change that alters a gate, a check, or what one reads should show up here as a diff, and a proposal that cannot be expressed here is a proposal that has not been thought through.
+So this document is the contract. A tooling change that alters a gate, a check, or what one reads should show up here as a diff, and a proposal expressible here is one that has been thought through.
 
 ## How to read it
 
@@ -13,7 +13,7 @@ So this document is the contract. A tooling change that alters a gate, a check, 
 
 **Purpose before criteria.** Owner, 2026-09-16: *"The requirements should specify what each action, check, decision or gate is trying to achieve and only then the criteria used."* Every row in the tables below names what it is for first. Where a criterion is wider than its purpose — checking on rehearsal what is really a statement about a mechanism — that is a defect, and #252 is a live instance.
 
-**Latency is a property of the consumer, not of the board.**
+**Latency is a property of the consumer.**
 
 | class | tolerance | when the picture is stale |
 | --- | --- | --- |
@@ -23,20 +23,24 @@ So this document is the contract. A tooling change that alters a gate, a check, 
 
 A stale board makes a report mildly wrong and makes a gate ship the wrong thing.
 
-## The lanes
+## The shapes, as examples
 
-A delivery is `{ route, branches }`, and the branch chain is what decides which lane it runs in.
+A delivery is `{ route, branches }`. The branches say where the change travels; an arrow is a merge into what follows.
 
-| branches | lane | pull request | milestone | delivery-log row |
+**Examples, rather than a catalogue.** Other shapes are legitimate; these are the ones that have happened.
+
+| route | branches | pull request | milestone | delivery-log row |
 | --- | --- | --- | --- | --- |
-| `None` | straight to main | no | `pre-approved` | no |
-| `[Project]` | project branch | yes | letter or semver | yes |
-| `[Project, Release]` | project into release | yes, twice | semver | yes |
-| `[WP_A, WP_B]` | work packages sharing a milestone | one each | one, shared | one each |
+| Repository | `None` | — | `pre-approved` | — |
+| Repository | `Project -> main` | one | previous semver plus a letter | one |
+| Release | `Project -> main` | one | semver | one |
+| Release | `WP A -> main, WP B -> main` | one each | one, shared | one each |
+| Release | `WP A -> WP B -> main` | one each | one, shared | one each |
+| Release | `WP A -> Release, WP B -> Release` | one each, plus the release | semver | one each |
 
-### Lane 1 — straight to main
+### Repository · `None`
 
-Nothing is held back, so the only gates are local. The commit is the record.
+Everything is live on push, so the gates are local. The commit is the record.
 
 ```mermaid
 flowchart LR
@@ -54,17 +58,17 @@ flowchart LR
   class CT,ST check
 ```
 
-**`pre-commit` is the whole of this lane's protection**, and it carries three refusals:
+**`pre-commit` is the whole of this shape's protection**, and it carries three refusals:
 
 | refuses | purpose |
 | --- | --- |
-| an image change committed on `main` | the image is what production runs; it cannot reach main unreviewed |
+| an image change committed on `main` | the image is what production runs, so it reaches main reviewed |
 | a new artefact absent from `docs/3.0-tools.md` | a script nobody registered is a script nobody maintains |
 | Rust that `rustfmt` would change | a red build and a refused release gate, moved to the cheapest moment |
 
 It also runs `check-docs.sh` when markdown is staged, which is the one place the documents are gated rather than merely checked.
 
-### Lane 2 — a project branch
+### Repository or Release · `Project -> main`
 
 ```mermaid
 flowchart TD
@@ -86,15 +90,15 @@ flowchart TD
   class V check
 ```
 
-**e2e runs on every pull request today, whatever it touches — #348.** For a repository change that reaches nothing in the image, that is around seven minutes proving a document has not broken the game.
+**e2e runs on every pull request today, whatever it touches — #348.** For a repository change confined to documents and scripts, that is around seven minutes proving the game still works.
 
-**Since D55 (#388) this lane is the default for an image change, not an exception.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
+**Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
 > Releases are simpler if we have a next release branch that accumulates changes. Because of doc and tooling changes it is easier if that is `main`.
 
-**What makes it safe is not in this lane, it is in the emergency one.** `main` now carries tested-but-unshipped image changes, so an emergency release cut from `main` ships all of them. `docs/3.3` now says to cut from the last released tag instead. Nothing enforces that yet — #387 R2 for the report, R3 for the enforcement — so it is a documented procedure and not a gate.
+**What makes it safe lives in the emergency path.** `main` now carries tested-but-unshipped image changes, so an emergency release cut from `main` ships all of them. `docs/3.3` now says to cut from the last released tag instead. That is a documented procedure today; #387 R2 asks for the report and R3 for the enforcement that would make it a gate.
 
-### Lane 3 — a project into a release branch
+### Release · `WP A -> Release, WP B -> Release`
 
 ```mermaid
 flowchart TD
@@ -114,9 +118,9 @@ flowchart TD
   class MR1,MR2,RT,FF,DEP gate
 ```
 
-**`merge-to-release.sh` asks two questions, not one**: the incoming pull request's own run, and *the release branch tip's* run, both requiring a real `e2e` verdict. The second is why e2e cannot be skipped on a release branch however little a merge touches — the next merge is judged against the tip this one creates.
+**`merge-to-release.sh` asks two questions**: the incoming pull request's own run, and *the release branch tip's* run, both requiring a real `e2e` verdict. The second is why e2e runs on a release branch however little a merge touches — the next merge is judged against the tip this one creates.
 
-### Lane 4 — work packages sharing a milestone
+### Release · `WP A -> main, WP B -> main`, one milestone
 
 ```mermaid
 flowchart TD
@@ -134,7 +138,9 @@ flowchart TD
   class PD check
 ```
 
-**The milestone is the only thing identifying the group** — there is no issue for it. So *"move out what is not shipping before deploying"* is not advice, it is the only control: the deploy settles everything in the milestone.
+`WP A -> WP B -> main` is the same shape with the packages integrated before they land — the interim branch `docs/3.3` says #71 will need. It has no diagram here because it has yet to happen.
+
+**The milestone is the only thing identifying the group** — there is no issue for it. So *"move out what is not shipping before deploying"* is the whole control: the deploy settles everything in the milestone.
 
 ## The table of checks, and how each one gets its answer
 
@@ -149,7 +155,7 @@ Get methods matter because they are where the nine pictures come from. The right
 | `pull-request` | the review's own run agreed | PR run passed; absence said aloud | `gh run list --commit`, filtered to `pull_request` | current |
 | `schema` | the image can boot against the live database | target migrations ⊇ database's | `git show` + `/health` | current |
 | `version` | what ships is the version claimed | semver agrees across tree, milestone, tag | `git` + `gh api milestones` | current |
-| `milestone` | nothing ships that was not meant to | every open issue in it is built by a commit | `gh api milestones --paginate` + `git log --grep` | current |
+| `milestone` | everything shipping was meant to | every open issue in it is built by a commit | `gh api milestones --paginate` + `git log --grep` | current |
 | `preview` | the image ran somewhere first | preview answers on the target version | `curl /health` | current |
 | `rehearsal` | the image ran under production's shape | rehearsal answers on the target version | `curl /health` | current |
 | *settle* | the record matches what shipped | phases, milestones and comments written | `gh` mutations | **re-read after write** |
@@ -164,14 +170,14 @@ Grouped by obligation rather than by grep, because the obligation is what the mo
 | on hold justified | a stall names something actionable | `check-transitions` | body text |
 | scoped | effort known before queueing | `check-transitions` | issue fields |
 | project shaped | the seven headings exist to be filled | `check-transitions` | body headings |
-| provenance intact | folding a requirement does not lose it | `check-transitions` | sub-issues + body table |
+| provenance intact | folding a requirement keeps it findable | `check-transitions` | sub-issues + body table |
 | route known | something can say whether this reaches users | `check-transitions` | issue fields |
-| parent stays a parent | oversight is a design role, not a build one | `check-transitions` | field + `is_parent` |
+| parent stays a parent | oversight is a design role | `check-transitions` | field + `is_parent` |
 | testable | a test approach exists before building | `check-transitions`, `verify` | body headings + checkbox counts |
 | built | a milestone's issues are backed by commits | `verify`, `deploy` | `git log --grep` + parentage |
 | deliverable | deliveries and their checks are written down | `check-transitions` | body headings |
 | closable | the lesson is captured before closing | `check-transitions` | body text + unticked boxes |
-| whose turn | the owner is not made to scan the board | `actions.py` | decision state + `reviewDecision` |
+| whose turn | what needs the owner is brought to him | `actions.py` | decision state + `reviewDecision` |
 
 **`testable`, `built` and `closable` are each asked by more than one script, in more than one way.** That is the issue in one line.
 
@@ -188,10 +194,10 @@ Reading the tables rather than designing from scratch, the snapshot owes exactly
 | `waiting_on` | `actions.py`'s whole purpose |
 | `age` on the snapshot itself | so a gate can refuse what a report may serve |
 
-## What this does not yet settle
+## Still open
 
 | | |
 | --- | --- |
-| **partial failure** | what the snapshot says when GitHub answers and git does not. Today each script decides for itself, mostly by exiting 0 |
+| **partial failure** | what the snapshot says when GitHub answers and git stays silent. Today each script decides for itself, mostly by exiting 0 |
 | **the obligation table per issue type** | the rows above are the union; the owner's *"each issue type has defined requirements for each lifecycle step"* means a grid, and closedown is its last row |
 | **where the exception lives** | *"associated doc changes might go with a release"* is the case that produced the heaviest-artefact fudge; it needs writing as an exception rather than left to erode the branch-chain rule |
