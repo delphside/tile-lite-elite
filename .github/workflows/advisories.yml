@@ -122,5 +122,10 @@ jobs:
             gh issue edit "$existing" --body-file /tmp/body.md
             echo "updated #$existing"
           else
-            gh issue create --title "$TITLE" --body-file /tmp/body.md
+            # `--type`, because an untyped issue is invisible to every rule
+            # keyed on type -- check-transitions.sh, verify.sh and actions.py
+            # all skip it silently. That was #361, closed after twenty issues
+            # were typed by hand; this line is what stops it recurring, since
+            # a workflow that raises untyped issues refills the hole nightly.
+            gh issue create --type Requirement --title "$TITLE" --body-file /tmp/body.md
           fi

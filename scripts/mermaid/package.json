@@ -1,0 +1,9 @@
+{
+  "name": "tle-mermaid-check",
+  "private": true,
+  "description": "mermaid + jsdom for scripts/mermaid/check.mjs, the diagram parse check (#340). Exact pins, because the point is that every machine gets the grammar GitHub renders with. node_modules is ignored; package-lock.json is the record.",
+  "dependencies": {
+    "jsdom": "26.1.0",
+    "mermaid": "11.12.0"
+  }
+}

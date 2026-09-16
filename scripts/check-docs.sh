@@ -32,7 +32,7 @@ FAILED=0
 # otherwise "whatever is in one machine's npx cache", which is not a dependency
 # anybody declared.
 bold "1. markdownlint"
-npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#e2e/node_modules" "#old-crates" "#pipeline.md" 2>&1 | tail -4 || FAILED=1
+npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" 2>&1 | tail -4 || FAILED=1
 
 bold "2. links"
 python3 scripts/check-doc-links.py || FAILED=1
@@ -101,6 +101,18 @@ fi
 echo
 bold "5. API errors"
 "$HERE/scripts/check-api-errors.py" 2>&1 | sed -n '2,$p' | sed 's/^/  /'
+
+# 6. mermaid — #340. markdownlint sees a fenced block as opaque, so a diagram
+# that does not parse renders as an error box on GitHub and is caught by
+# nothing. Mermaid's own grammar is used, because only it agrees with what
+# GitHub renders.
+#
+# **A gate where it can run, silent where it cannot.** The parse needs `mermaid`
+# and `jsdom` -- 146MB, six seconds to install -- and whether CI pays that is
+# still open on #340. So a machine that has them enforces the check, and one
+# that does not says so and passes. The pins live in scripts/mermaid/package.json.
+bold "6. mermaid diagrams"
+if ! node scripts/mermaid/check.mjs; then FAILED=1; fi
 
 echo
 if (( FAILED )); then
