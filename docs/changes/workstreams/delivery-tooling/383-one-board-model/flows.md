@@ -88,6 +88,14 @@ flowchart TD
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change that reaches nothing in the image, that is around seven minutes proving a document has not broken the game.
 
+**This lane has a hazard for image changes, and the diagram above draws it as legitimate — #387.** Owner, 2026-09-16:
+
+> It shouldn't really be merged to main, but go via a release branch, otherwise any emergency release will ship it.
+
+`main` is the deploy source, so merging an image change into it is not *finished*, it is **queued for whoever deploys next** — including an emergency release cut to restore service, whose author is in no position to audit what else has accumulated. Lane 3 exists partly to avoid this and nothing obliges an image change to use it.
+
+Until #387 settles that, the honest reading of this lane is: **safe for a repository change, and a deliberate decision for an image one.**
+
 ### Lane 3 — a project into a release branch
 
 ```mermaid
