@@ -32,7 +32,11 @@ one of them has a defect: fix it, don't work around it.
   board to find work waiting on him. So anything genuinely needing him is
   brought to him, and everything else is Claude's to find and move.
 - Triage is done jointly with the owner, never alone, and Claude leads it:
-  bring the reading and the proposal, then agree it. Minimum: clear short
+  bring the reading and the proposal, then agree it. **Except in Delivery
+  Tooling and Process Definition, and for type `tooling` or `documentation` in
+  any workstream, where Claude triages alone** — D54, 2026-09-17. Anything
+  reaching production, the product and game rules, and anything irreversible
+  outside git still come to the owner whatever their workstream. Minimum: clear short
   description, workstream, priority, type of change. Then scope (options,
   dependencies, effort), then project planning. Outcomes: solo project,
   grouped project, straight to main, on hold, cancelled.
