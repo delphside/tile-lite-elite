@@ -76,7 +76,7 @@ flowchart LR
 
 It also runs `check-docs.sh` when markdown is staged, which is the one place the documents are gated rather than merely checked.
 
-### `Project -> main` · Repository, then Release
+### `Project -> main` · one branch shape, two routes
 
 ```mermaid
 flowchart TD
@@ -100,7 +100,16 @@ flowchart TD
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change confined to documents and scripts, that is around seven minutes proving the game still works.
 
-**The diagram above is the Repository ending: the merge delivers and the lap stops there.** A Release change runs the same branch and the same gates, and the delivery continues past the merge to its release — `main` holds it meanwhile, and the deploy gates below are what it must pass.
+**Two different routes share this branch shape, and the route decides where the delivery ends.** Owner, 2026-09-17:
+
+> The Release route includes the change to main and the deployment. The Repository route is for docs and scripts which are delivered as soon as they hit `main`.
+
+| route | what it carries | delivery ends |
+| --- | --- | --- |
+| **Repository** | documents and scripts | at the merge — they are live on `origin/main` |
+| **Release** | anything built into the image, and anything deployed to the production host | at the deployment, which the route includes |
+
+The diagram above draws the branch and its gates, which both routes run. A Repository delivery stops there. A Release delivery carries on to the deploy gates below, and `main` holds the change meanwhile.
 
 **Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
