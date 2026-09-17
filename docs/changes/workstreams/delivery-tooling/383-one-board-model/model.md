@@ -94,38 +94,56 @@ and the derived facts, each defined once:
 
 **Fields are resolved by name at the boundary.** Option ids appear in `sources/github.py` and nowhere else. Today five scripts carry hardcoded ids like `IFSS_kgDOAsQ80g`, which is a fact about the GitHub instance leaking into process logic.
 
-## Freshness is part of the contract
+## Latency is declared per consumption, and some consumptions refresh
 
-Owner, 2026-09-16: *"Different points in the process need different latencies. A to do list differs from a production deployment gate."*
+Owner, 2026-09-16: *"Different points in the process need different latencies. A to do list differs from a production deployment gate."* And 2026-09-17: *"some checks should refresh the cache. So the latency requirement is something to be documented for each consumption."*
 
-So the snapshot carries its own age and the caller declares what it tolerates:
+So latency is not a convention the caller remembers — it is **an attribute of the consumption, written down beside it**, in the same way `Route` is an attribute of an artefact. Four values, and the third is the one that was missing:
 
-```python
-snap = board.snapshot(max_age=0)        # a gate: fetch now, or fail
-snap = board.snapshot(max_age=300)      # a report: five minutes is fine
-```
+| freshness | means | who asks for it |
+| --- | --- | --- |
+| `CACHED` | whatever is there; the answer carries its age | reports, where a stale row is visible and harmless |
+| `RECENT(n)` | cached if younger than `n`, else fetch | sweeps that run often and need not pay every time |
+| `REFRESH` | fetch now, **and write the result to the cache** | anything that decides: every gate, and any check whose answer stops work |
+| `AFTER_WRITE` | re-read following a mutation, ignoring the cache entirely | `settle`, where the point is to confirm what was just written |
 
-`flows.md` already assigns a latency to every gate — all `current`, except *settle*, which is **re-read after write**. Those become the arguments, not a convention. A gate asking for `max_age=0` and being handed a cached snapshot is a bug the type system can catch; a gate reading a stale report today is silent.
+**`REFRESH` updates the cache rather than bypassing it.** That is the change, and it is what makes the cache worth having: a gate that must fetch leaves the board fresher for every report behind it, instead of paying for a fetch and throwing it away. A deploy refreshes on its first gate, and the seven after it read a snapshot seconds old.
 
-## Partial failure, which `flows.md` left open
+`AFTER_WRITE` is separate because it must **not** be served by the cache at any age, including one written moments earlier by the mutation's own optimistic update.
 
-> *what the snapshot says when GitHub answers and git stays silent. Today each script decides for itself, mostly by exiting 0*
+### The consumption register
 
-Exiting 0 on a failed source is the worst available answer: a gate that cannot see the data reports that it found no problem. The model's answer:
+Every point that asks the model appears here with its latency. A new consumption adds a row; a consumption without one is the defect, not the missing latency.
 
-```python
-class Unavailable(Exception):
-    """A fact was asked for whose source did not answer."""
-```
+| consumer | consumption | freshness | because |
+| --- | --- | --- | --- |
+| `deploy.sh` | `on-remote`, `ci`, `pull-request`, `schema`, `version`, `milestone`, `preview`, `rehearsal` | `REFRESH` on the first, `RECENT(60)` after | eight gates in one run; the first pays, the rest read it |
+| `deploy.sh` | *settle* | `AFTER_WRITE` | it confirms the write it just made |
+| `verify.sh` | post-deploy obligations | `REFRESH` | it answers whether the deploy worked; a stale yes is the failure it exists to catch |
+| `check-transitions.sh` | every obligation in the grid | `REFRESH` | it refuses transitions — the answer stops work |
+| `sync-pr-state.sh` | read review decision, write field | `REFRESH`, then `AFTER_WRITE` | it reads to decide and re-reads to confirm |
+| `status.sh` | the board report | `RECENT(300)` | a five-minute-old board is a correct board for reading |
+| `actions.py` | what waits on the owner | `RECENT(300)` | the to-do list your rule names |
+| `inbox.sh` | comments since a date | `RECENT(300)` | a conversation does not turn over in minutes |
+| `turn-check.sh` | the per-turn sweep | `CACHED` | it runs constantly and must cost nothing; it reports, never refuses |
+| `roadmap-diagram.py` | the diagram | `CACHED` | a picture, redrawn on demand |
 
-Each source records `ok` or `failed`. A derived fact whose source failed **raises**; it never returns a default. The consumer decides what that means, and the two answers differ by design:
+Two things fall out of reading it as a table. Every consumption that **refuses** asks for `REFRESH`, and every consumption that **reports** does not — which is the gate-and-check distinction showing up again, this time as a cache policy. And `turn-check.sh` is the only `CACHED` consumer that runs unattended, which is exactly why it must not gate.
 
-| consumer | on `Unavailable` |
+## Everything uses the model
+
+Owner, 2026-09-17: *"We want everything to use the new model."*
+
+No consumer is exempt, including `inbox.sh`. An earlier draft of this document carved it out because it reads comment threads and the obligations grid deliberately does not. That conflated two different things:
+
+| | |
 | --- | --- |
-| a **gate** | refuse — "cannot say" is not "no problem" |
-| a **report** | print `cannot say` in the row, and carry on |
+| **the model** holds comments | it is a source like any other, and `inbox.sh` needs it |
+| **the obligations grid** ignores comments | evidence and conclusions live in the body — owner, 2026-09-16 |
 
-That distinction is already the project's rule — *a gate refuses and work stops; a check reports and a person decides* — applied to missing data rather than to findings.
+So `sources/github.py` fetches comments, `Issue.comments` exists, `inbox.sh` asks for it, and **no obligation predicate may read it**. That is a rule the grid can enforce on itself rather than a carve-out in prose: an obligation whose predicate touches `comments` is rejected at import.
+
+Nine consumers, nine users of the model, one picture.
 
 ## The grid is the requirement, not a description of it
 
@@ -168,18 +186,30 @@ This also fixes the failure mode this sweep found. The grid said a parent owes a
 | `status.sh` | 7 | asks; formatting stays |
 | `sync-pr-state.sh`, `inbox.sh`, `turn-check.sh`, `actions.py`, `roadmap-diagram.py` | 11 between them | ask |
 
-`inbox.sh` keeps its own reading of comment threads: its subject *is* the conversation, and the model deliberately reads only bodies and fields.
+**All nine, with no exemption.** `inbox.sh` asks the model for comments; the obligations grid still may not read them. The count that matters afterwards is `gh api` call sites outside `board/`, which should be zero.
 
-## Parallel running, because 16 new checks would refuse a lot of history
+## Parallel running, to catch what changes unexpectedly
 
-The grid's `gap` rows are unenforced today. Turning them on at once would refuse most of the open board.
+Owner, 2026-09-17: *"We can have some parallel running to see if we change something unexpected."*
 
-So the model ships **reporting only**: it computes every obligation, the existing scripts keep gating, and a nightly diff reports where the two disagree. A row moves from `gap` to `now` when the diff has been empty for a week and the backlog it would refuse is cleared. That is also how the model earns trust before anything depends on it.
+The point is **not** a staged rollout where some consumers stay behind. Everything moves to the model. Parallel running is the safety net across the move, and it answers one question: **does any consumer now say something different from what it said yesterday?**
+
+So each converted consumer runs both ways for a period and reports only where they disagree:
+
+| the diff says | what it means | what to do |
+| --- | --- | --- |
+| nothing | the model reproduces the old behaviour | convert the next one |
+| a difference the model is **right** about | an old bug, now visible — #297 was exactly this | record it and keep the model's answer |
+| a difference the model is **wrong** about | a defect in a derived fact, caught before it gated anything | fix the model |
+
+The second row is the one to expect, and it is why the diff is worth running rather than merely reassuring. Two of the disagreements this design exists to remove — parentage in `built`, and the route on a parent — were invisible precisely because nothing compared two pictures of the same fact.
+
+**The `gap` rows are a separate question and must not ride along.** Sixteen obligations are unenforced today; turning them on at once would refuse a lot of history, and doing it in the same change would make every diff ambiguous — a difference could be the model being wrong or the grid being newly enforced. So the conversion reproduces today's behaviour exactly, gaps included, and enforcing a `gap` row is a later change with its own diff.
 
 ## Still open
 
 | | |
 | --- | --- |
 | **where the snapshot is cached** | a file in `.logs/` is simplest; a gate asking `max_age=0` never reads it, so the risk is confined to reports |
-| **whether `roadmap-diagram.py` should survive** | it has one call site and one reader. The job spec puts deleting in scope, and this is a candidate |
+| **whether `roadmap-diagram.py` should survive** | it has one call site and one reader. The job spec puts deleting in scope, and this is a candidate — but it is a `CACHED` consumer, so converting it is cheap and deleting it need not block the move |
 | **the cost of the grid being executable** | generating `check-transitions.sh` is a rewrite of a working script. The safer order is: model reports first, generation later, and possibly never |
