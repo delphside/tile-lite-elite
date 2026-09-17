@@ -97,7 +97,13 @@ admin() {
     local)     "$REPO_DIR/scripts/admin.sh" "$@" ;;
     preview)   docker compose -f "$REPO_DIR/docker-compose.preview.yml" exec -T server \
                  tile-lite-elite-admin "$@" ;;
-    rehearsal) ssh -o BatchMode=yes tile-lite-elite-rehearsal \
+    # `-n` redirects ssh's stdin from /dev/null. Without it, an ssh run inside
+    # a `while read` loop consumes the lines the loop has not read yet — so the
+    # cleaner deleted exactly **one** game and **one** account per run, however
+    # many matched, and reported "1 of 9" as though the rest had been refused.
+    # Measured 2026-09-17 against rehearsal. `deploy.sh` carries the same fix
+    # and the same note; this is the second place to need it.
+    rehearsal) ssh -n -o BatchMode=yes tile-lite-elite-rehearsal \
                  "docker compose -f ~/tile-lite-elite/docker-compose.yml exec -T server tile-lite-elite-admin $*" ;;
   esac
 }
@@ -129,11 +135,57 @@ fi
 # Games first. An account holding a game is refused by the retention rule, and
 # a signed-in one by #82 — both correct, and both would otherwise look like the
 # cleaner failing.
+# **The games first, and only the ones that are wholly this suite's.**
+#
+# An account holding a game is refused by the retention rule, so a run that
+# leaves a game behind leaves its accounts undeletable — permanently, because
+# nothing here ever removed a game. Measured 2026-09-17 against rehearsal:
+# **0 of 9 removed**, twice, first blamed on sessions and then on games.
+#
+# **Every human seat must match the prefix.** That is the safe rule and it is
+# #252's own argument: test accounts play each other, so a game a test account
+# holds is wholly test-owned by construction. A game with one real player in it
+# is left alone and its test accounts stay — which is the right way round, since
+# the alternative deletes somebody's game.
+GAMES_JSON="$(admin --json games list 2>/dev/null || true)"
+GAME_IDS="$(printf '%s' "$GAMES_JSON" | PREFIX="$PREFIX" python3 -c '
+import json, os, sys
+prefix = os.environ["PREFIX"]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+games = data if isinstance(data, list) else data.get("games", [])
+for game in games:
+    humans = [p for p in game.get("participants", []) if p.get("kind") == "human"]
+    names = [p.get("display_name") or "" for p in humans]
+    if humans and all(n.startswith(prefix) for n in names):
+        print(game["id"])
+' 2>/dev/null || true)"
+GAMES_REMOVED=0
+while IFS= read -r gid; do
+  [[ -n "$gid" ]] || continue
+  admin games delete "$gid" > /dev/null 2>&1 && GAMES_REMOVED=$(( GAMES_REMOVED + 1 )) \
+    || echo "clean-test-accounts: could not delete game '$gid'" >&2
+done <<< "$GAME_IDS"
+(( GAMES_REMOVED > 0 )) && echo "clean-test-accounts: removed $GAMES_REMOVED game(s) held only by '$PREFIX' accounts"
+
+#
+# **Signed out, then deleted.** The refusal for a live session is #82 working,
+# and `users sign-out` exists to answer it — #295 built it for exactly this. Not
+# using it meant a suite that ended with sessions open left every account behind:
+# measured 2026-09-17 against rehearsal, **0 of 9 removed**, which reads as the
+# cleaner being broken rather than as accounts still being signed in.
+#
+# Sign-out first rather than delete-then-retry: it costs one call either way,
+# and a delete that fails for the *other* reason — the account still holds a
+# game — then says so truthfully instead of being tried twice.
 REMOVED=0
 while IFS= read -r name; do
   [[ -n "$name" ]] || continue
+  admin users sign-out "$name" > /dev/null 2>&1 || true
   admin users delete "$name" > /dev/null 2>&1 && REMOVED=$(( REMOVED + 1 )) \
-    || echo "clean-test-accounts: could not delete '$name' — it may hold a game or be signed in" >&2
+    || echo "clean-test-accounts: could not delete '$name' — it still holds a game" >&2
 done <<< "$MATCHING"
 
 echo "clean-test-accounts: removed $REMOVED of $COUNT account(s) matching '$PREFIX' on $ENV_NAME"
