@@ -3286,7 +3286,10 @@ async fn claimed_seat_preview_rejects_a_different_player() {
         },
     )
     .await;
-    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    // 403 since #379: the caller is authenticated and not allowed. This
+    // asserted 401 and was asserting the defect -- a client that retries a
+    // 401 by refreshing its session refreshes, retries and gets 401 forever.
+    assert_eq!(rejected.status(), StatusCode::FORBIDDEN);
 
     let accepted = send_json_auth(
         app,
@@ -3327,7 +3330,10 @@ async fn claimed_seat_suggest_move_rejects_a_different_player() {
         Some(&mallory.session_token),
     )
     .await;
-    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    // 403 since #379: the caller is authenticated and not allowed. This
+    // asserted 401 and was asserting the defect -- a client that retries a
+    // 401 by refreshing its session refreshes, retries and gets 401 forever.
+    assert_eq!(rejected.status(), StatusCode::FORBIDDEN);
 
     let accepted = send_empty_auth(
         app,
