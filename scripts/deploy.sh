@@ -894,6 +894,57 @@ if [[ -z "$REMOTE_BRANCHES" ]]; then
   exit 1
 fi
 note_gate on-remote
+
+# --- an emergency must not carry the queue ------------------------------ #387 R3
+#
+# Since D55 `main` accumulates release-route changes that have passed testing
+# and have not shipped. That is the intended state, and it is also a hazard at
+# exactly one moment: an emergency deploy of `main` ships every one of them
+# alongside the fix, and the person restoring service cannot audit what else is
+# there. `docs/3.3` says to cut from the last released tag and apply the one
+# fix; this is what makes ignoring that visible at the point it is happening.
+#
+# **Asked, not refused.** Production is down when this runs. A gate that stops
+# a restore because the record is untidy would be bypassed the first time it
+# fired, and `DEPLOY_EMERGENCY` exists precisely to bypass gates — so a refusal
+# here would teach people to skip the one check that knows what is shipping.
+# With no terminal it does refuse, because nobody is there to judge.
+#
+# The comparison is in image terms, using `shipping-paths.sh` — the same
+# definition the pre-commit hook and the build manifest use.
+if [[ -n "$EMERGENCY" && "$DEPLOY_ENV" == "production" ]]; then
+  EMERG_LIVE="$(curl -fsS --max-time 10 "$TARGET_URL/health" 2>/dev/null \
+                | sed -n 's/.*"app_version":"[^+]*+\([^"]*\)".*/\1/p')"
+  if [[ -n "$EMERG_LIVE" ]] && git cat-file -e "$EMERG_LIVE^{commit}" 2>/dev/null; then
+    EMERG_EXTRA=""
+    while read -r esha; do
+      [[ -n "$esha" ]] || continue
+      if touches_image "$esha"; then
+        EMERG_EXTRA+="      $(git log -1 --format='%h %s' "$esha" | cut -c1-90)"$'\n'
+      fi
+    done < <(git log --format=%H "$EMERG_LIVE..$TARGET_FULL_SHA" 2>/dev/null)
+    if [[ -n "$EMERG_EXTRA" ]]; then
+      echo
+      echo "    This emergency deploy also ships image changes already on main:"
+      echo
+      printf '%s' "$EMERG_EXTRA"
+      echo
+      echo "    docs/3.3: cut an emergency from the last released tag, not from main."
+      echo "      git switch --detach prod-<version> && <apply the fix> "
+      echo
+      if [[ ! -t 0 ]]; then
+        echo "error: refusing — an emergency carrying unreleased work, and no terminal to confirm at." >&2
+        exit 1
+      fi
+      read -r -p "    Ship those too? [y/N] " REPLY_EMERG
+      if [[ "$REPLY_EMERG" != "y" && "$REPLY_EMERG" != "Y" ]]; then
+        echo "    Stopped. Cut from the tag instead." >&2
+        exit 1
+      fi
+    fi
+  fi
+  note_gate emergency-scope
+fi
 echo "==> $TARGET_SHA confirmed on the remote ($REMOTE_BRANCHES)"
 
 # Refuses to ship a commit CI hasn't passed. Until this existed, CI was

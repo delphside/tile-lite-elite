@@ -154,6 +154,23 @@ check_says() {
   fi
 }
 
+# The mirror of check_says. Needed by the emergency-scope case below: a gate
+# that fires when it should is half the test, and a gate that stays quiet when
+# it should is the half that stops it becoming noise on every ordinary deploy.
+check_silent() {
+  local name="$1" unwanted="$2"
+  shift 2
+  local out
+  out="$("$@" 2>&1 || true)"
+  if [[ "$out" != *"$unwanted"* ]]; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name: output mentioned '$unwanted' and should not have"
+    echo "     got: ${out:0:800}"
+    failures=$((failures + 1))
+  fi
+}
+
 row() { printf '%s\t%s\t%s\t%s\t%s\t%s' "$1" "$2" "$3" "$4" "$5" "$6"; }
 health_for() { printf '%s {"status":"ok","app_version":"%s","schema_version":%s}' "$1" "$2" "$3"; }
 
@@ -307,4 +324,32 @@ if (( failures > 0 )); then
   echo "$failures test(s) failed" >&2
   exit 1
 fi
+
+# --- the emergency scope gate ----------------------------------------------- #387 R3
+#
+# Since D55 `main` accumulates tested-but-unshipped image changes. An emergency
+# deploy of `main` ships all of them alongside the fix, and the person restoring
+# service cannot audit what else is there. The gate asks; with no terminal, as
+# here, it refuses.
+#
+# The commits are found rather than hardcoded: the newest commit that touches
+# the image, and its parent as what production is running. A fixed sha would
+# stop testing anything the day it aged out of the range.
+IMG_NEW="$(git -C "$HERE" log --format=%H -1 -- Cargo.lock 'crates/*' 2>/dev/null || true)"
+IMG_OLD="$(git -C "$HERE" rev-parse --verify --quiet "${IMG_NEW}^" 2>/dev/null || true)"
+
+if [[ -n "$IMG_NEW" && -n "$IMG_OLD" ]]; then
+  check_says "an emergency carrying unreleased image changes names them" "also ships image changes" \
+    run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
+  check_says "and says to cut from the tag instead" "last released tag" \
+    run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
+  check_exit "and refuses, because there is no terminal to confirm at" 1 \
+    run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
+  # The half that keeps it from becoming noise: an ordinary deploy says nothing.
+  check_silent "an ordinary deploy is not asked about scope" "also ships image changes" \
+    run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW"
+else
+  echo "ok   (skipped: no image-touching commit with a parent to compare)"
+fi
+
 echo "All deploy gate tests passed."
