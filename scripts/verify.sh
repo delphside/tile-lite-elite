@@ -177,6 +177,52 @@ check_envs() {
   else pass envs "production, rehearsal and preview all answering" "$lines"; fi
 }
 
+LABEL[unreleased]="What main holds that production does not"
+# --- image changes waiting on main ------------------------------------- #387 R2
+#
+# Since D55 `main` is the accumulating next release, so tested-but-unshipped
+# image changes sitting there is the expected state rather than a fault. What
+# was missing is anybody being able to see them.
+#
+# **It matters most at the worst moment.** An emergency release cut from `main`
+# ships everything here alongside the fix, and the person restoring service is
+# in no position to audit it. `docs/3.3` says to cut from the last released tag
+# instead; this is what makes the thing that rule protects against visible.
+#
+# **Counted in image terms, never in commits.** "3 commits ahead" is the answer
+# to a different question -- documents and scripts reach `main` constantly and
+# reach production never. `shipping-paths.sh` already decides what reaches the
+# image, for the pre-commit hook and for the deploy manifest, and this is its
+# third consumer rather than a second opinion.
+check_unreleased() {
+  local prod sha line="" n=0
+  prod="$(curl -fsS --max-time 10 https://tileliteelite.com/health 2>/dev/null \
+          | sed -n 's/.*"app_version":"[^+]*+\([^"]*\)".*/\1/p')"
+  if [[ -z "$prod" ]]; then
+    note unreleased "production did not answer, so nothing can be compared"; return
+  fi
+  if ! git cat-file -e "$prod^{commit}" 2>/dev/null; then
+    note unreleased "production reports $prod, which is not a commit here" \
+      "fetch, or production is running something this checkout does not have"
+    return
+  fi
+  # shellcheck source=scripts/shipping-paths.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/shipping-paths.sh"
+  while read -r sha; do
+    [[ -n "$sha" ]] || continue
+    if touches_image "$sha"; then
+      n=$((n + 1))
+      line+="$(git log -1 --format='%h %s' "$sha" | cut -c1-96)"$'\n'
+    fi
+  done < <(git log --format=%H "$prod..origin/main" 2>/dev/null)
+  if (( n == 0 )); then
+    pass unreleased "production is level with main on everything that ships"
+  else
+    note unreleased "$n image change(s) on main and not in production" \
+      "an emergency release cut from main would ship these too — cut from the last released tag"$'\n'"$line"
+  fi
+}
+
 LABEL[reviews]="Shipped projects have been closed out"
 # A project is left open at `Post-deployment` by the deploy that ships it (#263),
 # so the column means *awaiting its review*. That is a passive reminder, which is
@@ -529,8 +575,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches envs rehearsal reviews milestone approach transitions ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests envs rehearsal reviews milestone approach transitions gates branches)
+RUN_ORDER=(tree pushed branches envs unreleased rehearsal reviews milestone approach transitions ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests envs unreleased rehearsal reviews milestone approach transitions gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done
