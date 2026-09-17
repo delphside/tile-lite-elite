@@ -46,7 +46,7 @@ A parent owns requirements, design and documents. Owner: *"The parent runs Scope
 
 | phase | what the step is for | owes | evidence | status |
 | --- | --- | --- | --- | --- |
-| Scope | what the project does, and which technical option | `## Requirements`, `## Design` headings; route; sources listed ⟺ parented | body, field, GitHub | `now` |
+| Scope | what the project does, and which technical option | `## Requirements`, `## Design` headings; sources listed ⟺ parented. **No route** — a parent has no delivery role, and its work packages carry one each | body, GitHub | `now` |
 | Q3 · Q2 · Q1 | a queue position that means something | a position, and nothing regressing | field | `n/a` |
 | Design and Test Approach | design settled, test approach defined | `## Test approach` with both lists; `## Impacted artefacts`; `## Deliveries` | body | `now` |
 | Development | — | **a parent must not be here** | field + `is_parent` | `now` |
@@ -54,6 +54,8 @@ A parent owns requirements, design and documents. Owner: *"The parent runs Scope
 | Deployment | — | **a parent must not be here** | field + `is_parent` | `now` |
 | Post-deployment | a requirement no single delivery satisfies is answered | one row per requirement, each answered | body | `gap` |
 | Project Closedown | the lesson is captured while it is still remembered | lessons learnt; no unticked boxes; every child closed | body, GitHub | partly `now` |
+
+**A parent owes no route, and this grid said it did until 2026-09-17.** The row above asked for one at `Scope`, which is the same defect `status.sh` carried and is why it is worth recording here: the grid is meant to be the single statement of what is owed, so a wrong row in it would have been copied into whatever the model generates. A parent is a project whose sub-issues include projects — not one with any sub-issues, since a project carries folded requirements routinely.
 
 ## Work package, by `Phase`
 
