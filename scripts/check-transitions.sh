@@ -16,7 +16,7 @@ set -euo pipefail
 command -v gh >/dev/null || { echo "check-transitions: no 'gh' on PATH" >&2; exit 2; }
 command -v jq >/dev/null || { echo "check-transitions: no 'jq' on PATH" >&2; exit 2; }
 
-Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} parent{number} subIssues(first:30){nodes{number issueType{name}}} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
+Q='{repository(owner:"delphside",name:"tile-lite-elite"){issues(first:100,states:OPEN){nodes{number title body issueType{name} parent{number} milestone{title} subIssues(first:30){nodes{number issueType{name}}} issueFieldValues(first:12){nodes{... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}'
 ISSUES="$(gh api graphql -f query="$Q" 2>/dev/null)" || {
   echo "check-transitions: could not read the issues" >&2; exit 2; }
 
@@ -40,7 +40,8 @@ ROWS="$(printf '%s' "$ISSUES" | jq -r '
   | (if $i.parent then "sub" elif $pkgs > 0 then "parent" else "solo" end) as $role
   | ([$i.subIssues.nodes[]? | select(.issueType.name == "Requirement") | .number]
      | sort | map(tostring) | join(",")) as $reqkids
-  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $route, $role,
+  | (if ($i.milestone.title // "") == "" then "-" else $i.milestone.title end) as $ms
+  | [$i.number, ($i.issueType.name // ""), $stage, $phase, $ws, $toc, $pri, $eff, $dstate, $route, $role, $ms,
      (if $reqkids == "" then "-" else $reqkids end),
      (($i.body // "") | @base64),
      (($i.body // "") | gsub("[\n\r]"; " "))] | @tsv')"
@@ -102,6 +103,26 @@ decision_has_actions_heading() {
   grep -qE '^#+[[:space:]]*Open actions' <<< "$1"
 }
 
+# Post-deployment rows with no answer — #346 R4. The table was checked for
+# existing and never for being **answered**: #103 sat at `Post-deployment` with
+# both rows blank and was completed only because somebody looked on 2026-09-06.
+#
+# A row is a table line under the heading; the header and its `---` separator
+# are not rows. An answer is `passed`, `cannot be tested` or `failed`, which are
+# the three the template allows.
+unanswered_checks() {
+  awk '
+    /^#+[[:space:]]/ { inside = (tolower($0) ~ /post-deployment/) ? 1 : 0; next }
+    !inside { next }
+    /^[[:space:]]*\|/ {
+      if ($0 ~ /^[[:space:]]*\|[[:space:]]*-+/) next          # the --- separator
+      if (++seen == 1) next                                    # the header row
+      if (tolower($0) ~ /passed|cannot be tested|failed/) next
+      n++
+    }
+    END { print n + 0 }' <<< "$1"
+}
+
 # Unticked boxes under a heading, by substring. `verify.sh` has the same shape
 # in `section_boxes`; this counts rather than prints, because the caller only
 # ever asks *how many*.
@@ -116,9 +137,9 @@ unticked_under() {
 # character: bash collapses a run of them, so a genuinely empty field would
 # merge with the next and shift the body out of reach. That failure is silent —
 # the check simply stops finding anything.
-while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role reqkids b64 body; do
+while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role ms reqkids b64 body; do
   [ -n "$num" ] || continue
-  for v in stage phase ws toc pri eff dstate route reqkids; do
+  for v in stage phase ws toc pri eff dstate route ms reqkids; do
     [ "${!v}" = "-" ] && printf -v "$v" '%s' ""
   done
   # **No stage means Triage.** Owner, 2026-09-10. An unset field and the first
@@ -153,6 +174,49 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role re
       esac
       ;;
     Project)
+      # --- the fields a phase claims are complete --------------------------- #346
+      #
+      # Owner, 2026-09-07: *"Except for the initial value they should expect
+      # certain fields and sections to be completed, and this should be
+      # checked."* A Requirement's fields were checked and a Project's never
+      # were, so a project could reach Development with no workstream, no
+      # effort and no milestone and nothing said so.
+      #
+      # **The queue is where scoping is claimed complete**, so that is where
+      # these begin. `Scope` is the initial value and is exempt by the owner's
+      # rule; reaching `Q3` asserts that what the project does is settled.
+      case "$phase" in
+        Q3|Q2|Q1|"Design and Test Approach"|Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
+          [ -n "$ws" ]  || report "$num" "$phase" "past Scope with no workstream"
+          [ -n "$eff" ] || report "$num" "$phase" "past Scope with no effort"
+          [ -n "$pri" ] || report "$num" "$phase" "past Scope with no priority"
+          ;;
+      esac
+      # **Route and milestone belong to the work package, never the parent.**
+      # A parent has no delivery role, so it has neither to set — the rule that
+      # replaced the heaviest-route ranking on 2026-09-17. Asking them of a
+      # parent would report every main project as defective, which is how a
+      # check earns its way into being ignored.
+      if [ "$role" != "parent" ]; then
+        case "$phase" in
+          "Design and Test Approach"|Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
+            [ -n "$route" ] || report "$num" "$phase" "design is done but no route, so nothing says how this reaches users"
+            ;;
+        esac
+        case "$phase" in
+          Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
+            [ -n "$ms" ] || report "$num" "$phase" "being built with no milestone, so nothing records how it reaches main"
+            ;;
+        esac
+      fi
+      # A check is answered per delivery, so this asks the same of a parent
+      # that reached Post-deployment for a requirement no single delivery met.
+      case "$phase" in
+        Post-deployment|"Project Closedown")
+          blank="$(unanswered_checks "$(printf '%s' "$b64" | base64 -d 2>/dev/null)")"
+          [ "$blank" = "0" ] || report "$num" "$phase" "$blank post-deployment check(s) with no answer — passed, cannot be tested, or failed"
+          ;;
+      esac
       # **A parent and a work package are both `Project` and owe different
       # things** — D51. The parent owns the requirements, the design and the
       # documents; a package links to them and owes what is its own. Told apart
@@ -261,7 +325,13 @@ while IFS=$'\t' read -r num kind stage phase ws toc pri eff dstate route role re
         Development|"User testing"|Deployment|Post-deployment|"Project Closedown")
           if [ "$role" != "parent" ]; then
             printf '%s' "$body" | grep -q "## Test approach"       || report "$num" "$phase" "no test approach"
-            printf '%s' "$body" | grep -q "Technical tests"        || report "$num" "$phase" "test approach has no Preview/Rehearsal lists"
+            # **Both headings, because `verify.sh` counts boxes under both** —
+            # #346 R5. It matched only the technical one, so a project missing
+            # the Preview heading was invisible here and counted there. The
+            # skill says to write "None." rather than remove one, for exactly
+            # this reason.
+            printf '%s' "$body" | grep -q "Technical tests"        || report "$num" "$phase" "test approach has no Technical tests heading"
+            printf '%s' "$body" | grep -q "Functional user tests"  || report "$num" "$phase" "test approach has no Functional user tests heading"
             printf '%s' "$body" | grep -q "## Impacted artefacts"  || report "$num" "$phase" "no impacted artefacts"
           fi
           ;;
