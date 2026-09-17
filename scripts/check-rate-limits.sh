@@ -60,11 +60,11 @@ FAILURES=0
 # `rehearsal-access.sh status` reads it. Set REHEARSAL_ACCESS_KEY to skip the
 # ssh, or to point this at some other environment.
 GATE_COOKIE=()
+# Delegated to `rehearsal-key.sh` since #371: this knew how to get in and the
+# Rust example did not, and one place knowing is the fix rather than a third
+# copy of the ssh.
 if [[ -z "${REHEARSAL_ACCESS_KEY:-}" ]]; then
-  REHEARSAL_ACCESS_KEY="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 \
-    "${REHEARSAL_SSH_HOST:-tile-lite-elite-rehearsal}" \
-    "grep -m1 '^REHEARSAL_ACCESS_KEY=' ~/tile-lite-elite/.env | cut -d= -f2-" \
-    2>/dev/null | tr -d '\r' || true)"
+  REHEARSAL_ACCESS_KEY="$("$(dirname "${BASH_SOURCE[0]}")/rehearsal-key.sh" 2>/dev/null || true)"
 fi
 if [[ -n "${REHEARSAL_ACCESS_KEY:-}" ]]; then
   GATE_COOKIE=(-H "Cookie: rehearsal=$REHEARSAL_ACCESS_KEY")
