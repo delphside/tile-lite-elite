@@ -19,8 +19,8 @@ one of them has a defect: fix it, don't work around it.
   *"It is more efficient to have one requirement covering an area we are
   revising."*
 - **A decision belongs on what it decides.** Its own issue only where it spans
-  several, or where the argument is long enough to bury the requirement. The
-  decision log indexes them either way.
+  several, or where the argument is long enough to bury the requirement. Either
+  way it is a `Decision` issue, and the board indexes them by type.
 - **Options live in the body, numbered, each saying what it constrains**, so one
   issue can be read and settled rather than assembled from a thread. Owner:
   *"being able to focus on one with options clearly presented in the body would
@@ -200,9 +200,12 @@ one of them has a defect: fix it, don't work around it.
 
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
-- At a process step, consult the owning document. A decision about process
-  goes in the decision log (the process-definition glossary), then in the
-  one place where that part of the process is documented.
+- At a process step, consult the owning document. A decision about process is a
+  **`Decision` issue** — the GitHub issue type, carrying `Decision State` and an
+  `Agreed Decision` heading that `check-transitions.sh` reads — and is then
+  applied in the one place where that part of the process is documented. The
+  process-definition glossary holds D1 to D38 and is history: it predates the
+  issue type and is not added to.
 - docs/N.N numbering: 1.x product, 2.x design, 3.x lifecycle, 4.x reference.
   A change document lives in its issue's folder under docs/changes/, named
   for the parent project — a work package has no folder of its own.

@@ -1,8 +1,17 @@
 # Triage
 
-**Triage is joint. Never alone.** Raising a project folds and closes
-requirements, and setting a stage or a milestone commits to a shape — none of
-that is reversible cheaply. Present the questions and wait.
+**Triage is joint, except where D54 gives it to Claude.** Raising a project
+folds and closes requirements, and setting a stage or a milestone commits to a
+shape — none of that is reversible cheaply, which is why the default is to
+present the questions and wait.
+
+**Claude triages alone in Delivery Tooling and Process Definition, and for
+type `tooling` or `documentation` in any workstream** — D54, accepted
+2026-09-17. The limits are the job spec on #382, and the ones that bite here
+are that anything reaching production, the product and game rules, and
+anything irreversible outside git still come to the owner whatever their
+workstream. Everything else in those areas is Claude's to classify, scope,
+group, fold and close.
 
 The rules live in [`CLAUDE.md`](../../../CLAUDE.md) and
 [`docs/3.6`](../../../docs/3.6-change-lifecycle.md). This is the order to ask
@@ -78,8 +87,12 @@ carries none. The `folded` label is the signal.
 fifty-six requirements that should have had none, and four projects whose
 letters were already written in `4.9` and never set on the issue.
 
-**Triaging alone.** The most expensive mistake here, because folding closes
-issues and un-folding is manual.
+**Triaging alone outside D54's scope.** Folding closes issues and un-folding
+is manual, so the cost of getting this wrong is asymmetric. Inside Delivery
+Tooling and Process Definition, and for type `tooling` or `documentation`,
+triaging alone is now correct; everywhere else it is still the expensive
+mistake. Check the workstream and the type before deciding which case you are
+in.
 
 **Answering "does it reach users" from `Type of change`.** It is `Route`.
 `documentation` and `tooling` are not the same question as *Repository Change*,

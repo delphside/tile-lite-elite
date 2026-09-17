@@ -1,5 +1,11 @@
 # Glossary: our terms, the industry's, and the process changes they carry
 
+> **Decisions moved to GitHub.** This holds **D1 to D38** and is not added to.
+> A decision is now a **`Decision` issue**, with `Decision State` saying whose
+> turn it is and an `Agreed Decision` heading that `check-transitions.sh`
+> requires before it can close. Read this for the early decisions and for the
+> terms; raise new ones on the board.
+
 **What this document is for.** Owner, 2026-08-19: *"The glossary has become a
 home for candidate changes to process and language of process. After review and
 discussion it should state the decisions which can then be used to update doc
