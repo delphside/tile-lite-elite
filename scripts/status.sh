@@ -152,10 +152,18 @@ reach_of() {
   esac
 }
 
-# One issue's title and Type of change, tab separated.
+# One issue's title, Type of change, Route, issue type, and whether it is a
+# parent — tab separated.
+#
+# **A parent is a project with sub-issues that are themselves projects**, not a
+# project with any sub-issues at all. A project routinely carries folded
+# requirements as sub-issues and is still a single delivery owing a single
+# route: #214 has two work packages and two folded requirements, and counting
+# sub-issues rather than project sub-issues would have misread it.
 type_of_issue() {
   gh api graphql -f query="{ repository(owner: \"$REPO_OWNER\", name: \"$REPO_NAME\") {
       issue(number: $1) { title issueType { name }
+        subIssues(first: 50) { nodes { issueType { name } } }
         issueFieldValues(first: 10) {
           nodes { ... on IssueFieldSingleSelectValue {
                     value field { ... on IssueFieldCommon { name } } } } } } } }" \
@@ -163,7 +171,9 @@ type_of_issue() {
           | [ .title,
               ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
               ([.issueFieldValues.nodes[]? | select(.field.name == "Route") | .value] | first // "-"),
-              (.issueType.name // "-") ]
+              (.issueType.name // "-"),
+              (if ([.subIssues.nodes[]? | select(.issueType.name == "Project")] | length) > 0
+               then "parent" else "-" end) ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -241,11 +251,12 @@ else
     # actually ships. Grouped by what it means for *this* release instead.
     FUNCTIONAL=""
     DELIVERS=""; LIVE=""; DECISIONS=""; ATMERGE=""; UNSET=""; REQS=""; UNTYPED=""
+    PARENTS=""
     while read -r num; do
       [[ -z "$num" ]] && continue
-      IFS=$'\t' read -r title toc route kind <<< "$(type_of_issue "$num")"
-      [[ -z "$title" ]] && { title="(could not read issue)"; toc="-"; route="-"; kind="-"; }
-      for v in toc route kind; do [[ "${!v}" == "-" ]] && printf -v "$v" '%s' ""; done
+      IFS=$'\t' read -r title toc route kind parent <<< "$(type_of_issue "$num")"
+      [[ -z "$title" ]] && { title="(could not read issue)"; toc="-"; route="-"; kind="-"; parent="-"; }
+      for v in toc route kind parent; do [[ "${!v}" == "-" ]] && printf -v "$v" '%s' ""; done
       already="$(shipped_already "$num")"
       row="$(printf '#%-4s %-42s %s' "$num" "$(printf '%.42s' "$title")" "${toc:-unclassified}")"
 
@@ -262,6 +273,16 @@ else
         # (#339, #340, #346) sat under *"route not set — cannot say, and that
         # is the thing to fix"*, which named the wrong thing to fix.
         REQS="$REQS      $row"$'\n'
+      elif [[ -n "$parent" ]]; then
+        # **A parent owes no route, and asking it for one is a defect in this
+        # report rather than in the issue** — the same mistake as the
+        # requirement case above, on a different kind of issue. `CLAUDE.md`:
+        # *"The parent needs no milestone and no Route: it has no delivery
+        # role."* Its work packages carry both, one per delivery. Until
+        # 2026-09-17 #297 sat under *"route not set — cannot say, and that is
+        # the thing to fix"* while being exactly right, and #214 and #344 had
+        # been given a route to silence it, which the deploy then ignores.
+        PARENTS="$PARENTS      $row"$'\n'
       elif [[ -z "$kind" ]]; then
         # **Untyped is its own finding.** Twenty issues carry no issue type at
         # all, left by an earlier type retirement. Without a type nothing can
@@ -284,13 +305,14 @@ else
     if [[ -n "$DELIVERS" ]]; then printf '%s' "$DELIVERS"
     else printf '    %-12s %s\n' "ships" "nothing — no change in this range reaches users"; fi
 
-    if [[ -n "$LIVE$DECISIONS$ATMERGE$UNSET$REQS$UNTYPED" ]]; then
+    if [[ -n "$LIVE$DECISIONS$ATMERGE$UNSET$REQS$UNTYPED$PARENTS" ]]; then
       echo
       echo "    also referenced by these commits, and not delivered by this release"
       [[ -n "$LIVE" ]]      && { echo "    already live"; printf '%s' "$LIVE"; }
       [[ -n "$ATMERGE" ]]   && { echo "    live at merge — repository changes"; printf '%s' "$ATMERGE"; }
       [[ -n "$DECISIONS" ]] && { echo "    decisions — they route work and ship nothing"; printf '%s' "$DECISIONS"; }
       [[ -n "$REQS" ]]      && { echo "    requirements — a project carries the route, not these"; printf '%s' "$REQS"; }
+      [[ -n "$PARENTS" ]]   && { echo "    parent projects — their work packages carry the route, not these"; printf '%s' "$PARENTS"; }
       [[ -n "$UNTYPED" ]]   && { echo "    no issue type — that is the thing to fix, not the route"; printf '%s' "$UNTYPED"; }
       [[ -n "$UNSET" ]]     && { echo "    route not set — cannot say, and that is the thing to fix"; printf '%s' "$UNSET"; }
     fi
