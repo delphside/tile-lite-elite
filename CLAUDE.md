@@ -102,6 +102,12 @@ one of them has a defect: fix it, don't work around it.
   artefacts with different routes, and the issue field is a summary of them —
   the heaviest one. What shape the change needs follows from that combination
   and not from the summary alone.
+- **Documentation riding on a release is a pre-approved add-on.** A release that
+  also touches documents stays one delivery with one semver milestone: the
+  documents need no letter milestone, no second pull request and no row of their
+  own. They are on the project branch already, reviewed in the same diff, and
+  live when the release is. A document carried along does not make a second
+  delivery.
 - So there are two shapes: straight to main, recorded by its commits; or held
   back on a branch, which then owes a pull request, a milestone and a row in
   the delivery log. The branch is what makes a delivery a point in time; the

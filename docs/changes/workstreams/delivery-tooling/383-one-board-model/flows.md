@@ -111,6 +111,14 @@ flowchart TD
 
 The diagram above draws the branch and its gates, which both routes run. A Repository delivery stops there. A Release delivery carries on, through user testing, technical testing, the merge, the rehearsal deployment and the production deployment.
 
+**Documentation riding on a Release delivery is a pre-approved add-on.** Owner, 2026-09-17:
+
+> The Release version may carry some documentation changes but these can be classed as pre-approved add-ons to the release and don't need any ceremony.
+
+So a release that also touches documents stays one Release delivery with one semver milestone. The documents need no letter milestone, no second pull request and no delivery-log row of their own — they are already on the project branch, reviewed in the same diff, and live when the release is. **The route is decided by what the change is for, and a document carried along does not make it a second delivery.**
+
+This is the case that produced the *heaviest artefact* wording, and it reads better as an add-on than as a route calculation: rather than ranking the routes a delivery touches, say the delivery has a route and documents ride with it.
+
 **The milestone marks the point the change goes live, and that is why the two differ.** Owner, 2026-09-17:
 
 > In this version reaching `main` is not a milestone because the change is not live.
@@ -290,4 +298,3 @@ Reading the tables rather than designing from scratch, the snapshot owes exactly
 | --- | --- |
 | **partial failure** | what the snapshot says when GitHub answers and git stays silent. Today each script decides for itself, mostly by exiting 0 |
 | **the obligation table per issue type** | the rows above are the union; the owner's *"each issue type has defined requirements for each lifecycle step"* means a grid, and closedown is its last row |
-| **where the exception lives** | *"associated doc changes might go with a release"* is the case that produced the heaviest-artefact fudge; it needs writing as an exception rather than left to erode the branch-chain rule |
