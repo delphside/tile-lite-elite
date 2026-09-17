@@ -33,12 +33,18 @@ A delivery is `{ route, branches }`. The branches say where the change travels; 
 | --- | --- | --- | --- | --- | --- |
 | Repository | `None` | the push | — | `pre-approved` | — |
 | Repository | `Project -> main` | the merge | one | previous semver plus a letter | one |
-| Release | `Project -> main` | a later production deployment | one | semver | one |
-| Release | `WP A -> main, WP B -> main` | one production deployment | one each | one, shared | one each |
-| Release | `WP A -> WP B -> main` | one production deployment | one each | one, shared | one each |
-| Release | `WP A -> Release, WP B -> Release` | one production deployment | one each, plus the release | semver | one each |
+| Release | `Project -> main` | the release | one | semver | one |
+| Release | `WP A -> main, WP B -> main` | the release | one each | one, shared | one each |
+| Release | `WP A -> WP B -> main` | the release | one each | one, shared | one each |
+| Release | `WP A -> Release, WP B -> Release` | the release | one each, plus the release | semver | one each |
 
-**`Project -> main` means two different things, and the route is what separates them.** For a Repository change the merge *is* the delivery: it is live on `origin/main` and nothing follows. For a Release change the merge is a staging act — the change is delivered when production is deployed, which may be days later and may carry other work packages. Same branches, different ending, which is why the route column comes first.
+**Every row is a delivery, and the release is part of it.** Owner, 2026-09-17:
+
+> All of these rows are deliveries so there is no later release. For the release route this is all the changes reaching `main`, together or separately, and then being released together.
+
+So a Release row describes the whole thing: the changes reach `main` — as one branch, as several, or built on each other — and that set is then released. One production deployment ends it.
+
+**`Project -> main` means two different things, and the route is what separates them.** For a Repository change the merge *is* the delivery and nothing follows. For a Release change the merge is a step inside the delivery, which ends at the release. Same branches, different ending, which is why the route column comes first.
 
 ### Repository · `None`
 
@@ -94,7 +100,7 @@ flowchart TD
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change confined to documents and scripts, that is around seven minutes proving the game still works.
 
-**The diagram above is the Repository ending: the merge delivers and the lap stops there.** A Release change runs the same branch and the same gates, and then continues — `main` holds it until a deployment ships it, and the deploy gates below are what it must pass.
+**The diagram above is the Repository ending: the merge delivers and the lap stops there.** A Release change runs the same branch and the same gates, and the delivery continues past the merge to its release — `main` holds it meanwhile, and the deploy gates below are what it must pass.
 
 **Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
@@ -164,7 +170,7 @@ Reach for it where B depends on A and A is unready to land alone. Where A can la
 
 ## A release delivers once
 
-**One Release delivery is one deployment to production**, whatever it carries.
+**One Release delivery is one deployment to production**, whatever it carries, and the deployment is the end of that delivery rather than an event after it.
 
 The testing divides along that line, and the two halves are easy to confuse because they use the same machine:
 
