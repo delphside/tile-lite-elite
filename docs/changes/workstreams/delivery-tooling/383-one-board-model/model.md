@@ -94,6 +94,74 @@ and the derived facts, each defined once:
 
 **Fields are resolved by name at the boundary.** Option ids appear in `sources/github.py` and nowhere else. Today five scripts carry hardcoded ids like `IFSS_kgDOAsQ80g`, which is a fact about the GitHub instance leaking into process logic.
 
+## What a fetch costs, measured
+
+Owner, 2026-09-17: *"We should understand the time to fetch data."* Measured on 2026-09-17, 45 open issues and 272 closed.
+
+| what | time | note |
+| --- | --- | --- |
+| **the whole open board, one GraphQL query** | **4.6s** | 300KB, every field a snapshot needs |
+| the same without issue bodies | 1.9s | 23KB — **bodies are 2.7s and 92% of the payload** |
+| 100 most recent closed issues | 1.3s | |
+| one issue, `gh issue view` or GraphQL | 0.6s | what the scripts do today, per issue |
+| `git fetch origin` | 1.5s | |
+| `git log --grep` over the release range | 0.03s | local, effectively free |
+| `git ls-remote origin main` | 1.4s | |
+| production `/health` | 0.2s | |
+
+And what the consumers cost today, end to end:
+
+| | today | why |
+| --- | --- | --- |
+| `status.sh` | **46.0s** | ~25 per-issue queries at 0.6s, plus health, plus git |
+| `actions.py` | 10.3s | |
+| `inbox.sh` | 0.6s | one query already |
+
+**The snapshot is cheaper than what a single consumer does today.** `status.sh` takes forty-six seconds to build a picture that one query builds in under five. That is the measurement that matters, and it changes the design:
+
+> **The cache is an optimisation for cheap readers. It is never a correctness dependency for anything that decides.**
+
+Every gate and every check can simply fetch. At 4.6s a deploy that refreshes before each of its eight gates would pay 37s, which is why they share one refresh — but even the naive version is affordable, so no gate need ever reason about staleness. That removes most of the risk the owner's caution is about: the consumers where a stale answer would do damage are exactly the ones that never read a cache.
+
+**Bodies are the expensive half and not everyone needs them.** The obligations grid reads body headings, so `check-transitions.sh` needs them; `status.sh` and `actions.py` do not. The snapshot therefore fetches bodies on demand rather than always — 1.9s against 4.6s for the consumers that can skip them.
+
+## Consistency, which is where caches go wrong
+
+Owner, 2026-09-17: *"Data must be consistent with itself and other sources, and any writes."* Three separate problems, and they need three separate answers.
+
+### Self-consistency: a snapshot is a window, not an instant
+
+GitHub offers no transactional read, so a paginated fetch can see the board change underneath it. Today 45 open issues fit in one page of 100, so the open board **is** an instant — but that is a fact about the current size, not a property of the design, and it stops being true at 100.
+
+| | |
+| --- | --- |
+| open issues | one page today; the snapshot records `pages=1` and is an instant |
+| closed issues | 272, three pages, and therefore a window |
+| the rule | a snapshot records `started_at`, `finished_at` and `pages`; a window wider than one page is reported, not hidden |
+| the hard rule | **a consumer is handed one snapshot and every fact comes from it.** Two snapshots are never mixed in one answer |
+
+### Consistency with other sources: git is a different clock
+
+`commits_naming_it` comes from git; the issue comes from GitHub. `git log --grep` is free precisely because it reads whatever `origin/main` happens to be locally, which may be hours old. A `built` answer computed from a stale `origin/main` and a fresh GitHub is wrong in the most dangerous direction: it reports work as unbuilt that is built, or misses a commit that closes a gate.
+
+| | |
+| --- | --- |
+| the snapshot records | the `origin/main` sha it read, and whether it fetched |
+| `REFRESH` implies | `git fetch` first — the 1.5s is part of the price of deciding |
+| a report may skip the fetch | and says which sha it used, so a surprising answer is traceable |
+
+The same applies to `/health`: it is a live reading, and pairing a live version with a stale board is how *"production is 52 changes behind"* could be computed from the wrong `main`.
+
+### Consistency with writes: a write invalidates everything
+
+A process that mutates the board must not then serve its own stale reads. The rule is the blunt one, and it is affordable only because a refetch is 4.6s:
+
+> **Any write through the model invalidates the whole snapshot cache, for every consumer, immediately.**
+
+Not a targeted invalidation of the issue written — a write changes derived facts on other issues, and working out which is exactly the reasoning that gets caches wrong. `AFTER_WRITE` then re-reads from source, and the next reader pays a fresh fetch it would mostly have paid anyway.
+
+`deploy.sh` settling is the case that matters: it writes phases and milestones on several issues, and every later gate and report must see them.
+
 ## Latency is declared per consumption, and some consumptions refresh
 
 Owner, 2026-09-16: *"Different points in the process need different latencies. A to do list differs from a production deployment gate."* And 2026-09-17: *"some checks should refresh the cache. So the latency requirement is something to be documented for each consumption."*
@@ -106,6 +174,8 @@ So latency is not a convention the caller remembers — it is **an attribute of 
 | `RECENT(n)` | cached if younger than `n`, else fetch | sweeps that run often and need not pay every time |
 | `REFRESH` | fetch now, **and write the result to the cache** | anything that decides: every gate, and any check whose answer stops work |
 | `AFTER_WRITE` | re-read following a mutation, ignoring the cache entirely | `settle`, where the point is to confirm what was just written |
+
+**`REFRESH` fetches the board and `git fetch`es, and updates the cache.** At 4.6s plus 1.5s it is affordable for anything that decides.
 
 **`REFRESH` updates the cache rather than bypassing it.** That is the change, and it is what makes the cache worth having: a gate that must fetch leaves the board fresher for every report behind it, instead of paying for a fetch and throwing it away. A deploy refreshes on its first gate, and the seven after it read a snapshot seconds old.
 
@@ -210,6 +280,7 @@ The second row is the one to expect, and it is why the diff is worth running rat
 
 | | |
 | --- | --- |
-| **where the snapshot is cached** | a file in `.logs/` is simplest; a gate asking `max_age=0` never reads it, so the risk is confined to reports |
+| **where the snapshot is cached** | a file in `.logs/` is simplest. The risk is confined to reports by design, since nothing that decides reads a cache |
+| **whether the cache is worth having at all** | a full fetch is 4.6s and only `turn-check.sh` runs often enough to care. A design with no cache is simpler, consistent by construction, and 4.6s slower for the two consumers that would notice. It should be costed before the cache is built |
 | **whether `roadmap-diagram.py` should survive** | it has one call site and one reader. The job spec puts deleting in scope, and this is a candidate — but it is a `CACHED` consumer, so converting it is cheap and deleting it need not block the move |
 | **the cost of the grid being executable** | generating `check-transitions.sh` is a rewrite of a working script. The safer order is: model reports first, generation later, and possibly never |
