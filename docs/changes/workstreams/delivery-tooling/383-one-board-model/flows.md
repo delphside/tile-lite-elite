@@ -138,7 +138,58 @@ flowchart TD
   class PD check
 ```
 
-`WP A -> WP B -> main` is the same shape with the packages integrated before they land — the interim branch `docs/3.3` says #71 will need. It has no diagram here because it has yet to happen.
+### Release · `WP A -> WP B -> main`
+
+Sequential, and the arrow is doing more work here than a merge. **WP A is tested first; WP B is then developed and tested on top of it, in its own branch.** So B's branch carries A's work, B's testing exercises both, and main receives them together.
+
+```mermaid
+flowchart LR
+  BA[(branch WP A)] --> TA[preview · user test · technical test]
+  TA --> BB[(branch WP B, cut from A)]
+  BB --> DEV[WP B developed on top]
+  DEV --> TB[preview · user test · technical test<br/>exercising A and B together]
+  TB --> M[(main)]
+
+  classDef branch fill:#eef3ea,stroke:#5c7a4a
+  classDef test fill:#eef,stroke:#46a
+  class BA,BB,M branch
+  class TA,TB,DEV test
+```
+
+Reach for it where B depends on A and A is unready to land alone. Where A can land by itself, the shape is `Project -> main` twice and main carries the sequencing.
+
+## A release delivers once
+
+**One Release delivery is one deployment to production**, whatever it carries.
+
+The testing divides along that line, and the two halves are easy to confuse because they use the same machine:
+
+| | scope | when |
+| --- | --- | --- |
+| user testing and **technical testing** | one change | before that change merges to main |
+| **rehearsal deployment** | the whole release | once, after main is assembled and before production |
+| **production deployment** | the whole release | once |
+| post-deployment checks | one per work package | after production |
+
+**Technical testing happens to run on the rehearsal environment; the rehearsal deployment is a different act.** The first asks *does this change behave correctly on hardware like production's?* The second asks *does deploying this release work?* — and it can only be asked of the assembled thing, which is why it happens once and late.
+
+```mermaid
+flowchart TB
+  subgraph PER["per change, before it merges"]
+    P1[preview] --> U1[user testing] --> T1[technical testing<br/>on the rehearsal environment]
+  end
+  PER --> M[(main · accumulating)]
+  M --> RD{{rehearsal deployment<br/>of the whole release}}
+  RD --> PD{{production deployment<br/>once}}
+  PD --> C[post-deployment checks<br/>one per work package]
+
+  classDef gate fill:#fde,stroke:#a36
+  classDef check fill:#eef,stroke:#46a
+  class RD,PD gate
+  class C check
+```
+
+Under D55 this is what main accumulating buys: each change is proven on its own, and the release pays for one rehearsal and one deployment rather than one of each per change.
 
 **The milestone is the only thing identifying the group** — there is no issue for it. So *"move out what is not shipping before deploying"* is the whole control: the deploy settles everything in the milestone.
 
