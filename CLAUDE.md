@@ -103,6 +103,11 @@ one of them has a defect: fix it, don't work around it.
   each taking the shape its own route needs. A project might deliver its script
   changes first, then a configuration change applied in the console, then the
   application — three deliveries, three routes, one project.
+- **Each of those deliveries is a work package, so each is tracked**, and the
+  parent carries no `Route`. That is what replaces the old ranking: rather than
+  the parent summarising its deliveries with the heaviest route they touch, the
+  route lives where the delivery does. A project with a Release and an Other has
+  a work package for each, and the parent has no route to set.
 - **Documentation riding on a release is a pre-approved add-on.** A release that
   also touches documents stays one delivery with one semver milestone: the
   documents need no letter milestone, no second pull request and no row of their

@@ -125,6 +125,12 @@ This is the case that produced the *heaviest artefact* wording, and it reads bet
 
 So a project's deliveries may each sit in a different row of the table above, run in whatever order the work needs. That is what retired the heaviest-route ranking in `CLAUDE.md`, `docs/3.3` and `docs/4.8`: it existed to summarise a mixed delivery, and there are no mixed deliveries to summarise.
 
+**Each delivery is a work package, and the parent carries no route.** Owner, 2026-09-17:
+
+> So a project with Release and Other would have a sub-project work package for each delivery, so they can both be tracked. The parent project does not have route set (replacing the heaviest route rule).
+
+The ranking was the parent's way of describing deliveries it did not itself make. Splitting removes the need: the route sits on the work package that delivers, and the parent has none to set. `is_work_package` and the route resolved by name are two of the things the model owes, below, for exactly this reason — every gate that asks *how does this reach users* is asking a work package, never a parent.
+
 **The milestone marks the point the change goes live, and that is why the two differ.** Owner, 2026-09-17:
 
 > In this version reaching `main` is not a milestone because the change is not live.
