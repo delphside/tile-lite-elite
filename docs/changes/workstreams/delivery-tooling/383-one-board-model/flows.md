@@ -104,12 +104,32 @@ flowchart TD
 
 > The Release route includes the change to main and the deployment. The Repository route is for docs and scripts which are delivered as soon as they hit `main`.
 
-| route | what it carries | delivery ends |
-| --- | --- | --- |
-| **Repository** | documents and scripts | at the merge — they are live on `origin/main` |
-| **Release** | anything built into the image, and anything deployed to the production host | at the deployment, which the route includes |
+| route | what it carries | delivery ends | milestone |
+| --- | --- | --- | --- |
+| **Repository** | documents and scripts | at the merge — they are live on `origin/main` | previous semver plus a letter, at the merge |
+| **Release** | anything built into the image, and anything deployed to the production host | at the production deployment, which the route includes | semver, at the point it reaches production |
 
-The diagram above draws the branch and its gates, which both routes run. A Repository delivery stops there. A Release delivery carries on to the deploy gates below, and `main` holds the change meanwhile.
+The diagram above draws the branch and its gates, which both routes run. A Repository delivery stops there. A Release delivery carries on, through user testing, technical testing, the merge, the rehearsal deployment and the production deployment.
+
+**The milestone marks the point the change goes live, and that is why the two differ.** Owner, 2026-09-17:
+
+> In this version reaching `main` is not a milestone because the change is not live.
+
+For documents and scripts the merge *is* going live, so the letter milestone sits there. For a Release change `main` is a waypoint — the change is inert there, however well tested — so the semver milestone sits at production. A milestone marks a delivery made at one point in time, and for each route that point is when its users can see it.
+
+```mermaid
+flowchart LR
+  B[(branch)] --> U[user testing<br/>preview]
+  U --> T[technical testing<br/>rehearsal environment]
+  T --> M[(main)]
+  M --> RD[rehearsal deployment<br/>the whole release]
+  RD --> P[production deployment]
+  M -.->|Repository stops here<br/>letter milestone| LIVE1([live])
+  P -->|semver milestone| LIVE2([live])
+
+  classDef done fill:#eef3ea,stroke:#5c7a4a
+  class LIVE1,LIVE2 done
+```
 
 **Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
