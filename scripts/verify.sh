@@ -535,6 +535,27 @@ check_gates() {
   fi
 }
 
+LABEL[prstate]="The board agrees with GitHub about pull requests"
+# The `PR State` field is derived and never typed, so the only way it goes wrong
+# is nobody running the thing that derives it — and nothing did. Found
+# 2026-09-17 by the owner: **#386 and #390 both sat with no state at all**, one
+# of them merged. A generated field with no generator on any path is a field
+# that is right only by luck.
+#
+# `--check` so this reports and changes nothing; correcting it is
+# `sync-pr-state.sh` with no arguments, which the message says.
+check_prstate() {
+  local out
+  if ! command -v gh >/dev/null 2>&1; then
+    fail prstate "not checked — no 'gh' on PATH"; return
+  fi
+  if out="$(timeout 60 "$(dirname "${BASH_SOURCE[0]}")/sync-pr-state.sh" --check 2>&1)"; then
+    pass prstate "every pull request's state matches GitHub"
+  else
+    note prstate "the board disagrees with GitHub — run sync-pr-state.sh" "$out"
+  fi
+}
+
 LABEL[transitions]="Issues have done the work their fields claim"
 # Owner, 2026-09-05: run check-transitions.sh from here.
 #
@@ -575,8 +596,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches envs unreleased rehearsal reviews milestone approach transitions ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests envs unreleased rehearsal reviews milestone approach transitions gates branches)
+RUN_ORDER=(tree pushed branches envs unreleased rehearsal reviews milestone approach transitions prstate ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests envs unreleased rehearsal reviews milestone approach transitions prstate gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done

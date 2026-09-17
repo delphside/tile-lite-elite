@@ -85,9 +85,12 @@ one of them has a defect: fix it, don't work around it.
   a recorded approval, a merge that waits for a tick. Pre-approved does not mean
   unreviewed — it means the discussion was the review, which is enough where a
   change is cheap to reverse and is not, for the image.
-- The pull request body is the review surface. It defines the scope of this
-  delivery given the project context, and does not duplicate the project
-  body or documents. Add the owner as reviewer at creation. He ticks and
+- The pull request body is the review surface. **It says which part of the
+  project's scope is being requested, and what is deliberately left out** —
+  owner, 2026-09-17. It does not duplicate the project body or the documents:
+  the argument, the measurements and the design live on the issue, and a body
+  that restates them makes the reviewer read the same thing twice to find the
+  one paragraph that is new. Add the owner as reviewer at creation. He ticks and
   approves, Claude merges by rebase and fast-forward.
 - A review comes back two ways and they return differently. **Approved with
   comments** stays approved: make the changes and merge. **Changes requested**
