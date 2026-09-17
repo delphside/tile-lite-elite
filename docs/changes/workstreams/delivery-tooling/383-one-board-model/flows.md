@@ -29,14 +29,16 @@ A delivery is `{ route, branches }`. The branches say where the change travels; 
 
 **Examples, rather than a catalogue.** Other shapes are legitimate; these are the ones that have happened.
 
-| route | branches | pull request | milestone | delivery-log row |
-| --- | --- | --- | --- | --- |
-| Repository | `None` | — | `pre-approved` | — |
-| Repository | `Project -> main` | one | previous semver plus a letter | one |
-| Release | `Project -> main` | one | semver | one |
-| Release | `WP A -> main, WP B -> main` | one each | one, shared | one each |
-| Release | `WP A -> WP B -> main` | one each | one, shared | one each |
-| Release | `WP A -> Release, WP B -> Release` | one each, plus the release | semver | one each |
+| route | branches | delivered by | pull request | milestone | delivery-log row |
+| --- | --- | --- | --- | --- | --- |
+| Repository | `None` | the push | — | `pre-approved` | — |
+| Repository | `Project -> main` | the merge | one | previous semver plus a letter | one |
+| Release | `Project -> main` | a later production deployment | one | semver | one |
+| Release | `WP A -> main, WP B -> main` | one production deployment | one each | one, shared | one each |
+| Release | `WP A -> WP B -> main` | one production deployment | one each | one, shared | one each |
+| Release | `WP A -> Release, WP B -> Release` | one production deployment | one each, plus the release | semver | one each |
+
+**`Project -> main` means two different things, and the route is what separates them.** For a Repository change the merge *is* the delivery: it is live on `origin/main` and nothing follows. For a Release change the merge is a staging act — the change is delivered when production is deployed, which may be days later and may carry other work packages. Same branches, different ending, which is why the route column comes first.
 
 ### Repository · `None`
 
@@ -68,7 +70,7 @@ flowchart LR
 
 It also runs `check-docs.sh` when markdown is staged, which is the one place the documents are gated rather than merely checked.
 
-### Repository or Release · `Project -> main`
+### `Project -> main` · Repository, then Release
 
 ```mermaid
 flowchart TD
@@ -91,6 +93,8 @@ flowchart TD
 ```
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change confined to documents and scripts, that is around seven minutes proving the game still works.
+
+**The diagram above is the Repository ending: the merge delivers and the lap stops there.** A Release change runs the same branch and the same gates, and then continues — `main` holds it until a deployment ships it, and the deploy gates below are what it must pass.
 
 **Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
 
