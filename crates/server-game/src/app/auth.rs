@@ -25,9 +25,14 @@ pub(crate) async fn register_player(
     let password_hash = hash_password_bounded(&state, &request.password).await?;
 
     let player_id = Uuid::new_v4().to_string();
+    // The check above is an optimisation; this constraint is the truth. Two
+    // registrations of the same name race across the Argon2 hash, both pass the
+    // check, and one of them lands here — #380 R5.
     persistence::create_player(&state.db, &player_id, display_name, email, &password_hash)
         .await
-        .map_err(ApiProblem::from_sqlx)?;
+        .map_err(|error| {
+            ApiProblem::from_sqlx_or_duplicate(error, "That User ID is already taken")
+        })?;
 
     let session_token = Uuid::new_v4().to_string();
     let expires_at = session_expiry();
@@ -303,9 +308,12 @@ pub(crate) async fn update_player_details(
         return Err(ApiProblem::bad_request("That User ID is already taken"));
     }
 
+    // Same race as registration — #380 R5.
     persistence::update_player_details(&state.db, &player_id, display_name, email)
         .await
-        .map_err(ApiProblem::from_sqlx)?;
+        .map_err(|error| {
+            ApiProblem::from_sqlx_or_duplicate(error, "That User ID is already taken")
+        })?;
 
     let player = persistence::get_player_by_id(&state.db, &player_id)
         .await

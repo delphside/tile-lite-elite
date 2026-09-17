@@ -33,7 +33,11 @@ DOC = ROOT / "docs" / "4.3-api-schema.md"
 # `ApiProblem::kind("literal"` — the first argument only, and only where it is a
 # literal. A message built with `format!` carries a runtime value and cannot be
 # matched against a document, so it is out of scope rather than silently missed.
-CALL = re.compile(r'ApiProblem::(\w+)\(\s*"([^"]+)"')
+# `Self::` as well as `ApiProblem::`, because `error.rs` builds problems from
+# inside the impl — `from_sqlx` answers two messages of its own and neither was
+# seen here, so the check said all messages were documented while two were not.
+# Found 2026-09-17 while shipping #380.
+CALL = re.compile(r'(?:ApiProblem|Self)::(\w+)\(\s*"([^"]+)"')
 
 # Not an interface: `tests.rs` asserts against these strings, and counting a
 # test's copy would let a message be "documented" by being tested.

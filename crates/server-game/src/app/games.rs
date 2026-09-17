@@ -681,7 +681,10 @@ pub(crate) async fn preview_move(
         && seat.kind == api::SeatKind::Human
         && caller_player_id.as_deref() != seat.player_id.as_deref()
     {
-        return Err(ApiProblem::unauthorized(
+        // 403, not 401 — #379. The caller is authenticated and not allowed,
+        // which is what 403 means; 401 tells a client to refresh its session,
+        // and a client that does will refresh, retry and get 401 forever.
+        return Err(ApiProblem::forbidden(
             "This seat belongs to a different player",
         ));
     }
@@ -771,7 +774,8 @@ pub(crate) async fn suggest_move(
             ));
         }
         if caller_player_id.as_deref() != participant.player_id.as_deref() {
-            return Err(ApiProblem::unauthorized(
+            // 403, not 401 — #379, as above.
+            return Err(ApiProblem::forbidden(
                 "This seat belongs to a different player",
             ));
         }
