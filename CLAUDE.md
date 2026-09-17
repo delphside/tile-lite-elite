@@ -10,6 +10,21 @@ one of them has a defect: fix it, don't work around it.
   it quickly. Discussion happens in the comments; the conclusions go in the
   body, which is edited to stay current. Where the project is already clear,
   raise the project instead and skip the requirement.
+- **Raise quickly, but into an existing requirement where one covers the area.**
+  Look first; a new row in a table beats a new number. Seventy-five issues were
+  raised in the fourteen days to 2026-09-17 and ten of them were facets of one
+  thing — the board tooling — which is what #383 then exists to unify. A new
+  issue is right when the subject is genuinely separate, or when the existing
+  one has been scoped and widening it would reopen that. Owner, 2026-09-17:
+  *"It is more efficient to have one requirement covering an area we are
+  revising."*
+- **A decision belongs on what it decides.** Its own issue only where it spans
+  several, or where the argument is long enough to bury the requirement. The
+  decision log indexes them either way.
+- **Options live in the body, numbered, each saying what it constrains**, so one
+  issue can be read and settled rather than assembled from a thread. Owner:
+  *"being able to focus on one with options clearly presented in the body would
+  help a lot."*
 - Make a tooling change when something first needs it, not when it occurs to
   you. The requirement is still raised; the doing waits for the need.
 - Claude sweeps, the owner reacts. Claude looks across every open item and
