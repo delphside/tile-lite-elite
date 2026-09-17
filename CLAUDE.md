@@ -98,10 +98,11 @@ one of them has a defect: fix it, don't work around it.
   the development version, because the development version is intent and can
   change — 0.7.3 became 0.8.0 on 2026-09-09, and a letter pinned to it would
   have named a release that never existed.
-- `Route` belongs to the **artefact**, not to the change. A delivery combines
-  artefacts with different routes, and the issue field is a summary of them —
-  the heaviest one. What shape the change needs follows from that combination
-  and not from the summary alone.
+- `Route` belongs to the **artefact**, and **a delivery has one route**. Work
+  touching artefacts with different routes is split into a delivery per route,
+  each taking the shape its own route needs. A project might deliver its script
+  changes first, then a configuration change applied in the console, then the
+  application — three deliveries, three routes, one project.
 - **Documentation riding on a release is a pre-approved add-on.** A release that
   also touches documents stays one delivery with one semver milestone: the
   documents need no letter milestone, no second pull request and no row of their

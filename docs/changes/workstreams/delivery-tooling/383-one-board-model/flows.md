@@ -119,6 +119,12 @@ So a release that also touches documents stays one Release delivery with one sem
 
 This is the case that produced the *heaviest artefact* wording, and it reads better as an add-on than as a route calculation: rather than ranking the routes a delivery touches, say the delivery has a route and documents ride with it.
 
+**Everything else spanning routes is split, not ranked.** Owner, 2026-09-17:
+
+> Different routes can be split into separate deliveries (apart from carry-on documentation changes). So a project might have script changes going first, then a configuration change in OCI, then an application change. Three deliveries by different routes.
+
+So a project's deliveries may each sit in a different row of the table above, run in whatever order the work needs. That is what retired the heaviest-route ranking in `CLAUDE.md`, `docs/3.3` and `docs/4.8`: it existed to summarise a mixed delivery, and there are no mixed deliveries to summarise.
+
 **The milestone marks the point the change goes live, and that is why the two differ.** Owner, 2026-09-17:
 
 > In this version reaching `main` is not a milestone because the change is not live.
