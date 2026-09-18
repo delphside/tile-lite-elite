@@ -28,7 +28,7 @@ query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
            orderBy:{field:CREATED_AT, direction:DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title state %(body)s
+        number title state createdAt updatedAt %(body)s
         issueType { name }
         milestone { title }
         parent { number }
@@ -45,6 +45,44 @@ query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
   }
 }
 """
+
+
+_PR_QUERY = """
+query($owner:String!, $repo:String!, $cursor:String) {
+  repository(owner:$owner, name:$repo) {
+    pullRequests(first:50, after:$cursor, states:OPEN,
+                 orderBy:{field:CREATED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title state body createdAt updatedAt
+        isDraft reviewDecision
+        reviewRequests(first:1) { totalCount }
+        milestone { title }
+        labels(first:20) { nodes { name } }
+      }
+    }
+  }
+}
+"""
+
+
+def pr_state(draft: bool, review: str | None, reviewers: int) -> str:
+    """GitHub's own state, read as the board's `PR State`.
+
+    The same ladder, in the same order, as `scripts/sync-pr-state.sh`, which is
+    what writes the field. Two answers to one question is the disagreement this
+    model exists to remove, so this reproduces that script rather than deciding
+    for itself -- if they ever differ, the parallel run is meant to catch it.
+    """
+    if draft:
+        return "Drafting"
+    if review == "APPROVED":
+        return "Approved"
+    if review == "CHANGES_REQUESTED":
+        return "Changes requested"
+    if reviewers:
+        return "Awaiting review"
+    return "Drafting"
 
 
 class Unavailable(Exception):
@@ -127,15 +165,50 @@ def _to_raw(node: dict) -> RawIssue:
         blocks=frozenset(
             n["number"] for n in (node.get("blocking") or {}).get("nodes", []) if n
         ),
+        created_at=node.get("createdAt"),
+        updated_at=node.get("updatedAt"),
     )
 
 
-def fetch(states: str = "OPEN", with_bodies: bool = True) -> Snapshot:
+def _pr_to_raw(node: dict) -> RawIssue:
+    state = pr_state(bool(node.get("isDraft")),
+                     node.get("reviewDecision") or None,
+                     (node.get("reviewRequests") or {}).get("totalCount", 0))
+    return RawIssue(
+        number=node["number"],
+        title=node.get("title") or "",
+        state=node.get("state") or "",
+        body=node.get("body") or "",
+        # A pull request carries no issue type -- GitHub does not offer one --
+        # so the model supplies it. Without this the fourth type is a class
+        # nothing ever instantiates.
+        issue_type="PullRequest",
+        fields={"PR State": state},
+        sub_issues=(),
+        parent=None,
+        milestone=(node.get("milestone") or {}).get("title"),
+        labels=frozenset(
+            n["name"] for n in node.get("labels", {}).get("nodes", []) if n
+        ),
+        created_at=node.get("createdAt"),
+        updated_at=node.get("updatedAt"),
+    )
+
+
+def fetch(states: str = "OPEN", with_bodies: bool = True,
+          with_pull_requests: bool = True) -> Snapshot:
     """One snapshot of the board.
 
     Bodies are 2.7s of the 4.6s and 92% of the payload, so a consumer that
     reads no body headings should ask for none.
     """
+    # **Pull requests are not issues.** GraphQL's `issues` connection excludes
+    # them, so a snapshot built from it alone contains no `PullRequest` at all
+    # -- `classify` never reaches that branch, both PR obligations apply to
+    # nothing, and R1 cannot see a review waiting on the owner. Every one of
+    # those reads as "nothing to report", which is the defect family this model
+    # exists to remove: a consumer asking a source for something it never
+    # carried, and taking the silence for good news.
     query = _QUERY % {"body": "body" if with_bodies else ""}
     started = time.time()
     issues: list[RawIssue] = []
@@ -153,6 +226,20 @@ def fetch(states: str = "OPEN", with_bodies: bool = True) -> Snapshot:
         if not block["pageInfo"]["hasNextPage"]:
             break
         cursor = block["pageInfo"]["endCursor"]
+
+    if with_pull_requests and states == "OPEN":
+        cursor = None
+        while True:
+            payload = _gh_graphql(_PR_QUERY, owner=OWNER, repo=REPO, cursor=cursor)
+            if "errors" in payload:
+                raise Unavailable(str(payload["errors"])[:300])
+            block = payload["data"]["repository"]["pullRequests"]
+            issues += [_pr_to_raw(n) for n in block["nodes"] if n]
+            pages += 1
+            if not block["pageInfo"]["hasNextPage"]:
+                break
+            cursor = block["pageInfo"]["endCursor"]
+
     return Snapshot(
         issues=tuple(issues),
         started_at=started,

@@ -20,6 +20,8 @@ import sys
 sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
 from board.obligations import Answer, assess
+from board.sources import pr_state
+from board.turn import waiting_on_owner
 
 failures = 0
 
@@ -154,6 +156,64 @@ ready = classify(issue(1, kind="Requirement",
                        fields={"Stage": "Ready for Project", "Workstream": "W"}))
 ids = {f.obligation.id: f.answer for f in assess(ready)}
 check("a gap row answers not checked", Answer.NOT_CHECKED, ids.get("ready-complete"))
+
+print()
+print("a pull request is not an issue, and must still reach the model")
+# GraphQL's `issues` connection excludes pull requests, so a snapshot built
+# from it alone contains no PullRequest at all: classify never reaches that
+# branch, both PR obligations apply to nothing, and R1 cannot see a review
+# waiting. Every one of those reads as "nothing to report".
+pr = classify(issue(391, kind="PullRequest", fields={"PR State": "Awaiting review"},
+                    body="Refs #301\n\n## What is being requested\n\nx\n\n"
+                         "## What is deliberately left out\n\ny\n"))
+check("a pull request classifies as one", "PullRequest", pr.kind)
+ids = {f.obligation.id: f.answer for f in assess(pr)}
+check("a linked issue is found", Answer.MET, ids.get("pr-linked"))
+check("both scope headings are found", Answer.MET, ids.get("pr-scope-stated"))
+# The grid says what a pull request owes: a linked issue, the two headings,
+# the review, CI. A workstream is not on it -- a pull request is a change
+# vehicle and its workstream is that of the issue it refs.
+check("a pull request is never asked for a workstream", None, ids.get("workstream"))
+
+no_ref = classify(issue(390, kind="PullRequest", fields={"PR State": "Approved"},
+                        body="Scope of this delivery: things.\n"))
+ids = {f.obligation.id: f.answer for f in assess(no_ref)}
+check("a pull request with no Refs is reported", Answer.MISSING, ids.get("pr-linked"))
+check("and one with neither heading is too", Answer.MISSING, ids.get("pr-scope-stated"))
+
+print()
+print("PR State is read with sync-pr-state.sh's ladder, in its order")
+# Two answers to one question is the disagreement this model exists to remove.
+check("draft beats everything, approval included",
+      "Drafting", pr_state(True, "APPROVED", 1))
+check("approved", "Approved", pr_state(False, "APPROVED", 0))
+check("changes requested", "Changes requested", pr_state(False, "CHANGES_REQUESTED", 1))
+check("a requested reviewer and no decision is awaiting review",
+      "Awaiting review", pr_state(False, None, 1))
+check("no reviewer and no decision is still drafting",
+      "Drafting", pr_state(False, None, 0))
+
+print()
+print("R1 sees only what the owner must do")
+check("a review waiting is his", "pull request",
+      getattr(waiting_on_owner(pr), "source", None))
+check("an approved one is not",
+      None, waiting_on_owner(classify(issue(1, kind="PullRequest",
+                                            fields={"PR State": "Approved"}))))
+check("an unanswered decision is his", "decision",
+      getattr(waiting_on_owner(classify(issue(1, kind="Decision",
+                                              fields={"Decision State": "Asked"}))),
+              "source", None))
+check("a decided one is not", None,
+      waiting_on_owner(classify(issue(1, kind="Decision",
+                                      fields={"Decision State": "Decided"}))))
+wp = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+                    body="## Functional user tests — Preview\n\n- [ ] click it\n"))
+check("an untested delivery is his", "user testing",
+      getattr(waiting_on_owner(wp), "source", None))
+done = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+                      body="## Functional user tests — Preview\n\n- [x] clicked\n"))
+check("a tested one is not", None, waiting_on_owner(done))
 
 print()
 if failures:

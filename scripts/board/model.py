@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Iterator, Mapping, Sequence
 
 # --------------------------------------------------------------------------
@@ -45,6 +46,12 @@ class RawIssue:
     # why the roadmap diagram exists — owner, 2026-09-18.
     blocked_by: frozenset[int] = frozenset()
     blocks: frozenset[int] = frozenset()
+    # Reports ask "for how long"; gates only ask "is it true now". These are
+    # the cheapest answer GitHub gives, and `updated_at` is last activity of
+    # any kind -- NOT when the field reached its current value. R1 says so
+    # rather than implying a precision it does not have.
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 # --------------------------------------------------------------------------
@@ -191,6 +198,20 @@ class Issue:
     @property
     def blocks(self) -> frozenset[int]:
         return self.raw.blocks
+
+    # -- age ---------------------------------------------------------------
+    @property
+    def quiet_days(self) -> float | None:
+        """Days since anything at all happened on this issue.
+
+        A floor on how long something has been waiting, not a measure of it:
+        a comment that changed nothing resets it. Named `quiet_days` rather
+        than `waiting_days` so no consumer can read it as the latter.
+        """
+        if not self.raw.updated_at:
+            return None
+        stamp = datetime.fromisoformat(self.raw.updated_at.replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - stamp).total_seconds() / 86400
 
 
 @dataclass(frozen=True)

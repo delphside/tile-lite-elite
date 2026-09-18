@@ -381,7 +381,7 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `verify.sh` | R6 | asks the model |
 | `check-transitions.sh` | obligation checks | generated from the grid |
 | `status.sh` | R3 | asks; formatting stays |
-| `actions.py` | R1 | asks |
+| `actions.py` | R1 | asks. `board-actions.py` runs beside it: R1 as specified is narrower — only what the owner must do — so a difference between them is the expected result, not a defect |
 | `inbox.sh` | R2 | asks, including comments |
 | `sync-pr-state.sh` | a write | `board` command |
 | `turn-check.sh` | the sweep | asks, `CACHED` |

@@ -27,7 +27,11 @@ With [`flows.md`](flows.md) and [`obligations.md`](obligations.md) this complete
 
 **Empty is the expected state** and must be said plainly, not left as blank space.
 
-*Today: `actions.py`.*
+**Three of the four sources can be derived; the fourth cannot, and the report says so.** There is no convention marking a question as the owner's: bodies use `- [ ]` for work of every kind, and nothing distinguishes a box he must tick from one Claude must. A heading he answers under, or a label, would make it derivable. Until then R1 prints the gap under every run, on the same rule as `obligations.md` — something nothing can evidence must not read as *nothing to do*, because an empty report and an unenforceable rule look identical from the outside and only one of them is good news.
+
+**Pull requests are not issues**, and this is where that first bit. GraphQL's `issues` connection excludes them, so a snapshot built from it alone holds no `PullRequest` at all: `classify` never reaches that branch, both PR obligations apply to nothing, and R1 cannot see a review waiting. All three read as *nothing to report*. `sources.py` fetches them separately and supplies the type GitHub does not, deriving `PR State` with the same ladder `sync-pr-state.sh` uses to write it.
+
+*Today: `actions.py`, which answers a wider question — every outstanding action on the board, not only the owner's. The difference is deliberate and is what the parallel run compares.*
 
 ---
 

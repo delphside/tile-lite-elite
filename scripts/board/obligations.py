@@ -141,7 +141,14 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         lambda i: not i.stage_was_defaulted,
     ),
     Obligation(
-        "workstream", (Issue,), ANY_STEP,
+        # NOT PullRequest. The grid lists what a pull request owes -- a linked
+        # issue, the two headings, the review, CI -- and a workstream is not on
+        # it: a pull request is a change vehicle, and its workstream is the
+        # workstream of the issue it refs. Asking one for a field it does not
+        # carry is the defect this model exists to remove, and it appeared here
+        # the moment pull requests started reaching the model.
+        "workstream", (Requirement, ParentProject, WorkPackage,
+                       StandaloneProject, Decision), ANY_STEP,
         "a workstream",
         "unset is the triage queue, so an unset workstream is untriaged",
         lambda i: bool(i.field("Workstream")),
