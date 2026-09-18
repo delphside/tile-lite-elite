@@ -814,7 +814,7 @@ pub async fn create_player(
 /// `players.display_name_folded` and compared against; the original-case name
 /// stays in `display_name` for display. This is why matching must go through
 /// this fn on both the write and the lookup side — never a bare SQL compare.
-pub(crate) fn fold_display_name(name: &str) -> String {
+pub fn fold_display_name(name: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     name.nfc().collect::<String>().to_lowercase()
 }
