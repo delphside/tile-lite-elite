@@ -1,0 +1,14 @@
+# Blank issues are off, because a blank issue carries no type and an untyped
+# issue is skipped by every rule keyed on type — it reads as compliant while
+# being invisible. Twenty of them sat unnoticed (#361).
+#
+# Owner, 2026-09-18: "Disable blank issues. Use Req as the default."
+#
+# So every issue arrives through a form that sets its type. Anything that still
+# reaches the board untyped — the API sets no type, and `gh issue create` does
+# not use these forms — is read as a Requirement and reported as defaulted, in
+# `scripts/board/model.py`.
+#
+# Raise a Requirement when unsure: it is the cheapest to raise and the only one
+# that can be folded into a project later.
+blank_issues_enabled: false
