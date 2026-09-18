@@ -76,86 +76,114 @@ flowchart LR
 
 It also runs `check-docs.sh` when markdown is staged, which is the one place the documents are gated rather than merely checked.
 
-### `Project -> main` · one branch shape, two routes
+### Both routes share a branch and a pull request, and nothing after it
+
+The two `Project -> main` shapes below use the same branch mechanics, so they are stated once here and not repeated.
 
 ```mermaid
-flowchart TD
+flowchart LR
   B[(project branch)] --> CI1{{CI check + stamp, every push}}
   CI1 --> PR[pull request]
   PR --> E2E{{CI e2e, every PR}}
-  PR --> REV{{owner review: approved / changes requested}}
+  PR --> REV{{owner review}}
   E2E --> MG{{merge: rebase and fast-forward}}
   REV --> MG
   MG --> M[(main)]
-  M --> DEP{{deploy.sh, 8 gates}}
-  DEP --> PREV[preview] --> REH[rehearsal] --> PROD[production]
-  PROD --> SET[settle: phases, milestones, comments]
-  SET -.-> V[verify.sh]
 
   classDef gate fill:#fde,stroke:#a36
-  classDef check fill:#eef,stroke:#46a
-  class CI1,E2E,REV,MG,DEP gate
-  class V check
+  class CI1,E2E,REV,MG gate
 ```
 
 **e2e runs on every pull request today, whatever it touches — #348.** For a repository change confined to documents and scripts, that is around seven minutes proving the game still works.
 
-**Two different routes share this branch shape, and the route decides where the delivery ends.** Owner, 2026-09-17:
+**After the merge the two routes have nothing in common**, which is why they are separate shapes rather than one shape with a branch in it. Owner, 2026-09-17:
 
 > The Release route includes the change to main and the deployment. The Repository route is for docs and scripts which are delivered as soon as they hit `main`.
 
-| route | what it carries | delivery ends | milestone |
-| --- | --- | --- | --- |
-| **Repository** | documents and scripts | at the merge — they are live on `origin/main` | previous semver plus a letter, at the merge |
-| **Release** | anything built into the image, and anything deployed to the production host | at the production deployment, which the route includes | semver, at the point it reaches production |
+For a Repository change the merge **is** the delivery. For a Release change `main` is a waypoint and the change is inert there, however well tested.
 
-The diagram above draws the branch and its gates, which both routes run. A Repository delivery stops there. A Release delivery carries on, through user testing, technical testing, the merge, the rehearsal deployment and the production deployment.
+### Repository · `Project -> main`
+
+Documents and scripts. **The delivery ends at the merge** — there is nothing after it, and no deployment is involved.
+
+```mermaid
+flowchart LR
+  MG{{merge}} --> M[(main)]
+  M --> LIVE([live on origin/main])
+  LIVE --> MS[letter milestone<br/>previous semver + a letter]
+  M -.-> CT[check-transitions.sh]
+
+  classDef gate fill:#fde,stroke:#a36
+  classDef done fill:#eef3ea,stroke:#5c7a4a
+  classDef check fill:#eef,stroke:#46a
+  class MG gate
+  class LIVE,MS done
+  class CT check
+```
+
+| | |
+| --- | --- |
+| carries | documents and scripts |
+| delivery ends | at the merge — live on `origin/main` |
+| milestone | previous semver plus a letter, **at the merge**, because that is when it goes live |
+| owes | a pull request and a delivery-log row; no deployment, no environments, no post-deployment check against a running service |
+
+### Release · `Project -> main`
+
+Anything built into the image, and anything deployed to the production host. **The delivery ends at the production deployment**, which the route includes.
+
+```mermaid
+flowchart LR
+  B[(branch)] --> U[user testing<br/>preview]
+  U --> T[technical testing<br/>rehearsal]
+  T --> MG{{merge}} --> M[(main)]
+  M --> RD[rehearsal deployment<br/>the whole release]
+  RD --> DEP{{deploy.sh, 8 gates}}
+  DEP --> P[production deployment]
+  P --> MS[semver milestone] --> LIVE([live])
+  P --> SET[settle: phases, milestones, comments]
+  SET -.-> V[verify.sh]
+
+  classDef gate fill:#fde,stroke:#a36
+  classDef check fill:#eef,stroke:#46a
+  classDef done fill:#eef3ea,stroke:#5c7a4a
+  class MG,DEP gate
+  class V check
+  class LIVE,MS done
+```
+
+| | |
+| --- | --- |
+| carries | anything built into the image, and anything deployed to the production host |
+| delivery ends | at the production deployment |
+| milestone | semver, **at production**, because `main` is not live |
+| owes | everything the Repository route owes, plus user testing, technical testing, two deployments, eight gates and a post-deployment check per requirement |
+
+**Since D55 (#388) merging to `main` comes before the release, not with it.** A release-route change merges once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
+
+> Releases are simpler if we have a next release branch that accumulates changes. Because of doc and tooling changes it is easier if that is `main`.
+
+**What makes that safe lives in the emergency path.** `main` now carries tested-but-unshipped image changes, so an emergency release cut from `main` ships all of them. `docs/3.3` says to cut from the last released tag instead. That is a documented procedure today; #387 R2 asks for the report and R3 for the enforcement that would make it a gate.
 
 **Documentation riding on a Release delivery is a pre-approved add-on.** Owner, 2026-09-17:
 
 > The Release version may carry some documentation changes but these can be classed as pre-approved add-ons to the release and don't need any ceremony.
 
-So a release that also touches documents stays one Release delivery with one semver milestone. The documents need no letter milestone, no second pull request and no delivery-log row of their own — they are already on the project branch, reviewed in the same diff, and live when the release is. **The route is decided by what the change is for, and a document carried along does not make it a second delivery.**
+So a release that also touches documents stays one Release delivery with one semver milestone: no letter milestone, no second pull request, no delivery-log row of its own. They are on the project branch already, reviewed in the same diff, and live when the release is. **A document carried along does not make a second delivery** — which is what the *heaviest artefact* wording was reaching for, and reads better as an add-on than as a route calculation.
 
-This is the case that produced the *heaviest artefact* wording, and it reads better as an add-on than as a route calculation: rather than ranking the routes a delivery touches, say the delivery has a route and documents ride with it.
+### Anything else spanning routes is split, not ranked
 
-**Everything else spanning routes is split, not ranked.** Owner, 2026-09-17:
+Owner, 2026-09-17:
 
 > Different routes can be split into separate deliveries (apart from carry-on documentation changes). So a project might have script changes going first, then a configuration change in OCI, then an application change. Three deliveries by different routes.
 
-So a project's deliveries may each sit in a different row of the table above, run in whatever order the work needs. That is what retired the heaviest-route ranking in `CLAUDE.md`, `docs/3.3` and `docs/4.8`: it existed to summarise a mixed delivery, and there are no mixed deliveries to summarise.
+So a project's deliveries may each take a different shape from the table above, in whatever order the work needs.
 
 **Each delivery is a work package, and the parent carries no route.** Owner, 2026-09-17:
 
 > So a project with Release and Other would have a sub-project work package for each delivery, so they can both be tracked. The parent project does not have route set (replacing the heaviest route rule).
 
-The ranking was the parent's way of describing deliveries it did not itself make. Splitting removes the need: the route sits on the work package that delivers, and the parent has none to set. `is_work_package` and the route resolved by name are two of the things the model owes, below, for exactly this reason — every gate that asks *how does this reach users* is asking a work package, never a parent.
-
-**The milestone marks the point the change goes live, and that is why the two differ.** Owner, 2026-09-17:
-
-> In this version reaching `main` is not a milestone because the change is not live.
-
-For documents and scripts the merge *is* going live, so the letter milestone sits there. For a Release change `main` is a waypoint — the change is inert there, however well tested — so the semver milestone sits at production. A milestone marks a delivery made at one point in time, and for each route that point is when its users can see it.
-
-```mermaid
-flowchart LR
-  B[(branch)] --> U[user testing<br/>preview]
-  U --> T[technical testing<br/>rehearsal environment]
-  T --> M[(main)]
-  M --> RD[rehearsal deployment<br/>the whole release]
-  RD --> P[production deployment]
-  M -.->|Repository stops here<br/>letter milestone| LIVE1([live])
-  P -->|semver milestone| LIVE2([live])
-
-  classDef done fill:#eef3ea,stroke:#5c7a4a
-  class LIVE1,LIVE2 done
-```
-
-**Since D55 (#388) this is the default for an image change.** A release-route change merges to `main` once user and technical testing pass, and `main` is the accumulating next release. The owner's reason:
-
-> Releases are simpler if we have a next release branch that accumulates changes. Because of doc and tooling changes it is easier if that is `main`.
-
-**What makes it safe lives in the emergency path.** `main` now carries tested-but-unshipped image changes, so an emergency release cut from `main` ships all of them. `docs/3.3` now says to cut from the last released tag instead. That is a documented procedure today; #387 R2 asks for the report and R3 for the enforcement that would make it a gate.
+The ranking was the parent's way of describing deliveries it did not itself make. Splitting removes the need: the route sits on the work package that delivers, and the parent has none to set. Every gate that asks *how does this reach users* is asking a work package, never a parent.
 
 ### Release · `WP A -> Release, WP B -> Release`
 

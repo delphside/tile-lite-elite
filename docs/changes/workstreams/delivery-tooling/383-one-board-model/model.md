@@ -3,9 +3,17 @@
 
 For #383. Owner, 2026-09-17: *"python for the model so it can be structured to support each use case."*
 
-This document designs the model. It does **not** restate the process: the flows, gates and checks are in [`flows.md`](flows.md), and what each issue type owes at each step is in [`obligations.md`](obligations.md). Those two are the description; this is what falls out of them.
+This document designs the model. It does **not** restate the process. Three documents are the description and this is what falls out of them:
 
-The order matters and is the owner's: **describe the process, list its checks, gates, actions and decisions, and only then say what information the model must hold.** Designing the model first produces a data structure that is convenient to build and awkward to ask.
+| | |
+| --- | --- |
+| [`flows.md`](flows.md) | the change flows, and the gates in each |
+| [`obligations.md`](obligations.md) | what each issue type owes at each lifecycle step |
+| [`reports.md`](reports.md) | the reports, each from its purpose to its content |
+
+The order matters and is the owner's: **describe the process and the reports, list their checks, gates, actions and decisions, and only then say what information the model must hold.** Designing the model first produces a data structure convenient to build and awkward to ask.
+
+**Nothing here is derived from the scripts that exist today.** An earlier draft organised itself around the nine consumers, which reads as a rewrite of what is already there and quietly adopts today's implementation as the specification — including its defects, since three of those scripts answer the same question differently. The scripts appear once, at the end, as a migration note. Two of the seven reports do not exist today at all, which is the clearest sign that deriving from them was the right way round.
 
 ## The one rule
 
@@ -23,7 +31,8 @@ Each layer may call the one below it and never the one above.
 | **snapshot** | `board/snapshot.py` | fetch once, record freshness and failures | derive facts |
 | **model** | `board/model.py` | define issues and every derived fact | perform I/O |
 | **obligations** | `board/obligations.py` | hold the grid, evaluate predicates | reformat for a reader |
-| **consumers** | the scripts | ask, format, decide what to do about the answer | compute anything |
+| **commands** | `board/commands.py` | write what a rule implies, straight through to GitHub | hold a record of its own |
+| **consumers** | reports and gates | ask, format, decide what to do about the answer | compute anything |
 
 The layer boundary that does the work is the third: **no consumer computes.** A consumer that needs to know whether an issue is a parent asks; it does not look at sub-issues.
 
@@ -33,7 +42,7 @@ The owner's example, and the one that has broken twice.
 
 **1 · The process says it.** Two obligations in `obligations.md` name it: *a parent must not be at Development, User testing or Deployment*, and *a parent owes no route* — its work packages carry one each.
 
-**2 · So a predicate is needed**, and it needs exactly one definition:
+**2 · So a distinction is needed**, and it has exactly one definition — as a class rather than a predicate, which is why `classify` below is the only place parentage is decided:
 
 ```python
 # board/model.py
@@ -62,37 +71,81 @@ def is_parent(self) -> bool:
 
 **4 · The test moves with the definition.** `scripts/tests/status-parent-route.test.sh` already extracts the function from the script rather than copying it. Under the model there is one function, so there is one test, and it covers every consumer at once. That is the saving — not fewer lines, but a defect that can only exist in one place.
 
-## What the model holds
+## An issue type is a class
 
-Read out of the tables in `flows.md`, not invented here.
+Owner, 2026-09-17: *"In the python we should model each issue type."*
+
+GitHub gives three types. The lifecycle gives a fourth distinction inside one of them, because a `Project` is one of three different things with three different obligation sets.
+
+```text
+Issue                     what every issue has; step is abstract
+├── Requirement           step = Stage
+├── Project               step = Phase
+│   ├── ParentProject     owns requirements and design; no route, no milestone
+│   ├── WorkPackage       one delivery; carries route and milestone
+│   └── StandaloneProject one delivery, no children; carries both
+└── Decision              step = Decision State
+```
+
+**`is_parent` stops being a predicate and becomes a class.** A factory reads the GitHub type and, for a project, its sub-issue shape:
 
 ```python
-@dataclass(frozen=True)
+def classify(raw: RawIssue) -> Issue:
+    match raw.issue_type:
+        case "Requirement": return Requirement(raw)
+        case "Decision":    return Decision(raw)
+        case "Project":
+            # A project whose sub-issues include projects is a parent. NOT
+            # "has sub-issues": a project carries folded requirements as
+            # sub-issues routinely and is still one delivery owing one route.
+            # #214 has two work packages and two folded requirements, and
+            # counting sub-issues rather than project sub-issues misread it,
+            # which is the defect behind #297.
+            if any(sub.issue_type == "Project" for sub in raw.sub_issues):
+                return ParentProject(raw)
+            return WorkPackage(raw) if raw.parent else StandaloneProject(raw)
+    return Untyped(raw)          # twenty exist, from an earlier type retirement
+```
+
+That is the whole of the definition, in one function, and it is better than a predicate for three reasons:
+
+| | |
+| --- | --- |
+| the obligations attach to the class | `ParentProject.owes(step)` rather than a grid lookup guarded by an `if` |
+| the impossible states stop being expressible | `ParentProject.route` does not exist, so no consumer can ask for it |
+| the defect has one home | `classify` is where parentage is decided, and the one test covers every consumer |
+
+**`Untyped` is a class rather than an error** because twenty issues carry no type, left by a type retirement, and a model that refuses to load them cannot report on them. It owes nothing and answers `not checked` to everything, which is how R4 will surface it.
+
+### What each class knows
+
+```python
 class Issue:
     number: int
     title: str
-    body: str
-    type: IssueType                  # Requirement | Project | Decision | None
     state: str
-    fields: Mapping[str, str]        # by NAME, never by option id
-    sub_issues: tuple[Issue, ...]
-    parent: Issue | None
-    milestone: str | None
+    fields: Mapping[str, str]      # by NAME, never by option id
     labels: frozenset[str]
+    @property
+    def step(self) -> str: ...     # Stage | Phase | Decision State
+    @property
+    def owes(self) -> tuple[Obligation, ...]: ...
+    @property
+    def waiting_on(self) -> Actor | None: ...
 ```
 
-and the derived facts, each defined once:
+and the facts that only some classes have, which is the point of having classes:
 
-| derived | why it exists |
-| --- | --- |
-| `is_parent`, `is_work_package`, `is_standalone` | four gates and three checks branch on it |
-| `route`, `phase`, `stage`, `decision_state` | resolved by name; every consumer matches option ids today |
-| `commits_naming_it`, `commits_naming_its_parent` | kept apart — the `built` obligation, #375 |
-| `owes` | the obligation list for this issue at its current step |
-| `waiting_on` | `actions.py`'s whole purpose |
-| `is_built`, `is_deliverable`, `is_closable` | one implementation of each; three scripts ask each today |
+| | on | why |
+| --- | --- | --- |
+| `route`, `milestone` | `WorkPackage`, `StandaloneProject` | a delivery has both; a parent has neither |
+| `deliveries` | `ParentProject` | what it delivers, and through which packages |
+| `commits_naming_it`, `commits_naming_its_parent` | `WorkPackage` | kept apart — #375 |
+| `agreed`, `open_actions` | `Decision` | the body headings `check-transitions` reads |
+| `is_built`, `is_closable` | `WorkPackage`, `StandaloneProject` | one implementation each; three scripts ask each today |
+| `body` | all, **fetched on demand** | 2.7s of the 4.6s fetch, and only R4 and the decision checks need it |
 
-**Fields are resolved by name at the boundary.** Option ids appear in `sources/github.py` and nowhere else. Today five scripts carry hardcoded ids like `IFSS_kgDOAsQ80g`, which is a fact about the GitHub instance leaking into process logic.
+**Fields are resolved by name at the boundary.** Option ids live in `sources/github.py` and nowhere else. Five scripts carry ids like `IFSS_kgDOAsQ80g` today, which is a fact about the GitHub instance leaking into process logic.
 
 ## What a fetch costs, measured
 
@@ -183,22 +236,22 @@ So latency is not a convention the caller remembers — it is **an attribute of 
 
 ### The consumption register
 
-Every point that asks the model appears here with its latency. A new consumption adds a row; a consumption without one is the defect, not the missing latency.
+Every consumption declares its latency. The rows are the reports of [`reports.md`](reports.md) and the gates of [`flows.md`](flows.md) — not the scripts, which are an implementation of them and may not survive.
 
-| consumer | consumption | freshness | because |
-| --- | --- | --- | --- |
-| `deploy.sh` | `on-remote`, `ci`, `pull-request`, `schema`, `version`, `milestone`, `preview`, `rehearsal` | `REFRESH` on the first, `RECENT(60)` after | eight gates in one run; the first pays, the rest read it |
-| `deploy.sh` | *settle* | `AFTER_WRITE` | it confirms the write it just made |
-| `verify.sh` | post-deploy obligations | `REFRESH` | it answers whether the deploy worked; a stale yes is the failure it exists to catch |
-| `check-transitions.sh` | every obligation in the grid | `REFRESH` | it refuses transitions — the answer stops work |
-| `sync-pr-state.sh` | read review decision, write field | `REFRESH`, then `AFTER_WRITE` | it reads to decide and re-reads to confirm |
-| `status.sh` | the board report | `RECENT(300)` | a five-minute-old board is a correct board for reading |
-| `actions.py` | what waits on the owner | `RECENT(300)` | the to-do list your rule names |
-| `inbox.sh` | comments since a date | `RECENT(300)` | a conversation does not turn over in minutes |
-| `turn-check.sh` | the per-turn sweep | `CACHED` | it runs constantly and must cost nothing; it reports, never refuses |
-| `roadmap-diagram.py` | the diagram | `CACHED` | a picture, redrawn on demand |
+| consumption | freshness | because |
+| --- | --- | --- |
+| **R5** deployment gates | `REFRESH` on the first gate, `RECENT(60)` for the seven after | eight gates in one run; the first pays for all of them |
+| **R5** *settle* | `AFTER_WRITE` | it confirms the write it just made |
+| **R6** post-deployment | `REFRESH` | it answers whether the deploy worked; a stale yes is the failure it exists to catch |
+| **R4** issue completeness | `REFRESH` | it reads bodies, and is the slowest fetch; worth being right |
+| obligation checks at a transition | `REFRESH` | they refuse — the answer stops work |
+| **R1** what needs the owner | `RECENT(300)` | a to-do list, in the owner's own words |
+| **R3** where the programme stands | `RECENT(300)` | a five-minute-old board is a correct board for reading |
+| **R2** what changed since I looked | `RECENT(300)` | a conversation does not turn over in minutes |
+| **R7** model-versus-scripts diff | `REFRESH` | comparing two pictures requires one moment |
+| the per-turn sweep | `CACHED` | runs constantly, must cost nothing, and reports rather than refuses |
 
-Two things fall out of reading it as a table. Every consumption that **refuses** asks for `REFRESH`, and every consumption that **reports** does not — which is the gate-and-check distinction showing up again, this time as a cache policy. And `turn-check.sh` is the only `CACHED` consumer that runs unattended, which is exactly why it must not gate.
+Two things fall out of reading it as a table. **Every consumption that refuses asks for `REFRESH`, and every consumption that reports does not** — the gate-and-check distinction turning up again, as a cache policy. And the per-turn sweep is the only `CACHED` consumption running unattended, which is exactly why it must never gate.
 
 ## Everything uses the model
 
@@ -246,17 +299,64 @@ This also fixes the failure mode this sweep found. The grid said a parent owes a
 4. **Two facts that look alike are distinguished in code, not in a comment.** `commits_naming_it` and `commits_naming_its_parent` are separate properties because conflating them caused #375.
 5. **Every derived fact carries the issue number that made it necessary**, as `is_parent` does above. A fact nobody can attribute is a fact nobody can delete, and deleting is in scope.
 
-## What this replaces
+## Writing through the model
 
-| consumer | today | after |
+Owner, 2026-09-17: *"Do we want to update via the python? Let's take the opportunity that using a high level language gives us to build a mini app in so far as that is useful. It should operate a bit like the cli admin tool, but being careful not to go too far and start duplicating GitHub and git."*
+
+Yes, with one test that decides every case:
+
+> **The app writes what a rule implies. It does not write what a person would rather type into GitHub.**
+
+A write earns its place when the value is *derived* — when doing it by hand means applying a rule from memory, which is where the board's data defects have come from. It does not earn its place merely because it is possible.
+
+| write | why it qualifies |
+| --- | --- |
+| settle after a deploy | phases, milestones and comments across several issues, all derived from what shipped |
+| correct a field the rules determine | clearing a route on a parent is the rule applied; doing it by hand is the rule remembered. Two parents had one set, and the report had been changed to stop complaining |
+| advance a step, obligations checked first | the check and the transition in one act, so a step cannot advance while incomplete |
+| raise an issue with its fields set | the minimum from `obligations.md` at Triage, rather than a form somebody completes later |
+| close, with the closedown obligations answered | the row most often skipped, because by then the interest has moved on |
+
+| refused | because |
+| --- | --- |
+| editing a body | GitHub's editor is better, and a body is prose |
+| branches, pull requests, merges | `git` and `gh` do this, and doing it twice is how two tools disagree |
+| browsing, searching, listing for their own sake | the GitHub UI exists and is better |
+| anything the owner would want to see happen | the job spec already says so |
+
+**The shape is a small command set over the model**, not an admin console:
+
+```bash
+board show 383              # one issue: type, step, what it owes, what is missing
+board check 383             # R4 for one issue
+board check --all           # R4 for the board
+board settle 0.8.1          # the deploy's write step
+board fix route --dry-run   # data the rules determine, listed before it is changed
+```
+
+**`--dry-run` is the default for anything that writes more than one issue.** The route correction is the worked example: it touched two issues, and listing them first is the difference between a fix and a surprise.
+
+**The line not to cross** is the one the owner drew. A model that can write is a model that can drift from GitHub, and the guard is that every write goes straight through to GitHub and the snapshot is invalidated — no local state of record, no queue, no reconciliation. The app is a way of applying rules to the board, not a second copy of it.
+
+## What exists today, and what becomes of it
+
+A migration note, not a specification. The nine scripts are one implementation of the seven reports and the gates; they are listed here so the move can be planned, not because the design is derived from them.
+
+| today | serves | after |
 | --- | --- | --- |
-| `deploy.sh` | 18 GitHub call sites | gates call `board`, settle stays in bash |
-| `check-transitions.sh` | 10 | generated from the grid |
-| `verify.sh` | 8 | asks `is_built`, `is_deliverable` |
-| `status.sh` | 7 | asks; formatting stays |
-| `sync-pr-state.sh`, `inbox.sh`, `turn-check.sh`, `actions.py`, `roadmap-diagram.py` | 11 between them | ask |
+| `deploy.sh` | R5 | gates call the model; the deployment mechanics stay in bash |
+| `verify.sh` | R6 | asks the model |
+| `check-transitions.sh` | obligation checks | generated from the grid |
+| `status.sh` | R3 | asks; formatting stays |
+| `actions.py` | R1 | asks |
+| `inbox.sh` | R2 | asks, including comments |
+| `sync-pr-state.sh` | a write | `board` command |
+| `turn-check.sh` | the sweep | asks, `CACHED` |
+| `roadmap-diagram.py` | — | serves no report on this list. A candidate for deletion rather than conversion |
+| — | **R4** | **new** |
+| — | **R7** | **new, and temporary** |
 
-**All nine, with no exemption.** `inbox.sh` asks the model for comments; the obligations grid still may not read them. The count that matters afterwards is `gh api` call sites outside `board/`, which should be zero.
+`roadmap-diagram.py` earning no row is the kind of thing deriving from purpose finds and deriving from the scripts cannot: working from the existing nine would have converted it without ever asking what it was for.
 
 ## Parallel running, to catch what changes unexpectedly
 
