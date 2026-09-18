@@ -69,6 +69,39 @@ def has_headings(*headings: str) -> Callable[[Issue], bool]:
     return lambda i: all(i.has_heading(h) for h in headings)
 
 
+def headings_answered(*headings: str) -> Callable[[Issue], bool]:
+    """Each heading exists and has something under it — content or a pointer.
+
+    Owner, 2026-09-18: *"Both, but one will point at the other. All docs will
+    be stored in the parent project folder, or in the bodies... both parent
+    and work package describe where it is."*
+
+    So a parent and its work package both owe a test approach, and either may
+    satisfy it by naming where the other holds it. What neither may do is stay
+    silent: the obligation is to say where it is, and an absent heading says
+    nothing. That is why this is stricter than checking the heading exists —
+    an empty heading is the same silence with a title on it.
+
+    `CLAUDE.md` adds *"the content or a link to the design document that holds
+    it, never both"*. The "never both" half is not checked: telling a summary
+    from a duplicate needs judgement, and a check that guesses at it would cry
+    wolf.
+    """
+    def check(issue: Issue) -> bool:
+        return all(
+            issue.has_heading(h) and _has_substance(issue.section(h))
+            for h in headings
+        )
+
+    return check
+
+
+def _has_substance(body: str) -> bool:
+    # a table skeleton, a placeholder, or nothing at all is not an answer
+    stripped = re.sub(r"[|\-\s]", "", body).lower()
+    return bool(stripped) and stripped not in {"none", "n/a", "tbd", "tbc"}
+
+
 def section_has_text(heading: str) -> Callable[[Issue], bool]:
     def check(issue: Issue) -> bool:
         body = issue.section(heading)
@@ -151,9 +184,9 @@ OBLIGATIONS: tuple[Obligation, ...] = (
     # ---- Parent project, by Phase ---------------------------------------
     Obligation(
         "parent-scope-headings", (ParentProject,), ("Scope",),
-        "`## Requirements` and `## Design`",
+        "`## Requirements` and `## Design`, each holding content or a pointer",
         "what the project does, and which technical option",
-        has_headings("Requirements", "Design"),
+        headings_answered("Requirements", "Design"),
     ),
     Obligation(
         "parent-no-route", (ParentProject,), ANY_STEP,
@@ -169,9 +202,11 @@ OBLIGATIONS: tuple[Obligation, ...] = (
     ),
     Obligation(
         "parent-design-testable", (ParentProject,), ("Design and Test Approach",),
-        "`## Test approach`, `## Impacted artefacts` and `## Deliveries`",
-        "design settled and test approach defined before building",
-        has_headings("Test approach", "Impacted artefacts", "Deliveries"),
+        "`## Test approach`, `## Impacted artefacts` and `## Deliveries`, "
+        "each holding the content or saying where it is",
+        "a parent and its packages both owe these, and either may point at "
+        "the other — but neither may stay silent",
+        headings_answered("Test approach", "Impacted artefacts", "Deliveries"),
     ),
     Obligation(
         "parent-closedown", (ParentProject,), ("Project Closedown",),
@@ -189,9 +224,10 @@ OBLIGATIONS: tuple[Obligation, ...] = (
     ),
     Obligation(
         "wp-design-testable", DELIVERING, ("Design and Test Approach",),
-        "its own test approach and impacted artefacts",
-        "a delivery is testable before it is built",
-        has_headings("Test approach", "Impacted artefacts"),
+        "a test approach and impacted artefacts, held here or pointed at",
+        "a delivery is testable before it is built; the parent may hold the "
+        "detail, but this says where",
+        headings_answered("Test approach", "Impacted artefacts"),
     ),
     Obligation(
         "wp-user-tested", DELIVERING, ("User testing",),

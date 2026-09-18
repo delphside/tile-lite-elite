@@ -109,18 +109,32 @@ class Issue:
         return False
 
     def section(self, heading: str) -> str:
-        """The text under a heading, up to the next heading of any level."""
+        """The text under a heading, including its subheadings.
+
+        Stops at the next heading of the SAME OR HIGHER level, not at the next
+        heading of any level. The documented shape of a test approach is
+        `## Test approach` with `### Functional user tests` and
+        `### Technical tests` beneath it, so stopping at any heading reported
+        a fully written section as empty — #363 read as having no test
+        approach when it has one under its subheadings.
+        """
         wanted = heading.strip().lower().rstrip(":")
         out: list[str] = []
-        inside = False
+        depth: int | None = None
         for line in self.body.splitlines():
-            if line.lstrip().startswith("#"):
-                got = line.lstrip("#").strip().lower().rstrip(":")
-                if inside:
-                    break
-                inside = got == wanted or got.startswith(wanted + " ")
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                level = len(stripped) - len(stripped.lstrip("#"))
+                got = stripped.lstrip("#").strip().lower().rstrip(":")
+                if depth is not None:
+                    if level <= depth:
+                        break
+                    out.append(line)          # a subheading is part of it
+                    continue
+                if got == wanted or got.startswith(wanted + " "):
+                    depth = level
                 continue
-            if inside:
+            if depth is not None:
                 out.append(line)
         return "\n".join(out).strip()
 

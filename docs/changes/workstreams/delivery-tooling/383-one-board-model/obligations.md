@@ -60,6 +60,12 @@ A parent owns requirements, design and documents. Owner: *"The parent runs Scope
 
 **A parent owes no route, and this grid said it did until 2026-09-17.** The row above asked for one at `Scope`, which is the same defect `status.sh` carried and is why it is worth recording here: the grid is meant to be the single statement of what is owed, so a wrong row in it would have been copied into whatever the model generates. A parent is a project whose sub-issues include projects — not one with any sub-issues, since a project carries folded requirements routinely.
 
+**A parent and its work packages both owe the test approach, and either may point at the other.** Owner, 2026-09-18:
+
+> Both, but one will point at the other. All docs will be stored in the parent project folder, or in the bodies. They can be organised however works best and both parent and work package describe where it is.
+
+So the obligation is **to say where it is**, which a pointer satisfies and an absent heading does not. That reading is stricter than it sounds: a heading with nothing under it is the same silence with a title on it, and is not an answer. `CLAUDE.md` adds *"the content or a link to the design document that holds it, never both"* — the "never both" half is not checked, because telling a summary from a duplicate needs judgement and a check that guessed would cry wolf.
+
 ## Work package, by `Phase`
 
 A work package carries its own artefacts, test approach and post-deployment checks, because a check is answered per delivery.

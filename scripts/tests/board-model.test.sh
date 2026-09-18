@@ -109,6 +109,30 @@ check("answered post-deployment checks are not reported as missing",
       Answer.MET, ids.get("wp-post-deployment"))
 
 print()
+print("a section includes its subheadings")
+body = """## Test approach
+
+### Functional user tests — Preview
+
+- [x] somebody used it
+
+### Technical tests — Rehearsal
+
+- [x] and measured it
+
+## Deliveries
+
+One.
+"""
+i = classify(issue(363, kind="Project", body=body))
+check("content under ### subheadings is part of the ## section",
+      True, len(i.section("Test approach")) > 20)
+check("and the next ## heading ends it",
+      False, "One." in i.section("Test approach"))
+check("ticks inside a subsection are counted",
+      2, i.ticked_in("Test approach"))
+
+print()
 print("an obligation nothing can evidence is 'not checked', never 'met'")
 ready = classify(issue(1, kind="Requirement",
                        fields={"Stage": "Ready for Project", "Workstream": "W"}))
