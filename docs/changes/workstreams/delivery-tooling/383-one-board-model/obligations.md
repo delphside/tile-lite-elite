@@ -30,8 +30,11 @@ A requirement's job is to become well enough understood to be planned, and then 
 
 | stage | what the step is for | owes | evidence | status |
 | --- | --- | --- | --- | --- |
-| *unset* | nothing yet — the inbox | a title a stranger can act on | body | `gap` |
+| Triage | the inbox, and deciding whether to keep it | a title a stranger can act on | body | `gap` |
 | Triage | decide whether to keep it, and place it | workstream, type of change, priority | field | `now` |
+
+**There is no unset `Stage` row.** Owner, 2026-09-18: *"Requirements with unset state are set to Triage."* So `Triage` is the inbox rather than a stage after it, and a requirement always sits somewhere in this table. An unset stage was a row that every rule skipped, which is the same shape of defect as an untyped issue.
+
 | Scope, Options and Dependencies | know the size and the shape, and that the option is feasible | effort; options named while open; dependencies named | field, body | effort `now`, rest `gap` |
 | On Hold | the stall is visible and attributable | something named under dependencies | body | `now` |
 | Ready for Project | it can be planned without re-reading it | scope, option chosen, effort — and nothing unresolved | body, field | `gap` |

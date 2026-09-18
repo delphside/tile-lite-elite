@@ -87,16 +87,18 @@ With [`flows.md`](flows.md) and [`obligations.md`](obligations.md) this complete
 | the evidence for each: body headings, fields, git, GitHub | each obligation names where it is evidenced |
 | whether an obligation is enforced today or a `gap` | so a `gap` reads as *not checked*, not as *met* |
 
-**An untyped issue is the first thing this report says, not the last.** Every rule is keyed on type, so an untyped issue is skipped by all of them and reads as compliant — #361, where twenty sat unnoticed. So `Untyped` owes exactly one obligation, a type, and fails it; it answers *not checked* for everything else, because nothing can say which obligations apply until the type is set.
+**A defaulted field is the first thing this report says, not the last.** Owner, 2026-09-18: untyped becomes a `Requirement`, and a requirement with no `Stage` becomes `Triage`. Those defaults keep the issue inside the rules — an issue outside every rule keyed on type is skipped by all of them and reads as compliant, which is #361, where twenty sat unnoticed.
 
-The two states must not be allowed to look alike:
+But the default must not become the quiet answer, so R4 reports it:
 
 | | reads as | is |
 | --- | --- | --- |
-| exempt from everything | no findings | invisible |
-| owes one thing and fails it | one finding, always | visible until fixed |
+| silently defaulted | no findings | drift, invisible |
+| defaulted **and flagged** | one finding until corrected | visible, and workable meanwhile |
 
-Measured 2026-09-18: **zero untyped open issues**, and none among the hundred most recently updated closed. So this is prevention. Two routes remain open — a blank issue from the GitHub UI, since no `config.yml` disables them, and the API, which requires no type. All three templates set one.
+The finding says the field was unset and what it was taken to be, because an issue raised outside the three templates is worth knowing about even once it has been made workable. `board fix defaults` writes the value back so GitHub agrees with the model.
+
+Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open requirements with `Stage` unset.** So both are prevention. Two routes keep them necessary — a blank issue from the GitHub UI, which no `config.yml` disables, and the API, which requires no type.
 
 **This is the report that does not exist today**, and its absence is why the grid in `obligations.md` could sit with a wrong row in it. Twenty-eight obligations, twelve enforced: this makes all twenty-eight visible, and the sixteen unenforced ones answer *not checked* rather than silently passing.
 

@@ -92,7 +92,6 @@ Issue                     what every issue has; step is abstract
 ```python
 def classify(raw: RawIssue) -> Issue:
     match raw.issue_type:
-        case "Requirement": return Requirement(raw)
         case "Decision":    return Decision(raw)
         case "Project":
             # A project whose sub-issues include projects is a parent. NOT
@@ -104,35 +103,45 @@ def classify(raw: RawIssue) -> Issue:
             if any(sub.issue_type == "Project" for sub in raw.sub_issues):
                 return ParentProject(raw)
             return WorkPackage(raw) if raw.parent else StandaloneProject(raw)
-    return Untyped(raw)          # twenty exist, from an earlier type retirement
+        case "Requirement": return Requirement(raw)
+        case None:
+            # Owner, 2026-09-18: untyped becomes a Requirement. There is no
+            # Untyped class - a class owing nothing is skipped by every rule
+            # keyed on type, which is #361 restated rather than fixed.
+            return Requirement(raw, type_was_defaulted=True)
 ```
 
-That is the whole of the definition, in one function, and it is better than a predicate for three reasons:
+That is the whole of the definition, in one function, and a class is better than a predicate for three reasons:
 
 | | |
 | --- | --- |
 | the obligations attach to the class | `ParentProject.owes(step)` rather than a grid lookup guarded by an `if` |
-| the impossible states stop being expressible | `ParentProject.route` does not exist, so no consumer can ask for it |
-| the defect has one home | `classify` is where parentage is decided, and the one test covers every consumer |
+| impossible states stop being expressible | `ParentProject.route` does not exist, so no consumer can ask for it |
+| the defect has one home | `classify` is where parentage is decided, and one test covers every consumer |
 
-**`Untyped` is a class rather than an error**, because a model that refuses to load an untyped issue cannot report on it — and reporting on it is the entire point. But it does **not** owe nothing:
+### Two defaults, both flagged
 
-```python
-class Untyped(Issue):
-    """An issue with no type. Owes exactly one thing: a type.
+Owner, 2026-09-18: *"Untyped should be changed to Requirement. Requirements with unset state are set to Triage."*
 
-    Owing nothing is the #361 defect restated as a class. Every rule is keyed
-    on type, so an untyped issue is skipped by all of them and reads as
-    compliant. One obligation it always fails is what makes it visible.
-    """
-    @property
-    def owes(self) -> tuple[Obligation, ...]:
-        return (NEEDS_A_TYPE,)      # fails until the type is set
-```
+| unset | becomes | flag |
+| --- | --- | --- |
+| issue type | `Requirement` | `type_was_defaulted` |
+| a requirement's `Stage` | `Triage` | `stage_was_defaulted` |
 
-**The distinction matters and it is easy to get backwards.** An untyped issue answers `not checked` for every obligation of every type — because nothing can say which apply — but `missing` for the one obligation that would settle that. An issue exempt from everything looks identical to an issue that has satisfied everything, which is how twenty of them sat unnoticed.
+**Defaulting and reporting are not alternatives; the design needs both, for different reasons.** Defaulting stops an issue falling outside every rule, which is what made twenty of them invisible under #361. The flag stops the default becoming the quiet answer: R4 reports a defaulted field, because an issue raised outside the three templates is worth knowing about even once it has been made workable.
 
-**Measured 2026-09-18: zero open issues carry no type, and none among the hundred most recently updated closed.** #361's backlog is cleared, so this is prevention rather than cleanup. Two ways it recurs: a blank issue from the GitHub UI, which has no `config.yml` disabling it, and the API, which requires no type. All three issue templates set one correctly.
+**A default that is not reported is how a board drifts while every report stays green.**
+
+**Applied in both places, deliberately:**
+
+| | |
+| --- | --- |
+| **on read**, in `classify` | no report breaks and no rule is skipped, the moment such an issue appears |
+| **on write**, via `board fix defaults` | the board becomes correct, so GitHub and the model agree |
+
+Reading alone leaves blank fields that only the model interprets — two pictures again, which is what this design exists to remove. Writing alone leaves the gap between raising and fixing as a hole in every report.
+
+**Measured 2026-09-18: zero untyped open issues, and zero of the sixteen open requirements with `Stage` unset.** Both defaults are prevention, and `board fix defaults` currently has nothing to do. Two routes keep it necessary: a blank issue from the GitHub UI, which no `config.yml` disables, and the API, which requires no type. All three templates set one correctly.
 
 ### What each class knows
 
