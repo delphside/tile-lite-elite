@@ -98,8 +98,9 @@ class Change:
         the derivation was what was wrong. Owner, 2026-09-18: *"Refs #N does
         not imply anything specific. Closes #N does."*
         """
-        return self.state in ("released", "closed by a commit on main",
-                              "merged", "merged, awaiting release") \
+        return (self.state.startswith("released")
+                or self.state in ("closed by a commit on main", "merged",
+                                  "merged, awaiting release")) \
             and self.phase in EARLY
 
 
@@ -108,12 +109,15 @@ def changes(snapshot: Snapshot, got: repo.Commits) -> list[Change]:
     deliveries and carry no route, so they are not asked for one."""
     out = []
     branches = repo.branches()
+    shipped = got.shipped_milestones()
     for raw in snapshot.issues:
         issue = classify(raw)
         if not isinstance(issue, DELIVERING):
             continue
         route = issue.field("Route")
-        state = got.state_of(issue.number, live_at_merge=route != "Production Release")
+        state = got.state_of(issue.number,
+                             live_at_merge=route != "Production Release",
+                             milestone=issue.raw.milestone, shipped=shipped)
         if state == "not started" and issue.number in branches:
             state = "branch only"
 
@@ -216,7 +220,8 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
     out.append(paint(BOLD, "Open changes"))
     shown = 0
     states = [s for s in STATE_ORDER if s != "released"]
-    states += sorted({c.state for c in every if c.state not in STATE_ORDER})
+    states += sorted({c.state for c in every
+                      if c.state not in STATE_ORDER and not c.state.startswith("released")})
     for state in states:
         rows = [c for c in every if c.state == state]
         if not rows:

@@ -65,6 +65,29 @@ one = repo.Scope(); one.closes = {5: ["a"]}
 check("a closing commit is not counted twice", 1, one.count(5))
 
 print()
+print("the milestone is the delivery evidence, with or without commits")
+# docs/3.3: `Closes #N` fires when a commit reaches the default branch —
+# written, not shipped. So the deploy closes an issue and the milestone means
+# "in production". #362 and #373 were split out of their parents after the
+# work landed, so they carry no commits of their own and still shipped.
+c = commits()
+check("a shipped milestone and no commits at all is still released",
+      "released in 0.8.0", c.state_of(362, False, "0.8.0", frozenset({"0.8.0"})))
+check("an unshipped milestone is not", "not started",
+      c.state_of(362, False, "1.0.0", frozenset({"0.8.0"})))
+check("pre-approved never ships via a release", "not started",
+      c.state_of(362, True, "pre-approved", frozenset({"0.8.0"})))
+c = commits(released=scope(refs=[295]))
+check("a mention plus a shipped milestone is released",
+      "released in 0.8.0", c.state_of(295, False, "0.8.0", frozenset({"0.8.0"})))
+check("the same mention without one is not",
+      "mentioned before prod-0.8.0", c.state_of(295, False, None, frozenset()))
+# Work in progress still wins: an issue reopened after a release is not done.
+c = commits(off_main=scope(refs=[1]))
+check("work on a branch beats a shipped milestone", "in progress",
+      c.state_of(1, False, "0.8.0", frozenset({"0.8.0"})))
+
+print()
 print("state precedence is newest work first")
 c = commits(off_main=scope(refs=[1]), unreleased=scope(refs=[1]),
             released=scope(closes=[1]))
@@ -132,6 +155,21 @@ print()
 print("an environment that did not answer is not an empty one")
 check("an unparsable version yields no comparison", "", repo.behind_main(None))
 check("a version with no build sha yields none either", "", repo.behind_main("0.8.0"))
+
+print()
+print("R7 reduces two vocabularies to one word each")
+from board.diff import ROW, _bucket
+check("status.sh's tooling wording", "merged",
+      _bucket("merged — smoke-test, then close · pre-approved"))
+check("its documentation wording", "merged", _bucket("merged — close it · pre-approved"))
+check("its release wording", "merged", _bucket("merged, awaiting release · 1.0.0"))
+check("a branch it names", "in progress", _bucket("in progress (290-dioxus-07)"))
+check("no trailer, but merged", "merged", _bucket("merged (no Refs trailer)"))
+check("the model's own", "mentioned only", _bucket("mentioned before prod-0.8.0"))
+check("and its released form", "released", _bucket("released in 0.8.0"))
+row = ROW.match("    10   Bot client harness: run an en\u2026 tooling          merged — smoke-test, then close")
+check("a status.sh row parses", ("10", "tooling"),
+      (row.group(1), row.group(2)) if row else None)
 
 print()
 if failures:

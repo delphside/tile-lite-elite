@@ -387,7 +387,7 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `turn-check.sh` | the sweep | asks, `CACHED` |
 | `roadmap-diagram.py` | **R8** | asks the model. Reformatted: it drew structure, and R8 wants sequence |
 | — | **R4** | **new** |
-| — | **R7** | **new, and temporary** |
+| — | **R7** | **new, and temporary** — `board-diff.py`, model against `status.sh` |
 
 `roadmap-diagram.py` was listed here with no report against it, and read as a candidate for deletion. That was wrong, and wrong in an instructive way: the report list was incomplete, not the script redundant. Owner, 2026-09-18: *"roadmap-diagram.py has a purpose but the format should be updated."*
 

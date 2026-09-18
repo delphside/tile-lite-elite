@@ -67,7 +67,22 @@ class Commits:
     unreleased_total: int = 0
     last_tag: str | None = None
 
-    def state_of(self, number: int, live_at_merge: bool) -> str:
+    def shipped_milestones(self) -> frozenset[str]:
+        """Milestones a `prod-*` tag exists for, so they are demonstrably out.
+
+        docs/3.3: *"`Closes #N` fires when the commit reaches the default
+        branch — written, not shipped. So commits say `Refs #N`, and the
+        milestone means 'in production' — the deploy is what closes them."*
+        That makes the milestone, not the commit, the delivery evidence for
+        anything taking the release route.
+        """
+        tags = {t.removeprefix("prod-") for t in
+                _git("tag", "--list", "prod-*").split() if t}
+        return frozenset(tags)
+
+    def state_of(self, number: int, live_at_merge: bool,
+                 milestone: str | None = None,
+                 shipped: frozenset[str] = frozenset()) -> str:
         """Where this change is. One rule, used by every block of R3.
 
         Two things decide it, and neither is a field anybody maintains.
@@ -94,9 +109,17 @@ class Commits:
             return "merged" if live_at_merge else "merged, awaiting release"
         if number in self.released.closes:
             return "released"
+        # **The milestone is the delivery evidence, with or without commits.**
+        # docs/3.3: the deploy is what closes an issue, and the milestone means
+        # "in production". A package split out of its parent after the work
+        # landed has no commits of its own and is still shipped -- #362 read as
+        # `not started` at Post-deployment on milestone 0.8.0, which R7 caught
+        # by disagreeing with `status.sh`.
+        if milestone and milestone in shipped:
+            return f"released in {milestone}"
         if number in self.released.refs:
-            # Named by a commit already in production. That is not delivery:
-            # the deploy closes an issue, and this one is still open.
+            # Named by a commit already in production. On its own that is not
+            # delivery: `Refs` permits a passing mention.
             return f"mentioned before {self.last_tag or 'the last release'}"
         return "not started"
 

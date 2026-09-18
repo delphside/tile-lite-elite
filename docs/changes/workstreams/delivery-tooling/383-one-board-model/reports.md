@@ -170,6 +170,10 @@ Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open re
 
 **Content.** One line per disagreement: the consumer, the issue, what each says. Empty is the goal and the expected state within a week.
 
+**Compared as facts, not as text.** Both sides are reduced to one word per issue, because the wording differs by design and a text diff would be all noise. Only issues both sides describe are compared: `status.sh` lists parents and requirements the model does not call deliveries, and counting those would bury the real differences under a definitional one that is the point of the model rather than a defect in it.
+
+**It earned its place on the first run.** Five disagreements, and one of them was the model: #362 read *not started* at Post-deployment on a shipped milestone, because it was split out of its parent after the work landed and carries no commits of its own. The milestone is the delivery evidence — docs/3.3, *"the deploy is what closes them"* — and the model was not reading it. That is the third row of the table above, a defect caught before it gated anything, and it was invisible until two pictures of the same fact were put side by side.
+
 **Retired when the move is complete.** A report with a scheduled death should say so in its own output.
 
 ---
