@@ -240,6 +240,14 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
     out.append(paint(BOLD, "Behind"))
     behind_any = False
 
+    red = repo.ci_red_on_main()
+    if red:
+        behind_any = True
+        out.append(f"  CI is red on main: {red}")
+        out.append(paint(DIM, "  Nothing releases from a red main, and it is "
+                              "Claude's to fix rather than the owner's."))
+        out.append("")
+
     disagreeing = [c for c in every if c.disagrees]
     if disagreeing:
         behind_any = True

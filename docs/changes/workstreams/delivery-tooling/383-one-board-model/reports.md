@@ -23,7 +23,11 @@ With [`flows.md`](flows.md) and [`obligations.md`](obligations.md) this complete
 | how long it has been that way | ordering, and the only signal that something is stuck |
 | what is being asked | so the owner can answer without opening the issue |
 
-**Whose turn** is a derived fact with four sources: `Decision State` on a decision, `reviewDecision` on a pull request, an unanswered question in a body, and a phase that only the owner can advance. Today these are read by two scripts that disagree about the third.
+**Whose turn** is a derived fact with four sources: `Decision State` on a decision, `PR State` on a pull request, an unanswered question in a body — a checkbox labelled **owner**, since 2026-09-19 — and a phase that only the owner can advance.
+
+**How long is read from the timeline, not from last activity.** `IssueFieldChangedEvent` and `IssueFieldAddedEvent` carry `createdAt`, so the model can say when a field reached the value it holds now; nothing has to be stored, and a field moved by hand is dated exactly like one moved by `deploy.sh`. The fallback — last activity of any kind — is a floor rather than a measure, and the report names the two differently (`12d waiting` against `12d quiet`) so the weaker one cannot be read as the stronger.
+
+**The token countdown belongs here**, because renewing it is the owner's and nothing else warns: GitHub emails 45 days ahead about 2FA and says nothing about a fine-grained token, so the first symptom would be a command failing in the middle of something else (#309).
 
 **Empty is the expected state** and must be said plainly, not left as blank space.
 

@@ -15,6 +15,8 @@ import json
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Sequence
 
 from .model import RawIssue, RawSubIssue
 
@@ -193,6 +195,102 @@ def _pr_to_raw(node: dict) -> RawIssue:
         created_at=node.get("createdAt"),
         updated_at=node.get("updatedAt"),
     )
+
+
+def step_ages(wanted: Sequence[tuple[int, str, str]]) -> dict[int, float]:
+    """Days since each issue's step field last became the value it holds now.
+
+    **The clock is GitHub's, not ours.** A field *value* carries no timestamp,
+    but the issue records every change: `IssueFieldChangedEvent` and
+    `IssueFieldAddedEvent` are timeline items with `createdAt`. So nothing has
+    to be stored, and a field moved by hand is dated exactly like one moved by
+    `deploy.sh`.
+
+    **Matched on the value moved *to*, as it was named at the time.** The
+    events keep the old option name and renaming does not rewrite them -- the
+    `Scope and design` option became `Scope` on 2026-08-31, so anything
+    matching against the current option list would silently miss every event
+    before that date.
+
+    Asked only for the issues a caller actually needs, which is a handful:
+    widening the whole-board query with timelines would cost far more than it
+    returns. Taken from `actions.py`, which had the only correct answer to
+    "how long has it been that way" in the repository.
+    """
+    ages: dict[int, float] = {}
+    wanted = [w for w in wanted if w[1] and w[2]]
+    for start in range(0, len(wanted), 25):
+        chunk = wanted[start:start + 25]
+        parts = " ".join(
+            f'i{n}: issue(number:{n}) {{ number timelineItems(last:40, '
+            "itemTypes:[ISSUE_FIELD_CHANGED_EVENT, ISSUE_FIELD_ADDED_EVENT]) { nodes { "
+            "... on IssueFieldChangedEvent { createdAt newValue "
+            "issueField { ... on IssueFieldSingleSelect { name } } } "
+            "... on IssueFieldAddedEvent { createdAt value "
+            "issueField { ... on IssueFieldSingleSelect { name } } } } } }"
+            for n, _, _ in chunk)
+        query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+        try:
+            payload = _gh_graphql(query)
+        except Unavailable:
+            # A clock we cannot read is not an age we should invent.
+            return ages
+        # **Partial data is still data.** One bad alias -- a pull request
+        # number handed to `issue(number:)`, which is the shape that broke
+        # this -- makes GitHub answer with `errors` and null that entry while
+        # every other one comes back fine. Returning early on `errors` threw
+        # away the ages it did fetch, so R1 said "today" about something that
+        # had waited twelve days.
+        block = ((payload.get("data") or {}).get("repository") or {})
+        by_number = {n: (field, value) for n, field, value in chunk}
+        for node in block.values():
+            if not isinstance(node, dict) or "number" not in node:
+                continue
+            field, value = by_number.get(node["number"], (None, None))
+            when = None
+            for event in node.get("timelineItems", {}).get("nodes", []):
+                if not event or (event.get("issueField") or {}).get("name") != field:
+                    continue
+                if (event.get("newValue") or event.get("value")) == value:
+                    when = event.get("createdAt")
+            if when:
+                moved = datetime.fromisoformat(when.replace("Z", "+00:00"))
+                ages[node["number"]] = (
+                    datetime.now(timezone.utc) - moved).total_seconds() / 86400
+    return ages
+
+
+def token_days_left() -> int | None:
+    """Days until the token `gh` runs on expires; None if it does not or the
+    header is missing.
+
+    A countdown rather than a warning under a threshold -- owner, 2026-09-04:
+    there is no right number of days to start caring, and a figure that is
+    always there needs no decision about when to appear.
+
+    #309: the fine-grained token expires 2026-11-24 and nothing warns. GitHub
+    emails 45 days ahead about 2FA and says nothing at all about this, so the
+    first symptom would be a command failing in the middle of something else.
+
+    UTC on both sides. The header is UTC and a local `today()` is not, so
+    between midnight BST and midnight UTC they are different days and the
+    countdown is out by one -- which is exactly when the test caught it.
+    """
+    try:
+        out = subprocess.run(["gh", "api", "-i", "user", "--silent"],
+                             capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    for line in (out.stdout + out.stderr).splitlines():
+        if line.lower().startswith("github-authentication-token-expiration:"):
+            when = line.split(":", 1)[1].strip()
+            for fmt in ("%Y-%m-%d %H:%M:%S %Z", "%Y-%m-%d %H:%M:%S UTC"):
+                try:
+                    expiry = datetime.strptime(when, fmt)
+                except ValueError:
+                    continue
+                return (expiry.date() - datetime.now(timezone.utc).date()).days
+    return None
 
 
 def fetch(states: str = "OPEN", with_bodies: bool = True,

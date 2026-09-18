@@ -20,6 +20,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
 # 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/3.6 §1132) is that
@@ -194,6 +195,36 @@ def behind_main(version: str | None, main: str = "origin/main") -> str:
     if changes == "0":
         return f"up to date with main{suffix}"
     return f"{changes} change{'' if changes == '1' else 's'} behind main{suffix}"
+
+
+def ci_red_on_main() -> str | None:
+    """The `push:main` run's conclusion, if it concluded and failed.
+
+    Delegates to `ci-status.sh` rather than asking GitHub again: that script
+    is already the release gate `deploy.sh` trusts, and a second opinion about
+    whether CI passed is exactly the duplication this model exists to remove.
+
+    A run still in progress, or none at all, is **not** a failure -- "concluded"
+    has to appear before this says anything, because an absent answer must not
+    read as a red one any more than as a green one.
+    """
+    script = Path(__file__).resolve().parent.parent / "ci-status.sh"
+    if not script.exists():
+        return None
+    try:
+        out = subprocess.run([str(script), "--run", "push:main"],
+                             capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if out.returncode == 0:
+        return None
+    text = (out.stdout or "") + (out.stderr or "")
+    if "concluded" not in text:
+        return None
+    for line in text.splitlines():
+        if "concluded" in line:
+            return line.strip()
+    return None
 
 
 def live_version(url: str, timeout: float = 5.0) -> str | None:

@@ -29,7 +29,7 @@ evidence must not read as *nothing to do*.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .model import (
     OWNER,
@@ -40,7 +40,7 @@ from .model import (
     WorkPackage,
     classify,
 )
-from .sources import Snapshot
+from .sources import Snapshot, step_ages, token_days_left
 
 DELIVERING = (WorkPackage, StandaloneProject)
 
@@ -83,15 +83,25 @@ class Waiting:
     issue: Issue
     asked: str
     source: str
+    days: float | None = None
+    dated: bool = False
 
     @property
-    def quiet_days(self) -> float:
-        return self.issue.quiet_days or 0.0
+    def age(self) -> float:
+        return self.days if self.days is not None else (self.issue.quiet_days or 0.0)
 
     @property
     def line(self) -> str:
-        days = self.quiet_days
-        age = "today" if days < 1 else f"{int(days)}d quiet"
+        days = self.age
+        if days < 1:
+            age = "today"
+        else:
+            # `waiting` is the real thing: the timeline says when the field
+            # reached this value. `quiet` is the fallback and a weaker claim --
+            # last activity of any kind, which a comment resets. Naming them
+            # differently is what stops the weaker one being read as the
+            # stronger.
+            age = f"{int(days)}d {'waiting' if self.dated else 'quiet'}"
         return f"#{self.issue.number} {self.issue.title}  —  {self.asked}  ({age})"
 
 
@@ -122,23 +132,39 @@ def waiting_on_owner(issue: Issue) -> Waiting | None:
     return None
 
 
-def whats_waiting(snapshot: Snapshot) -> list[Waiting]:
-    """Longest-quiet first: the only signal the board gives that something is
-    stuck is that nothing has happened to it."""
+def whats_waiting(snapshot: Snapshot, dated: bool = True) -> list[Waiting]:
+    """Longest-waiting first, because that is the only signal the board gives
+    that something is stuck.
+
+    The age comes from the timeline -- when the step field reached the value it
+    holds now -- and is asked only for the handful actually waiting, not for
+    the whole board. Without it the ordering falls back to last activity, which
+    is a floor rather than a measure and says so in the output.
+    """
     found = [w for w in (waiting_on_owner(classify(raw)) for raw in snapshot.issues)
              if w is not None]
-    return sorted(found, key=lambda w: (-w.quiet_days, w.issue.number))
+    if dated and found:
+        # Pull requests are not issues: `issue(number:)` on a pull request
+        # number fails, and its step lives on the board rather than in the
+        # issue timeline, so there is nothing to read even if it did not.
+        ages = step_ages([(w.issue.number, w.issue.step_field, w.issue.step or "")
+                          for w in found
+                          if not isinstance(w.issue, PullRequest)])
+        found = [replace(w, days=ages.get(w.issue.number), dated=w.issue.number in ages)
+                 for w in found]
+    return sorted(found, key=lambda w: (-w.age, w.issue.number))
 
 
 BOLD, DIM, RESET = "\033[1m", "\033[2m", "\033[0m"
 
 
-def render(snapshot: Snapshot, colour: bool = True) -> tuple[str, int]:
+def render(snapshot: Snapshot, colour: bool = True,
+           dated: bool = True) -> tuple[str, int]:
     """The report, and how many things are waiting."""
     def paint(code: str, text: str) -> str:
         return f"{code}{text}{RESET}" if colour else text
 
-    waiting = whats_waiting(snapshot)
+    waiting = whats_waiting(snapshot, dated=dated)
     out = []
 
     if waiting:
@@ -159,6 +185,16 @@ def render(snapshot: Snapshot, colour: bool = True) -> tuple[str, int]:
         out.append(paint(DIM, f"  {later} box(es) are yours but not yet due — "
                               "they belong to work that has not reached a step "
                               "where you act."))
+
+    # The token is the owner's to renew and nothing else warns: GitHub emails
+    # about 2FA and says nothing about this, so the first symptom would be a
+    # command failing in the middle of something else. #309.
+    if dated:
+        left = token_days_left()
+        if left is not None:
+            out.append("")
+            line = f"  the token gh runs on expires in {left} days"
+            out.append(line if left > 30 else paint(BOLD, line + " — #309"))
 
     orphans = sum(len(i.unlabelled_boxes) for i in issues)
     if orphans:

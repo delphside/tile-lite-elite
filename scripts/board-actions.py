@@ -31,6 +31,9 @@ def main(argv=None) -> int:
     ap.add_argument("--exit-code", action="store_true",
                     help="exit non-zero when something is waiting on the owner")
     ap.add_argument("--no-colour", action="store_true")
+    ap.add_argument("--quick", action="store_true",
+                    help="skip the timeline and token reads, which cost a "
+                         "query each; ages fall back to last activity")
     args = ap.parse_args(argv)
 
     started = time.time()
@@ -42,7 +45,8 @@ def main(argv=None) -> int:
         print(f"cannot say: {exc}", file=sys.stderr)
         return 2
 
-    text, count = render(snapshot, colour=not args.no_colour)
+    text, count = render(snapshot, colour=not args.no_colour,
+                         dated=not args.quick)
     print(text)
     print(f"\033[2mfetched in {snapshot.window:.1f}s, "
           f"reported in {time.time() - started:.1f}s total\033[0m")

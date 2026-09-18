@@ -194,6 +194,21 @@ check("no reviewer and no decision is still drafting",
       "Drafting", pr_state(False, None, 0))
 
 print()
+print("an age is named for what it is")
+from board.turn import Waiting
+from dataclasses import replace as _replace
+w = Waiting(classify(issue(1, kind="Requirement")), "do it", "checkbox")
+check("no age at all falls back to nothing and reads as today",
+      True, "(today)" in w.line)
+dated = _replace(w, days=12.4, dated=True)
+check("a timeline age says waiting", True, "12d waiting" in dated.line)
+guessed = _replace(w, days=12.4, dated=False)
+# `quiet` is the weaker claim: last activity of any kind, which a comment
+# resets. Naming them the same would let the weaker read as the stronger.
+check("a fallback age says quiet, not waiting", True, "12d quiet" in guessed.line)
+check("and never claims to be waiting", False, "waiting" in guessed.line)
+
+print()
 print("R1 sees only what the owner must do")
 check("a review waiting is his", "pull request",
       getattr(waiting_on_owner(pr), "source", None))
