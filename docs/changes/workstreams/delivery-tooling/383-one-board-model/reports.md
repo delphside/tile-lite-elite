@@ -174,7 +174,7 @@ Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open re
 
 **It earned its place on the first run.** Five disagreements, and one of them was the model: #362 read *not started* at Post-deployment on a shipped milestone, because it was split out of its parent after the work landed and carries no commits of its own. The milestone is the delivery evidence — docs/3.3, *"the deploy is what closes them"* — and the model was not reading it. That is the third row of the table above, a defect caught before it gated anything, and it was invisible until two pictures of the same fact were put side by side.
 
-**Retired when the move is complete.** A report with a scheduled death should say so in its own output.
+**Retired 2026-09-19, with `status.sh`.** It found five disagreements over its life and the model was right about all five — three were `status.sh` reading `Refs #N` as delivery, one was a shipped milestone it could not see, and one was the model's own, caught before it gated anything. R7 compares the old script against the new one, so it cannot outlive the thing it compares against: both were deleted in the same commit.
 
 ---
 

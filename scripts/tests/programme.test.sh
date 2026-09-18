@@ -157,21 +157,6 @@ check("an unparsable version yields no comparison", "", repo.behind_main(None))
 check("a version with no build sha yields none either", "", repo.behind_main("0.8.0"))
 
 print()
-print("R7 reduces two vocabularies to one word each")
-from board.diff import ROW, _bucket
-check("status.sh's tooling wording", "merged",
-      _bucket("merged — smoke-test, then close · pre-approved"))
-check("its documentation wording", "merged", _bucket("merged — close it · pre-approved"))
-check("its release wording", "merged", _bucket("merged, awaiting release · 1.0.0"))
-check("a branch it names", "in progress", _bucket("in progress (290-dioxus-07)"))
-check("no trailer, but merged", "merged", _bucket("merged (no Refs trailer)"))
-check("the model's own", "mentioned only", _bucket("mentioned before prod-0.8.0"))
-check("and its released form", "released", _bucket("released in 0.8.0"))
-row = ROW.match("    10   Bot client harness: run an en\u2026 tooling          merged — smoke-test, then close")
-check("a status.sh row parses", ("10", "tooling"),
-      (row.group(1), row.group(2)) if row else None)
-
-print()
 if failures:
     print(f"{failures} failure(s)")
     sys.exit(1)

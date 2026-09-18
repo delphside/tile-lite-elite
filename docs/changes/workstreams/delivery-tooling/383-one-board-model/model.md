@@ -380,14 +380,14 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `deploy.sh` | R5 | gates call the model; the deployment mechanics stay in bash |
 | `verify.sh` | R6 | asks the model |
 | `check-transitions.sh` | obligation checks | generated from the grid |
-| `status.sh` | R3 | asks. `board-status.py` runs beside it. Three sources meet there — GitHub for what a change is, git for where it got to, `/health` for what is running |
+| ~~`status.sh`~~ | R3 | **retired 2026-09-19.** `board-status.py` replaces it. Three sources meet there — GitHub for what a change is, git for where it got to, `/health` for what is running |
 | `actions.py` | R1 | asks. `board-actions.py` runs beside it: R1 as specified is narrower — only what the owner must do — so a difference between them is the expected result, not a defect |
 | `inbox.sh` | R2 | asks, including comments |
 | `sync-pr-state.sh` | a write | `board` command |
 | `turn-check.sh` | the sweep | asks, `CACHED` |
 | `roadmap-diagram.py` | **R8** | asks the model. Reformatted: it drew structure, and R8 wants sequence |
 | — | **R4** | **new** |
-| — | **R7** | **new, and temporary** — `board-diff.py`, model against `status.sh` |
+| — | ~~**R7**~~ | **retired 2026-09-19** with `status.sh`, having done its job: five disagreements, the model right about all five |
 
 `roadmap-diagram.py` was listed here with no report against it, and read as a candidate for deletion. That was wrong, and wrong in an instructive way: the report list was incomplete, not the script redundant. Owner, 2026-09-18: *"roadmap-diagram.py has a purpose but the format should be updated."*
 
