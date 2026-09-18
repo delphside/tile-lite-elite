@@ -330,7 +330,7 @@ check_rehearsal() {
 # path and not in a GraphQL document. A project with `Project` children is a
 # parent; folded requirements and owned decisions are children too, which is why
 # the type is filtered — counting them all made #295, #297 and #301 read as
-# parents in `check-transitions.sh` once.
+# parents in the obligations grid once.
 # The number of the issue this one is a work package of, or empty.
 #
 # A package built before it existed carries its parent's number in the commit
@@ -557,7 +557,8 @@ check_prstate() {
 }
 
 LABEL[transitions]="Issues have done the work their fields claim"
-# Owner, 2026-09-05: run check-transitions.sh from here.
+# Owner, 2026-09-05: run the transition check from here. It is
+# board-check.py (R4) since 2026-09-19; check-transitions.sh is retired.
 #
 # **A note, never a failure**, and the reason is in the other script's own
 # header: *"It reports; it does not refuse. A field is changed in a browser and
@@ -574,7 +575,7 @@ LABEL[transitions]="Issues have done the work their fields claim"
 # pull-request run" out loud.
 check_transitions() {
   local out status=0
-  out="$(timeout 60 ./scripts/check-transitions.sh 2>&1)" || status=$?
+  out="$(timeout 120 ./scripts/board-check.py --exit-code --no-colour 2>&1)" || status=$?
   if (( status == 124 )); then
     note transitions "the transition check timed out after 60s"
   elif (( status == 0 )); then
@@ -584,7 +585,7 @@ check_transitions() {
       "$(printf '%s' "$out" | tail -2)"
   else
     note transitions "some issues are further along than their content supports" \
-      "$(printf '%s' "$out" | grep -E '^  #[0-9]' | head -8)"
+      "$(printf '%s' "$out" | grep -E '^#[0-9]' | head -8)"
   fi
 }
 

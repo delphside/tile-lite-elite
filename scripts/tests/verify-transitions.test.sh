@@ -5,7 +5,7 @@ set -euo pipefail
 # verify.sh runs with.
 #
 # The behaviour it pins is the contract, not the wording: **this check never
-# fails.** `check-transitions.sh` reports and does not refuse — a field is
+# fails.** `board-check.py` reports and does not refuse — a field is
 # changed in a browser and nothing can stand in front of that — so surfacing it
 # through verify.sh must not put the deploy path's trusted exit status at the
 # mercy of bookkeeping. Every case below asserts `note` or `pass`, and case 5
@@ -29,7 +29,9 @@ check() {
 }
 
 # Runs verify.sh's transition check alone against a stubbed
-# `scripts/check-transitions.sh`.
+# `scripts/board-check.py` (R4), which replaced check-transitions.sh on
+# 2026-09-19. The exit contract is the same: 0 clean, 2 could not run,
+# anything else findings.
 #   $1  the exit status the stub returns
 #   $2  what the stub prints
 #   $3  optional: "timeout" to stub `timeout` itself as having killed it,
@@ -40,12 +42,12 @@ run_transitions() {
   mkdir -p "$work/scripts" "$work/bin"
   printf '%s' "$output" > "$work/out"
 
-  cat > "$work/scripts/check-transitions.sh" <<STUB
+  cat > "$work/scripts/board-check.py" <<STUB
 #!/usr/bin/env bash
 cat "$work/out"
 exit $status
 STUB
-  chmod +x "$work/scripts/check-transitions.sh"
+  chmod +x "$work/scripts/board-check.py"
 
   if [[ "$mode" == "timeout" ]]; then
     # `timeout` exits 124 when it kills its child. Stubbing it is the only way
@@ -77,16 +79,17 @@ STUB
 echo "verify-transitions"
 
 # 1 — findings are a note, and the issues are named
-out="$(run_transitions 1 '==> Open issues, against what their stage or phase claims
-  #309   On Hold                  on hold with nothing under dependencies
+out="$(run_transitions 1 'ISSUE COMPLETENESS  R4 - each issue against its type and step
+#309 Requirement at On Hold  The machine account token expires
+    !!  something named under dependencies
 
-  1 issue(s) are further along than their content supports.
+Totals  160 met  1 missing  8 not checked
 ')"
 check "findings report as a note"        "NOTE" "$(awk '{print $1; exit}' <<< "$out")"
 check "the issue is named in the detail" "1"    "$(grep -c '#309' <<< "$out")"
 
 # 2 — the quiet case
-out="$(run_transitions 0 '==> Open issues, against what their stage or phase claims
+out="$(run_transitions 0 'ISSUE COMPLETENESS  R4 - each issue against its type and step
 
   every open issue has done the work its field claims
 ')"

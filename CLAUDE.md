@@ -154,7 +154,7 @@ one of them has a defect: fix it, don't work around it.
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
   carries more than one package. The counts go stale and are kept anyway: a
   title saying `Del 1 of 2` is wrong loudly where `Del 1` is silently
-  incomplete, and check-transitions.sh derives all of them from the milestones.
+  incomplete, and board-check.py derives all of them from the milestones.
 - The parent owns the requirements, the design and the documents; a work
   package links to them and carries its own artefacts, test approach and
   post-deployment checks, because a check is answered per delivery. The parent
@@ -207,7 +207,7 @@ one of them has a defect: fix it, don't work around it.
   the issue, and every other mention is a link.
 - At a process step, consult the owning document. A decision about process is a
   **`Decision` issue** — the GitHub issue type, carrying `Decision State` and an
-  `Agreed Decision` heading that `check-transitions.sh` reads — and is then
+  `Agreed Decision` heading that `board-check.py` reads — and is then
   applied in the one place where that part of the process is documented. The
   process-definition glossary holds D1 to D38 and is history: it predates the
   issue type and is not added to.

@@ -519,7 +519,7 @@ def main() -> int:
             holder = DECISION_HOLDER.get(dstate)
             if holder is None:
                 # An unset or unrecognised state: fall back to the body, rather
-                # than silently showing nothing. `check-transitions.sh` reports
+                # than silently showing nothing. `board-check.py` reports
                 # the missing state separately.
                 pass
             elif not ALL and holder != WHO:

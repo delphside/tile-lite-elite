@@ -123,7 +123,7 @@ check "unticked post-deployment rows are not counted as tests" "PASS" "$(awk '{p
 # 3b — a parent owns no test approach, so it is not asked for one
 # D51: the parent owns the requirements, the design and the documents; the work
 # packages own the artefacts, the test approach and the post-deployment checks.
-# `check-transitions.sh` has exempted a parent since D51 landed and this check
+# the obligations grid has exempted a parent since D51 landed and this check
 # did not, so the two tools disagreed about the same issue. The body here is a
 # real parent's shape — requirements and design, and no test approach at all.
 PARENTS="71"; export PARENTS

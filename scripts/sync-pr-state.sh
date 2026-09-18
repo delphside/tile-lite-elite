@@ -68,7 +68,7 @@ derive() {
 # later one left. `reviewDecision` comes back as an empty *string* rather than
 # null for a pull request nobody has reviewed, so `// "none"` never fires — and
 # the node id then lands in the wrong variable and the add fails with
-# `global id of ''`. `check-transitions.sh` carries the same note; this walked
+# `global id of ''`. `board/sources.py` carries the same note; this walked
 # into it anyway on 2026-09-10.
 PRS="$(gh pr list --state all --limit 500 \
   --json number,state,isDraft,reviewDecision,reviewRequests,id \

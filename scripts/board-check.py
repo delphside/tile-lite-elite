@@ -20,6 +20,7 @@ Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,8 @@ def main(argv=None) -> int:
                     help="read closed issues instead of open ones")
     ap.add_argument("--exit-code", action="store_true",
                     help="exit non-zero when something is missing")
+    ap.add_argument("--no-colour", action="store_true",
+                    help="plain text, for a caller that captures the output")
     args = ap.parse_args(argv)
 
     started = time.time()
@@ -52,6 +55,11 @@ def main(argv=None) -> int:
         return 2
 
     text, failing = render(snapshot, args.issue, args.all)
+    # Stripped at the boundary rather than threaded through the renderer:
+    # nineteen call sites would each have to remember, and one that forgot
+    # would put escape codes into a caller's captured output.
+    if args.no_colour:
+        text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     print(text)
     print(f"\033[2mfetched in {snapshot.window:.1f}s, "
           f"reported in {time.time() - started:.1f}s total\033[0m")
