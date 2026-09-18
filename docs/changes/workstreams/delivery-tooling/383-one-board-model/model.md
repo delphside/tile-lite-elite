@@ -115,7 +115,24 @@ That is the whole of the definition, in one function, and it is better than a pr
 | the impossible states stop being expressible | `ParentProject.route` does not exist, so no consumer can ask for it |
 | the defect has one home | `classify` is where parentage is decided, and the one test covers every consumer |
 
-**`Untyped` is a class rather than an error** because twenty issues carry no type, left by a type retirement, and a model that refuses to load them cannot report on them. It owes nothing and answers `not checked` to everything, which is how R4 will surface it.
+**`Untyped` is a class rather than an error**, because a model that refuses to load an untyped issue cannot report on it — and reporting on it is the entire point. But it does **not** owe nothing:
+
+```python
+class Untyped(Issue):
+    """An issue with no type. Owes exactly one thing: a type.
+
+    Owing nothing is the #361 defect restated as a class. Every rule is keyed
+    on type, so an untyped issue is skipped by all of them and reads as
+    compliant. One obligation it always fails is what makes it visible.
+    """
+    @property
+    def owes(self) -> tuple[Obligation, ...]:
+        return (NEEDS_A_TYPE,)      # fails until the type is set
+```
+
+**The distinction matters and it is easy to get backwards.** An untyped issue answers `not checked` for every obligation of every type — because nothing can say which apply — but `missing` for the one obligation that would settle that. An issue exempt from everything looks identical to an issue that has satisfied everything, which is how twenty of them sat unnoticed.
+
+**Measured 2026-09-18: zero open issues carry no type, and none among the hundred most recently updated closed.** #361's backlog is cleared, so this is prevention rather than cleanup. Two ways it recurs: a blank issue from the GitHub UI, which has no `config.yml` disabling it, and the API, which requires no type. All three issue templates set one correctly.
 
 ### What each class knows
 

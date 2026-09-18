@@ -87,6 +87,17 @@ With [`flows.md`](flows.md) and [`obligations.md`](obligations.md) this complete
 | the evidence for each: body headings, fields, git, GitHub | each obligation names where it is evidenced |
 | whether an obligation is enforced today or a `gap` | so a `gap` reads as *not checked*, not as *met* |
 
+**An untyped issue is the first thing this report says, not the last.** Every rule is keyed on type, so an untyped issue is skipped by all of them and reads as compliant — #361, where twenty sat unnoticed. So `Untyped` owes exactly one obligation, a type, and fails it; it answers *not checked* for everything else, because nothing can say which obligations apply until the type is set.
+
+The two states must not be allowed to look alike:
+
+| | reads as | is |
+| --- | --- | --- |
+| exempt from everything | no findings | invisible |
+| owes one thing and fails it | one finding, always | visible until fixed |
+
+Measured 2026-09-18: **zero untyped open issues**, and none among the hundred most recently updated closed. So this is prevention. Two routes remain open — a blank issue from the GitHub UI, since no `config.yml` disables them, and the API, which requires no type. All three templates set one.
+
 **This is the report that does not exist today**, and its absence is why the grid in `obligations.md` could sit with a wrong row in it. Twenty-eight obligations, twelve enforced: this makes all twenty-eight visible, and the sixteen unenforced ones answer *not checked* rather than silently passing.
 
 **It is a report and not a gate**, at least first. Sixteen obligations arriving as refusals would refuse most of the open board. A gate refuses and work stops; a check reports and a person decides, and this starts as the second.
