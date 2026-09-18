@@ -380,7 +380,7 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `deploy.sh` | R5 | gates call the model; the deployment mechanics stay in bash |
 | `verify.sh` | R6 | asks the model |
 | `check-transitions.sh` | obligation checks | generated from the grid |
-| `status.sh` | R3 | asks; formatting stays |
+| `status.sh` | R3 | asks. `board-status.py` runs beside it. Three sources meet there — GitHub for what a change is, git for where it got to, `/health` for what is running |
 | `actions.py` | R1 | asks. `board-actions.py` runs beside it: R1 as specified is narrower — only what the owner must do — so a difference between them is the expected result, not a defect |
 | `inbox.sh` | R2 | asks, including comments |
 | `sync-pr-state.sh` | a write | `board` command |

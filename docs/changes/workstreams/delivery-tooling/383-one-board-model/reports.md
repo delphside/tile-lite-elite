@@ -74,6 +74,10 @@ With [`flows.md`](flows.md) and [`obligations.md`](obligations.md) this complete
 
 **The separation in block 2 is the whole value.** A Repository change is live at merge and must not appear under *would ship*; a parent has no route and must not appear under *cannot say*. Both were wrong in the version that existed before this design.
 
+**Where the commits and the board disagree, both are shown.** State is derived from commits precisely so nobody has to remember to set a field — but a `Refs #N` in an old commit is enough to make a change that never started read as shipped, and that is the one state that stops anybody looking at it again. So a row whose derived state cannot be squared with its Phase is marked rather than silently resolved in favour of either.
+
+**A package built before it existed carries its parent's number**, and its commits cannot be rewritten — #373 was split out of #297 after `1036e1c` had landed saying `Refs #297`. The rule `verify.sh` settled (#375) is *not* to count the parent's commits as the package's, which would make every package of a parent look built: say **where** the commits are and let the reader judge. R3 does that, and it is why #373 and #362 read *not started* with a note rather than reading as delivered.
+
 *Today: `status.sh`.*
 
 ---
