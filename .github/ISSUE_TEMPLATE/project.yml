@@ -109,11 +109,11 @@ body:
       value: |
         ### Functional user tests — Preview
 
-        - [ ]
+        - [ ] **owner** —
 
         ### Technical tests — Rehearsal
 
-        - [ ]
+        - [ ] **Claude** —
     validations:
       required: true
 

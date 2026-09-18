@@ -33,9 +33,9 @@ an indented `>` note — the body is the review surface, so the state and the
 comments stay together, and a review that produced changes still reads as one
 thing afterwards.
 
-- [ ] the change does what the issue asked
+- [ ] **owner** — the change does what the issue asked
       >
-- [ ] what is left out is deliberate, and named above
+- [ ] **owner** — what is left out is deliberate, and named above
       >
 
 ### Any other comments

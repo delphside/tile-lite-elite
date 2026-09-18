@@ -21,7 +21,7 @@ sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
 from board.obligations import Answer, assess
 from board.sources import pr_state
-from board.turn import waiting_on_owner
+from board.turn import boxes_are_due, waiting_on_owner
 
 failures = 0
 
@@ -214,6 +214,54 @@ check("an untested delivery is his", "user testing",
 done = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
                       body="## Functional user tests — Preview\n\n- [x] clicked\n"))
 check("a tested one is not", None, waiting_on_owner(done))
+
+print()
+print("every checkbox says whose move it is")
+body = """## Functional user tests — Preview
+
+- [ ] **owner** — click it
+- [x] **Claude** — wrote the test
+
+## Technical tests — Rehearsal
+
+- [ ] **Claude** — run the script
+- [ ] nobody owns this one
+"""
+i = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+                   body=body))
+check("four boxes are found", 4, len(i.boxes))
+check("one is the owner's and unticked", 1, len(i.unticked_for("owner")))
+check("one is Claude's and unticked", 1, len(i.unticked_for("Claude")))
+check("the unlabelled one is counted, not assigned", 1, len(i.unlabelled_boxes))
+check("a ticked box is not waiting", "wrote the test", i.boxes[1].text)
+check("the label is stripped from the text", "click it", i.boxes[0].text)
+ids = {f.obligation.id: f.answer for f in assess(i)}
+check("an unlabelled box is reported", Answer.MISSING, ids.get("boxes-labelled"))
+
+clean = classify(issue(1, kind="Requirement",
+                       body="- [ ] **Claude** — do it\n- [x] **owner** — judged\n"))
+check("a fully labelled body passes", Answer.MET,
+      {f.obligation.id: f.answer for f in assess(clean)}.get("boxes-labelled"))
+check("an em dash is not required", 1,
+      len(classify(issue(1, body="- [ ] **owner** - hyphen works\n")).unticked_for("owner")))
+
+print()
+print("a box is not waiting until it is due")
+# Labelling made 126 boxes visible at once. Listing every one of the owner's
+# turns R1 into everything that will ever need him, which is the report that
+# gets skimmed.
+req = classify(issue(1, kind="Requirement", fields={"Stage": "Triage"},
+                     body="- [ ] **owner** — future evidence\n"))
+check("a requirement's evidence box is never due", False, boxes_are_due(req))
+check("so it is not reported as waiting", None, waiting_on_owner(req))
+scoped = classify(issue(1, parent=2, fields={"Phase": "Scope", "Route": "x"},
+                        body="- [ ] **owner** — a test written early\n"))
+check("a delivery still in Scope is not due", False, boxes_are_due(scoped))
+live = classify(issue(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"},
+                      body="- [ ] **owner** — did the benefit arrive\n"))
+check("one at Post-deployment is", True, boxes_are_due(live))
+check("and it reports as the owner's", "checkbox",
+      getattr(waiting_on_owner(live), "source", None))
 
 print()
 if failures:

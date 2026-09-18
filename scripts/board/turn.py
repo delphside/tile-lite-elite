@@ -15,28 +15,64 @@ The fourth cannot, and that is reported rather than passed over:
 | a decision waiting to be answered | `Decision State` is `Asked` |
 | a pull request waiting to be reviewed | `PR State` is `Awaiting review` |
 | a phase only the owner can advance | `User testing`, with Preview boxes unticked |
-| **an unanswered question in a body** | **no convention exists — see `UNDERIVABLE`** |
+| an unanswered question in a body | an unticked `- [ ]` labelled **owner** |
 
-The same discipline as `obligations.py`: something nothing can evidence must
-not read as *nothing to do*. An empty report and an unenforceable rule look
-identical from the outside, and only one of them is good news.
+**The fourth source was underivable until 2026-09-18.** Bodies used `- [ ]` for
+work of every kind and nothing distinguished a box the owner must tick from one
+Claude must, so R1 printed the gap under every run rather than pretending the
+absence of a signal was the absence of work. Owner: *"Label Checkboxes
+consistently as Claude or owner so the tools can differentiate."* Now they do,
+and what remains reportable is a box with **no** label — which this still
+refuses to guess at, on the same rule as `obligations.py`: something nothing can
+evidence must not read as *nothing to do*.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .model import Decision, Issue, PullRequest, StandaloneProject, WorkPackage, classify
+from .model import (
+    OWNER,
+    Decision,
+    Issue,
+    PullRequest,
+    StandaloneProject,
+    WorkPackage,
+    classify,
+)
 from .sources import Snapshot
 
 DELIVERING = (WorkPackage, StandaloneProject)
 
-UNDERIVABLE = (
-    "an unanswered question in an issue body",
-    "No convention marks one. Bodies use `- [ ]` for work of every kind, and "
-    "nothing distinguishes a box the owner must tick from one Claude must. A "
-    "heading the owner answers under — or a label — would make this derivable; "
-    "until then R1 cannot see this source and does not pretend to.",
+# **A box is not waiting until it is due.** Labelling every checkbox made 126
+# of them visible, and listing all the owner's at once turned R1 into a list of
+# everything that will ever need him -- which is the report that gets skimmed,
+# and then the one line that mattered is missed.
+#
+# So a box counts when its issue has reached a step where the owner acts. A
+# Requirement never qualifies: its `What would show it works` boxes describe
+# evidence a future delivery will produce, not work waiting on anybody today.
+DUE_AT: dict[str, tuple[str, ...]] = {
+    "ParentProject": ("User testing", "Deployment", "Post-deployment",
+                      "Project Closedown"),
+    "WorkPackage": ("User testing", "Deployment", "Post-deployment",
+                    "Project Closedown"),
+    "StandaloneProject": ("User testing", "Deployment", "Post-deployment",
+                          "Project Closedown"),
+    "Decision": ("Asked",),
+    "PullRequest": ("Awaiting review", "Changes requested"),
+    "Requirement": (),
+}
+
+
+def boxes_are_due(issue: Issue) -> bool:
+    return issue.step in DUE_AT.get(issue.kind, ())
+
+UNLABELLED = (
+    "a checkbox with no owner",
+    "An unticked box labelled neither **owner** nor **Claude** is waiting on "
+    "nobody. It is counted, never assigned: guessing from the heading is the "
+    "inference the label exists to replace.",
 )
 
 
@@ -75,6 +111,14 @@ def waiting_on_owner(issue: Issue) -> Waiting | None:
             plural = "" if unticked == 1 else "s"
             return Waiting(issue, f"run {unticked} browser test{plural}",
                            "user testing")
+
+    # The fourth source. Anywhere in the body, on any type: a box he has to
+    # tick is his move whatever section it sits in -- once it is due.
+    his = issue.unticked_for(OWNER) if boxes_are_due(issue) else []
+    if his:
+        first = his[0].text
+        more = f" (+{len(his) - 1} more)" if len(his) > 1 else ""
+        return Waiting(issue, f"{first[:60]}{more}", "checkbox")
     return None
 
 
@@ -108,7 +152,17 @@ def render(snapshot: Snapshot, colour: bool = True) -> tuple[str, int]:
         out.append(paint(DIM, "  No decision is unanswered, no pull request is "
                               "awaiting review, and no delivery is in user testing."))
 
-    out.append("")
-    out.append(paint(DIM, f"  not checked: {UNDERIVABLE[0]}."))
-    out.append(paint(DIM, f"  {UNDERIVABLE[1]}"))
+    issues = [classify(raw) for raw in snapshot.issues]
+    later = sum(len(i.unticked_for(OWNER)) for i in issues if not boxes_are_due(i))
+    if later:
+        out.append("")
+        out.append(paint(DIM, f"  {later} box(es) are yours but not yet due — "
+                              "they belong to work that has not reached a step "
+                              "where you act."))
+
+    orphans = sum(len(i.unlabelled_boxes) for i in issues)
+    if orphans:
+        out.append("")
+        out.append(paint(DIM, f"  not checked: {orphans} × {UNLABELLED[0]}."))
+        out.append(paint(DIM, f"  {UNLABELLED[1]}"))
     return "\n".join(out), len(waiting)

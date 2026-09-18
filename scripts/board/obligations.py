@@ -154,6 +154,15 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         lambda i: bool(i.field("Workstream")),
     ),
 
+    Obligation(
+        "boxes-labelled", (Issue,), ANY_STEP,
+        "every checkbox labelled **owner** or **Claude**",
+        "an unlabelled box is waiting on nobody: R1 cannot tell a task the "
+        "owner must do from one Claude must, and 126 of them accumulated "
+        "before anything could say so — owner, 2026-09-18",
+        lambda i: not i.unlabelled_boxes,
+    ),
+
     # ---- Requirement, by Stage ------------------------------------------
     Obligation(
         "triage-minimum", (Requirement,), ("Triage",),

@@ -188,6 +188,11 @@ one of them has a defect: fix it, don't work around it.
   are docs/1.0.
 - A gate refuses and work stops; a check reports and a person decides. A new
   check is shown to fail before it ships.
+- **Every checkbox names whose move it is**: `- [ ] **owner** — run the six
+  browser tests`, or `- [ ] **Claude** — write the regression tests`. The label
+  is on the box, not inferred from its heading, so a box keeps its owner when
+  it moves and a reader sees whose it is without scrolling up. An unlabelled
+  box is waiting on nobody, and `board-check.py` reports it.
 - A decision is applied in the same commit that marks it answered, or an
   issue is raised and named in the decision.
 - A decision is not a change vehicle. It routes work: raise a requirement, add

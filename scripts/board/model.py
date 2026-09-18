@@ -22,6 +22,34 @@ from typing import Iterator, Mapping, Sequence
 # --------------------------------------------------------------------------
 
 
+OWNER, CLAUDE = "owner", "Claude"
+
+# `- [ ] **owner** — run the six browser tests`
+#
+# Owner, 2026-09-18: *"Label Checkboxes consistently as Claude or owner so the
+# tools can differentiate."* Before this, every box looked alike, so nothing
+# could tell a task waiting on the owner from one waiting on Claude -- which is
+# why R1 could not derive its fourth source and said so under every run.
+#
+# The label is on the box, not inferred from the heading it sits under: a box
+# moved to another section keeps its owner, and a reader sees whose it is
+# without scrolling up.
+_BOX = re.compile(
+    r"^[ \t]*[-*][ \t]*\[([ xX])\][ \t]*"
+    r"(?:\*\*(owner|Claude)\*\*[ \t]*[\u2014\u2013-][ \t]*)?"
+    r"(.*)$",
+    re.M | re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Box:
+    """One checkbox, and whose move it is."""
+
+    ticked: bool
+    who: str | None
+    text: str
+
+
 @dataclass(frozen=True)
 class RawSubIssue:
     number: int
@@ -148,6 +176,35 @@ class Issue:
             if depth is not None:
                 out.append(line)
         return "\n".join(out).strip()
+
+    # -- checkboxes --------------------------------------------------------
+    @property
+    def boxes(self) -> list[Box]:
+        out = []
+        for mark, who, text in _BOX.findall(self.body):
+            label = None
+            if who:
+                label = OWNER if who.lower() == "owner" else CLAUDE
+            out.append(Box(mark.lower() == "x", label, text.strip()))
+        return out
+
+    def boxes_in(self, heading: str) -> list[Box]:
+        section = Issue(RawIssue(0, "", "", self.section(heading), None, {},
+                                 (), None, None, frozenset()))
+        return section.boxes
+
+    def unticked_for(self, who: str) -> list[Box]:
+        return [b for b in self.boxes if not b.ticked and b.who == who]
+
+    @property
+    def unlabelled_boxes(self) -> list[Box]:
+        """Boxes that say nothing about whose move it is.
+
+        Reported rather than assumed: guessing from the heading would be the
+        same inference the label exists to replace, and a box nobody owns is
+        how work waits on nobody at all.
+        """
+        return [b for b in self.boxes if b.who is None]
 
     @property
     def unticked_boxes(self) -> int:

@@ -38,5 +38,5 @@ body:
         `scripts/actions.py` reads — anything else is invisible to the one tool
         that reports what is waiting.
       placeholder: |
-        - [ ] (Steve) decide whether X applies to Y
-        - [ ] (Claude) record it in docs/3.6 and update the register
+        - [ ] **owner** — decide whether X applies to Y
+        - [ ] **Claude** — record it in docs/3.6 and update the register
