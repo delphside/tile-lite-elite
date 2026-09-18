@@ -91,13 +91,15 @@ class Change:
     def disagrees(self) -> bool:
         """The commits and the board cannot both be right.
 
-        R3 derives state from commits precisely so nobody has to remember to
-        set a field — but when the two disagree, saying only the derived
-        answer hides the more interesting fact. A `Refs #N` in an old commit
-        is enough to make a change that never started read as shipped, and
-        that is the one state that stops anybody looking at it again.
+        Only states that actually imply the work landed count. A
+        *mentioned before prod-0.8.0* row is an old commit naming the issue in
+        passing, which `Refs #N` explicitly permits — treating that as a
+        contradiction reported four changes as disagreeing with the board when
+        the derivation was what was wrong. Owner, 2026-09-18: *"Refs #N does
+        not imply anything specific. Closes #N does."*
         """
-        return self.state in ("released", "live", "merged, awaiting release") \
+        return self.state in ("released", "closed by a commit on main",
+                              "merged", "merged, awaiting release") \
             and self.phase in EARLY
 
 
@@ -124,8 +126,8 @@ def changes(snapshot: Snapshot, got: repo.Commits) -> list[Change]:
         # judge.
         note = ""
         if state in ("not started", "branch only") and issue.parent:
-            elsewhere = len(got.released.get(issue.parent, [])) \
-                + len(got.unreleased.get(issue.parent, []))
+            elsewhere = got.released.count(issue.parent) \
+                + got.unreleased.count(issue.parent)
             if elsewhere:
                 note = (f"no commits of its own; #{issue.parent} carries "
                         f"{elsewhere} — split out after they landed?")
@@ -172,8 +174,9 @@ def unanswered_checks(snapshot: Snapshot) -> list[tuple[int, str, int]]:
 
 BOLD, DIM, RED, RESET = "\033[1m", "\033[2m", "\033[31m", "\033[0m"
 
-STATE_ORDER = ("in progress", "merged, awaiting release", "live", "released",
-               "branch only", "not started")
+STATE_ORDER = ("in progress", "merged, awaiting release", "merged",
+               "closed by a commit on main", "released", "branch only",
+               "not started")
 
 
 def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
@@ -190,7 +193,7 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
     out.append(paint(BOLD, "A release from main would ship"))
     every = changes(snapshot, got)
     shipping = [c for c in every if c.state == "merged, awaiting release"]
-    already = [c for c in every if c.state == "live"]
+    already = [c for c in every if c.state in ("merged", "closed by a commit on main")]
     if shipping:
         for c in shipping:
             out.append(f"  #{c.number:<5}{c.milestone or 'no milestone':<14}{c.title[:60]}")
@@ -211,9 +214,10 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
 
     out.append("")
     out.append(paint(BOLD, "Open changes"))
-    live_states = [s for s in STATE_ORDER if s not in ("released",)]
     shown = 0
-    for state in live_states:
+    states = [s for s in STATE_ORDER if s != "released"]
+    states += sorted({c.state for c in every if c.state not in STATE_ORDER})
+    for state in states:
         rows = [c for c in every if c.state == state]
         if not rows:
             continue
@@ -235,8 +239,11 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
     if disagreeing:
         behind_any = True
         out.append(f"  {len(disagreeing)} change(s) where the commits and the board disagree.")
-        out.append(paint(DIM, "  A `Refs #N` in an old commit is enough to make a change that "
-                              "never started read as shipped."))
+        for c in disagreeing:
+            out.append(paint(DIM, f"    #{c.number} commits say {c.state}, "
+                                  f"the board says {c.phase}"))
+        out.append(paint(DIM, "  One of the two is out of date. `Refs #N` means work "
+                              "touched the issue, so this is a claim that it merged."))
 
     unanswered = unanswered_checks(snapshot)
     if unanswered:

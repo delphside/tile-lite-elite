@@ -38,28 +38,48 @@ def check(what, want, got):
         print(f"  FAIL {what}\n       want {want!r}\n       got  {got!r}")
         failures += 1
 
-def commits(**kw):
-    c = repo.Commits(last_tag="prod-0.8.0")
-    for name, numbers in kw.items():
-        setattr(c, name, {n: ["deadbee"] for n in numbers})
-    return c
+def scope(closes=(), refs=()):
+    s = repo.Scope()
+    s.closes = {n: ["deadbee"] for n in closes}
+    s.refs = {n: ["deadbee"] for n in refs}
+    return s
 
+def commits(**kw):
+    return repo.Commits(last_tag="prod-0.8.0", **kw)
+
+print("`Refs #N` means work touched it; `Closes #N` means it is done")
+# Owner, 2026-09-18. Commits say `Refs #N` and the DEPLOY closes them;
+# `Closes #N` is correct only where the change never leaves the repository.
+# Reading the two as the same made an incidental mention of #10 in an old
+# commit report the Bot client harness as released while it sat at Scope.
+c = commits(released=scope(refs=[10]))
+check("an old mention is not a delivery",
+      "mentioned before prod-0.8.0", c.state_of(10, False))
+c = commits(released=scope(closes=[10]))
+check("a closing commit in production is", "released", c.state_of(10, False))
+c = commits(unreleased=scope(closes=[10]))
+check("a closing commit on main, not yet released",
+      "closed by a commit on main", c.state_of(10, False))
+# A commit that closes an issue is not also merely referencing it.
+one = repo.Scope(); one.closes = {5: ["a"]}
+check("a closing commit is not counted twice", 1, one.count(5))
+
+print()
 print("state precedence is newest work first")
-c = commits(off_main=[1], unreleased=[1], released=[1])
+c = commits(off_main=scope(refs=[1]), unreleased=scope(refs=[1]),
+            released=scope(closes=[1]))
 check("work in progress beats everything", "in progress", c.state_of(1, False))
-c = commits(unreleased=[1], released=[1])
+c = commits(unreleased=scope(refs=[1]), released=scope(closes=[1]))
 check("an unreleased commit beats an old released one",
       "merged, awaiting release", c.state_of(1, False))
-c = commits(released=[1])
-check("only released commits means released", "released", c.state_of(1, False))
 check("and nothing at all means not started", "not started",
       commits().state_of(1, False))
 
 print()
 print("the route decides whether it waits for a release")
-c = commits(unreleased=[1])
+c = commits(unreleased=scope(refs=[1]))
 check("a production release waits", "merged, awaiting release", c.state_of(1, False))
-check("a repository change is already live", "live", c.state_of(1, True))
+check("a repository change does not", "merged", c.state_of(1, True))
 
 print()
 print("a package built under its parent's number is not claimed as built")
@@ -69,7 +89,7 @@ def issue(number, kind="Project", parent=None, fields=None, milestone=None):
                     (), parent, milestone, frozenset())
 
 snap = Snapshot((issue(373, parent=297),), 0.0, 0.0, 1, False)
-c = commits(released=[297])
+c = commits(released=scope(refs=[297]))
 got = changes(snap, c)[0]
 check("the package still reads as not started", "not started", got.state)
 check("and says where the commits are instead",
@@ -79,19 +99,25 @@ check("and says where the commits are instead",
 check("it does not claim the parent's commits", False, "released" == got.state)
 
 snap = Snapshot((issue(374, parent=297),), 0.0, 0.0, 1, False)
-got = changes(snap, commits(unreleased=[374], released=[297]))[0]
+got = changes(snap, commits(unreleased=scope(refs=[374]),
+                            released=scope(refs=[297])))[0]
 check("a package with its own commits needs no note", "", got.note)
 
 print()
 print("the commits and the board can disagree, and that is reported")
 snap = Snapshot((issue(10, fields={"Route": "Repository Change", "Phase": "Scope"}),),
                 0.0, 0.0, 1, False)
-got = changes(snap, commits(released=[10]))[0]
+got = changes(snap, commits(released=scope(closes=[10])))[0]
 check("shipped, but the board says Scope", True, got.disagrees)
+# An old `Refs` is a mention the convention explicitly allows. Treating it as
+# a contradiction reported four changes as disagreeing with the board when the
+# derivation was what was wrong.
+check("an old mention is not a contradiction", False,
+      changes(snap, commits(released=scope(refs=[10])))[0].disagrees)
 snap = Snapshot((issue(11, fields={"Route": "Repository Change",
                                    "Phase": "Post-deployment"}),), 0.0, 0.0, 1, False)
 check("shipped and the board agrees", False,
-      changes(snap, commits(released=[11]))[0].disagrees)
+      changes(snap, commits(released=scope(closes=[11])))[0].disagrees)
 
 print()
 print("only deliveries get a row")

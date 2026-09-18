@@ -21,7 +21,18 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
-REFS = re.compile(r"\b(?:Refs|Closes|Fixes|Resolves)\s+#(\d+)", re.I)
+# **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
+# 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/3.6 §1132) is that
+# commits say `Refs #N` and **the deploy** is what closes them -- `Closes #N`
+# is correct only where the change never leaves the repository, because
+# nothing else will ever close it.
+#
+# So a `Refs` is evidence that work touched an issue and nothing more. Reading
+# the two as the same thing made an incidental mention of #10 in an old commit
+# report the Bot client harness as *released* while it sat at Scope, and then
+# reported the contradiction as though the board were at fault.
+CLOSES = re.compile(r"\b(?:Closes|Fixes|Resolves)\s+#(\d+)", re.I)
+MENTIONS = re.compile(r"\bRefs\s+#(\d+)", re.I)
 
 
 def _git(*args: str) -> str:
@@ -33,57 +44,84 @@ def _git(*args: str) -> str:
 
 
 @dataclass
-class Commits:
-    """Which commits name which issue, and which side of `origin/main` they sit."""
+class Scope:
+    """What a range of commits says about each issue, kept apart by strength."""
 
-    on_main: dict[int, list[str]] = field(default_factory=dict)
-    off_main: dict[int, list[str]] = field(default_factory=dict)
-    unreleased: dict[int, list[str]] = field(default_factory=dict)
-    released: dict[int, list[str]] = field(default_factory=dict)
+    closes: dict[int, list[str]] = field(default_factory=dict)
+    refs: dict[int, list[str]] = field(default_factory=dict)
+
+    def __contains__(self, number: int) -> bool:
+        return number in self.closes or number in self.refs
+
+    def count(self, number: int) -> int:
+        return len(self.closes.get(number, [])) + len(self.refs.get(number, []))
+
+
+@dataclass
+class Commits:
+    """Which commits name which issue, how strongly, and where they sit."""
+
+    off_main: Scope = field(default_factory=Scope)
+    unreleased: Scope = field(default_factory=Scope)
+    released: Scope = field(default_factory=Scope)
     unreleased_total: int = 0
     last_tag: str | None = None
 
     def state_of(self, number: int, live_at_merge: bool) -> str:
         """Where this change is. One rule, used by every block of R3.
 
-        `live_at_merge` is the Route's answer, not the type's: a Repository
-        Change reaches its users the moment it merges, so *merged, awaiting
-        release* would be wrong for it and it is simply live. Reading this
-        from the type instead of the Route is what made nine closed changes
-        pile up under "done, not yet released" when all of them were already
-        out.
+        Two things decide it, and neither is a field anybody maintains.
+
+        **How strongly a commit names the issue.** `Closes` completes it;
+        `Refs` only says work touched it. An open issue whose only evidence is
+        a `Refs` has not been delivered by that commit and must not read as
+        though it had.
+
+        **`live_at_merge`, from the Route and not the type.** A Repository
+        Change reaches its users the moment it merges, so *awaiting release*
+        is wrong for it. Reading this off the type made nine closed changes
+        pile up under "done, not yet released" when all of them were out.
+
+        Order is newest-work-first: asking "is it released" before "is work
+        happening" made an issue with old commits and a live branch read as
+        released, the one state that stops anybody looking at it again.
         """
-        # Order matters, and it is newest-work-first. Asking "is it released"
-        # before "is work happening" made an issue with old shipped commits
-        # and a live branch read as `released`, which is the one state that
-        # stops anybody looking at it again.
         if number in self.off_main:
             return "in progress"
-        if number in self.unreleased:
-            return "live" if live_at_merge else "merged, awaiting release"
-        if number in self.released:
+        if number in self.unreleased.closes:
+            return "closed by a commit on main"
+        if number in self.unreleased.refs:
+            return "merged" if live_at_merge else "merged, awaiting release"
+        if number in self.released.closes:
             return "released"
+        if number in self.released.refs:
+            # Named by a commit already in production. That is not delivery:
+            # the deploy closes an issue, and this one is still open.
+            return f"mentioned before {self.last_tag or 'the last release'}"
         return "not started"
 
 
 def commits(main: str = "origin/main") -> Commits:
     got = Commits()
 
-    def collect(rev: list[str]) -> dict[int, list[str]]:
-        found: dict[int, list[str]] = {}
+    def collect(rev: list[str]) -> Scope:
+        scope = Scope()
         text = _git("log", "--no-merges", "--format=%H%x1f%B%x1e", *rev)
         for entry in text.split("\x1e"):
             if "\x1f" not in entry:
                 continue
             sha, body = entry.split("\x1f", 1)
-            for number in {int(n) for n in REFS.findall(body)}:
-                found.setdefault(number, []).append(sha.strip())
-        return found
+            closing = {int(n) for n in CLOSES.findall(body)}
+            for number in closing:
+                scope.closes.setdefault(number, []).append(sha.strip())
+            # A commit that closes an issue is not also merely referencing it.
+            for number in {int(n) for n in MENTIONS.findall(body)} - closing:
+                scope.refs.setdefault(number, []).append(sha.strip())
+        return scope
 
     tags = [t for t in _git("tag", "--list", "prod-*", "--sort=-creatordate").split() if t]
     got.last_tag = tags[0] if tags else None
 
-    got.on_main = collect([main])
     got.off_main = collect(["--all", f"^{main}"])
     # Anything already in the last production tag is out, whatever the board
     # says. The board is a plan; the tag is what happened. What sits between
@@ -94,7 +132,7 @@ def commits(main: str = "origin/main") -> Commits:
         got.released = collect([got.last_tag])
         got.unreleased = collect([f"{got.last_tag}..{main}"])
     else:
-        got.unreleased = got.on_main
+        got.unreleased = collect([main])
         count = _git("rev-list", "--no-merges", "--count",
                      f"{got.last_tag}..{main}").strip()
         got.unreleased_total = int(count) if count.isdigit() else 0
