@@ -385,11 +385,13 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `inbox.sh` | R2 | asks, including comments |
 | `sync-pr-state.sh` | a write | `board` command |
 | `turn-check.sh` | the sweep | asks, `CACHED` |
-| `roadmap-diagram.py` | — | serves no report on this list. A candidate for deletion rather than conversion |
+| `roadmap-diagram.py` | **R8** | asks the model. Reformatted: it drew structure, and R8 wants sequence |
 | — | **R4** | **new** |
 | — | **R7** | **new, and temporary** |
 
-`roadmap-diagram.py` earning no row is the kind of thing deriving from purpose finds and deriving from the scripts cannot: working from the existing nine would have converted it without ever asking what it was for.
+`roadmap-diagram.py` was listed here with no report against it, and read as a candidate for deletion. That was wrong, and wrong in an instructive way: the report list was incomplete, not the script redundant. Owner, 2026-09-18: *"roadmap-diagram.py has a purpose but the format should be updated."*
+
+What it was missing was a **purpose stated independently of what it drew**. Asked for one, the answer is R8: dependencies are recorded on issues and no board view can show them, so something has to draw them. The script satisfied that need in the wrong format — it drew *structure*, what belongs to what, when what is wanted is *sequence*, what comes before what. Deriving from purpose caught that the format was wrong; it very nearly also concluded the script was, because a report missing from the list looks exactly like a script with no reason to exist.
 
 ## Parallel running, to catch what changes unexpectedly
 
@@ -415,5 +417,4 @@ The second row is the one to expect, and it is why the diff is worth running rat
 | --- | --- |
 | **where the snapshot is cached** | a file in `.logs/` is simplest. The risk is confined to reports by design, since nothing that decides reads a cache |
 | **whether the cache is worth having at all** | a full fetch is 4.6s and only `turn-check.sh` runs often enough to care. A design with no cache is simpler, consistent by construction, and 4.6s slower for the two consumers that would notice. It should be costed before the cache is built |
-| **whether `roadmap-diagram.py` should survive** | it has one call site and one reader. The job spec puts deleting in scope, and this is a candidate — but it is a `CACHED` consumer, so converting it is cheap and deleting it need not block the move |
 | **the cost of the grid being executable** | generating `check-transitions.sh` is a rewrite of a working script. The safer order is: model reports first, generation later, and possibly never |

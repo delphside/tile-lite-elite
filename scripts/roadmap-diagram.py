@@ -1,41 +1,43 @@
 #!/usr/bin/env python3
-"""Draw the roadmap from GitHub, as Mermaid.
+"""roadmap-diagram.py — R8: the roadmap as a Gantt without dates.
 
-**A flowchart, not a Gantt.** A Gantt needs a start and a target date per item,
-and this programme deliberately has neither: `Q1`-`Q3` on the Phase field order
-what is next without inventing dates (docs/4.8). Drawing a Gantt would mean
-inventing exactly what that choice avoids, so this draws what is actually
-recorded — what depends on what, and what belongs to what.
+Workstreams are swimlanes, sequencing runs left to right, and the bars are
+deliveries: work packages and standalone projects, the issues that carry a
+delivery milestone. Parent projects deliver nothing and so have no bar.
+Dependencies are drawn, because GitHub records them and the project board has
+no column that can show them.
 
-**Derived, never maintained.** The picture is generated from the issues each
-time it is asked for. A hand-drawn diagram is stale the first time something
-moves, and stale in a way nobody can see; this one cannot disagree with the
-data because it has no independent existence. Same reasoning as docs/4.9's
-"change history is derived from git".
+    scripts/roadmap-diagram.py                        # the whole roadmap
+    scripts/roadmap-diagram.py --parent 71            # one project's packages
+    scripts/roadmap-diagram.py --workstream "Client UI"
+    scripts/roadmap-diagram.py --write                # into 1.5-work-in-progress
+    scripts/roadmap-diagram.py --project 71           # one project's allocation
 
-Usage:
-    ./scripts/roadmap-diagram.py                 # every open project
-    ./scripts/roadmap-diagram.py --parent 71     # one project's work packages
-    ./scripts/roadmap-diagram.py --all           # requirements too
+**Derived, never maintained.** Generated from the issues each time it is asked
+for. A hand-drawn diagram is stale the first time something moves and stale in
+a way nobody can see; this one cannot disagree with the data because it has no
+independent existence — the same reasoning as docs/4.9's "change history is
+derived from git".
 
-It prints a fenced ```mermaid block, ready to paste into an issue or a document.
-GitHub renders it in both.
+Reads the board model, so "is this a delivery" is answered in one place
+(`scripts/board/model.py`) rather than re-derived here. Design:
+docs/changes/workstreams/delivery-tooling/383-one-board-model/
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import re
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
-FIELDS = "number,title,issueType,parent,blockedBy,blocking"
-PHASE_ORDER = [
-    "Scope", "Q3", "Q2", "Q1", "Design and Test Approach",
-    "Development", "User testing", "Deployment",
-    "Post-deployment", "Project Closedown",
-]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
+from board.roadmap import render                # noqa: E402
+from board.sources import Unavailable, fetch    # noqa: E402
 
 START = "<!-- roadmap-diagram:start -->"
 END = "<!-- roadmap-diagram:end -->"
@@ -49,32 +51,27 @@ def write_between_markers(path: str, block: str) -> None:
     they are absent is deliberate — a diagram appended to the wrong file, or
     silently replacing a document, is worse than not drawing one.
     """
-    text = open(path).read()
+    text = Path(path).read_text()
     if START not in text or END not in text:
         sys.exit(f"roadmap-diagram: {path} has no {START} / {END} markers")
     head, rest = text.split(START, 1)
     _, tail = rest.split(END, 1)
-    open(path, "w").write(f"{head}{START}\n\n{block}\n\n{END}{tail}")
+    Path(path).write_text(f"{head}{START}\n\n{block}\n\n{END}{tail}")
 
 
 def write_into_issue(number: int, block: str) -> None:
-    """Replace what is between the markers in an issue body.
-
-    Same contract as the file version: the markers are the boundary, and a body
-    without them is refused rather than appended to. An issue body is edited by
-    people, so overwriting one that never asked for a diagram would be worse
-    than not drawing it.
-    """
+    """Same contract as the file version: the markers are the boundary, and a
+    body without them is refused rather than appended to. An issue body is
+    edited by people, so overwriting one that never asked for a diagram would
+    be worse than not drawing it."""
     body = subprocess.run(["gh", "issue", "view", str(number), "--json", "body",
                            "--jq", ".body"], capture_output=True, text=True).stdout
     if START not in body or END not in body:
         sys.exit(f"roadmap-diagram: #{number} has no {START} / {END} markers in its body")
     head, rest = body.split(START, 1)
     _, tail = rest.split(END, 1)
-    new = f"{head}{START}\n\n{block}\n\n{END}{tail}"
-    import tempfile
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
-        fh.write(new)
+        fh.write(f"{head}{START}\n\n{block}\n\n{END}{tail}")
         path = fh.name
     out = subprocess.run(["gh", "issue", "edit", str(number), "--body-file", path],
                          capture_output=True, text=True)
@@ -82,24 +79,22 @@ def write_into_issue(number: int, block: str) -> None:
         sys.exit(f"roadmap-diagram: could not update #{number}: {out.stderr.strip()}")
 
 
-def project_diagram(number: int) -> list[str]:
-    """One project, its packages, and the requirements each expects to take.
+def project_diagram(number: int) -> str:
+    """One project's insides: its packages, and the requirements each takes.
 
-    The allocation is parsed out of the project's own body rather than held in
-    a field, because the owner's decision (2026-09-02) is that requirements fold
-    into the project and the split is recorded in its design: "allocating
-    requirements to work packages can be done within the project ... they can be
-    listed in the one project design document."
-
-    So the document is the source and this is a view of it. If they disagree,
-    the document is right and this is wrong, which is the way round it should be.
+    A different picture from the roadmap and still driven by the project's own
+    body, because the owner's decision (2026-09-02) is that the split lives in
+    the design document: "allocating requirements to work packages can be done
+    within the project ... they can be listed in the one project design
+    document." So the document is the source and this is a view of it. If they
+    disagree the document is right and this is wrong, which is the way round it
+    should be.
     """
     body = subprocess.run(["gh", "issue", "view", str(number), "--json", "body",
                            "--jq", ".body"], capture_output=True, text=True).stdout
-    subs = gh_json("issue", "view", str(number), "--json", "subIssues")
-    # subIssues is {nodes: [...]}, the same shape blockedBy has — the second
-    # time that assumption cost a crash, so it is written down here too.
-    nodes = ((subs.get("subIssues") or {}).get("nodes") or [])
+    out = subprocess.run(["gh", "issue", "view", str(number), "--json", "subIssues"],
+                         capture_output=True, text=True)
+    nodes = ((json.loads(out.stdout or "{}").get("subIssues") or {}).get("nodes") or [])
     titles = {n["number"]: n["title"] for n in nodes}
 
     # Rows read "| #253 no foreign keys | **#268 Core** | why |".
@@ -109,140 +104,74 @@ def project_diagram(number: int) -> list[str]:
         key = f"#{pkg} {name.strip().strip('*').strip()}".rstrip()
         packages.setdefault(key.strip(), []).append((int(req), titles.get(int(req), "")))
 
-    out = ["```mermaid", "flowchart TB"]
+    lines = ["```mermaid", "flowchart TB"]
     if not packages:
-        out.append(f'  n{number}["#{number}: no allocation table found in the body"]')
-        out.append("```")
-        return out
+        lines.append(f'  n{number}["#{number}: no allocation table found in the body"]')
+        lines.append("```")
+        return "\n".join(lines)
     for pkg, reqs in packages.items():
         pid = re.match(r"#(\d+)", pkg).group(1)
-        out.append(f'  subgraph p{pid}["{pkg}"]')
+        lines.append(f'  subgraph p{pid}["{pkg}"]')
         for req, title in reqs:
             t = (title or "").replace('"', "'").replace("[", "(").replace("]", ")")
-            out.append(f'    r{req}["#{req} {t[:40]}"]')
-        out.append("  end")
-    out.append("```")
-    return out
+            lines.append(f'    r{req}["#{req} {t[:40]}"]')
+        lines.append("  end")
+    lines.append("```")
+    return "\n".join(lines)
 
 
-def gh_json(*args: str):
-    out = subprocess.run(["gh", *args], capture_output=True, text=True)
-    if out.returncode != 0:
-        sys.exit(f"roadmap-diagram: gh failed: {out.stderr.strip()}")
-    return json.loads(out.stdout or "[]")
-
-
-def phases() -> dict[int, str]:
-    """Phase per issue, which the REST-shaped `gh issue list` does not carry."""
-    q = """{repository(owner:"delphside",name:"tile-lite-elite"){
-      issues(first:100,states:OPEN){nodes{number issueFieldValues(first:12){nodes{
-        ... on IssueFieldSingleSelectValue{name field{... on IssueFieldSingleSelect{name}}}}}}}}}"""
-    out = subprocess.run(["gh", "api", "graphql", "-f", f"query={q}"],
-                         capture_output=True, text=True)
-    if out.returncode != 0:
-        return {}
-    got = {}
-    for i in json.loads(out.stdout)["data"]["repository"]["issues"]["nodes"]:
-        for n in i["issueFieldValues"]["nodes"]:
-            if n and (n.get("field") or {}).get("name") == "Phase":
-                got[i["number"]] = n["name"]
-    return got
-
-
-def label(issue, phase: str | None) -> str:
-    # Quotes and brackets both end a Mermaid node label, so they go.
-    title = issue["title"].replace('"', "'").replace("[", "(").replace("]", ")")
-    if len(title) > 46:
-        title = title[:45] + "…"
-    tail = f"<br/><i>{phase}</i>" if phase else ""
-    return f'#{issue["number"]} {title}{tail}'
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--parent", type=int, help="only this issue's sub-issues")
-    ap.add_argument("--all", action="store_true", help="include requirements")
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--parent", type=int, metavar="N",
+                    help="only the work packages of project N")
+    ap.add_argument("--workstream", metavar="NAME", help="only this swimlane")
     ap.add_argument("--project", type=int, metavar="N",
-                    help="draw one project's insides: its work packages as boxes, "
-                         "with the requirements each is expected to take. The "
-                         "allocation is read from the table in the project's own "
-                         "body, so the document stays the only place it is written")
+                    help="a different picture: one project's work packages as "
+                         "boxes, with the requirements each is expected to "
+                         "take, read from the table in its own body")
     ap.add_argument("--write-issue", type=int, metavar="N",
                     help="replace the block between the markers in issue N's "
-                         "body, so the diagram lives with the project it draws")
+                         "body, so the diagram lives with what it draws")
     ap.add_argument("--write", metavar="FILE", nargs="?",
                     const="docs/1.5-work-in-progress.md",
                     help="replace the block between the roadmap-diagram markers "
-                         "in FILE, instead of printing. Defaults to "
-                         "docs/1.5-work-in-progress.md, which is the document "
-                         "that exists to be left open while working")
-    args = ap.parse_args()
+                         "in FILE instead of printing. Defaults to "
+                         "docs/1.5-work-in-progress.md, the document that "
+                         "exists to be left open while working")
+    args = ap.parse_args(argv)
 
     if args.project:
-        block = "\n".join(project_diagram(args.project))
-        if args.write_issue:
-            write_into_issue(args.write_issue, block)
-            sys.stderr.write(f"roadmap-diagram: updated #{args.write_issue}\n")
-        elif args.write:
-            write_between_markers(args.write, block)
-            sys.stderr.write(f"roadmap-diagram: updated {args.write}\n")
-        else:
-            sys.stdout.write(block + "\n")
-        return
+        block = project_diagram(args.project)
+    else:
+        try:
+            # No bodies: this reads fields, milestones and dependencies and no
+            # headings, and bodies are 2.7s of the 4.6s (sources.py).
+            snapshot = fetch(states="OPEN", with_bodies=False)
+        except Unavailable as exc:
+            # A source that did not answer is not an empty roadmap.
+            print(f"cannot say: {exc}", file=sys.stderr)
+            return 2
+        block, road = render(snapshot, args.parent, args.workstream)
+        if not road.deliveries:
+            print("roadmap-diagram: nothing to draw with that filter", file=sys.stderr)
+            return 1
+        if not road.edges:
+            print("note: no blocked-by relationships are recorded, so every "
+                  "delivery starts at the left.\n      Set them on the issues "
+                  "(GitHub's own dependencies) and run this again.",
+                  file=sys.stderr)
 
-    issues = gh_json("issue", "list", "--state", "open", "--limit", "100",
-                     "--json", FIELDS)
-    ph = phases()
-
-    def kind(i):
-        return (i.get("issueType") or {}).get("name", "")
-
-    wanted = issues if args.all else [i for i in issues
-                                      if kind(i) == "Project"]
-    if args.parent:
-        wanted = [i for i in wanted
-                  if (i.get("parent") or {}).get("number") == args.parent
-                  or i["number"] == args.parent]
-    nums = {i["number"] for i in wanted}
-
-    out: list[str] = ["```mermaid", "flowchart LR"]
-
-    def print(*a, **k):  # noqa: A001 — collect instead of emitting
-        out.append(" ".join(str(x) for x in a))
-
-    for i in sorted(wanted, key=lambda x: PHASE_ORDER.index(ph.get(x["number"], "Scope"))
-                    if ph.get(x["number"]) in PHASE_ORDER else 0):
-        text = '"' + label(i, ph.get(i["number"])) + '"'
-        # A work package is drawn as a stadium, a parent or solo project as a box.
-        shape = f"([{text}])" if i.get("parent") else f"[{text}]"
-        print(f'  n{i["number"]}{shape}')
-
-    edges = 0
-    for i in wanted:
-        # `blockedBy` is {nodes, totalCount}, not a list — the shape cost a
-        # crash the first time this ran, which is why it is named here.
-        for b in ((i.get("blockedBy") or {}).get("nodes") or []):
-            if b["number"] in nums:
-                print(f'  n{b["number"]} --> n{i["number"]}')
-                edges += 1
-        p = (i.get("parent") or {}).get("number")
-        if p in nums:
-            print(f'  n{p} -.- n{i["number"]}')
-    out.append("```")
-
-    if args.write:
-        write_between_markers(args.write, "\n".join(out))
+    if args.write_issue:
+        write_into_issue(args.write_issue, block)
+        sys.stderr.write(f"roadmap-diagram: updated #{args.write_issue}\n")
+    elif args.write:
+        write_between_markers(args.write, block)
         sys.stderr.write(f"roadmap-diagram: updated {args.write}\n")
     else:
-        sys.stdout.write("\n".join(out) + "\n")
-
-    if not edges:
-        print("", file=sys.stderr)
-        print("note: no blocked-by relationships are recorded, so the diagram shows",
-              file=sys.stderr)
-        print("      structure only. Set them on the issues and run this again.",
-              file=sys.stderr)
+        sys.stdout.write(block + "\n")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -34,6 +34,8 @@ query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
         parent { number }
         labels(first:20) { nodes { name } }
         subIssues(first:50) { nodes { number issueType { name } } }
+        blockedBy(first:20) { nodes { number } }
+        blocking(first:20) { nodes { number } }
         issueFieldValues(first:20) {
           nodes { ... on IssueFieldSingleSelectValue {
                     value field { ... on IssueFieldCommon { name } } } }
@@ -115,6 +117,15 @@ def _to_raw(node: dict) -> RawIssue:
         milestone=(node.get("milestone") or {}).get("title"),
         labels=frozenset(
             n["name"] for n in node.get("labels", {}).get("nodes", []) if n
+        ),
+        # `blockedBy` is {nodes: [...]}, not a list. The shape crashed
+        # roadmap-diagram.py the first time it ran, so it is named here once
+        # and never guessed at again.
+        blocked_by=frozenset(
+            n["number"] for n in (node.get("blockedBy") or {}).get("nodes", []) if n
+        ),
+        blocks=frozenset(
+            n["number"] for n in (node.get("blocking") or {}).get("nodes", []) if n
         ),
     )
 

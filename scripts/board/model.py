@@ -41,6 +41,10 @@ class RawIssue:
     parent: int | None
     milestone: str | None
     labels: frozenset[str]
+    # GitHub's own issue dependencies. The board cannot show them, which is
+    # why the roadmap diagram exists — owner, 2026-09-18.
+    blocked_by: frozenset[int] = frozenset()
+    blocks: frozenset[int] = frozenset()
 
 
 # --------------------------------------------------------------------------
@@ -173,6 +177,20 @@ class Issue:
     @property
     def labels(self) -> frozenset[str]:
         return self.raw.labels
+
+    # -- sequencing --------------------------------------------------------
+    @property
+    def blocked_by(self) -> frozenset[int]:
+        """What must finish first, as GitHub records it.
+
+        The project board has no column for this, so it is invisible until
+        something draws it: `scripts/roadmap-diagram.py` is that something.
+        """
+        return self.raw.blocked_by
+
+    @property
+    def blocks(self) -> frozenset[int]:
+        return self.raw.blocks
 
 
 @dataclass(frozen=True)

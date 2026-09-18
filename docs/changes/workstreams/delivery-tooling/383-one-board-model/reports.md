@@ -164,9 +164,39 @@ Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open re
 
 ---
 
+## R8 · What comes before what
+
+**Purpose.** Show the sequence and the dependencies between deliveries, which the project board cannot. Owner, 2026-09-18: *"essentially a gantt chart without dates, showing sequencing and dependencies between work packages ... We can add dependencies to issues but not show them on the board."*
+
+That last clause is the whole reason this report exists. GitHub records dependencies on the issue (`blockedBy`), and every board view drops them. So the only place the programme's sequence can be read is a drawing, and the drawing has to be generated or it is stale the first time anything moves.
+
+**Content.** One Mermaid diagram: swimlanes down, sequence across.
+
+1. **swimlanes are workstreams** — one lane per `Workstream`, and an unset workstream gets its own lane rather than disappearing
+2. **bars are deliveries** — work packages and standalone projects, which is to say the issues carrying a delivery milestone. Owner: *"Parent projects are not needed, only work packages as they have an associated delivery milestone"*
+3. **left to right is sequence, not time** — column *k* means *k* rounds of blockers stand in front of it. There are no dates and none are invented
+4. **anything unsequenced starts at the left** — owner: *"Where sequencing is not know things can just start at the left"*
+5. **each bar carries its milestone and phase**, so an unset milestone is visible in the picture rather than only in R4
+
+| the report must know | why |
+| --- | --- |
+| which issues are deliveries | blocks 2 — a parent has no bar |
+| `Workstream`, per delivery | block 1 |
+| `blockedBy`, per issue | blocks 3 and 4 |
+| a parent's work packages | to lift a dependency recorded against a parent |
+| milestone and `Phase` | block 5, and the shading |
+
+**A dependency recorded against a parent is drawn against every delivery it makes.** A parent has no bar, so the alternative is dropping the relationship — and the one dependency on the board today is exactly this shape (#10 waits for #71 One Game Model). Dropping it would have left the board's only recorded sequencing invisible, which is the defect this report exists to fix.
+
+**Phase does not order the columns.** Being at Development says a thing has started, not that anything waits on it. Only recorded dependencies move a bar right; Phase is shading.
+
+*Today: `roadmap-diagram.py`, which drew structure — what belongs to what — rather than sequence.*
+
+---
+
 ## What the reports need that the flows do not
 
-Reading R1 to R7 against `flows.md`, the reports ask for four things the gates never do:
+Reading R1 to R8 against `flows.md`, the reports ask for four things the gates never do:
 
 | | asked by | |
 | --- | --- | --- |
