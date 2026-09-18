@@ -88,6 +88,24 @@ A work package carries its own artefacts, test approach and post-deployment chec
 
 **Only one of the five is checked today**, and the check is the weak direction: `check-transitions.sh` reports a decision whose body reads as agreed while the field still says `Asked` — which is #382's current flag. Nothing checks that `Actioned` actually actioned anything.
 
+## Pull request, by `PR State`
+
+Owner, 2026-09-18: *"Pull Request is a particular type of issue in GitHub. All four types have templates which should be present on creation."*
+
+A pull request is what gives a review its mechanics: a diff, a place to comment, a recorded approval, a merge that waits for a tick. Its body is the review surface.
+
+| state | what the step is for | owes | evidence | status |
+| --- | --- | --- | --- | --- |
+| Drafting | the work is visible before it is ready to judge | a linked issue — `Refs #N` or `Closes #N` | body | `gap` |
+| Awaiting review | the reviewer can tell what is being asked | **what is being requested**; **what is deliberately left out**; owner added as reviewer | body, GitHub | `gap` |
+| Changes requested | the ask is recorded where the state is | the change noted under its own review item | body | `gap` |
+| Approved | it can merge | the review ticked; CI and e2e green for the head sha | GitHub | `now` |
+| merged | the record survives the branch | `Refs #N` in the commits; milestone or `pre-approved` resolved | git, GitHub | partly `now` |
+
+**Only one of the five is checked today**, and it is the one GitHub enforces for us. The two headings at `Awaiting review` are the owner's rule of 2026-09-17 and were in no template until 2026-09-18, so a pull request could reach review saying neither.
+
+**`Changes requested` has a mechanical trap already documented in `CLAUDE.md`**: making the changes without re-requesting the review leaves the board reading `Changes requested` and the work waiting on nobody. That is a `gap` this grid can close, because both halves are visible — the review state and whether a re-request followed.
+
 ## Closedown as a skill with a hook
 
 Owner, 2026-09-16: *"Closedown is a skill with a hook."*

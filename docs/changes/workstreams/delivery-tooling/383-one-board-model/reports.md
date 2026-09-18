@@ -100,6 +100,17 @@ The finding says the field was unset and what it was taken to be, because an iss
 
 Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open requirements with `Stage` unset.** So both are prevention. Two routes keep them necessary — a blank issue from the GitHub UI, which no `config.yml` disables, and the API, which requires no type.
 
+**All four types have a template, and it is the template that makes the obligations present at creation.** Owner, 2026-09-18. Three issue templates set their type and ask for the minimum their first step owes; `PULL_REQUEST_TEMPLATE.md` is the fourth.
+
+| type | template | sets the type |
+| --- | --- | --- |
+| Requirement | `.github/ISSUE_TEMPLATE/requirement.yml` | yes |
+| Project | `.github/ISSUE_TEMPLATE/project.yml` | yes |
+| Decision | `.github/ISSUE_TEMPLATE/decision.yml` | yes |
+| Pull request | `.github/PULL_REQUEST_TEMPLATE.md` | GitHub's own type |
+
+**A template drifting from the grid is a defect this report can find**, and one had: the pull request template dated from 2026-08-19 and asked for *"what the change is, and why"*, while the rule since 2026-09-17 asks for **which part of the project's scope is being requested and what is deliberately left out**. Nothing compared the two, so every pull request raised in between was prompted for the wrong thing. R4 checking the grid per issue is what would have caught it.
+
 **This is the report that does not exist today**, and its absence is why the grid in `obligations.md` could sit with a wrong row in it. Twenty-eight obligations, twelve enforced: this makes all twenty-eight visible, and the sixteen unenforced ones answer *not checked* rather than silently passing.
 
 **It is a report and not a gate**, at least first. Sixteen obligations arriving as refusals would refuse most of the open board. A gate refuses and work stops; a check reports and a person decides, and this starts as the second.

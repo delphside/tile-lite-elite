@@ -84,8 +84,13 @@ Issue                     what every issue has; step is abstract
 │   ├── ParentProject     owns requirements and design; no route, no milestone
 │   ├── WorkPackage       one delivery; carries route and milestone
 │   └── StandaloneProject one delivery, no children; carries both
-└── Decision              step = Decision State
+├── Decision              step = Decision State
+└── PullRequest           step = PR State
 ```
+
+**A pull request is an issue.** Owner, 2026-09-18: *"Pull Request is a particular type of issue in GitHub."* GitHub models it that way and so should we — it has a number, a body, a state, comments and reviewers, and the board already carries a `PR State` field for it. Leaving it out would put the review surface outside the model while every other artefact is inside, which is how `sync-pr-state.sh` came to hold its own picture of the board.
+
+Its step is the `PR State` that `sync-pr-state.sh` derives today: `Drafting`, `Awaiting review`, `Approved`, `Changes requested`, and merged. That derivation belongs in the model with the rest.
 
 **`is_parent` stops being a predicate and becomes a class.** A factory reads the GitHub type and, for a project, its sub-issue shape:
 
@@ -168,6 +173,8 @@ and the facts that only some classes have, which is the point of having classes:
 | `deliveries` | `ParentProject` | what it delivers, and through which packages |
 | `commits_naming_it`, `commits_naming_its_parent` | `WorkPackage` | kept apart — #375 |
 | `agreed`, `open_actions` | `Decision` | the body headings `check-transitions` reads |
+| `review_decision`, `is_draft`, `reviewers` | `PullRequest` | the `PR State` derivation, which lives here rather than in a script |
+| `requests`, `leaves_out` | `PullRequest` | the two headings the review surface owes |
 | `is_built`, `is_closable` | `WorkPackage`, `StandaloneProject` | one implementation each; three scripts ask each today |
 | `body` | all, **fetched on demand** | 2.7s of the 4.6s fetch, and only R4 and the decision checks need it |
 

@@ -1,9 +1,29 @@
 <!-- markdownlint-disable-file MD041 -->
 <!--
-What the change is, and why. Enough that the reviewer knows what to look for
-before they open a file.
+The body is the review surface. Say what is being asked for, not what the
+issue already says — the argument, the measurements and the design live there,
+and a body that restates them makes the reviewer read the same thing twice to
+find the one paragraph that is new.
+
+Add the owner as reviewer at creation.
 
 Refs #N — or Closes #N in the merge lane, where nothing else will ever close it.
+-->
+
+## What is being requested
+
+<!--
+Which part of the project's scope this delivers. Named against the project, so
+a reviewer can tell what is now done from what is still owed.
+-->
+
+## What is deliberately left out
+
+<!--
+Scope this pull request does not carry, and why — a later delivery, a
+dependency not ready, a decision still open. "Nothing" is a valid answer and is
+worth writing, because a blank heading reads as an oversight rather than as a
+decision.
 -->
 
 ## Review
@@ -14,6 +34,8 @@ comments stay together, and a review that produced changes still reads as one
 thing afterwards.
 
 - [ ] the change does what the issue asked
+      >
+- [ ] what is left out is deliberate, and named above
       >
 
 ### Any other comments
