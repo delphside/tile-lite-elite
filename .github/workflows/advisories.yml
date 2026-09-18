@@ -109,7 +109,15 @@ jobs:
             printf 'Everything unreachable is filtered by `.cargo/audit.toml`, so each\n'
             printf 'finding below is one somebody can act on. Untriaged — #297 R3.\n\n'
             printf '```\n'
-            cat /tmp/audit.txt
+            # **Strip the colour.** `cargo audit` writes ANSI to the pipe and
+            # `tee` keeps it, so the issue body arrived as `^[[0m^[[1m^[[31m`
+            # around every field. The finding was legible only to somebody
+            # willing to read past it, which is exactly what #297 R3 says a
+            # report must not require -- and #297's own post-deployment check
+            # ("readable without opening the run") is what caught it.
+            # Both forms: the real ESC in the file, and the literal `^[`
+            # GitHub rewrites it to if any survives to the API.
+            sed -r 's/(\x1b|\^\[)\[[0-9;]*[a-zA-Z]//g' /tmp/audit.txt
             printf '```\n'
           } > /tmp/body.md
 

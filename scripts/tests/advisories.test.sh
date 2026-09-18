@@ -101,6 +101,26 @@ if block:
     check("and flags nothing as reasonless", False, "NO REASON RECORDED" in out.stdout)
 
 print()
+print("the report is readable, not raw terminal output")
+# cargo audit writes ANSI to the pipe and tee keeps it. #384 arrived with
+# `^[[0m^[[1m^[[31m` around every field -- legible only to somebody willing to
+# read past it, which is what #297 R3 says a report must not require.
+check("the colour is stripped before the body is written",
+      True, "sed -r" in wf and "/tmp/audit.txt" in wf and "[0-9;]*[a-zA-Z]" in wf)
+# GitHub rewrites a real ESC to the literal "^[" on the way in, so #384 could
+# not be cleaned by matching \x1b alone. Both forms are handled.
+check("and the literal ^[ form too", True, r"\^\[" in wf)
+check("and the raw file is not pasted in", False, "cat /tmp/audit.txt" in wf)
+# Run the workflow's OWN line, not a hand-written copy of it: a test that
+# writes its own expression proves only that the test author can write sed.
+line = [l for l in wf.splitlines() if l.strip().startswith("sed -r")][0].strip()
+sample = "\x1b[0m\x1b[1m\x1b[31mCrate:\x1b[0m rustls\n^[[31merror:^[[0m 1 found\n"
+out = subprocess.run(["bash", "-c", line.replace("/tmp/audit.txt", "-")],
+                     input=sample, capture_output=True, text=True)
+check("the workflow's own expression removes both forms",
+      "Crate: rustls\nerror: 1 found", out.stdout.strip())
+
+print()
 print("R2's scope: actions are watched, crates deliberately are not")
 check("github-actions is watched", True, "package-ecosystem: github-actions" in dependabot)
 check("cargo is not, because advisories.yml answers that question",
