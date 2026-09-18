@@ -364,7 +364,22 @@ unmerged_branch_for_issue() {
 }
 
 state_of_issue() {
-  local num="$1" type="${2:-}" branch unmerged
+  local num="$1" type="${2:-}" kind="${3:-}" branch unmerged
+
+  # **A decision is not a change vehicle.** `CLAUDE.md`: *"It routes work ...
+  # So it takes no semver and no letter milestone, and no delivery-log row."*
+  # Asking it when it ships is the parent-and-Route defect on another artefact:
+  # the fallback below reads `Type of change`, a decision carries none, and it
+  # fell through to "merged, awaiting release" — D54 sat under that on
+  # 2026-09-18, awaiting a release it can never be in.
+  if [[ "$kind" == "Decision" ]]; then
+    if [[ "$(git rev-list --count origin/main -E --grep="Refs #${num}([^0-9]|\$)" 2>/dev/null || echo 0)" != "0" ]]; then
+      echo "actioned — it routes work and ships nothing"
+    else
+      echo "open — it routes work and ships nothing"
+    fi
+    return
+  fi
   branch="$(branch_for_issue "$num")"
   [[ -z "$branch" ]] && branch="$(remote_branch_for_issue "$num")"
 
@@ -436,7 +451,7 @@ state_of_issue() {
 issues_with_type() {
   gh api graphql -f query="{ repository(owner: \"$REPO_OWNER\", name: \"$REPO_NAME\") {
       issues(states: ${1^^}, first: 100, orderBy:{field:CREATED_AT, direction:ASC}) {
-        nodes { number title milestone { title }
+        nodes { number title milestone { title } issueType { name }
                 issueFieldValues(first: 10) {
                   nodes { ... on IssueFieldSingleSelectValue {
                             value field { ... on IssueFieldCommon { name } } } } } } } } }" \
@@ -444,7 +459,8 @@ issues_with_type() {
           | [ .number,
               .title,
               ([.issueFieldValues.nodes[]? | select(.field.name == "Type of change") | .value] | first // "-"),
-              (.milestone.title // "-") ]
+              (.milestone.title // "-"),
+              (.issueType.name // "-") ]
           | @tsv' 2>/dev/null || true
 }
 
@@ -564,7 +580,7 @@ ISSUES="$(issues_with_type open)"
 if [[ -z "$ISSUES" ]]; then
   echo "    (none open)"
 else
-  while IFS=$'\t' read -r num title toc milestone; do
+  while IFS=$'\t' read -r num title toc milestone kind; do
     [[ -z "$num" ]] && continue
     # `-` is the placeholder the query emits for an empty field. Tab is IFS
     # whitespace, so bash collapses a run of them: an unset `Type of change`
@@ -574,8 +590,9 @@ else
     # there.
     [[ "$toc" == "-" ]] && toc=""
     [[ "$milestone" == "-" ]] && milestone=""
+    [[ "$kind" == "-" ]] && kind=""
     TYPE="$(type_of "$toc")"
-    state="$(state_of_issue "$num" "$TYPE")"
+    state="$(state_of_issue "$num" "$TYPE" "$kind")"
     [[ -n "$milestone" ]] && state="$state · $milestone"
     printf "    %-4s %s %-16s %s\n" "$num" "$(fit_title "$title")" "$TYPE" "$state"
   done <<< "$(printf '%s' "$ISSUES" | sort -n)"

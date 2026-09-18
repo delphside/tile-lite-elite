@@ -84,6 +84,12 @@ A work package carries its own artefacts, test approach and post-deployment chec
 
 ## Decision, by `Decision State`
 
+**A decision owes no milestone, and nothing should ask it for one.** Owner, 2026-09-18: *"Decisions don't get milestones. They aren't delivered. They may be children of projects that do the delivery."* `CLAUDE.md` already said it — *"it takes no semver and no letter milestone, and no delivery-log row"* — and `status.sh` asked anyway, falling through to *"merged, awaiting release"* because a decision carries no `Type of change` to branch on. D54 sat under that label on 2026-09-18, awaiting a release it can never be in.
+
+That is the third artefact caught being asked for something it does not have, after a requirement and a parent project. The shape is always the same: a consumer reads a field the artefact never carries, finds nothing, and reports the absence as a defect in the issue rather than in the question.
+
+A decision **may** have a parent, where a project carries out what it decided. That is how the delivery is tracked, and its absence is not a defect.
+
 | state | what the step is for | owes | evidence | status |
 | --- | --- | --- | --- | --- |
 | Asked | the question is answerable as put | a question, options, and what turns on it | body | `gap` |

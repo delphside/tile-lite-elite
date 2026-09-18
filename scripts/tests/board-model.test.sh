@@ -109,6 +109,22 @@ check("answered post-deployment checks are not reported as missing",
       Answer.MET, ids.get("wp-post-deployment"))
 
 print()
+print("a decision ships nothing, so it owes no milestone")
+d = classify(issue(382, kind="Decision", fields={"Decision State": "Decided"},
+                   body="## Agreed Decision\n\nAccepted.\n"))
+ids = {f.obligation.id: f.answer for f in assess(d)}
+check("a decision with no milestone is fine", Answer.MET,
+      ids.get("decision-no-milestone"))
+check("a decision is never asked for a Route", None, ids.get("delivery-route"))
+check("nor for a delivery milestone", None, ids.get("wp-milestone"))
+
+d = classify(issue(382, kind="Decision", fields={"Decision State": "Decided"},
+                   milestone="0.8.1", body="## Agreed Decision\n\nAccepted.\n"))
+ids = {f.obligation.id: f.answer for f in assess(d)}
+check("a decision carrying a milestone is reported", Answer.MISSING,
+      ids.get("decision-no-milestone"))
+
+print()
 print("a section includes its subheadings")
 body = """## Test approach
 

@@ -274,6 +274,20 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         None,  # gap
     ),
     Obligation(
+        "decision-no-milestone", (Decision,), ANY_STEP,
+        "no milestone",
+        "a decision is not a change vehicle: it routes work and ships nothing, "
+        "so it takes no semver and no letter milestone — CLAUDE.md",
+        lambda i: i.raw.milestone is None,
+    ),
+    Obligation(
+        "decision-parent", (Decision,), ANY_STEP,
+        "a parent, where a project carries out what it decided",
+        "a decision may be a child of the project that does the delivery — "
+        "owner, 2026-09-18",
+        None,  # gap: a decision need not have one, so absence is not a defect
+    ),
+    Obligation(
         "decision-agreed", (Decision,), ("Decided", "Actioned"),
         "an `Agreed Decision` heading with an answer under it",
         "it is settled, and the answer is where it will be found",
