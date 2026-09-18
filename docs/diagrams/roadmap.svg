@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="676" height="1768" viewBox="0 0 676 1768" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="676" height="1768" fill="#ffffff"/>
+<text x="278" y="36" text-anchor="middle" font-size="11" font-weight="600" fill="#5a6472">can start now</text>
+<text x="548" y="36" text-anchor="middle" font-size="11" font-weight="600" fill="#5a6472">after 1 round</text>
+<rect x="16" y="50" width="644" height="222" fill="#ffffff"/>
+<line x1="16" y1="50" x2="660" y2="50" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="153" font-size="11.5" font-weight="700" fill="#111418">Application &amp; Game</text>
+<text x="26" y="167" font-size="11.5" font-weight="700" fill="#111418">Architecture</text>
+<rect x="166" y="57" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="72" font-size="11" font-weight="700" fill="#111418">#268 · WP A</text>
+<text x="175" y="86" font-size="10.5" fill="#111418">Core Game Lifecycle</text>
+<text x="175" y="110" font-size="9.5" font-style="italic" fill="#5a6472">1.0.0 · Q1</text>
+<rect x="166" y="131" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="146" font-size="11" font-weight="700" fill="#111418">#270 · WP C</text>
+<text x="175" y="160" font-size="10.5" fill="#111418">Additional Game Lifecycle</text>
+<text x="175" y="184" font-size="9.5" font-style="italic" fill="#5a6472">1.0.0 · Q2</text>
+<rect x="166" y="205" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="220" font-size="11" font-weight="700" fill="#111418">#272 · WP E</text>
+<text x="175" y="234" font-size="10.5" fill="#111418">Undo and Redo</text>
+<text x="175" y="258" font-size="9.5" font-style="italic" fill="#5a6472">1.0.0 · Q3</text>
+<rect x="16" y="272" width="644" height="296" fill="#f6f8fa"/>
+<line x1="16" y1="272" x2="660" y2="272" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="412" font-size="11.5" font-weight="700" fill="#111418">Authentication &amp;</text>
+<text x="26" y="426" font-size="11.5" font-weight="700" fill="#111418">Authorisation</text>
+<rect x="166" y="279" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
+<text x="175" y="294" font-size="11" font-weight="700" fill="#111418">#295</text>
+<text x="175" y="308" font-size="10.5" fill="#111418">Admin CLI: sign an account out, so</text>
+<text x="175" y="320" font-size="10.5" fill="#111418">the delete refusal has a remedy</text>
+<text x="175" y="332" font-size="9.5" font-style="italic" fill="#5a6472">0.8.0 · Post-deployment</text>
+<rect x="166" y="353" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
+<text x="175" y="368" font-size="11" font-weight="700" fill="#111418">#362 · WP A Del 1 of 2</text>
+<text x="175" y="382" font-size="10.5" fill="#111418">the form asks for a User ID, and the</text>
+<text x="175" y="394" font-size="10.5" fill="#111418">invite field for a User</text>
+<text x="175" y="406" font-size="9.5" font-style="italic" fill="#5a6472">0.8.0 · Post-deployment</text>
+<rect x="166" y="427" width="224" height="60" rx="5" fill="#e6efff" stroke="#5b7fbd" stroke-width="1"/>
+<text x="175" y="442" font-size="11" font-weight="700" fill="#111418">#363 · WP B Del 2 of 2</text>
+<text x="175" y="456" font-size="10.5" fill="#111418">the rules a display name must follow</text>
+<text x="175" y="480" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Design and Test…</text>
+<rect x="166" y="501" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="516" font-size="11" font-weight="700" fill="#111418">#296</text>
+<text x="175" y="530" font-size="10.5" fill="#111418">Account states: leaving, and being</text>
+<text x="175" y="542" font-size="10.5" fill="#111418">stopped from playing</text>
+<text x="175" y="554" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q1</text>
+<rect x="16" y="568" width="644" height="74" fill="#ffffff"/>
+<line x1="16" y1="568" x2="660" y2="568" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="597" font-size="11.5" font-weight="700" fill="#111418">Capacity Planning</text>
+<rect x="166" y="575" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="590" font-size="11" font-weight="700" fill="#111418">#291</text>
+<text x="175" y="604" font-size="10.5" fill="#111418">Capacity planning: what is consumed,</text>
+<text x="175" y="616" font-size="10.5" fill="#111418">against what ceiling</text>
+<text x="175" y="628" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q1</text>
+<rect x="16" y="642" width="644" height="74" fill="#f6f8fa"/>
+<line x1="16" y1="642" x2="660" y2="642" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="671" font-size="11.5" font-weight="700" fill="#111418">Client Management</text>
+<rect x="166" y="649" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="664" font-size="11" font-weight="700" fill="#111418">#293</text>
+<text x="175" y="678" font-size="10.5" fill="#111418">The desktop client: a product with</text>
+<text x="175" y="690" font-size="10.5" fill="#111418">somewhere to download it, or a…</text>
+<text x="175" y="702" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q1</text>
+<rect x="16" y="716" width="644" height="222" fill="#ffffff"/>
+<line x1="16" y1="716" x2="660" y2="716" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="819" font-size="11.5" font-weight="700" fill="#111418">Client UI</text>
+<rect x="166" y="723" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="738" font-size="11" font-weight="700" fill="#111418">#290 · WP F</text>
+<text x="175" y="752" font-size="10.5" fill="#111418">the client is a major version behind</text>
+<text x="175" y="764" font-size="10.5" fill="#111418">on dioxus</text>
+<text x="175" y="776" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q1</text>
+<rect x="166" y="797" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="812" font-size="11" font-weight="700" fill="#111418">#269 · WP B</text>
+<text x="175" y="826" font-size="10.5" fill="#111418">Core Client UI</text>
+<text x="175" y="850" font-size="9.5" font-style="italic" fill="#5a6472">1.0.0 · Q2</text>
+<rect x="166" y="871" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="886" font-size="11" font-weight="700" fill="#111418">#271 · WP D</text>
+<text x="175" y="900" font-size="10.5" fill="#111418">Additional Client UI</text>
+<text x="175" y="924" font-size="9.5" font-style="italic" fill="#5a6472">1.0.0 · Q3</text>
+<rect x="16" y="938" width="644" height="370" fill="#f6f8fa"/>
+<line x1="16" y1="938" x2="660" y2="938" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="1115" font-size="11.5" font-weight="700" fill="#111418">Delivery Tooling</text>
+<rect x="166" y="945" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
+<text x="175" y="960" font-size="11" font-weight="700" fill="#111418">#252</text>
+<text x="175" y="974" font-size="10.5" fill="#111418">Test accounts have no suite or run,</text>
+<text x="175" y="986" font-size="10.5" fill="#111418">and are identified by a bare name…</text>
+<text x="175" y="998" font-size="9.5" font-style="italic" fill="#5a6472">pre-approved · Post-deployment</text>
+<rect x="166" y="1019" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
+<text x="175" y="1034" font-size="11" font-weight="700" fill="#111418">#373 · WP A Del 1 of 2</text>
+<text x="175" y="1048" font-size="10.5" fill="#111418">the lockfile, so the advisory check</text>
+<text x="175" y="1060" font-size="10.5" fill="#111418">does not arrive already red</text>
+<text x="175" y="1072" font-size="9.5" font-style="italic" fill="#5a6472">0.8.0 · Post-deployment</text>
+<rect x="166" y="1093" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
+<text x="175" y="1108" font-size="11" font-weight="700" fill="#111418">#374 · WP B Del 2 of 2</text>
+<text x="175" y="1122" font-size="10.5" fill="#111418">the advisory check, dependabot and</text>
+<text x="175" y="1134" font-size="10.5" fill="#111418">the ignore list</text>
+<text x="175" y="1146" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Post-deployment</text>
+<rect x="166" y="1167" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1182" font-size="11" font-weight="700" fill="#111418">#326</text>
+<text x="175" y="1196" font-size="10.5" fill="#111418">Nothing checks that the field values</text>
+<text x="175" y="1208" font-size="10.5" fill="#111418">the tooling matches still exist</text>
+<text x="175" y="1220" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
+<rect x="166" y="1241" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1256" font-size="11" font-weight="700" fill="#111418">#355 · WP B Del 2 of 2</text>
+<text x="175" y="1270" font-size="10.5" fill="#111418">one tooling across every environment</text>
+<text x="175" y="1294" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
+<rect x="16" y="1308" width="644" height="74" fill="#ffffff"/>
+<line x1="16" y1="1308" x2="660" y2="1308" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="1337" font-size="11.5" font-weight="700" fill="#111418">Engine Player</text>
+<rect x="436" y="1315" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="445" y="1330" font-size="11" font-weight="700" fill="#111418">#10</text>
+<text x="445" y="1344" font-size="10.5" fill="#111418">Bot client harness: run an engine as</text>
+<text x="445" y="1356" font-size="10.5" fill="#111418">an external client</text>
+<text x="445" y="1368" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
+<rect x="16" y="1382" width="644" height="148" fill="#f6f8fa"/>
+<line x1="16" y1="1382" x2="660" y2="1382" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="1448" font-size="11.5" font-weight="700" fill="#111418">Game Rules</text>
+<rect x="166" y="1389" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1404" font-size="11" font-weight="700" fill="#111418">#292</text>
+<text x="175" y="1418" font-size="10.5" fill="#111418">The word lists: one greylist for</text>
+<text x="175" y="1430" font-size="10.5" fill="#111418">every edition, and a generated file…</text>
+<text x="175" y="1442" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q1</text>
+<rect x="166" y="1463" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1478" font-size="11" font-weight="700" fill="#111418">#300</text>
+<text x="175" y="1492" font-size="10.5" fill="#111418">The rules-shared data structures:</text>
+<text x="175" y="1504" font-size="10.5" fill="#111418">board size, letter encoding, and…</text>
+<text x="175" y="1516" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Q2</text>
+<rect x="16" y="1530" width="644" height="222" fill="#ffffff"/>
+<line x1="16" y1="1530" x2="660" y2="1530" stroke="#d8dee6" stroke-width="1"/>
+<text x="26" y="1633" font-size="11.5" font-weight="700" fill="#111418">Operations &amp;</text>
+<text x="26" y="1647" font-size="11.5" font-weight="700" fill="#111418">Infrastructure</text>
+<rect x="166" y="1537" width="224" height="60" rx="5" fill="#e6efff" stroke="#5b7fbd" stroke-width="1"/>
+<text x="175" y="1552" font-size="11" font-weight="700" fill="#111418">#224</text>
+<text x="175" y="1566" font-size="10.5" fill="#111418">Monitoring and alarming: report what</text>
+<text x="175" y="1578" font-size="10.5" fill="#111418">we did, do not interrogate the…</text>
+<text x="175" y="1590" font-size="9.5" font-style="italic" fill="#5a6472">0.8.1 · Design and Test Approach</text>
+<rect x="166" y="1611" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1626" font-size="11" font-weight="700" fill="#111418">#241</text>
+<text x="175" y="1640" font-size="10.5" fill="#111418">Nobody has ever rebuilt this</text>
+<text x="175" y="1652" font-size="10.5" fill="#111418">instance, and rehearsal has no…</text>
+<text x="175" y="1664" font-size="9.5" font-style="italic" fill="#5a6472">no-release · Q1</text>
+<rect x="166" y="1685" width="224" height="60" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
+<text x="175" y="1700" font-size="11" font-weight="700" fill="#111418">#360</text>
+<text x="175" y="1714" font-size="10.5" fill="#111418">Rehearsal and production have drifted</text>
+<text x="175" y="1726" font-size="10.5" fill="#111418">apart, and nothing says how either i…</text>
+<text x="175" y="1738" font-size="9.5" font-style="italic" fill="#5a6472">0.8.1 · Scope</text>
+<line x1="16" y1="1752" x2="660" y2="1752" stroke="#d8dee6" stroke-width="1"/>
+<path d="M 390 87 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+<path d="M 390 827 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+<path d="M 390 161 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+<path d="M 390 901 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+<path d="M 390 235 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+<path d="M 390 753 H 413.0 V 1345 H 429" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
+<polygon points="436,1345 429,1341.4 429,1348.6" fill="#3d6fb4"/>
+</svg>

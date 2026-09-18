@@ -34,6 +34,7 @@ inventing an order to look busier.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .model import Issue, ParentProject, StandaloneProject, WorkPackage, classify
@@ -177,68 +178,212 @@ def build(snapshot: Snapshot, parent: int | None = None,
     return road
 
 
-def draw(road: Roadmap) -> str:
-    """The Mermaid, plus the caption that says what the picture cannot."""
-    out = ["```mermaid", "flowchart LR"]
+def _wrap(text: str, width_px: float, char_px: float, lines: int) -> list[str]:
+    """Greedy wrap, because SVG has no flow layout and GitHub strips the
+    foreignObject that would give us one. Measured in characters at an average
+    advance, which is approximate and only has to be close: the bar is fixed
+    width and the last line is clipped with an ellipsis if it overruns."""
+    per_line = max(1, int(width_px / char_px))
+    words, out, cur = text.split(), [], ""
+    for word in words:
+        trial = f"{cur} {word}".strip()
+        if len(trial) <= per_line:
+            cur = trial
+            continue
+        if cur:
+            out.append(cur)
+        cur = word
+        if len(out) == lines:
+            break
+    if cur and len(out) < lines:
+        out.append(cur)
+    if not out:
+        return [""]
+    dropped = len(" ".join(out)) < len(text.rstrip())
+    if dropped:
+        last = out[-1]
+        out[-1] = (last[: per_line - 1].rstrip() + "\u2026") if len(last) >= per_line - 1 \
+            else last + "\u2026"
+    return out
 
-    for index, (lane, issues) in enumerate(road.lanes.items()):
-        out.append(f'  subgraph lane{index}["{_clean(lane, 40)}"]')
-        out.append("    direction LR")
+
+_TAG = re.compile(r"^#\d+\s+(WP [A-Z](?: Del \d+ of \d+)?):\s*(.*)$")
+
+
+def _split_title(issue: Issue) -> tuple[str, str]:
+    """`#297 WP B Del 2 of 2: the advisory check...` is two facts in one string.
+
+    Which delivery of which parent belongs on the identifier line; the rest is
+    what it actually does. Splitting them is what stops a bar wrapping to four
+    lines of mostly punctuation.
+    """
+    match = _TAG.match(issue.title)
+    if match:
+        return f"#{issue.number} \u00b7 {match.group(1)}", match.group(2)
+    return f"#{issue.number}", re.sub(r"^#\d+\s+", "", issue.title)
+
+
+def _esc(text: str) -> str:
+    return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+
+# Geometry. A bar is fixed width because a Gantt bar's width means duration,
+# and this chart has no durations -- letting them vary would imply one.
+PAD, GUTTER, HEADER = 16, 150, 34
+BAR_W, BAR_H, COL_GAP, ROW_H = 224, 60, 46, 74
+
+BAND = ("#ffffff", "#f6f8fa")
+FILL = {"planned": ("#eef2f7", "#8895a7"), "designing": ("#e6efff", "#5b7fbd"),
+        "building": ("#fff4d6", "#c99700"), "landed": ("#e4f4e4", "#4c9a4c")}
+INK, MUTED, ARROW = "#111418", "#5a6472", "#3d6fb4"
+
+
+def _rows(road: Roadmap) -> tuple[dict[int, tuple[int, int]], dict[str, int]]:
+    """Give every bar a (row, column). Rows pack greedily within a lane.
+
+    A chain stays on one row where the slots are free, which is what makes a
+    sequence read as a sequence rather than as a staircase. Each bar occupies
+    exactly one column, so two bars share a row whenever their columns differ.
+    """
+    place: dict[int, tuple[int, int]] = {}
+    heights: dict[str, int] = {}
+    for lane, issues in road.lanes.items():
+        taken: list[set[int]] = []
         for issue in issues:
-            milestone = issue.raw.milestone or "milestone not set"
-            phase = issue.step or "phase not set"
-            label = (f"#{issue.number} {_clean(issue.title, 46)}"
-                     f"<br/><i>{_clean(milestone, 20)} · {_clean(phase, 24)}</i>")
-            out.append(f'    n{issue.number}["{label}"]:::{_band(issue.step)}')
-        out.append("  end")
+            col = road.rank[issue.number]
+            row = next((r for r, used in enumerate(taken) if col not in used), len(taken))
+            if row == len(taken):
+                taken.append(set())
+            taken[row].add(col)
+            place[issue.number] = (row, col)
+        heights[lane] = max(1, len(taken))
+    return place, heights
 
-    for f, t in road.edges:
-        out.append(f"  n{f} --> n{t}")
 
-    out += [
-        "  classDef planned fill:#eef2f7,stroke:#8895a7,color:#111",
-        "  classDef designing fill:#e6efff,stroke:#5b7fbd,color:#111",
-        "  classDef building fill:#fff4d6,stroke:#c99700,color:#111",
-        "  classDef landed fill:#e4f4e4,stroke:#4c9a4c,color:#111",
-        "```",
-    ]
+def draw(road: Roadmap) -> str:
+    """The chart as SVG.
 
+    **Not Mermaid, and the reason is worth recording.** A `flowchart LR` with
+    one `subgraph` per workstream is the obvious encoding and it does not
+    work. Rendered and looked at: without `direction LR` a dependency is drawn
+    top-to-bottom, which inverts the one thing the chart is for; with it, a
+    single edge between two lanes makes dagre place the lanes *side by side*
+    as columns instead of stacking them as bands, and the swimlanes are gone.
+    That is not an edge case -- it is the board's shape today, where #10 waits
+    on packages in two other workstreams. Mermaid has no swimlane primitive
+    for flowcharts, so the grid is drawn here instead.
+
+    Written to be safe through GitHub's SVG sanitiser: no `<style>`, no
+    `<defs>`, no `<marker>`, no `foreignObject`. Presentation attributes only,
+    arrowheads as explicit polygons, and an opaque background so the chart is
+    readable under a dark theme, which GitHub does not recolour.
+    """
+    place, heights = _rows(road)
+    ncols = max((c for _, c in place.values()), default=0) + 1
+    width = PAD * 2 + GUTTER + ncols * BAR_W + max(0, ncols - 1) * COL_GAP
+    height = PAD * 2 + HEADER + sum(heights.values()) * ROW_H
+
+    def col_x(col: int) -> int:
+        return PAD + GUTTER + col * (BAR_W + COL_GAP)
+
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
+           f'height="{height}" viewBox="0 0 {width} {height}" '
+           f'font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">',
+           f'<rect width="{width}" height="{height}" fill="#ffffff"/>']
+
+    # Column headers: what a column means, since it is not a date.
+    for col in range(ncols):
+        label = "can start now" if col == 0 else (
+            "after 1 round" if col == 1 else f"after {col} rounds")
+        out.append(f'<text x="{col_x(col) + BAR_W // 2}" y="{PAD + 20}" '
+                   f'text-anchor="middle" font-size="11" font-weight="600" '
+                   f'fill="{MUTED}">{_esc(label)}</text>')
+
+    centre: dict[int, tuple[int, int, int]] = {}
+    y = PAD + HEADER
+    for index, (lane, issues) in enumerate(road.lanes.items()):
+        band_h = heights[lane] * ROW_H
+        out.append(f'<rect x="{PAD}" y="{y}" width="{width - PAD * 2}" '
+                   f'height="{band_h}" fill="{BAND[index % 2]}"/>')
+        out.append(f'<line x1="{PAD}" y1="{y}" x2="{width - PAD}" y2="{y}" '
+                   f'stroke="#d8dee6" stroke-width="1"/>')
+        for n, line in enumerate(_wrap(lane, GUTTER - 18, 6.0, 3)):
+            out.append(f'<text x="{PAD + 10}" y="{y + band_h // 2 - 8 + n * 14}" '
+                       f'font-size="11.5" font-weight="700" fill="{INK}">'
+                       f'{_esc(line)}</text>')
+
+        for issue in issues:
+            row, col = place[issue.number]
+            bx, by = col_x(col), y + row * ROW_H + (ROW_H - BAR_H) // 2
+            fill, stroke = FILL[_band(issue.step)]
+            out.append(f'<rect x="{bx}" y="{by}" width="{BAR_W}" height="{BAR_H}" '
+                       f'rx="5" fill="{fill}" stroke="{stroke}" stroke-width="1"/>')
+            ident, rest = _split_title(issue)
+            out.append(f'<text x="{bx + 9}" y="{by + 15}" font-size="11" '
+                       f'font-weight="700" fill="{INK}">{_esc(ident)}</text>')
+            for n, line in enumerate(_wrap(rest, BAR_W - 18, 5.55, 2)):
+                out.append(f'<text x="{bx + 9}" y="{by + 29 + n * 12}" '
+                           f'font-size="10.5" fill="{INK}">{_esc(line)}</text>')
+            meta = f"{issue.raw.milestone or 'milestone not set'} \u00b7 {issue.step or 'phase not set'}"
+            out.append(f'<text x="{bx + 9}" y="{by + BAR_H - 7}" font-size="9.5" '
+                       f'font-style="italic" fill="{MUTED}">'
+                       f'{_esc(_wrap(meta, BAR_W - 18, 5.0, 1)[0])}</text>')
+            centre[issue.number] = (bx, by + BAR_H // 2, bx + BAR_W)
+        y += band_h
+
+    out.append(f'<line x1="{PAD}" y1="{y}" x2="{width - PAD}" y2="{y}" '
+               f'stroke="#d8dee6" stroke-width="1"/>')
+
+    # Arrows last, so they sit above the bands.
+    for source, target in road.edges:
+        if source not in centre or target not in centre:
+            continue
+        _, sy, sx = centre[source]
+        tx, ty, _ = centre[target]
+        mid = sx + (tx - sx) / 2 if tx > sx else sx + COL_GAP / 2
+        head = tx - 7
+        path = (f"M {sx} {sy} H {mid} V {ty} H {head}" if abs(sy - ty) > 2
+                else f"M {sx} {sy} H {head}")
+        out.append(f'<path d="{path}" fill="none" stroke="{ARROW}" '
+                   f'stroke-width="1.4" opacity="0.85"/>')
+        out.append(f'<polygon points="{tx},{ty} {tx - 7},{ty - 3.6} '
+                   f'{tx - 7},{ty + 3.6}" fill="{ARROW}"/>')
+
+    out.append("</svg>")
+    return "\n".join(out)
+
+
+def caption(road: Roadmap) -> str:
+    """The markdown that goes with the picture, saying what it cannot."""
     plural = "y" if road.deliveries == 1 else "ies"
-    caption = [
-        "",
+    lines = [
         f"*{road.deliveries} deliver{plural} in {len(road.lanes)} workstream"
         f"{'' if len(road.lanes) == 1 else 's'}. "
-        f"{road.recorded} dependenc"
-        f"{'y' if road.recorded == 1 else 'ies'} recorded and drawn as "
-        f"{len(road.edges)} arrow{'' if len(road.edges) == 1 else 's'}, so "
-        f"{road.unsequenced} start at the left.*",
+        f"{road.recorded} dependenc{'y' if road.recorded == 1 else 'ies'} "
+        f"recorded and drawn as {len(road.edges)} arrow"
+        f"{'' if len(road.edges) == 1 else 's'}, so {road.unsequenced} "
+        f"can start now.*",
         "",
         "*No dates: a column is a position in the sequence, not a month. "
-        "Column 0 means nothing recorded blocks it starting now. Parent "
-        "projects carry no milestone and make no delivery, so they have no "
-        "bar — their work packages do. Shading is Phase: "
-        "planned, designing, building, landed.*",
+        "Bars are all one width because a Gantt bar's width means duration, "
+        "and this chart has none. Shading is Phase: planned, designing, "
+        "building, landed.*",
     ]
     if road.lifted:
-        caption.append("")
-        caption.append(
-            "*A dependency on a parent project is drawn against each delivery "
-            "it makes, because that is what waiting for a parent means: "
-            + ", ".join(f"#{b} → #{i}"
-                          for b, i in sorted({(b, i) for b, i, _ in road.lifted}))
-            + ".*")
+        lines += ["", "*A dependency on a parent project is drawn against each "
+                  "delivery it makes, because that is what waiting for a parent "
+                  "means: " + ", ".join(
+                      f"#{b} \u2192 #{i}"
+                      for b, i in sorted({(b, i) for b, i, _ in road.lifted})) + ".*"]
     if road.cycles:
-        caption.append("")
-        caption.append("*Circular dependencies, which cannot be sequenced: "
-                       + ", ".join(f"#{a} → #{b}" for a, b in road.cycles) + ".*")
+        lines += ["", "*Circular dependencies, which cannot be sequenced: "
+                  + ", ".join(f"#{a} \u2192 #{b}" for a, b in road.cycles) + ".*"]
     if road.dropped:
-        caption.append("")
-        caption.append(
-            "*Recorded against something with no bar, so not drawn: "
-            + ", ".join(f"#{b} → #{i}" for b, i in sorted(set(road.dropped)))
-            + ".*")
-
-    return "\n".join(out + caption)
+        lines += ["", "*Recorded against something with no bar, so not drawn: "
+                  + ", ".join(f"#{b} \u2192 #{i}"
+                              for b, i in sorted(set(road.dropped))) + ".*"]
+    return "\n".join(lines)
 
 
 def render(snapshot: Snapshot, parent: int | None = None,

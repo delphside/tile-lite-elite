@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -36,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board.roadmap import render                # noqa: E402
+from board.roadmap import caption, render       # noqa: E402
 from board.sources import Unavailable, fetch    # noqa: E402
 
 START = "<!-- roadmap-diagram:start -->"
@@ -133,6 +134,9 @@ def main(argv=None) -> int:
     ap.add_argument("--write-issue", type=int, metavar="N",
                     help="replace the block between the markers in issue N's "
                          "body, so the diagram lives with what it draws")
+    ap.add_argument("--svg", metavar="FILE",
+                    help="where the chart itself is written by --write. "
+                         "Defaults to roadmap.svg beside the document")
     ap.add_argument("--write", metavar="FILE", nargs="?",
                     const="docs/1.5-work-in-progress.md",
                     help="replace the block between the roadmap-diagram markers "
@@ -152,15 +156,29 @@ def main(argv=None) -> int:
             # A source that did not answer is not an empty roadmap.
             print(f"cannot say: {exc}", file=sys.stderr)
             return 2
-        block, road = render(snapshot, args.parent, args.workstream)
+        svg, road = render(snapshot, args.parent, args.workstream)
         if not road.deliveries:
             print("roadmap-diagram: nothing to draw with that filter", file=sys.stderr)
             return 1
         if not road.edges:
             print("note: no blocked-by relationships are recorded, so every "
-                  "delivery starts at the left.\n      Set them on the issues "
+                  "delivery can start now.\n      Set them on the issues "
                   "(GitHub's own dependencies) and run this again.",
                   file=sys.stderr)
+        if not args.write and not args.write_issue:
+            sys.stdout.write(svg + "\n")
+            return 0
+        # The chart is a file and the document points at it: GitHub renders an
+        # `.svg` referenced from markdown, and `docs/` ships nothing, so it may
+        # live on `main` like any other document.
+        doc = Path(args.write or "docs/1.5-work-in-progress.md")
+        target = Path(args.svg) if args.svg else doc.parent / "diagrams" / "roadmap.svg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(svg)
+        sys.stderr.write(f"roadmap-diagram: wrote {target}\n")
+        rel = os.path.relpath(target, doc.parent)
+        block = (f"![The roadmap: workstreams as swimlanes, sequencing left to "
+                 f"right]({rel})\n\n{caption(road)}")
 
     if args.write_issue:
         write_into_issue(args.write_issue, block)

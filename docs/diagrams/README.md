@@ -3,6 +3,11 @@
 Each `.mmd` here is the source for the `.svg` beside it. Edit the `.mmd`,
 re-render, and commit both.
 
+**`roadmap.svg` is the exception: it has no `.mmd`.** Its source is the board,
+and `scripts/roadmap-diagram.py --write` regenerates both it and the block in
+[1.5](../1.5-work-in-progress.md) that embeds it. Do not edit it by hand — the
+next run overwrites it. Why it is not Mermaid is below.
+
 ```bash
 npx -y @mermaid-js/mermaid-cli -i docs/diagrams/release-flow.mmd \
   -o docs/diagrams/release-flow.svg -c docs/diagrams/mermaid-config.json -b white
@@ -75,6 +80,28 @@ branch here is `<issue>-short-name`, so every one of them does:
 error, and mermaid reports both the same way: a bomb icon reading *Syntax error
 in text*, with no line number and nothing on stderr. Bisecting is the only way
 to find which line it meant.
+
+**Mermaid cannot draw swimlanes, and a `flowchart` with one `subgraph` per lane
+is not a near miss.** The roadmap (R8) wants workstreams as bands and sequence
+running left to right. Rendered and looked at, both encodings fail:
+
+- **without `direction LR`** in the subgraph, a dependency inside a lane is
+  drawn *top to bottom*, which inverts the one thing the chart is for;
+- **with it**, a single edge between two lanes makes dagre lay the lanes out
+  *side by side as columns* instead of stacking them as bands — the swimlanes
+  are gone entirely.
+
+The second is not a corner case: it is the board's shape, where
+[#10](https://github.com/delphside/tile-lite-elite/issues/10) waits on packages
+in two other workstreams. Flowcharts have no swimlane primitive, and `gantt`
+has sections but no dependency arrows and insists on dates. So `roadmap.svg` is
+drawn directly by `scripts/board/roadmap.py`, which is also why it uses
+presentation attributes and polygon arrowheads and no `<style>`, `<defs>` or
+`<marker>` — the same sanitiser that blanks `foreignObject` above.
+
+Both failures were found by rendering with Playwright's Chromium, which is
+already installed for `e2e/` and works where `mermaid-cli`'s own Puppeteer
+download does not.
 
 Diagrams that *are* simple enough for dagre stay inline in the docs, where
 GitHub renders them from source — see the sequence diagram in

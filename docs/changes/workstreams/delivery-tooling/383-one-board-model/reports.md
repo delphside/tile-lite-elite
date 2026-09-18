@@ -170,7 +170,7 @@ Measured 2026-09-18: **zero untyped open issues, and zero of the sixteen open re
 
 That last clause is the whole reason this report exists. GitHub records dependencies on the issue (`blockedBy`), and every board view drops them. So the only place the programme's sequence can be read is a drawing, and the drawing has to be generated or it is stale the first time anything moves.
 
-**Content.** One Mermaid diagram: swimlanes down, sequence across.
+**Content.** One chart: swimlanes down, sequence across.
 
 1. **swimlanes are workstreams** — one lane per `Workstream`, and an unset workstream gets its own lane rather than disappearing
 2. **bars are deliveries** — work packages and standalone projects, which is to say the issues carrying a delivery milestone. Owner: *"Parent projects are not needed, only work packages as they have an associated delivery milestone"*
@@ -189,6 +189,10 @@ That last clause is the whole reason this report exists. GitHub records dependen
 **A dependency recorded against a parent is drawn against every delivery it makes.** A parent has no bar, so the alternative is dropping the relationship — and the one dependency on the board today is exactly this shape (#10 waits for #71 One Game Model). Dropping it would have left the board's only recorded sequencing invisible, which is the defect this report exists to fix.
 
 **Phase does not order the columns.** Being at Development says a thing has started, not that anything waits on it. Only recorded dependencies move a bar right; Phase is shading.
+
+**Every bar is the same width.** A Gantt bar's width means duration and this chart has none, so letting them vary would imply one. Position is the only thing that carries meaning.
+
+**Drawn as SVG, not Mermaid.** Mermaid has no swimlane primitive: a `flowchart` with one `subgraph` per lane draws in-lane dependencies top to bottom, and a single edge between lanes makes it lay the lanes out side by side as columns. Both were found by rendering, and [`docs/diagrams/README.md`](../../../../diagrams/README.md) records them with the rest of what rendering has taught this repository.
 
 *Today: `roadmap-diagram.py`, which drew structure — what belongs to what — rather than sequence.*
 

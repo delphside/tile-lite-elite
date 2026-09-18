@@ -108,10 +108,26 @@ r = road(issue(1, ws="Client UI", milestone="0.8.1"), issue(2, blocked_by=[1]))
 text = draw(r)
 check("a bar carries its milestone", True, "0.8.1" in text)
 check("a missing milestone is visible, not blank", True, "milestone not set" in text)
-check("swimlanes are subgraphs", True, 'subgraph lane0["Client UI"]' in text)
-check("left to right", True, "flowchart LR" in text)
-check("no dates anywhere", True, "dateFormat" not in text and "gantt" not in text)
+check("the swimlane is labelled", True, "Client UI" in text)
+check("it is SVG, because Mermaid cannot do swimlanes", True,
+      text.startswith("<svg ") and text.rstrip().endswith("</svg>"))
+check("the axis is ordinal, not dated", True, "can start now" in text)
+check("a second column appears once something is sequenced",
+      True, "after 1 round" in text)
+# GitHub strips these from an SVG in markdown, so using any of them would
+# render a blank or broken chart for everyone but the author.
+for banned in ("<style", "<defs", "<marker", "foreignObject", "<script"):
+    check(f"nothing the sanitiser strips: {banned}", False, banned in text)
+check("an arrow is drawn for the dependency", True, "<polygon" in text)
 
+print()
+print("a bar is one width, because width would imply duration")
+r = road(issue(1), issue(2, blocked_by=[1]))
+import re as _re
+widths = _re.findall(r'<rect [^>]*width="(\d+)" height="60"', draw(r))
+check("both bars the same width", 1, len(set(widths)))
+
+print()
 print()
 if failures:
     print(f"{failures} failure(s)")
