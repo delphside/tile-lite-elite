@@ -1,0 +1,10 @@
+[toolchain]
+# Pins the compiler for the release build, CI and a developer machine alike —
+# #360. rustup honours this file wherever it runs `cargo`/`rustc` inside this
+# checkout, including inside the `rust:1-bookworm` builder stage, so the three
+# stop agreeing only because of habit and start agreeing because of a file.
+# Bumping this is then an ordinary, diffable commit rather than whatever
+# `stable` happens to be the day something is built.
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

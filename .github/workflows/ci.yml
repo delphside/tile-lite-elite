@@ -67,8 +67,14 @@ jobs:
       - name: Check documents
         run: ./scripts/check-docs.sh
 
+      # Pinned to match rust-toolchain.toml (#360) -- dtolnay/rust-toolchain
+      # does not read a project's toolchain file itself, so the two are kept
+      # in sync by hand. A bump touches both in one commit; leaving this at
+      # `@stable` would let CI silently outrun the pin the day a new stable
+      # ships, and the release build in the failing direction whenever it
+      # doesn't.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
