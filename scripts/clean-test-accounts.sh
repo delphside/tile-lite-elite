@@ -106,7 +106,19 @@ admin() {
     rehearsal) ssh -n -o BatchMode=yes tile-lite-elite-rehearsal \
                  "docker compose -f ~/tile-lite-elite/docker-compose.yml exec -T server tile-lite-elite-admin $*" ;;
   esac
-}
+} < /dev/null
+# **stdin closed for every backend, not just ssh.**
+#
+# Redirecting the function definition applies it to every call, which is the
+# point: `ssh` was given `-n` on 2026-09-17 and the preview path still ate its
+# caller's input, because `docker compose exec -T` inherits stdin too — `-T`
+# only stops it allocating a TTY. So the cleaner still removed exactly **one**
+# account per run against preview after the ssh fix, and the count read as a
+# refusal rather than as a swallowed list.
+#
+# Measured 2026-09-19: 1 of 8, then 8 of 8. The half-fix is why this is written
+# here rather than at each call site — a third backend would arrive with the
+# same bug.
 
 # Reachability is checked before anything is deleted, so "could not reach it"
 # and "nothing to clean" cannot be confused — which is the whole defect.
