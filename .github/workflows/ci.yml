@@ -67,17 +67,26 @@ jobs:
       - name: Check documents
         run: ./scripts/check-docs.sh
 
-      # Pinned to match rust-toolchain.toml (#360) -- dtolnay/rust-toolchain
-      # does not read a project's toolchain file itself, so the two are kept
-      # in sync by hand. A bump touches both in one commit; leaving this at
-      # `@stable` would let CI silently outrun the pin the day a new stable
-      # ships, and the release build in the failing direction whenever it
-      # doesn't.
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.1
-        with:
-          components: rustfmt, clippy
-          targets: wasm32-unknown-unknown
+      # **No toolchain action: `rust-toolchain.toml` is the whole of it.**
+      #
+      # It names the channel, the components and the targets, and rustup
+      # installs all three the first time cargo runs in this directory.
+      # Measured 2026-09-20 from zero: a directory holding only that file
+      # produced toolchain `1.97.1`, both components and the wasm32 target,
+      # with no action and no install step.
+      #
+      # **What this removes is a second place to pin the version.** The action
+      # was pinned by hand to match the file, because it does not read one --
+      # and Dependabot then proposed `dtolnay/rust-toolchain@1.120.0`, which is
+      # a pre-created branch for a Rust release that does not exist and will
+      # not for years (#393). It compares refs numerically and cannot tell a
+      # placeholder from a release. With no version here, there is nothing for
+      # it to misread.
+      #
+      # The runner has rustup already. The first cargo step below pays for the
+      # download when the pin moves, which is the same cost the action paid.
+      - name: Show the toolchain the project pins
+        run: rustup show
 
       - name: Cache cargo registry and build output
         uses: Swatinem/rust-cache@v2
