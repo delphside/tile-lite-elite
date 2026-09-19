@@ -5,7 +5,17 @@
 # compiles the workspace once. Select which one to build with `--target`
 # (docker-compose.yml does this per service).
 
-FROM rust:1-bookworm AS builder
+# All three base images below are pinned by digest — #360. A floating tag
+# meant the image could move without a commit saying so, which is the same
+# defect as an unpinned dependency and the reason `TILE_LITE_ELITE_BUILD_ID`
+# identifies a build by its artefact digest rather than by the commit that
+# named it (#214). Pinning turns a base bump into an ordinary, diffable
+# commit instead: bump it here, `.github/dependabot.yml`'s `docker`
+# ecosystem watches for the next one, and the build goes through preview and
+# rehearsal like any other change. The tag stays alongside the digest so the
+# line still reads for a person; the `@sha256:...` is what Docker actually
+# resolves.
+FROM rust:1-bookworm@sha256:828077e0f5ed0401fbd9cb5b4d5dedca23bd13c7fe032f3e8b7313e7acd2a57f AS builder
 WORKDIR /workspace
 
 # dioxus-cli version pinned to match crates/ui's `dioxus`/`dioxus-web` deps
@@ -102,7 +112,7 @@ RUN BUNDLE_DIR=target/dx/tile-lite-elite-ui/release/web/public \
 
 # ---------------------------------------------------------------------------
 
-FROM debian:bookworm-slim AS runtime-server
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS runtime-server
 # curl is otherwise unused here — pulled in solely so HEALTHCHECK below has
 # something to hit /health with, without reaching for a heavier base image.
 #
@@ -140,7 +150,7 @@ ENTRYPOINT ["/usr/local/bin/server-game"]
 
 # ---------------------------------------------------------------------------
 
-FROM caddy:2-alpine AS runtime-web
+FROM caddy:2-alpine@sha256:de23def33b17fb5d1290b0f6c2add1d70780e52341896c00a4c8a2a2fe9d355e AS runtime-web
 COPY --from=builder /workspace/target/dx/tile-lite-elite-ui/release/web/public /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80

@@ -1,10 +1,17 @@
-# Watches the GitHub Actions we pin, and nothing else — #297 R2.
+# Watches the GitHub Actions we pin and, since #360, the Dockerfile's base
+# images — #297 R2.
 #
 # **The `cargo` ecosystem is deliberately absent.** R2 asks about actions that
 # have moved on without us. Dependabot on crates would open pull requests for
 # routine version drift nobody asked for, and crates are watched by
 # `.github/workflows/advisories.yml`, which reports on advisories rather than on
 # newness. Two mechanisms, one question each.
+#
+# **`docker` joins the two ecosystems here rather than getting a third file**,
+# because it is the same question R2 already asks — a pinned dependency that
+# has moved on without us — asked of the three base images now that #360 pins
+# them by digest. Dependabot cannot raise a pull request against a floating
+# tag, which is why this waited for the pin rather than preceding it.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -15,5 +22,12 @@ updates:
       # CI refuses a subject without both versions (docs/3.3 §2.7.1). Dependabot
       # cannot know them, so the prefix is fixed here and the versions are
       # corrected by whoever takes the pull request.
+      prefix: "app 0.0.0 api 0.0"
+    open-pull-requests-limit: 3
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
       prefix: "app 0.0.0 api 0.0"
     open-pull-requests-limit: 3
