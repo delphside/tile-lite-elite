@@ -136,10 +136,17 @@ print("every pinned action is one Dependabot can actually move")
 pins = sorted(set(re.findall(r"uses: (\S+)", " ".join(
     p.read_text() for p in pathlib.Path(".github/workflows").glob("*.yml")))))
 floating = [p for p in pins if not re.search(r"@v?\d", p)]
-# `@stable` is a moving toolchain channel, not a version: nothing to bump, and
-# Dependabot leaves it alone. Any OTHER floating ref is one nobody is watching.
-check("the only unversioned pin is the toolchain channel",
-      ["dtolnay/rust-toolchain@stable"], floating)
+# **No floating refs at all, since 2026-09-20.** This used to allow exactly one,
+# `dtolnay/rust-toolchain@stable`, on the grounds that a moving channel is not a
+# version and Dependabot leaves it alone. Both workflows have since dropped that
+# action: `rust-toolchain.toml` names the channel, the components and the
+# targets, and rustup installs all three when it activates the directory
+# override, so naming a version in a workflow was a second pin -- and Dependabot
+# misread the versioned form of it as Rust 1.120.0, which does not exist (#393).
+#
+# So the allowance is gone rather than widened. Any floating ref now is one
+# nobody is watching.
+check("no action is pinned to something Dependabot cannot move", [], floating)
 
 print()
 if failures:
