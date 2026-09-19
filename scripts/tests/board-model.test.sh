@@ -160,6 +160,34 @@ ids = {f.obligation.id: f.answer for f in assess(ready)}
 check("a gap row answers not checked", Answer.NOT_CHECKED, ids.get("ready-complete"))
 
 print()
+print("a project owes effort and priority once scoping is claimed settled")
+# #346: reaching a queue phase asserts scoping is finished. Restored
+# 2026-09-19 -- dropped silently when check-transitions.sh (582fed8) retired
+# in favour of this model, and the live board still shows #71 and #290 (a
+# parent and a work package, both at Q1) missing exactly what #346 found
+# them missing on 2026-09-17, unreported by this model until now.
+at_scope = classify(issue(1, kind="Project",
+                          fields={"Phase": "Scope", "Workstream": "W"}))
+ids = {f.obligation.id: f.answer for f in assess(at_scope)}
+check("Scope is the initial value and is exempt", None, ids.get("project-effort"))
+check("both fields exempt at Scope", None, ids.get("project-priority"))
+
+in_queue = classify(issue(71, kind="Project",
+                          fields={"Phase": "Q1", "Workstream": "W"}))
+ids = {f.obligation.id: f.answer for f in assess(in_queue)}
+check("reaching the queue with no effort is reported",
+      Answer.MISSING, ids.get("project-effort"))
+check("and no priority is reported the same way",
+      Answer.MISSING, ids.get("project-priority"))
+
+scoped_wp = classify(issue(268, parent=71, fields={
+    "Phase": "Q1", "Workstream": "W", "Effort": "Low", "Priority": "High"}))
+ids = {f.obligation.id: f.answer for f in assess(scoped_wp)}
+check("a work package with both fields set passes",
+      Answer.MET, ids.get("project-effort"))
+check("both", Answer.MET, ids.get("project-priority"))
+
+print()
 print("a pull request is not an issue, and must still reach the model")
 # GraphQL's `issues` connection excludes pull requests, so a snapshot built
 # from it alone contains no PullRequest at all: classify never reaches that

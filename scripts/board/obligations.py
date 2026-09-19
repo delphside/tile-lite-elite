@@ -120,6 +120,15 @@ PROJECTS = (ParentProject, WorkPackage, StandaloneProject)
 DELIVERING = (WorkPackage, StandaloneProject)
 BUILD_PHASES = ("Development", "User testing", "Deployment")
 
+# Every phase but `Scope`, the initial value the owner's rule exempts.
+# Reaching a queue phase (`Q3`/`Q2`/`Q1`) is what asserts scoping is settled —
+# #346 R2/R3 — so that is where a project's own fields start being owed,
+# parent and work package alike.
+PAST_SCOPE = (
+    "Q3", "Q2", "Q1", "Design and Test Approach", *BUILD_PHASES,
+    "Post-deployment", "Project Closedown",
+)
+
 
 # --------------------------------------------------------------------------
 # the grid
@@ -209,6 +218,29 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "no Route",
         "a parent has no delivery role; its work packages carry one each — #297",
         lambda i: not i.field("Route"),
+    ),
+
+    # ---- every project, once scoping is claimed settled ------------------
+    # #346: a Requirement had its workstream, type of change, priority and
+    # effort checked; a Project had only its headings checked and never a
+    # field, so one could reach Development with no effort, no priority and
+    # nothing said so. Workstream is checked above for every project at
+    # ANY_STEP; these two are the ones that went missing when
+    # check-transitions.sh retired in favour of this model (`de7ae6a`) —
+    # confirmed 2026-09-19 against the live board, which still shows #71,
+    # #268-#272 and #290 missing exactly what #346 found them missing on
+    # 2026-09-17, unreported.
+    Obligation(
+        "project-effort", PROJECTS, PAST_SCOPE,
+        "an effort",
+        "size known once scoping is claimed finished — #346",
+        fields_set("Effort"),
+    ),
+    Obligation(
+        "project-priority", PROJECTS, PAST_SCOPE,
+        "a priority",
+        "a judgement made once scoping is claimed finished — #346",
+        fields_set("Priority"),
     ),
     Obligation(
         "parent-not-building", (ParentProject,), BUILD_PHASES,
