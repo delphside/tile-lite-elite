@@ -32,7 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@stable
+      # No toolchain action, for the reason `ci.yml` gives: `rust-toolchain.toml`
+      # names the channel and rustup honours it, so naming a version here would
+      # be a second pin. `@stable` was doubly pointless — the runner ships
+      # stable already, and the directory override wants the pinned version
+      # regardless, which rustup treats as a separate toolchain even when the
+      # two are the same release.
+      #
+      # `cargo audit` needs no components, so there is nothing else to install.
 
       # Pinned rather than floating: this job's whole job is to notice change,
       # so it should not change underneath itself. `--locked` uses the tool's
