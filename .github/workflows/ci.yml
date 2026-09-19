@@ -185,22 +185,59 @@ jobs:
             ./scripts/check-commit-stamp.sh "$before..${{ github.sha }}"
           fi
 
+  # Whether a pull request's diff reaches the image, per scripts/shipping-paths.sh
+  # (#348) — one definition, shared with the pre-commit hook and deploy.sh's
+  # manifest, rather than a second copy of NON_SHIPPING in this file. Only
+  # pull requests ask: R2 applies the condition to pushes unconditionally,
+  # because merge-to-release.sh reads the release branch tip's run with
+  # `--require e2e`, and a push that happened to carry only documents must
+  # still produce a real verdict rather than a correctly-skipped one.
+  touches-image:
+    name: does this pull request reach the image?
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      touches: ${{ steps.check.outputs.touches }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          source scripts/shipping-paths.sh
+          if touches_image_range "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"; then
+            echo "touches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "touches=false" >> "$GITHUB_OUTPUT"
+          fi
+
   e2e:
     name: e2e (Playwright · preview stack)
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, touches-image]
     # A release branch is included with `main` — #344 R2. A pull request into a
-    # release branch already runs e2e, because `pull_request` matches whatever
-    # the base is; what it does not cover is the **push** that the merge makes.
-    # Without this the branch tip's run is green because e2e did not run, not
-    # because it passed — which is the blind window #144 was raised for, and
-    # the run `merge-to-release.sh` reads before the next merge.
+    # release branch already runs e2e when it reaches the image, because
+    # `pull_request` matches whatever the base is; what the push branch of the
+    # condition covers is the **push** the merge itself makes, unconditionally
+    # — #344 R2's own reason: merge-to-release.sh reads that run with
+    # `--require e2e`, and a push that happened to carry only documents must
+    # still produce a real verdict rather than a correctly-skipped one.
+    #
+    # `always()` because `touches-image` only runs for pull requests (#348) and
+    # is otherwise skipped — without it, a job-level `if` treats a skipped need
+    # the same as a failed one and this would never run on a push. The
+    # `needs.check.result == 'success'` clause restores the "only after check
+    # passes" gate that `always()` would otherwise remove.
     if: >
-      github.event_name == 'pull_request' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' ||
-      startsWith(github.ref, 'refs/heads/release/')))
+      always() &&
+      needs.check.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && needs.touches-image.outputs.touches == 'true') ||
+        (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/release/')))
+      )
     steps:
       - uses: actions/checkout@v7
 

@@ -50,3 +50,14 @@ touches_image() {
   [[ -n "$changed" ]] || return 1
   printf '%s\n' "$changed" | grep -qvE "$NON_SHIPPING"
 }
+
+# touches_image_range <base> <head> -> 0 if the diff between the two reaches
+# the image. For a proposed change as a whole — a pull request — rather than
+# one commit: CI asks this once per pull request, not once per commit in it
+# (#348).
+touches_image_range() {
+  local base="$1" head="$2" changed
+  changed="$(git -C "${REPO_DIR:-.}" diff --name-only "$base" "$head" </dev/null 2>/dev/null | grep -v '^$' || true)"
+  [[ -n "$changed" ]] || return 1
+  printf '%s\n' "$changed" | grep -qvE "$NON_SHIPPING"
+}
