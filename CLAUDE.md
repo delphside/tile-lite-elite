@@ -149,11 +149,12 @@ one of them has a defect: fix it, don't work around it.
   package to own it. `deploy.sh` already warns about this, and it was right when
   #380 and #379 were put in 0.8.1 on 2026-09-19 and shipped through the warning.
 - **A routine update owes what its route owes, and nothing more.** A
-  repository-side bump — a base image, an action, a crate — lands on `main` as
+  `Production Release` bump — a base image, a crate — lands on `main` as
   pre-approved, waits for the next release and is proved by that release's own
-  regression testing; it never justifies a release of its own. A host-side one
-  has no release to ride, so it supplies its own vehicle: work package, letter
-  milestone, delivery-log row. `docs/3.6` §2.2.1 is the table.
+  regression testing; it never justifies a release of its own. An `Other` one —
+  a host package, a kernel, a reboot — has no release to ride, so it supplies
+  its own vehicle: work package, letter milestone, delivery-log row.
+  `docs/3.6` §2.2.1 is the table.
 - **Who drove the change decides the ceremony, not how big the diff is.** A
   routine dependency bump raised by tooling takes none: a Dependabot pull
   request has no project, no milestone and no delivery-log row, and its commit
