@@ -144,6 +144,22 @@ fn run_tag() -> String {
     format!("{:x}", now_unix_seconds() & 0xff_ffff)
 }
 
+/// The rehearsal access key (#240), the way `scripts/rehearsal-key.sh` gets
+/// one — over ssh, or `REHEARSAL_ACCESS_KEY` to short-circuit it. Before this,
+/// `check-rate-limits.sh` knew how to get in and this example did not, which
+/// is #371: every request came back 403 from the gate, a closed door that
+/// looks exactly like a broken limiter.
+fn rehearsal_gate_cookie() -> Option<String> {
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/rehearsal-key.sh");
+    let output = Command::new(&script).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let key = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (!key.is_empty()).then_some(key)
+}
+
 async fn status_of(request: reqwest::RequestBuilder) -> u16 {
     match request.send().await {
         Ok(response) => response.status().as_u16(),
@@ -167,8 +183,23 @@ async fn main() {
         std::process::exit(2);
     }
 
+    let mut default_headers = reqwest::header::HeaderMap::new();
+    match rehearsal_gate_cookie() {
+        Some(key) => {
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("rehearsal={key}")) {
+                default_headers.insert(reqwest::header::COOKIE, value);
+            }
+        }
+        None => {
+            eprintln!("warning: no rehearsal access key — every request will be refused by the");
+            eprintln!("         gate, and a refusal at the door looks exactly like a broken");
+            eprintln!("         limiter. Run ./scripts/rehearsal-access.sh grant first.");
+        }
+    }
+
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
+        .default_headers(default_headers)
         .build()
     {
         Ok(client) => client,
@@ -190,7 +221,24 @@ async fn main() {
     let address = format!("203.0.113.{}", 1 + (now_unix_seconds() % 250));
 
     let (seeded, registration_refused_after) =
-        probe_registration_limit(&client, &target, &tag, &address, &mut report).await;
+        match probe_registration_limit(&client, &target, &tag, &address, &mut report).await {
+            RegistrationProbeOutcome::Reached {
+                seeded,
+                refused_after,
+            } => (seeded, refused_after),
+            // R3: a run that never reached the service records nothing, rather
+            // than the other three checks each failing for the same reason and
+            // the run reading as a broken limiter instead of a closed door.
+            RegistrationProbeOutcome::Unreachable { at_attempt, detail } => {
+                eprintln!("could not reach {target} at all — attempt {at_attempt} got {detail}.");
+                eprintln!(
+                    "A closed rehearsal gate (#240) and a broken rate limiter refuse identically;"
+                );
+                eprintln!("this is the gate. Run ./scripts/rehearsal-access.sh grant, or check");
+                eprintln!("REHEARSAL_ACCESS_KEY / REHEARSAL_SSH_HOST, then try again.");
+                std::process::exit(2);
+            }
+        };
     let sessions_separate =
         check_sessions_are_separate(&client, &target, &address, &seeded, &mut report).await;
     let hash_median_ms = check_hash_cost(&client, &target, &address, &seeded, &mut report).await;
@@ -238,6 +286,20 @@ struct SeededAccount {
     token: String,
 }
 
+/// What the registration probe found: either it reached the service, in which
+/// case the limit itself has an answer (held or not); or it did not, in which
+/// case the limit has no answer at all and saying so is the honest result.
+enum RegistrationProbeOutcome {
+    Reached {
+        seeded: Vec<SeededAccount>,
+        refused_after: String,
+    },
+    Unreachable {
+        at_attempt: usize,
+        detail: String,
+    },
+}
+
 /// LIMIT-1 and LIMIT-2, and the setup for everything after it — the same act.
 ///
 /// Registers until refused. What comes back is both the measurement (how many
@@ -256,7 +318,7 @@ async fn probe_registration_limit(
     tag: &str,
     address: &str,
     report: &mut Report,
-) -> (Vec<SeededAccount>, String) {
+) -> RegistrationProbeOutcome {
     let mut seeded: Vec<SeededAccount> = Vec::new();
     let mut refused_after: Option<usize> = None;
 
@@ -289,7 +351,25 @@ async fn probe_registration_limit(
                     });
                 }
             }
-            _ => break,
+            // Neither a refusal the limiter makes nor a success: the probe does
+            // not understand this response, so it says so rather than reading
+            // it as a rule failure (#371 R2). A 403 from the rehearsal access
+            // gate (#240) looks exactly like this, and used to be reported as
+            // "twelve attempts from one address were all accepted" — the
+            // opposite of what happened, since the loop broke on the first
+            // attempt and never made a second one.
+            Ok(r) => {
+                return RegistrationProbeOutcome::Unreachable {
+                    at_attempt: attempt,
+                    detail: format!("HTTP {}", r.status().as_u16()),
+                };
+            }
+            Err(error) => {
+                return RegistrationProbeOutcome::Unreachable {
+                    at_attempt: attempt,
+                    detail: error.to_string(),
+                };
+            }
         }
     }
 
@@ -299,7 +379,7 @@ async fn probe_registration_limit(
         format!("{} got through", seeded.len()),
     );
 
-    match refused_after {
+    let refused_after = match refused_after {
         Some(count) => {
             report.rule(
                 "registering repeatedly from one address is refused (429)",
@@ -314,7 +394,7 @@ async fn probe_registration_limit(
                 count <= 8,
                 format!("{count} accepted before refusal"),
             );
-            (seeded, count.to_string())
+            count.to_string()
         }
         None => {
             report.rule(
@@ -322,8 +402,13 @@ async fn probe_registration_limit(
                 false,
                 "twelve attempts from one address were all accepted",
             );
-            (seeded, "never".to_string())
+            "never".to_string()
         }
+    };
+
+    RegistrationProbeOutcome::Reached {
+        seeded,
+        refused_after,
     }
 }
 
