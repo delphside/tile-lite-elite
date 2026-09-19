@@ -113,6 +113,41 @@ check("answered post-deployment checks are not reported as missing",
       Answer.MET, ids.get("wp-post-deployment"))
 
 print()
+print("a post-deployment check is answered, not merely present")
+# **#346 R4, restored.** The checks are a table with an answer column, and the
+# model counted only boxes -- so a section of blank answers read as complete.
+# #374 closed on 2026-09-18 with R1 and R2 unanswered and the model said
+# "complete, 0 not checked". The rule existed in check-transitions.sh and did
+# not survive its retirement into this model.
+blank = """## Post-deployment checks against requirements
+
+| requirement | how | |
+| --- | --- | --- |
+| R1 | read it | **passed** |
+| R2 | look at it | |
+"""
+i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
+                                          "Route": "Repository Change"},
+                   body=blank, milestone="pre-approved"))
+check("a blank answer cell is one unanswered row", 1,
+      i.unanswered_rows_in("Post-deployment checks against requirements"))
+ids = {f.obligation.id: f.answer for f in assess(i)}
+check("and the obligation is not met", Answer.MISSING,
+      ids.get("wp-post-deployment"))
+
+# The other half, which is what stops it crying wolf: an answer in prose is
+# still an answer. The bash rule demanded passed/cannot be tested/failed and
+# would have flagged this.
+prose = blank.replace("| R2 | look at it | |",
+                      "| R2 | look at it | measured on the 9th: it does not |")
+i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
+                                          "Route": "Repository Change"},
+                   body=prose, milestone="pre-approved"))
+ids = {f.obligation.id: f.answer for f in assess(i)}
+check("an answer in other words is still an answer", Answer.MET,
+      ids.get("wp-post-deployment"))
+
+print()
 print("a decision ships nothing, so it owes no milestone")
 d = classify(issue(382, kind="Decision", fields={"Decision State": "Decided"},
                    body="## Agreed Decision\n\nAccepted.\n"))

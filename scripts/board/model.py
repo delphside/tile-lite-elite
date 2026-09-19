@@ -222,6 +222,37 @@ class Issue:
     def unticked_in(self, heading: str) -> int:
         return len(re.findall(r"^\s*[-*]\s*\[ \]", self.section(heading), re.M))
 
+    def unanswered_rows_in(self, heading: str) -> int:
+        """Table rows under a heading whose last cell is empty.
+
+        **Post-deployment checks are a table, not a checklist**, so counting
+        boxes says a section full of blank answers is complete. #374 reported
+        `complete, 0 not checked` on 2026-09-19 with R1 and R2 both unanswered;
+        the rule that caught it (#346 R4) did not survive `check-transitions.sh`
+        retiring into this model.
+
+        **Empty, rather than not one of `passed`/`cannot be tested`/`failed`.**
+        The bash rule required those three words and so flagged rows carrying a
+        considered answer in other words. A blank cell is unambiguous; judging
+        prose is a person's job, and a check that cries wolf gets ignored rather
+        than fixed.
+        """
+        rows = 0
+        seen_header = False
+        for line in self.section(heading).splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("|"):
+                continue
+            if re.match(r"^\|[\s:-]+\|", stripped):      # the --- separator
+                continue
+            if not seen_header:                            # the header row
+                seen_header = True
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if cells and not cells[-1]:
+                rows += 1
+        return rows
+
     def ticked_in(self, heading: str) -> int:
         return len(re.findall(r"^\s*[-*]\s*\[[xX]\]", self.section(heading), re.M))
 

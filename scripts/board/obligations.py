@@ -303,9 +303,15 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         # Scoped to its own section. Counting boxes across the whole body
         # made #252 report answered checks as unanswered, because its Test
         # approach boxes were the unticked ones.
+        # Boxes AND table rows. The checks are written as a table with an
+        # answer column, so counting only boxes called a section of blank
+        # answers complete -- #374 on 2026-09-19. #346 R4 caught this and did
+        # not survive check-transitions.sh retiring into this model.
         lambda i: (i.has_heading("Post-deployment checks")
                    and i.unticked_in("Post-deployment checks against requirements") == 0
-                   and i.unticked_in("Post-deployment checks") == 0),
+                   and i.unticked_in("Post-deployment checks") == 0
+                   and i.unanswered_rows_in("Post-deployment checks against requirements") == 0
+                   and i.unanswered_rows_in("Post-deployment checks") == 0),
     ),
     Obligation(
         "wp-closedown", DELIVERING, ("Project Closedown",),
