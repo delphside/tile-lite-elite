@@ -226,18 +226,15 @@ echo "==> SQLite shortcuts (dbdev, dbpre, dbprod)"
 # inspection session cannot write, whichever environment it lands in, and
 # production is one keystroke away from preview.
 #
-# A **throwaway container, from a prebuilt image** — deliberately not a
-# long-lived one. A permanent container holds the volume even while stopped,
-# and `deploy-preview.sh reset` does `down -v`, so it would break wiping
-# preview until somebody remembered to remove it. Baking a 5MB image instead
-# gets the speed without the lifecycle: 0.8s per query against 3.3s for
-# `apk add` every time, and nothing holds the volume between uses.
+# `dbpre` and `dbprod` run `docker compose exec` **inside the already-running
+# `server` container** — sqlite3 has been in the runtime image since #174, so
+# no separate container is created and nothing can be left holding the data
+# volume (#356). `docker compose exec` allocates a pseudo-tty by default; `-T`
+# drops it when a query is given, so `dbpre "select ..."` works in a pipeline
+# as well as interactively. If the stack is stopped, `exec` has nothing to
+# reach — docs/3.4 documents the throwaway-container fallback for that case.
 #
-# dbdev is a plain alias because dev's database is a file in the checkout. The
-# other two are functions: the query has to reach sqlite3 *inside* the
-# container rather than being appended to `docker run`, and they drop `-it`
-# when given one, so `dbpre "select ..."` works in a pipeline as well as
-# interactively.
+# dbdev is a plain alias because dev's database is a file in the checkout.
 python3 - "$REPO_DIR" <<'PYEOF'
 import re, sys, pathlib
 repo = sys.argv[1]
@@ -250,28 +247,16 @@ block = f'''
 # >>> tile-lite-elite sqlite >>>
 alias dbdev='sqlite3 -readonly {repo}/data/tile-lite-elite.sqlite3'
 
-# Built on first use, then reused. `docker image rm tle-sqlite` to refresh it.
-_tle_sqlite_image() {{
-  docker image inspect tle-sqlite >/dev/null 2>&1 && return 0
-  printf 'FROM alpine\\nRUN apk add --no-cache sqlite\\n' \\
-    | docker build -q -t tle-sqlite - >/dev/null
-}}
-
-_tle_sqlite_in_volume() {{
-  local volume="$1"; shift
-  _tle_sqlite_image || return 1
-  local tty=""; [ $# -eq 0 ] && [ -t 0 ] && tty="-it"
-  docker run --rm $tty -v "$volume":/data tle-sqlite \\
+dbpre() {{
+  local notty=""; [ $# -gt 0 ] && notty="-T"
+  docker compose -f {repo}/docker-compose.preview.yml exec $notty server \\
     sqlite3 -readonly /data/tile-lite-elite.sqlite3 "$@"
 }}
 
-dbpre() {{ _tle_sqlite_in_volume tile-lite-elite-preview-data "$@"; }}
-
-# Production, over ssh. alpine + apk there rather than a built image: it is
-# used rarely, and building one on the VM is not worth the disk.
+# Production, over ssh.
 dbprod() {{
-  ssh -t tile-lite-elite "docker run --rm -i -v tile-lite-elite-data:/data alpine sh -c \\
-    'apk add --no-cache sqlite >/dev/null 2>&1 && exec sqlite3 -readonly /data/tile-lite-elite.sqlite3'"
+  ssh -t tile-lite-elite "cd ~/tile-lite-elite && docker compose exec server \\
+    sqlite3 -readonly /data/tile-lite-elite.sqlite3"
 }}
 # <<< tile-lite-elite sqlite <<<
 '''
