@@ -140,6 +140,27 @@ one of them has a defect: fix it, don't work around it.
   back on a branch, which then owes a pull request, a milestone and a row in
   the delivery log. The branch is what makes a delivery a point in time; the
   milestone is what places that point in the sequence.
+- **A Requirement never carries a milestone except `pre-approved`** — owner,
+  2026-09-19: *"that is the only way they can deliver change apart from folding
+  into a project."* A requirement is a statement that something should be true;
+  it delivers either by folding into a project, and then the project's work
+  package carries the milestone, or straight to `main` as pre-approved. Any
+  other milestone on a requirement means a delivery happened with no work
+  package to own it. `deploy.sh` already warns about this, and it was right when
+  #380 and #379 were put in 0.8.1 on 2026-09-19 and shipped through the warning.
+- **Who drove the change decides the ceremony, not how big the diff is.** A
+  routine dependency bump raised by tooling takes none: a Dependabot pull
+  request has no project, no milestone and no delivery-log row, and its commit
+  message is the record. Owner: *"I don't want to introduce ceremony for bau
+  updates, especially when they are driven by tooling."* A host or dependency
+  change **we** decide on and carry out is the other case — the kernel and
+  package work of 2026-09-19 — and it takes the branch, the project, the letter
+  milestone and the row.
+- **A change to one of our own assets takes a new semver**, not a letter. The
+  `Caddyfile`, `docker-compose.yml` and the `Dockerfile` are ours and reach the
+  image, so changing one is a Production Release and gets a release version. The
+  letter form is for a delivery that ships **no** application code at all — a
+  host change, a console change, a drill.
 - **Every delivery is a work package.** Work packages sharing a milestone are
   delivered together, and that grouping has no issue of its own — the milestone
   is what identifies it. A parent lists what it delivers, each row naming the
