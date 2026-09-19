@@ -115,9 +115,15 @@ jobs:
       # -D warnings makes any clippy or rustc warning fail the build. Scoped to
       # this repo's crates (old-crates carry many pre-existing warnings we don't
       # maintain), but across all targets so tests and examples are linted too.
+      #
+      # --locked refuses to update Cargo.lock, so a manifest and a lockfile
+      # that disagree fail here rather than shipping a silently regenerated
+      # lockfile (#372) -- and it catches third-party drift the same way, which
+      # a check comparing only the two files' workspace versions would not.
       - name: Clippy (deny warnings)
         run: >
           cargo clippy
+          --locked
           --workspace --exclude first-try
           --all-targets
           -- -D warnings
