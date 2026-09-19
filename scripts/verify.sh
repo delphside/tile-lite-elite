@@ -228,7 +228,7 @@ LABEL[reviews]="Shipped projects have been closed out"
 # so the column means *awaiting its review*. That is a passive reminder, which is
 # the point — but a passive reminder is also one a column can quietly accumulate.
 #
-# This is the bound. `actions.py` mentions a project a week after it ships;
+# This is the bound. `board-actions.py --claude` mentions a project a week after it ships;
 # this fails once a **later release has shipped** while the earlier one was still
 # unreviewed, which is a different and much stronger statement: we moved on
 # without looking back.

@@ -21,7 +21,9 @@ sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
 from board.obligations import Answer, assess
 from board.sources import pr_state
-from board.turn import boxes_are_due, waiting_on_owner
+from board.turn import (REVIEW_DUE_DAYS, boxes_are_due, waiting_on_claude,
+                        waiting_on_owner, whats_waiting)
+from board.sources import Snapshot
 
 failures = 0
 
@@ -229,6 +231,43 @@ check("an untested delivery is his", "user testing",
 done = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
                       body="## Functional user tests — Preview\n\n- [x] clicked\n"))
 check("a tested one is not", None, waiting_on_owner(done))
+
+print()
+print("the mirror: what is waiting on Claude")
+def issue2(number, kind="Project", parent=None, fields=None, labels=(), body=""):
+    return RawIssue(number, f"issue {number}", "OPEN", body, kind, fields or {},
+                    (), parent, None, frozenset(labels))
+
+live = classify(issue2(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"}))
+check("a delivery at Post-deployment owes a review", "post-deployment",
+      getattr(waiting_on_claude(live), "source", None))
+# #310: a Release Check project waits for the next release and owes nobody an
+# action. Without this it nags for a review for ever.
+held = classify(issue2(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"},
+                       labels=["Release Check"]))
+check("unless it is waiting for a release", None, waiting_on_claude(held))
+check("an approved pull request is Claude's to merge", "pull request",
+      getattr(waiting_on_claude(classify(issue2(
+          1, kind="PullRequest", fields={"PR State": "Approved"}))), "source", None))
+check("one awaiting review is not", None,
+      waiting_on_claude(classify(issue2(1, kind="PullRequest",
+                                        fields={"PR State": "Awaiting review"}))))
+check("and that one is the owner's", "pull request",
+      getattr(waiting_on_owner(classify(issue2(1, kind="PullRequest",
+                                               fields={"PR State": "Awaiting review"}))),
+              "source", None))
+
+print()
+print("a review is not due until it has waited")
+# Dropped only once the age is KNOWN. Without a date there is nothing to
+# compare, and guessing "probably old enough" would claim work is owed when
+# nothing says so.
+snap = Snapshot((issue2(1, parent=2, fields={"Phase": "Post-deployment",
+                                             "Route": "x"}),), 0.0, 0.0, 1, False)
+got = whats_waiting(snap, dated=False, who="Claude")
+check("an undated review is kept, not guessed away", 1, len(got))
+check("and the threshold it is waiting for is recorded",
+      REVIEW_DUE_DAYS, got[0].due_after)
 
 print()
 print("every checkbox says whose move it is")

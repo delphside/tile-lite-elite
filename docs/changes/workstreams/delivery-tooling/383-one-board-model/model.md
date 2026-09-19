@@ -381,7 +381,7 @@ A migration note, not a specification. The nine scripts are one implementation o
 | `verify.sh` | R6 | asks the model |
 | ~~`check-transitions.sh`~~ | obligation checks | **retired 2026-09-19.** 666 lines of bash replaced by the grid in `obligations.py`; `verify.sh` now gates on `board-check.py --exit-code`, which keeps the same contract — 0 clean, 2 could not run, anything else findings |
 | ~~`status.sh`~~ | R3 | **retired 2026-09-19.** `board-status.py` replaces it. Three sources meet there — GitHub for what a change is, git for where it got to, `/health` for what is running |
-| `actions.py` | R1 | asks. `board-actions.py` runs beside it: R1 as specified is narrower — only what the owner must do — so a difference between them is the expected result, not a defect |
+| ~~`actions.py`~~ | R1 | **retired 2026-09-19.** `board-actions.py` answers both sides — `--claude` is the mirror — and took its three facts the model lacked: the timeline age, the token countdown, and the `Release Check` label that stops a delivery nagging for a review it cannot yet have (#310) |
 | `inbox.sh` | R2 | asks, including comments |
 | `sync-pr-state.sh` | a write | `board` command |
 | `turn-check.sh` | the sweep | asks, `CACHED` |

@@ -48,30 +48,38 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 ')"
 
 # **What is waiting on Claude, and what does not add up** — #347 R2. The two
-# tools that answer this were wired to nothing: `actions.py --claude` was in no
-# hook at all, and `check-transitions.sh` was reachable only by hand or through
+# tools that answer this were wired to nothing: the actions report was in no
+# hook at all, and the transition check was reachable only by hand or through
 # `verify.sh`, where it is a `note` and `CLAUDE.md`:82 says to trust the exit
 # status rather than read the output. Following the process exactly meant never
 # seeing either.
+#
+# **Both moved to the board model on 2026-09-19** — `board-actions.py --claude`
+# (R1's mirror) and `board-check.py` (R4). This hook kept calling the retired
+# `check-transitions.sh` for the length of one commit, and because every path
+# here is guarded it lost that half **silently**: exactly the failure the
+# guards exist to prevent at session start, arriving as a missing signal rather
+# than an error.
 #
 # **In parallel**, because three sequential calls measured 16s against a 30s
 # timeout and a slow GitHub would eat the margin. Each is separately guarded:
 # one failing leaves the others, and all of them failing leaves the inbox
 # summary, which is what this hook did before.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-( timeout 20 ./scripts/actions.py --claude 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' > "$TMP/actions" ) &
-( timeout 20 ./scripts/check-transitions.sh 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' > "$TMP/trans" ) &
+( timeout 25 ./scripts/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
+( timeout 25 ./scripts/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
 wait
 
-# Only the findings. A clean run says "every open issue has done the work its
-# field claims", which is worth nothing in context and would be repeated into
-# every later turn of the session.
-TRANS="$(grep -E '^\s+#[0-9]+' "$TMP/trans" 2>/dev/null | head -20 || true)"
-ACTIONS="$(sed '/^\s*$/d' "$TMP/actions" 2>/dev/null | head -40 || true)"
+# Only the findings. A clean run says nothing is missing, which is worth
+# nothing in context and would be repeated into every later turn of the
+# session. R4 prints a finding's issue at column 0, where check-transitions.sh
+# indented it — a difference that silently matched nothing for one commit.
+TRANS="$(grep -E '^#[0-9]+' "$TMP/trans" 2>/dev/null | head -20 || true)"
+ACTIONS="$(grep -E '^  #[0-9]+' "$TMP/actions" 2>/dev/null | head -40 || true)"
 
 EXTRA=""
-[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/actions.py --claude for the detail):"$'\n'"$ACTIONS"
-[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Further along than their content supports (./scripts/check-transitions.sh):"$'\n'"$TRANS"
+[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
+[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 

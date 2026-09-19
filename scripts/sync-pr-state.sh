@@ -4,7 +4,7 @@ set -euo pipefail
 # sync-pr-state.sh — put every pull request on the board, and set `PR State`
 # from what GitHub already knows.
 #
-# **The field is derived, never typed.** `actions.py` reads whose turn a pull
+# **The field is derived, never typed.** `board/turn.py` reads whose turn a pull
 # request is on from `isDraft`, `reviewDecision` and whether a review is
 # requested, and its own comment records why: the `approved` and
 # `awaiting-review` labels were deleted in #219 because they were a second
@@ -47,7 +47,7 @@ if [[ -z "$OPTIONS" ]]; then
 fi
 option_id() { awk -F'\t' -v n="$1" '$1==n{print $2}' <<< "$OPTIONS"; }
 
-# **The same ladder `actions.py` uses**, plus the two terminal states it has no
+# **The same ladder `board/sources.py` uses**, plus the two terminal states it has no
 # reason to name. Kept in one place so the board and the action list cannot
 # disagree about whose turn it is.
 derive() {

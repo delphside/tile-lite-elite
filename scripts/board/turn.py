@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from .model import (
+    CLAUDE,
     OWNER,
     Decision,
     Issue,
@@ -85,6 +86,9 @@ class Waiting:
     source: str
     days: float | None = None
     dated: bool = False
+    # Some work is not owed until it has sat a while. A post-deployment review
+    # is due after seven days, not the moment the deploy lands.
+    due_after: float = 0.0
 
     @property
     def age(self) -> float:
@@ -132,7 +136,49 @@ def waiting_on_owner(issue: Issue) -> Waiting | None:
     return None
 
 
-def whats_waiting(snapshot: Snapshot, dated: bool = True) -> list[Waiting]:
+# A delivery at Post-deployment owes a review after this long. `actions.py`'s
+# REVIEW_DUE_DAYS, kept at its value so the move changes nothing.
+REVIEW_DUE_DAYS = 7
+
+# A delivery carrying this waits for the next release and owes nobody an
+# action: the difference between "you have not done this" and "this cannot be
+# done yet". Without it a Release Check project nags for a review for ever,
+# which is #310.
+RELEASE_CHECK = "Release Check"
+
+
+def waiting_on_claude(issue: Issue) -> Waiting | None:
+    """The mirror of `waiting_on_owner`. Same question, other side.
+
+    Whose turn it is has exactly two answers, and a model that can only name
+    one of them leaves the other implicit -- which is how `actions.py --claude`
+    came to be the only thing that could say what Claude owed, wired into a
+    single hook.
+    """
+    if isinstance(issue, PullRequest):
+        if issue.step == "Approved":
+            return Waiting(issue, "approved — mine to merge", "pull request")
+        if issue.step == "Changes requested":
+            return Waiting(issue, "make the changes, then re-request the review",
+                           "pull request")
+        return None
+
+    if (isinstance(issue, DELIVERING) and issue.step == "Post-deployment"
+            and RELEASE_CHECK not in issue.labels):
+        return Waiting(issue, "post-deployment review is due — "
+                              "docs/templates/post-deployment-review.md",
+                       "post-deployment", due_after=REVIEW_DUE_DAYS)
+
+    mine = issue.unticked_for(CLAUDE) if boxes_are_due(issue) else []
+    if mine:
+        first = mine[0].text
+        more = f" (+{len(mine) - 1} more)" if len(mine) > 1 else ""
+        return Waiting(issue, f"{first[:60]}{more}", "checkbox")
+    return None
+
+
+def whats_waiting(snapshot: Snapshot, dated: bool = True,
+                  who: str = OWNER) -> list[Waiting]:
     """Longest-waiting first, because that is the only signal the board gives
     that something is stuck.
 
@@ -141,7 +187,8 @@ def whats_waiting(snapshot: Snapshot, dated: bool = True) -> list[Waiting]:
     the whole board. Without it the ordering falls back to last activity, which
     is a floor rather than a measure and says so in the output.
     """
-    found = [w for w in (waiting_on_owner(classify(raw)) for raw in snapshot.issues)
+    rule = waiting_on_owner if who == OWNER else waiting_on_claude
+    found = [w for w in (rule(classify(raw)) for raw in snapshot.issues)
              if w is not None]
     if dated and found:
         # Pull requests are not issues: `issue(number:)` on a pull request
@@ -152,44 +199,55 @@ def whats_waiting(snapshot: Snapshot, dated: bool = True) -> list[Waiting]:
                           if not isinstance(w.issue, PullRequest)])
         found = [replace(w, days=ages.get(w.issue.number), dated=w.issue.number in ages)
                  for w in found]
+    # Dropped only once the age is known: without a date there is nothing to
+    # compare, and guessing "probably old enough" would make the report claim
+    # work is owed when nothing says so.
+    found = [w for w in found if not (w.due_after and w.dated and w.age < w.due_after)]
     return sorted(found, key=lambda w: (-w.age, w.issue.number))
 
 
 BOLD, DIM, RESET = "\033[1m", "\033[2m", "\033[0m"
 
 
-def render(snapshot: Snapshot, colour: bool = True,
-           dated: bool = True) -> tuple[str, int]:
+def render(snapshot: Snapshot, colour: bool = True, dated: bool = True,
+           who: str = OWNER) -> tuple[str, int]:
     """The report, and how many things are waiting."""
     def paint(code: str, text: str) -> str:
         return f"{code}{text}{RESET}" if colour else text
 
-    waiting = whats_waiting(snapshot, dated=dated)
+    waiting = whats_waiting(snapshot, dated=dated, who=who)
+    subject = "you" if who == OWNER else "Claude"
     out = []
 
     if waiting:
-        out.append(paint(BOLD, f"{len(waiting)} waiting on you"))
+        out.append(paint(BOLD, f"{len(waiting)} waiting on {subject}"))
         out.append("")
         for w in waiting:
             out.append("  " + w.line)
     else:
         # Said plainly. Blank space is indistinguishable from a broken report.
-        out.append(paint(BOLD, "Nothing is waiting on you."))
-        out.append(paint(DIM, "  No decision is unanswered, no pull request is "
-                              "awaiting review, and no delivery is in user testing."))
+        out.append(paint(BOLD, f"Nothing is waiting on {subject}."))
+        if who == OWNER:
+            out.append(paint(DIM, "  No decision is unanswered, no pull request is "
+                                  "awaiting review, and no delivery is in user testing."))
+        else:
+            out.append(paint(DIM, "  No pull request is mine to move, no "
+                                  "post-deployment review is due, and no checkbox "
+                                  "labelled Claude is outstanding."))
 
     issues = [classify(raw) for raw in snapshot.issues]
-    later = sum(len(i.unticked_for(OWNER)) for i in issues if not boxes_are_due(i))
+    later = sum(len(i.unticked_for(who)) for i in issues if not boxes_are_due(i))
     if later:
         out.append("")
-        out.append(paint(DIM, f"  {later} box(es) are yours but not yet due — "
+        whose = "yours" if who == OWNER else "Claude's"
+        out.append(paint(DIM, f"  {later} box(es) are {whose} but not yet due — "
                               "they belong to work that has not reached a step "
                               "where you act."))
 
     # The token is the owner's to renew and nothing else warns: GitHub emails
     # about 2FA and says nothing about this, so the first symptom would be a
     # command failing in the middle of something else. #309.
-    if dated:
+    if dated and who == OWNER:
         left = token_days_left()
         if left is not None:
             out.append("")

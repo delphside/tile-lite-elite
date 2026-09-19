@@ -28,7 +28,6 @@ DEF = re.compile(r"^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{|^\s*
 FILES = [
     "scripts/deploy.sh",
     "scripts/verify.sh",
-    "scripts/actions.py",
 ]
 
 

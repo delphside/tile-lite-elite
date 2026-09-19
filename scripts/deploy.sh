@@ -586,7 +586,7 @@ settle_milestone() {
 # A project can reach `Post-deployment` owing a check that cannot be answered
 # until a *later* release: #214 compares this release's image digest against the
 # previous one, and before a second release there is nothing to compare. The
-# `Release Check` label marks those, `actions.py` shows them as waiting rather
+# `Release Check` label marks those, `board-actions.py` shows them as waiting rather
 # than due, and this is the moment they stop waiting (#310).
 #
 # A check and never a gate. It runs after everything else has succeeded, prints,
