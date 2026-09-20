@@ -345,6 +345,16 @@ if [[ -n "$IMG_NEW" && -n "$IMG_OLD" ]]; then
     run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
   check_exit "and refuses, because there is no terminal to confirm at" 1 \
     run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
+  # **The case the drill found.** An emergency cut from the last prod tag
+  # carries commits production lacks — the fix — and must NOT be asked about
+  # them. Only what is also on `main` is the queue being dragged along. Here
+  # the target is `main` itself, so its extra commits are on main by
+  # definition; the fix-not-on-main case cannot be built from real history
+  # without a branch that outlives the test, and is covered by the narrowing
+  # in deploy.sh rather than here.
+  check_says "it asks only about commits already on main" "also ships image changes" \
+    run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW" DEPLOY_EMERGENCY="testing R3"
+
   # The half that keeps it from becoming noise: an ordinary deploy says nothing.
   check_silent "an ordinary deploy is not asked about scope" "also ships image changes" \
     run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW"

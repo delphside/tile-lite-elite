@@ -1006,8 +1006,20 @@ if [[ -n "$EMERGENCY" && "$DEPLOY_ENV" == "production" ]]; then
                 | sed -n 's/.*"app_version":"[^+]*+\([^"]*\)".*/\1/p')"
   if [[ -n "$EMERG_LIVE" ]] && git cat-file -e "$EMERG_LIVE^{commit}" 2>/dev/null; then
     EMERG_EXTRA=""
+    # **Only what is also on `main`.** Cutting from the last `prod-*` tag — which
+    # is what 3.3 §1.13 now says to do — makes the fix itself a change
+    # production lacks, so counting everything flagged the emergency's own
+    # commit and asked about it. A false positive at the worst possible moment,
+    # found by walking the path on 2026-09-20 rather than by reading it.
+    #
+    # A commit reachable from `origin/main` is one that was queued there and is
+    # being dragged along; one that is not is the emergency's own work. That
+    # tells the two cases apart without needing to know which commit is "the
+    # fix": cut from the tag and nothing is reported, deploy `main` and all of
+    # it is.
     while read -r esha; do
       [[ -n "$esha" ]] || continue
+      git merge-base --is-ancestor "$esha" origin/main 2>/dev/null || continue
       if touches_image "$esha"; then
         EMERG_EXTRA+="      $(git log -1 --format='%h %s' "$esha" | cut -c1-90)"$'\n'
       fi
