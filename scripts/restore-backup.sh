@@ -97,6 +97,47 @@ echo "verified: integrity ok, $PLAYERS players, $GAMES games"
 
 # --- load it, if asked --------------------------------------------------------
 if [[ -n "$INTO" ]]; then
+  # --- refuse while anything holds the volume ------------------------------ #385
+  #
+  # **There is no error to catch, which is why this has to refuse.** Measured
+  # 2026-09-16: with a live sqlx pool open on a SQLite database, deleting
+  # `t.db`, `t.db-wal` and `t.db-shm` underneath it and writing again both
+  # *succeeded*. POSIX keeps the unlinked inode alive while a process holds it
+  # open, so the server goes on reading and writing a file with no name. The
+  # service looks healthy the whole time and the loss appears at the next
+  # restart, when it opens the restored file and none of the intervening work
+  # is there.
+  #
+  # `docs/3.4` says to stop the server first. `deploy.sh` obeys that without
+  # being asked; this did neither, and said so nowhere.
+  #
+  # **Refuse rather than stop the stack itself.** Stopping is a second failure
+  # mode on a path that runs when something has already gone wrong, and a
+  # restore that leaves the site down because its restart step failed is a
+  # worse outcome than one that asks for two commands. The operator is at a
+  # terminal by definition here.
+  holders="$(docker ps --filter "volume=$INTO" --format '{{.Names}}' 2>/dev/null || true)"
+  if [[ -n "$holders" ]]; then
+    project="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' \
+                 "$(head -1 <<< "$holders")" 2>/dev/null || true)"
+    echo "restore-backup: refusing — volume '$INTO' is in use by:" >&2
+    printf '  %s\n' $holders >&2
+    echo >&2
+    echo "  Replacing the database under a live connection does not fail. It" >&2
+    echo "  succeeds, silently, into a file that no longer has a name, and the" >&2
+    echo "  loss appears at the next restart. docs/3.4." >&2
+    echo >&2
+    if [[ -n "$project" ]]; then
+      echo "  Stop it, restore, start it again:" >&2
+      echo "    docker compose -p $project stop" >&2
+      echo "    $0 $*" >&2
+      echo "    docker compose -p $project start" >&2
+    else
+      echo "  Stop the containers above, run this again, then start them." >&2
+    fi
+    exit 1
+  fi
+
   echo "loading into volume $INTO — anything already there is replaced"
   docker run --rm -v "$INTO:/data" -v "$WORK:/in:ro" debian:bookworm-slim \
     sh -c 'rm -f /data/tile-lite-elite.sqlite3 /data/*-wal /data/*-shm \

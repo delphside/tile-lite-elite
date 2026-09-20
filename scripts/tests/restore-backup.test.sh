@@ -56,6 +56,49 @@ run() {   # $1 name, $2 players, $3 want-exit, $4 want-text
   rm -rf "$dir"
 }
 
+# --- the volume is in use ---------------------------------------------------- #385
+#
+# **The case with no error to catch.** Replacing the database under a live
+# connection succeeds -- POSIX keeps the unlinked inode alive -- so nothing
+# fails until the next restart, by which time the good copy may be gone. The
+# refusal is the only thing standing between those two moments.
+volume_case() {   # $1 name, $2 holders printed by `docker ps`, $3 want-exit, $4 want-text
+  local dir; dir="$(mktemp -d)"
+  make_bucket "$dir" 3
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'case "$1" in'
+    printf '  ps)      printf %s "%s" ;;\n' "'%s'" "$2"
+    echo '  inspect) echo tile-lite-elite-preview ;;'
+    echo '  run)     echo "(stub) would have written into the volume" ;;'
+    echo 'esac'
+  } > "$dir/bin/docker"
+  chmod +x "$dir/bin/docker"
+  local out status
+  set +e
+  out="$(cd "$dir" && PATH="$dir/bin:$PATH" bash "$SCRIPT" \
+          "https://example.invalid/p/x/o/" --into tile-lite-elite-data 2>&1)"
+  status=$?
+  set -e
+  if [[ "$status" -ne "$3" ]]; then
+    echo "FAIL  $1: exit $status, wanted $3"; echo "      $out"; failures=1
+  elif [[ -n "$4" && "$out" != *"$4"* ]]; then
+    echo "FAIL  $1: did not mention '$4'"; echo "      $out"; failures=1
+  else
+    echo "ok    $1"
+  fi
+  rm -rf "$dir"
+}
+
+volume_case "a volume a container still holds is refused" \
+            "tile-lite-elite-server-1" 1 "refusing — volume"
+volume_case "and it names the container holding it" \
+            "tile-lite-elite-server-1" 1 "tile-lite-elite-server-1"
+volume_case "and says how to stop it" \
+            "tile-lite-elite-server-1" 1 "docker compose -p"
+# The half that keeps it from blocking an ordinary restore.
+volume_case "a volume nobody holds is restored" "" 0 "loading into volume"
+
 run "a good backup verifies and restores"          3 0 "verified: integrity ok, 3 players"
 run "an empty database is refused"                 0 1 "valid database with no players"
 
