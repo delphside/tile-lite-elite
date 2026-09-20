@@ -8,27 +8,50 @@ import { execSync } from 'node:child_process';
 // `webServer:` block: this suite does not own the app's lifecycle.
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 
-// Rehearsal is closed by the Caddyfile (#240): everything but `/health` answers
-// 403 before the request reaches the application, so a suite pointed at it
-// fails every test at the door — and a closed gate and a broken application
+// Rehearsal is closed by the Caddyfile (#240): everything but `/health`
+// answers 403 before the request reaches the application, so a suite pointed at
+// it fails every test at the door — and a closed gate and a broken application
 // refuse identically. #371.
 //
 // The key comes from `scripts/rehearsal-key.sh`, which is the one place that
 // knows how to get it; set `REHEARSAL_ACCESS_KEY` to skip the ssh.
 //
-// **A header rather than the cookie jar, and that is safe here for a reason
-// that could change**: the client keeps its session in `localStorage`, never in
-// a cookie (`crates/ui/src/local_storage.rs`), so overriding `Cookie` cannot
-// disturb a logged-in session. If the app ever sets a cookie of its own this
-// must become `storageState` instead.
-function gateHeaders(): Record<string, string> {
-  if (!/rehearsal|84\.183/.test(baseURL)) return {};
+// **The cookie jar, not a header, and that distinction is the whole of #396.**
+// This first used `extraHTTPHeaders: { Cookie: ... }`, which works for every
+// request Playwright makes — and not for the one the *page* makes. The client
+// opens `wss://…/games/{id}/events` itself, and a browser-initiated WebSocket
+// handshake carries the cookie jar, never Playwright's extra headers. So the
+// gate answered 403 to the socket while every HTTP call sailed through, the
+// client lost its live updates, and the suite failed one assertion per run on
+// rehearsal and none on preview.
+//
+// Measured 2026-09-20, the same upgrade request both ways:
+//
+//     no cookie    -> 403   (the gate)
+//     with cookie  -> 400   (through it; the app rejecting a fabricated id)
+//
+// A `storageState` cookie is carried by both, which is why it is this and not
+// the header.
+function gateState() {
+  if (!/rehearsal|84\.183/.test(baseURL)) return undefined;
   const fromEnv = process.env.REHEARSAL_ACCESS_KEY;
   const key =
     fromEnv ??
     execSync(`${__dirname}/../scripts/rehearsal-key.sh`, { encoding: 'utf8' }).trim();
   if (!key) throw new Error('rehearsal is gated and no access key could be obtained');
-  return { Cookie: `rehearsal=${key}` };
+  return {
+    cookies: [{
+      name: 'rehearsal',
+      value: key,
+      domain: new URL(baseURL).hostname,
+      path: '/',
+      expires: -1,
+      httpOnly: false,
+      secure: true,
+      sameSite: 'Lax' as const,
+    }],
+    origins: [],
+  };
 }
 
 export default defineConfig({
@@ -51,7 +74,7 @@ export default defineConfig({
     // The wasm client takes a moment to boot and hydrate on first load.
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
-    extraHTTPHeaders: gateHeaders(),
+    storageState: gateState(),
   },
   // Two form factors. Layout regressions are invisible to the desktop run —
   // the board, the games panel and the top bar all reflow at phone width —
