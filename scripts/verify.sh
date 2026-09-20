@@ -535,6 +535,29 @@ check_gates() {
   fi
 }
 
+LABEL[hosts]="Rehearsal and production agree, and neither waits to reboot"
+# **The trigger for #360 R4's cadence.** The owner chose "when reboot-required
+# appears" over a calendar, which only works if something says when it appears.
+# `check-hosts.sh` reads it; this is what makes somebody see it, attached to a
+# command already run before a deploy rather than to a reminder.
+#
+# The named failure: production ran nine kernel revisions behind what it had
+# installed, for weeks, and nothing reported it — measured 2026-09-19.
+#
+# A note, never a failure. A pending reboot is not a reason to refuse a deploy;
+# it is a reason to schedule one, and that is the owner's call.
+check_hosts() {
+  local out
+  if out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/check-hosts.sh" 2>&1)"; then
+    pass hosts "same kernel, same Docker, neither waiting to reboot"
+  else
+    case "$out" in
+      *"could not read"*) note hosts "a host could not be read" "$out" ;;
+      *) note hosts "the hosts differ, or one is waiting to reboot" "$out" ;;
+    esac
+  fi
+}
+
 LABEL[prstate]="The board agrees with GitHub about pull requests"
 # The `PR State` field is derived and never typed, so the only way it goes wrong
 # is nobody running the thing that derives it — and nothing did. Found
@@ -597,8 +620,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches envs unreleased rehearsal reviews milestone approach transitions prstate ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests envs unreleased rehearsal reviews milestone approach transitions prstate gates branches)
+RUN_ORDER=(tree pushed branches envs unreleased hosts rehearsal reviews milestone approach transitions prstate ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests envs unreleased hosts rehearsal reviews milestone approach transitions prstate gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done
