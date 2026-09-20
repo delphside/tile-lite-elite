@@ -32,6 +32,32 @@ set -euo pipefail
 # notice. It was a label until 2026-08-26; see docs/3.6 2.6.
 FUNCTIONAL='IN("functional")' 
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: check-release-version.sh <version> [previous-version]
+
+Checks whether <version> is the right kind of release given what its
+milestone contains: a patch may not carry functional change
+(docs/3.3, "Releases are branches").
+
+Exits 1 (wrong) only when:
+  - <version> is a patch bump over its predecessor, and the milestone
+    named for it holds an issue whose "Type of change" is functional
+    -> "check-release-version: X.Y.Z is a patch release, but its
+        milestone carries functional change: ..."
+
+Exits 2 (could not judge) when:
+  - no version is given
+  - <version> is not an X.Y.Z version
+    -> "error: 'X' is not an X.Y.Z version"
+
+Otherwise exits 0 and prints why it passed or skipped: no previous
+release to compare against, gh unavailable, a minor/major bump (fixes
+are allowed there), or nothing functional found in the milestone.
+EOF
+  exit 0
+fi
+
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
   echo "usage: check-release-version.sh <version> [previous-version]" >&2

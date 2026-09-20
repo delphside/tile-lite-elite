@@ -50,7 +50,48 @@ while (( $# > 0 )); do
   case "$1" in
     --check-only)        CHECK_ONLY=1 ;;
     --allow-missing-run) ALLOW_MISSING=1 ;;
-    -h|--help) sed -n '3,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)
+      cat <<'EOF'
+usage: merge-to-release.sh <pr-number>
+       merge-to-release.sh <pr-number> --check-only
+       merge-to-release.sh <pr-number> --allow-missing-run
+
+Merges a project's pull request into a release branch, but only once
+CI has actually answered both for the pull request itself and for the
+release branch's current tip. See the header comment above for why
+both questions matter (#144, #344 R4/R5).
+
+Exits 2 (usage error) when:
+  - no pull request number is given
+    -> "usage: merge-to-release.sh <pr-number> ..."
+  - an unrecognised '-' option is given
+    -> "error: unknown option ..."
+  - more than one pull request is given
+    -> "error: one pull request at a time"
+  - the given value isn't a number
+    -> "error: '...' is not a pull request number"
+
+Refuses (exit 1) when:
+  - the pull request can't be read from GitHub
+    -> "error: cannot read pull request #... from ..."
+  - it isn't OPEN, or is still a draft
+    -> "error: #... is CLOSED/MERGED, not OPEN." / "... is a draft ..."
+  - it doesn't target a release/* branch
+    -> "error: #... targets '...', which is not a release branch."
+  - the release branch's current tip can't be read
+    -> "error: cannot read the tip of ..."
+  - either the pull request's own run or the release branch tip's run
+    is missing (unless --allow-missing-run) or did not pass CI with e2e
+    -> "error: refusing — a missing run is not a passing one." /
+       "error: refusing — ... did not pass CI."
+
+With --check-only, exits 0 after both checks pass without merging.
+Otherwise merges with --merge --delete-branch (never --rebase — see
+the header comment on why a rebase here would invalidate the very
+runs just checked).
+EOF
+      exit 0
+      ;;
     -*) echo "error: unknown option $1" >&2; exit 2 ;;
     *)  [[ -z "$PR" ]] || { echo "error: one pull request at a time" >&2; exit 2; }
         PR="$1" ;;

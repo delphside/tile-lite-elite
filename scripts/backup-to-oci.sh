@@ -24,6 +24,31 @@
 #        PAR_URL=... backup-to-oci.sh
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: backup-to-oci.sh
+       PAR_URL=... backup-to-oci.sh
+
+Takes a consistent VACUUM INTO copy of production's database and
+uploads it to OCI Object Storage via a write-only pre-authenticated
+request, so a backup exists somewhere the production host cannot
+itself delete.
+
+Refuses (exit 1) when:
+  - no PAR_URL is set and ~/.tile-lite-elite-backup-par is unreadable
+    -> "error: no PAR_URL, and no ~/.tile-lite-elite-backup-par"
+  - the fresh copy fails PRAGMA integrity_check
+    -> "error: integrity check failed on the fresh copy: ..."
+  - the upload itself fails (the previous backup is left untouched)
+    -> "error: upload failed; the previous backup is untouched"
+
+Only warns (exit 0) when the backup uploaded but the success marker
+did not — the alarm then fires on that absence:
+  -> "warning: backup uploaded but the marker did not; the alarm will fire"
+EOF
+  exit 0
+fi
+
 COMPOSE="${COMPOSE:-$HOME/tile-lite-elite/docker-compose.yml}"
 PAR_URL="${PAR_URL:-}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"

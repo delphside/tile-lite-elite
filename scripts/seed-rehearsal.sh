@@ -26,6 +26,30 @@ set -euo pipefail
 #   ./scripts/seed-rehearsal.sh          # newest production snapshot
 #   ./scripts/seed-rehearsal.sh <name>   # a specific one
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: seed-rehearsal.sh [snapshot-name]
+
+Copies one of production's own deploy.sh snapshots into the rehearsal
+host, discarding whatever rehearsal's database held. With no argument,
+uses the newest snapshot on production; production is only ever read
+from, never written to.
+
+Refuses (exit 1) when:
+  - no snapshot name is given and production has none yet
+    -> "error: no snapshot found on production ($PROD_HOST)."
+  - the rehearsal host does not answer /health within 60s of the
+    restore (its own database may be mid-restart; check with
+    'docker compose logs --tail=50 server' over ssh)
+    -> "warning: no /health within 60s. ..."
+
+The copy carries real accounts (email addresses, password hashes), so
+treat a seeded rehearsal host as carrying production data — see the
+comment above on why it is configured like production for that reason.
+EOF
+  exit 0
+fi
+
 PROD_HOST="${PROD_DEPLOY_HOST:-129.151.69.246}"
 PROD_KEY="${PROD_DEPLOY_SSH_KEY:-$HOME/.ssh/oracle_tile_lite_elite}"
 REHEARSAL_HOST="${DEPLOY_HOST:-129.151.84.183}"

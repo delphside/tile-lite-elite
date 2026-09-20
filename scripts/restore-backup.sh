@@ -29,7 +29,33 @@ while [[ $# -gt 0 ]]; do
     --into)   INTO="$2"; shift 2 ;;
     --object) OBJECT="$2"; shift 2 ;;
     --mark)   MARK="$2"; shift 2 ;;   # a write PAR, to refresh the restore marker
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help)
+      cat <<'EOF'
+usage: restore-backup.sh <read-par-url>                 newest backup, into a file
+       restore-backup.sh <read-par-url> --into <volume> and load it into a volume
+       restore-backup.sh <read-par-url> --object <name> a specific one
+       restore-backup.sh <read-par-url> --mark <write-par-url>  also refresh
+                                          the 100-day restore-drill marker
+
+Restores from the offsite backups (#174). Never run on the production
+VM itself — its PAR is write-only and cannot read, list or delete; see
+the header comment above. Make a short-lived read PAR in the console
+for this, and delete it after.
+
+Refuses (exit 1) when:
+  - no PAR URL is given
+    -> "error: give me a read pre-authenticated request URL (see --help)"
+  - the PAR URL doesn't end in /o/ (the bucket-listing form)
+    -> "error: the PAR URL should end in /o/ — that is the bucket form"
+  - no db-*.sqlite3.gz object exists in the bucket
+    -> "error: no db-*.sqlite3.gz objects in that bucket"
+  - the downloaded file fails PRAGMA integrity_check
+    -> "error: the downloaded backup fails its integrity check: ..."
+  - the backup is a valid database with zero players in it
+    -> "error: the backup is a valid database with no players in it"
+EOF
+      exit 0
+      ;;
     *)        PAR="$1"; shift ;;
   esac
 done

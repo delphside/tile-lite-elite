@@ -1,6 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+for _tle_arg in "$@"; do
+  if [[ "$_tle_arg" == "-h" || "$_tle_arg" == "--help" ]]; then
+    cat <<'EOF'
+usage: rollback.sh                    show what's available, change nothing
+       rollback.sh <snapshot>         database + images back
+       rollback.sh --db-only <snap>   database only, leave images alone
+       rollback.sh --yes <snapshot>   skip the confirmation
+
+Puts the target (production by default; DEPLOY_ENV=rehearsal for the
+rehearsal host) back to how it was before a deploy: the :previous
+images plus the database snapshot taken alongside them. See the header
+comment above for why both move together.
+
+Refuses (exit 1) when:
+  - PROD_URL is set instead of TARGET_URL
+    -> "error: PROD_URL is set but this script now reads TARGET_URL."
+  - ssh access to the target host fails preflight (see ssh-preflight.sh)
+  - an unrecognised '-' option is given
+    -> "error: unknown option '...'"
+  - the named snapshot does not exist on the host
+    -> "error: no snapshot named '...' on $DEPLOY_HOST."
+  - no ':previous' image exists and --db-only was not given
+    -> "error: no ':previous' image on the VM, so the code can't be
+        rolled back here."
+  - the typed confirmation doesn't match the snapshot name
+    -> "Names don't match — nothing was changed."
+  - the target doesn't answer /health within 60s of the restore
+    -> "warning: ... didn't answer /health within 60s ..."
+
+With no snapshot named, only lists what's available and changes
+nothing — the destructive form has to be asked for by name.
+EOF
+    exit 0
+  fi
+done
+
 # rollback.sh — Put production back to how it was before the last deploy:
 # the previous images, and the database snapshot taken alongside them.
 #

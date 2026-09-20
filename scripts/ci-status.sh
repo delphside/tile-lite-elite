@@ -51,6 +51,34 @@ REQUIRED_JOBS=()
 
 while (( $# > 0 )); do
   case "$1" in
+    -h|--help)
+      cat <<'EOF'
+usage: ci-status.sh --run <event>[:<branch>] [--require <job-prefix>]... [--wait] [commit-ish]
+
+Judges one *named* CI run for a commit — see the header comment above
+for why "did CI pass for this commit" has no single answer without one.
+
+Refuses (exit 2) when:
+  - --run is missing entirely
+    -> "error: --run is required." (with the full explanation)
+  - --run is given with no value
+    -> "error: --run needs <event>[:<branch>]"
+  - --require is given with no value
+    -> "error: --require needs a job name"
+
+Fails (exit 1) when:
+  - 'gh' is not installed
+    -> "error: 'gh' is not installed — install it and run 'gh auth login'."
+  - no matching run exists yet, or (without --wait) it hasn't finished
+  - --wait timed out after 20 minutes with no completed run
+  - the run completed but did not conclude 'success'
+  - a --require'd job is missing from the run, or did not conclude 'success'
+
+Exits 0 only when the named run completed successfully for that exact
+commit, and every --require'd job succeeded within it.
+EOF
+      exit 0
+      ;;
     --wait) WAIT=1 ;;
     --run)
       shift

@@ -71,6 +71,46 @@ fetch_app_version() {
 MODE="${1:-up}"
 
 case "$MODE" in
+  -h|--help)
+    cat <<'EOF'
+usage: deploy-preview.sh                # build + (re)start preview from HEAD
+       deploy-preview.sh down           # stop the preview stack, keep its data
+       deploy-preview.sh reset          # stop the preview stack, wipe its data
+       deploy-preview.sh at <git-ref>   # wipe preview, build + start from a ref
+       deploy-preview.sh at prod        # same, at whatever commit production runs
+       deploy-preview.sh verify         # compare preview's app_version to prod's
+
+Builds and runs the preview stack locally from a fresh checkout of a
+commit, using the same Dockerfile as deploy.sh. See the header comment
+above and docs/3.3, "Preview Environment".
+
+Refuses (exit 1) when:
+  - 'at' is given with no ref
+    -> "Usage: deploy-preview.sh at <git-ref>|prod"
+  - 'at prod' is asked for and production's /health is unreachable or
+    has no app_version / no build id in it
+    -> "error: couldn't reach .../health" or
+       "error: .../health responded but had no app_version field ..." or
+       "error: production's app_version (...) has no build id, ..."
+  - an unrecognised mode is given
+    -> "Usage: deploy-preview.sh [up|down|reset|at <git-ref>|at prod|verify]"
+  - 'verify' finds preview and production running different versions
+    -> "==> Mismatch — preview is NOT running the same version as production"
+  - the given ref isn't a valid local git ref
+    -> "error: '$REF' is not a valid local git ref ..."
+  - (mode 'up' only) preview's database is already ahead of the ref's
+    own migrations, which would crash-loop the container
+    -> "error: preview's database is at migration ..., but ... only
+        knows up to ..."
+  - the built stack doesn't answer on the expected commit within 60s
+    -> "error: preview did not come up on $SHORT_SHA within 60s."
+
+Ends with a document-checks NOTE (a check, not a gate) if check-docs.sh
+fails on the working tree — production still refuses on that; preview
+does not.
+EOF
+    exit 0
+    ;;
   down)
     "${COMPOSE[@]}" down
     exit 0

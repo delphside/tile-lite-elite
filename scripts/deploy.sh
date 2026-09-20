@@ -658,6 +658,95 @@ post_deploy() {
 if [[ "${DEPLOY_SH_FUNCTIONS_ONLY:-}" == "1" ]]; then
   return 0 2>/dev/null || exit 0
 fi
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: deploy.sh              # deploy HEAD
+       deploy.sh <commit-ish> # deploy a specific commit/tag/branch,
+                               # e.g. `deploy.sh prod-0.4.12` to roll
+                               # back to a previous release
+
+Builds fresh images from a clean checkout and ships them to the
+deployment VM (production by default; DEPLOY_ENV=rehearsal for the
+rehearsal host — deploy-rehearsal.sh sets that and more). See the
+header comment above for the full six-step sequence, and docs/3.3,
+"Container Deployment".
+
+Refuses before touching anything (exit 1) when:
+  - PROD_URL is set instead of TARGET_URL
+    -> "error: PROD_URL is set but this script now reads TARGET_URL."
+  - DEPLOY_ENV isn't 'production' or 'rehearsal'
+    -> "error: DEPLOY_ENV must be 'production' or 'rehearsal', not '...'."
+  - deploying to production from unmerged or dirty tooling, and there
+    is no terminal to confirm that at
+    -> "Not a terminal, so this cannot be confirmed. Refusing."
+  - the given ref isn't a valid local git ref
+    -> "error: '...' is not a valid local git ref (fetch it first ...)"
+  - the commit isn't pushed to any remote branch
+    -> "error: ... is not on any remote branch — push it first."
+  - an emergency deploy (DEPLOY_EMERGENCY) carries unreleased work and
+    there is no terminal to confirm that at
+    -> "error: refusing — an emergency carrying unreleased work, and
+        no terminal to confirm at."
+  - CI did not pass for the commit's push-to-main run
+    -> "error: refusing to deploy — see above. Fix CI rather than
+        deploying past it,"
+  - CI did not pass for the commit's pull request run
+    -> "error: refusing to deploy — the pull request for this commit
+        did not pass CI."
+  - production's database is already past the migrations this build knows
+    -> "error: production's database is at migration ..., but ...
+        only knows up to ..."
+  - the target commit's Cargo.toml has no readable version
+    -> "error: couldn't read a version from ...'s Cargo.toml."
+  - a milestone needs attention and there is no terminal to confirm that at
+    -> "error: refusing — the milestone needs attention and there is
+        no terminal to confirm at."
+  - preview isn't running this commit (skipped for an emergency deploy)
+    -> "error: preview (...) isn't running — look at this commit
+        there first:" or "error: preview is running commit ..., not ..."
+  - the rehearsal host isn't running this commit (skipped for an
+    emergency deploy)
+    -> "error: the rehearsal host (...) isn't reachable ..." or
+       "... has no commit id, was it deployed via deploy-rehearsal.sh?"
+       or "... is running commit ..., not ..."
+  - a required gate did not run at all (DEPLOY_GATES_ONLY misuse, or a
+    genuine gap)
+    -> "error: refusing to deploy — these gates did not run:..."
+
+Fails partway through an already-started deploy (exit 1) on:
+  - a cached build artefact whose digest is missing or doesn't match
+    -> "error: ... has no recorded digest." or "... does not match
+        its recorded digest."
+  - the image build or save step itself failing
+    -> "error: the image build failed. Nothing has been cached." or
+       "error: saving the images failed. Nothing has been cached."
+  - migrations failing or timing out on the target host (production is
+    left on the previous version, not mid-migration)
+    -> "error: migrations failed (or timed out) — this build's schema
+        change does not apply"
+  - the new version not answering healthy within 60s, which triggers
+    an automatic rollback
+    -> "error: production did not come up healthy on ... within 60s."
+  - that automatic rollback itself failing
+    -> "error: THE ROLLBACK ALSO FAILED. Production may be down."
+
+Configure via environment variables (defaults match the current VM):
+  DEPLOY_ENV         production | rehearsal (default: production)
+  DEPLOY_HOST        Public IP or hostname of the VM
+  DEPLOY_USER        SSH user
+  DEPLOY_SSH_KEY     Private key path
+  DEPLOY_REMOTE_DIR  Directory on the VM holding docker-compose.yml
+  DEPLOY_EMERGENCY   "<why>" — skip the preview/rehearsal gates only;
+                     see the "Emergency changes" comment above
+  DEPLOY_SKIP_CI     GitHub itself is unreachable — a different
+                     problem from production being down
+  DEPLOY_GATES_ONLY  run the gates and confirmations, deploy nothing
+  SNAPSHOT_KEEP      how many pre-deploy database snapshots to keep
+EOF
+  exit 0
+fi
+
 DEPLOY_ENV="${DEPLOY_ENV:-production}"
 DEPLOY_HOST="${DEPLOY_HOST:-129.151.69.246}"
 DEPLOY_USER="${DEPLOY_USER:-ubuntu}"
