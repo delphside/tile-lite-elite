@@ -389,6 +389,32 @@ check("and it reports as the owner's", "checkbox",
       getattr(waiting_on_owner(live), "source", None))
 
 print()
+print("a red main is Claude's, and the Claude view says so")
+# programme.py already said it -- "nothing releases from a red main, and it is
+# Claude's to fix rather than the owner's" -- but in the *status* report. The
+# report that answers what is waiting on Claude was silent about it.
+import board.repo as _repo
+import board.turn as _turn
+from board.sources import Snapshot
+
+empty = Snapshot(issues=(), started_at=0.0, finished_at=0.0, pages=1,
+                 with_bodies=True)
+_was = _repo.ci_red_on_main
+try:
+    _repo.ci_red_on_main = lambda: "failure"
+    claude_view, _ = _turn.render(empty, colour=False, who="Claude")
+    owner_view, _ = _turn.render(empty, colour=False, who="owner")
+    check("the Claude view names it", True, "CI is red on main" in claude_view)
+    check("the owner's does not — it is not his to fix", False,
+          "CI is red on main" in owner_view)
+    # An absent answer must not read as a failure any more than as a pass.
+    _repo.ci_red_on_main = lambda: None
+    quiet, _ = _turn.render(empty, colour=False, who="Claude")
+    check("a run still pending says nothing", False, "CI is red" in quiet)
+finally:
+    _repo.ci_red_on_main = _was
+
+print()
 if failures:
     print(f"{failures} failure(s)")
     sys.exit(1)

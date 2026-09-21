@@ -41,6 +41,7 @@ from .model import (
     WorkPackage,
     classify,
 )
+from . import repo
 from .sources import Snapshot, step_ages, token_days_left
 
 DELIVERING = (WorkPackage, StandaloneProject)
@@ -253,6 +254,21 @@ def render(snapshot: Snapshot, colour: bool = True, dated: bool = True,
             out.append("")
             line = f"  the token gh runs on expires in {left} days"
             out.append(line if left > 30 else paint(BOLD, line + " — #309"))
+
+    # **A red main is Claude's, and this is the report that says what is his.**
+    # `programme.py` already says so -- "nothing releases from a red main, and
+    # it is Claude's to fix rather than the owner's" -- but it says it in the
+    # status report. Somebody asking what is waiting on Claude was told nothing
+    # was, which was the last of `actions.py`'s extras still outside R1.
+    #
+    # Still pending is not red: an absent answer must not read as a failure any
+    # more than as a pass, which is `ci_red_on_main`'s own rule.
+    if dated and who != OWNER:
+        red = repo.ci_red_on_main()
+        if red:
+            out.append("")
+            out.append(paint(BOLD, f"  CI is red on main: {red}"))
+            out.append(paint(DIM, "  Nothing releases from a red main."))
 
     orphans = sum(len(i.unlabelled_boxes) for i in issues)
     if orphans:
