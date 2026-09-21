@@ -21,6 +21,13 @@ one of them has a defect: fix it, don't work around it.
 - **A decision belongs on what it decides.** Its own issue only where it spans
   several, or where the argument is long enough to bury the requirement. Either
   way it is a `Decision` issue, and the board indexes them by type.
+- **A decision is only worth an issue while there is a choice to discuss.**
+  Owner, 2026-09-21: *"Decisions are only useful when there is a choice to be
+  discussed. A settled decision lives in the permanent documents and claude
+  files."* So an answer that is already settled goes straight to its owning
+  document and to this page, with the argument in the commit message — no
+  issue, no `D` number, nothing to close later. The test is whether anybody
+  still has to be convinced.
 - **Options live in the body, numbered, each saying what it constrains**, so one
   issue can be read and settled rather than assembled from a thread. Owner:
   *"being able to focus on one with options clearly presented in the body would
@@ -239,10 +246,12 @@ one of them has a defect: fix it, don't work around it.
 
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
-- At a process step, consult the owning document. A decision about process is a
-  **`Decision` issue** — the GitHub issue type, carrying `Decision State` and an
-  `Agreed Decision` heading that `board-check.py` reads — and is then
-  applied in the one place where that part of the process is documented. The
+- At a process step, consult the owning document. A process question with a
+  choice still open is a **`Decision` issue** — the GitHub issue type, carrying
+  `Decision State` and an `Agreed Decision` heading that `board-check.py`
+  reads — and is applied to the one place that part of the process is
+  documented, then closed. A process answer that is already settled skips the
+  issue and goes straight to that document and this page. The
   process-definition glossary holds D1 to D38 and is history: it predates the
   issue type and is not added to.
 - docs/N.N numbering: 1.x product, 2.x design, 3.x lifecycle, 4.x reference.
