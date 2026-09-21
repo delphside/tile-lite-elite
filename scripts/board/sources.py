@@ -295,14 +295,17 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
     **`since` is on *updated*, so an edited older comment surfaces**, and that
     is right: an edit is a change you have not seen.
 
-    **Who typed it is decided by the account first, the footer second.** Claude
-    posts through `gh`, which authenticates as `SteveStyle-typed-by-Claude`; the
-    owner types in a browser as himself. The footer (#169) is the fallback, for
-    text of Claude's that somebody else posted.
+    **Who typed it is the account, and only the account.** Claude posts through
+    `gh`, which authenticates as `SteveStyle-typed-by-Claude`; the owner types in
+    a browser as himself. Owner, 2026-09-21: *"We no longer use the footer in
+    comments, we rely on the different GitHub accounts."*
 
-    **Getting this backwards is not a cosmetic error.** Written footer-only
-    first, it labelled 46 of Claude's own comments as the owner's -- and the
-    whole value of this report is that `>` marks what the owner typed.
+    **This was settled on 2026-09-03 and re-learned here.** `.claude/turn-check.sh`
+    had already dropped the `Typed by Claude` test, having checked the thirty
+    most recent comments and found the marker on **none** of them -- every
+    comment Claude had written qualified as the owner's. Written footer-first
+    here anyway, it mislabelled 46 of Claude's comments, and the whole value of
+    this report is that `>` marks what the owner typed.
     **`deploy.sh` is tested first, and that is a fix.** It announces its own
     releases through the same account, so an account-first test labelled them
     Claude's and `inbox.sh`'s dimmed `[deploy.sh]` branch could never fire --
@@ -319,8 +322,7 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
     ):
         jq = (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
               '(if (.body | test("^Released in prod-")) then "deploy" '
-              'elif (.user.login == "SteveStyle-typed-by-Claude") '
-              '     or (.body | test("Typed by Claude")) then "claude" '
+              'elif (.user.login == "SteveStyle-typed-by-Claude") then "claude" '
               'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150])] | @tsv')
         try:
             run = subprocess.run(
