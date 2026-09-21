@@ -83,6 +83,40 @@ at N per minute"* is a fact, and *"N is 40 times what the ceiling allows before
 memory runs out"* is a plan. So R1 is first, and R4 is measured against it
 rather than reported alone.
 
+## R7's tooling exists; what it lacks is a trigger
+
+Engine timing (#304) is delivered: the benchmark records CPU time, steal and a
+stable host label, with laptop, rehearsal and production recorded at `8eb923b`.
+**The gap R7 names is not the measurement, it is the five weeks after one.**
+Production was benchmarked on 30 July at `636794a`, which contains the tiered
+dictionary, and the numbers show the effect — 0.77 ms median before, 0.50 ms
+after. No production run then happened between 30 July and 3 September, across
+the 0.7.0 and 0.7.1 releases, so two releases shipped with no number from
+production-class hardware.
+
+**So the trigger belongs on the release.** Benchmarking at the moment of a known
+performance change already happens; what has no trigger is the release itself.
+Owner, 2026-09-04: make benchmarks part of the standard regression, which
+attaches the run to something that happens anyway.
+
+**One question that leaves open**, carried here from the issue body: does the
+release-regression benchmark also cover `rules-shared`'s dictionary benchmarks?
+They cost about 6 s of CPU against the engine benchmark's 2.6 s, so the answer
+decides whether every regression run pays that. Owner's for the same reason the
+threshold is.
+
+## R5's shape, and why it is not a small fix
+
+**Load games on demand rather than at boot** is the obvious answer, and what it
+costs is a cache policy, an eviction rule and a change to how the engine reaches
+a game. Expiring `waiting` games is the cheap half and is worth doing whichever
+way this goes, because it removes rows that no policy should ever have to hold.
+
+**It is not gated on the state rework (#71)**, although it touches the same
+structure. Owner, 2026-09-02: *"a game-related requirement outside #71 must be
+independent of it and doable at any time."* R5 changes *when* a game is loaded,
+not *what* a game is.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
