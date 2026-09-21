@@ -73,20 +73,41 @@ rather than carry a second design for the same rule. `#68` also records why it m
 on it, because an unanswered invitation lives only on an unstarted game and can
 otherwise hold an account open indefinitely.
 
-## R2 and R7 are one mechanism, and it does not exist
+## R2 and R7 are two mechanisms, and the argument for one was wrong
 
 R2 wants the capacity plan reviewed on a recurrence; R7 wants benchmark timings
-refreshed regularly. **Building two timers would be the mistake.** The repository
-has exactly one recurrence today — a post-deployment review falling due after
-`REVIEW_DUE_DAYS`, in the board model's `turn.py` — and it is specific to that.
+refreshed regularly. This document argued that building two timers would be the
+mistake. **That was wrong**, and the owner said why on 2026-09-21:
 
-**So the design question is what a recurrence is**, once, for both: a due date on
-an issue, a marker object whose age an alarm watches (the shape `backup-to-oci.sh`
-already uses), or a step in the release lap. The third is the cheapest and the
-weakest — it recurs only as often as releases do, which is not a schedule.
+> We are planning to introduce scheduled jobs. That would include some for
+> capacity planning, such as the benchmarks. Reviewing the capacity plan requires
+> Claude to update and Steve to review, so an issue date makes more sense.
 
-**Not settled here.** It needs the owner, and it is the one open question this
-document leaves.
+**A job a machine runs and a review two people do are not one mechanism wearing
+two hats.** The shared word *recurrence* hid a difference that matters: one has
+to happen unattended and produce a number, the other has to reach a person and
+wait for them.
+
+| | mechanism | why |
+| --- | --- | --- |
+| **R7**, benchmark timings | a **scheduled job** | it runs unattended, produces a row, and needs nobody |
+| **R2**, the capacity plan review | a **due date on an issue** | Claude updates it, the owner reviews it. A job cannot do either half |
+
+**R7 therefore depends on the scheduler**, which is owned elsewhere.
+`docs/3.7` (2026-09-01) puts the mechanism in Application & Game Architecture and
+the individual jobs with the workstream whose rule they apply — so the benchmark
+run is Capacity Planning's job on somebody else's mechanism, and it cannot be
+built before that mechanism is. The delivery project for it is #400.
+
+**R2 needs nothing that does not exist.** A date in the issue body and a report
+that surfaces it when the date passes; the board model's `turn.py` already
+carries the one recurrence this repository has, a post-deployment review falling
+due after `REVIEW_DUE_DAYS`, so the shape is there to follow rather than invent.
+Doing the review moves the date on, which is what makes it recur.
+
+**Which one is dearer is not the one you would guess.** R2 is a few lines in the
+board tooling and can be built at any time. R7 is blocked behind a project that
+has not started.
 
 ## R4 produces a number that ages, and R1 is what makes it mean anything
 
@@ -112,11 +133,10 @@ performance change already happens; what has no trigger is the release itself.
 Owner, 2026-09-04: make benchmarks part of the standard regression, which
 attaches the run to something that happens anyway.
 
-**One question that leaves open**, carried here from the issue body: does the
-release-regression benchmark also cover `rules-shared`'s dictionary benchmarks?
-They cost about 6 s of CPU against the engine benchmark's 2.6 s, so the answer
-decides whether every regression run pays that. Owner's for the same reason the
-threshold is.
+**Answered, 2026-09-21: the engine benchmark only.** The dictionary benchmarks
+cost about 6 s of CPU against the engine benchmark's 2.6 s, and the dictionary is
+fixed at build time — it does not drift, so refreshing its timings every release
+buys little for more than double the cost.
 
 ## R5's shape, and why it is not a small fix
 
@@ -129,6 +149,46 @@ way this goes, because it removes rows that no policy should ever have to hold.
 structure. Owner, 2026-09-02: *"a game-related requirement outside #71 must be
 independent of it and doable at any time."* R5 changes *when* a game is loaded,
 not *what* a game is.
+
+## R3 is a signal on somebody else's mechanism, like R7
+
+R3 wants unusual growth noticed by something other than a bill or an outage,
+starting with registrations. **That is monitoring and event management**, and
+after 2026-09-21 it has an owner: #402, which holds the classification, the
+counters, the alarms and what the server does about a failure.
+
+**The split is the same one `docs/3.7` already makes for sweeps.** #402 owns the
+mechanism — how a symptom becomes a number, how a number leaves the VM under
+D49, how an alarm is built. Capacity Planning owns *this* signal: what counts as
+unusual growth in registrations, and at what rate.
+
+**And the dependency runs both ways, which is worth saying.** #402's thresholds
+are meaningless without R1's table — *"registrations fail at N per minute"* is a
+fact and *"N is forty times the ceiling"* is a plan. So R1 feeds #402, and #402's
+mechanism carries R3.
+
+**What R3 owes this project, then**, is a number and a rule rather than a build:
+what rate of registration is unusual, measured against the six accounts and the
+ceilings in the table above. That is answerable here and is not answerable
+anywhere else.
+
+## Where this leaves each requirement
+
+| | state | owned by |
+| --- | --- | --- |
+| **R1** the capacity plan | **done** — the table above, measured on production 2026-09-21 | here |
+| **R2** reviewed on a recurrence | designed: a due date in the issue body, surfaced by the board. Buildable now | here |
+| **R3** unusual growth noticed | this project supplies the rate; #402 supplies the mechanism | split |
+| **R4** where the service breaks | needs a harness. Measured against R1 | here |
+| **R5** memory and startup stop growing | **RET-3, already decided.** Satisfied when #270 builds it | #270 |
+| **R6** `Retry-After`'s margin | out of scope — see below | here, as a defect |
+| **R7** benchmark timings refreshed | a scheduled job, blocked behind #400 | here, on #400's mechanism |
+
+**Three of the seven are not this project's to build**, which is the useful
+result of the design rather than a disappointment: R5 was already decided, R7
+needs a mechanism that does not exist, and R3 needs half of one being built next
+door. What is left here is R1 (done), R2 (small), R4 (real work) and a rate for
+R3.
 
 ## Out of scope, and why
 
