@@ -20,6 +20,43 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# --- refuse to run from a linked worktree -------------------------------- #389
+#
+# **This writes aliases for whichever tree it is run from**, because `REPO_DIR`
+# is derived from the script's own location — which is right, and is why the
+# aliases survived the move to two worktrees without a code change. It is also
+# the trap: run this from `projectdev` and `sadev` and `dbdev` quietly point at
+# the project worktree and its database, and nothing says so until something
+# reads the wrong data.
+#
+# Owner, 2026-09-21: *"we should be running scripts from main now, unless we
+# are testing a new version"*, and *"setup-dev-environment.sh should check
+# where it is run."*
+#
+# **Told apart by git, not by the path.** In the main worktree `--git-dir` and
+# `--git-common-dir` are the same; in a linked one the first is
+# `<common>/worktrees/<name>`. So a machine with a single checkout — a fresh
+# setup, which is this script's main job — is unaffected, and no directory name
+# is hardcoded.
+#
+# It refuses rather than warns because the wrong outcome is silent: a warning
+# scrolls past and the aliases are still wrong.
+if [ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-dir 2>/dev/null)" ]; then
+  echo "setup-dev-environment: refusing — this is a linked worktree." >&2
+  echo "  $REPO_DIR" >&2
+  echo >&2
+  echo "  It writes sadev, sapre, dbdev and the rest for the tree it runs in," >&2
+  echo "  so from here they would point at the project worktree and its" >&2
+  echo "  database. Scripts are operated from main — docs/3.2." >&2
+  echo >&2
+  echo "  Run it there:" >&2
+  echo "    $(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$||')/scripts/$(basename "$0")" >&2
+  echo >&2
+  echo "  SETUP_ALLOW_WORKTREE=1 to do it anyway, if that is deliberate." >&2
+  [ "${SETUP_ALLOW_WORKTREE:-}" = "1" ] || exit 1
+  echo "  SETUP_ALLOW_WORKTREE=1 set — continuing." >&2
+fi
+
 echo "==> Checking WSL/systemd (Docker needs systemd to manage its service)"
 if [ -f /proc/version ] && grep -qi microsoft /proc/version; then
     if [ "$(ps -p 1 -o comm=)" != "systemd" ]; then
