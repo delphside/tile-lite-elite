@@ -78,9 +78,10 @@ document leaves.
 ## R4 produces a number that ages, and R1 is what makes it mean anything
 
 Stress testing (#91) asks where the service breaks, by measurement. That
-measurement is worth having only against the table above: *"registrations fail at N per minute"* is a
-fact, and *"N is 40 times what the ceiling allows before memory runs out"* is a
-plan. So R1 is first, and R4 is measured against it rather than reported alone.
+measurement is worth having only against the table above: *"registrations fail
+at N per minute"* is a fact, and *"N is 40 times what the ceiling allows before
+memory runs out"* is a plan. So R1 is first, and R4 is measured against it
+rather than reported alone.
 
 ## Out of scope, and why
 
