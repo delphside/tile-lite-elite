@@ -216,6 +216,14 @@ placeholder_shipping() {
 # shellcheck source=scripts/shipping-paths.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shipping-paths.sh"
 
+# A record of this run that outlives the terminal -- #328. Adds a second
+# channel and changes nothing printed. 0.7.2 is why: the deploy exited 1
+# having printed every success line, the milestone settling never ran, and
+# both facts were in the terminal and nowhere else.
+# shellcheck source=scripts/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start deploy.sh "$@"
+
 ARTIFACT_DIR="${ARTIFACT_DIR:-$REPO_DIR/artifacts}"
 ARTIFACT_KEEP="${ARTIFACT_KEEP:-5}"
 
@@ -941,7 +949,7 @@ TARGET_SHA="$(git rev-parse --short "$TARGET_FULL_SHA")"
 # name to GATES_EXPECTED below, and forgetting to is itself caught, because the
 # checklist is what the deploy is verified against.
 GATES_RUN=""
-note_gate() { GATES_RUN="$GATES_RUN $1"; }
+note_gate() { GATES_RUN="$GATES_RUN $1"; run_log_event "gate passed" "gate=$1"; }
 
 # The working tree has no say in what ships, so a dirty one isn't an error
 # here — it simply isn't part of the deploy. Say so rather than staying
@@ -1505,7 +1513,10 @@ cleanup() {
   rm -f "$(artifact_path "$TARGET_FULL_SHA").partial"
   git worktree remove --force "$WORKTREE_DIR" 2>/dev/null || rm -rf "$WORKTREE_DIR"
 }
-trap cleanup EXIT
+# Status captured before `cleanup`: inside a trap `$?` is the previous
+# command's, so an unchained `cleanup; run_log_finish` would record what
+# the cleanup returned. run-log.sh says so where it is defined.
+trap '_st=$?; cleanup; run_log_finish $_st' EXIT
 # rmdir first: `git worktree add` refuses to target a directory mktemp
 # already created, even an empty one.
 rmdir "$WORKTREE_DIR"
