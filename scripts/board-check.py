@@ -35,9 +35,21 @@ from board.model import classify
 from board.overtaken import candidates
 from board.overtaken import check as check_overtaken
 from board.overtaken import render as render_overtaken
+from board.release import outstanding as tests_outstanding
+from board.release import render as render_tests
 from board.repo import last_release_at
 from board.sources import (Unavailable, fetch, issues_by_number,
                            remote_branches, step_ages)  # noqa: E402
+
+
+def _cargo_version() -> str | None:
+    """The version being built, which names the milestone under construction."""
+    try:
+        text = (Path(__file__).resolve().parent.parent / "Cargo.toml").read_text()
+    except OSError:
+        return None
+    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+    return m.group(1) if m else None
 
 
 def main(argv=None) -> int:
@@ -100,6 +112,16 @@ def main(argv=None) -> int:
             failing = failing or bool(found)
         except Unavailable as exc:
             text += f"\n\n  overtaken: cannot say — {exc}"
+
+        # What the milestone being built still owes. Moved from `verify.sh`'s
+        # `check_approach`, which asked GitHub for the milestone's projects,
+        # then each body, then each one's sub-issues to tell a parent from a
+        # package -- all of it in the snapshot already.
+        version = _cargo_version()
+        if version:
+            promised = tests_outstanding(typed, version)
+            text += "\n\n" + render_tests(promised, version)
+            failing = failing or bool(promised)
 
     # Stripped at the boundary rather than threaded through the renderer:
     # nineteen call sites would each have to remember, and one that forgot
