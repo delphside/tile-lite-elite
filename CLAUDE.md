@@ -264,6 +264,13 @@ one of them has a defect: fix it, don't work around it.
 
 ## Documentation
 
+- **Look up the industry's word before inventing one.** Owner, 2026-09-21:
+  *"Refer to ITIL, none of this is new to us. We should be reusing the industry
+  standard terminology and process."* Incident and problem management, event
+  classification, change types, release against deployment — take the term and
+  the shape of the practice, leave the ceremony that needs more people than
+  this has, and say which practice an answer came from. docs/3.6 has the
+  mapping tables.
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
 - **The documents live; the issues expire.** Owner, 2026-09-21: *"The project

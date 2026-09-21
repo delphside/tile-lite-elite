@@ -371,6 +371,32 @@ check("an em dash is not required", 1,
       len(classify(issue(1, body="- [ ] **owner** - hyphen works\n")).unticked_for("owner")))
 
 print()
+print("a delivery at closedown owes its lesson, or says who carries it")
+# This was a gap: the obligation existed with no evidence function, so #398
+# reached Project Closedown owing lessons learnt and read as complete. The
+# delegation is why it looked hard -- docs/3.6 lets a package point at its
+# parent, so an absent heading is not by itself a finding.
+closing = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+                         body="nothing to say\n"))
+ids = {f.obligation.id: f.answer for f in assess(closing)}
+check("no lesson and no delegation is a finding", Answer.MISSING,
+      ids.get("wp-closedown"))
+learnt = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+                        body="## Lessons learnt\n\nthe check reported sed's status\n"))
+check("a lesson answers it", Answer.MET,
+      {f.obligation.id: f.answer for f in assess(learnt)}.get("wp-closedown"))
+delegated = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+                           body="Delegated to #71\n"))
+check("so does delegating it to the parent", Answer.MET,
+      {f.obligation.id: f.answer for f in assess(delegated)}.get("wp-closedown"))
+# The other half, matching parent-closedown: a package that closes with a box
+# outstanding leaves work owned by nobody.
+outstanding = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+                             body="## Lessons learnt\n\n- [ ] **owner** — still to do\n"))
+check("an unticked box still fails it", Answer.MISSING,
+      {f.obligation.id: f.answer for f in assess(outstanding)}.get("wp-closedown"))
+
+print()
 print("a box is not waiting until it is due")
 # Labelling made 126 boxes visible at once. Listing every one of the owner's
 # turns R1 into everything that will ever need him, which is the report that

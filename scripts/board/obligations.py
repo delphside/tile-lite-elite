@@ -313,11 +313,20 @@ OBLIGATIONS: tuple[Obligation, ...] = (
                    and i.unanswered_rows_in("Post-deployment checks against requirements") == 0
                    and i.unanswered_rows_in("Post-deployment checks") == 0),
     ),
+    # **The evidence, added 2026-09-21.** This was a gap, and #398 reached
+    # `Project Closedown` owing lessons learnt and read as complete. The
+    # delegation is the reason it looked hard: a package may point at its
+    # parent rather than answer, so an absent heading is not by itself a
+    # finding -- docs/3.6: *"`Delegated to #<parent>` -- so `board-check.py`
+    # reads an answer rather than an omission"*. Both forms are read here, and
+    # the unticked-box half matches `parent-closedown`, because a package that
+    # closes with a box outstanding leaves work owned by nobody.
     Obligation(
         "wp-closedown", DELIVERING, ("Project Closedown",),
         "lessons learnt, or a statement that the parent carries them",
         "a delivery's lesson is captured or delegated",
-        None,  # gap
+        lambda i: (i.has_heading("Lessons learnt") or "Delegated to #" in i.body)
+        and i.unticked_boxes == 0,
     ),
 
     # ---- Decision, by Decision State ------------------------------------
