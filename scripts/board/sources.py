@@ -127,7 +127,17 @@ class Snapshot:
         return self.finished_at - self.started_at
 
 
-def _gh_graphql(query: str, **variables) -> dict:
+def _gh_graphql(query: str, partial: bool = False, **variables) -> dict:
+    """Run a GraphQL query through `gh`.
+
+    `partial` allows a query whose *fields* can fail while the response still
+    carries data -- an aliased lookup of several issues where one number does
+    not exist returns every other one beside the error, and `gh` still exits
+    non-zero. Without it the whole answer is thrown away because one field was
+    absent, which for R9 is the very case being asked about.
+
+    It is off by default: everywhere else, a refusal is a refusal.
+    """
     args = ["gh", "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if value is None:
@@ -138,6 +148,13 @@ def _gh_graphql(query: str, **variables) -> dict:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Unavailable(f"GitHub did not answer: {exc}") from exc
     if out.returncode != 0:
+        if partial and out.stdout.strip():
+            try:
+                payload = json.loads(out.stdout)
+            except json.JSONDecodeError:
+                raise Unavailable(f"GitHub refused: {out.stderr.strip()[:300]}") from None
+            if payload.get("data"):
+                return payload
         raise Unavailable(f"GitHub refused: {out.stderr.strip()[:300]}")
     try:
         return json.loads(out.stdout)
@@ -347,6 +364,66 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
             except ValueError:
                 continue
     return tuple(sorted(out, key=lambda r: (r.number, r.when)))
+
+
+def issues_by_number(numbers: Sequence[int]) -> dict[int, RawIssue]:
+    """Just these issues, whatever state they are in.
+
+    **For R9, which needs one or two and not the closed board.** Fetching every
+    closed issue to resolve a handful of branch names took `board-check.py` from
+    3.4s to 15s -- and this module's own note says a check nobody waits for is a
+    check nobody runs. One aliased query, one round trip.
+
+    A number that resolves to nothing is simply absent from the result, which is
+    the case R9 reports as *names #N, which does not exist*.
+    """
+    if not numbers:
+        return {}
+    parts = " ".join(f'i{n}: issue(number:{n}) {{ number title state '
+                     f'issueType {{ name }} }}' for n in sorted(set(numbers)))
+    query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+    payload = _gh_graphql(query, partial=True)
+    # Errors here are per-field -- a missing issue is an error beside the data,
+    # not instead of it -- so the data is read even when `errors` is present.
+    repo = (payload.get("data") or {}).get("repository") or {}
+    out: dict[int, RawIssue] = {}
+    for node in repo.values():
+        if not node:
+            continue
+        out[node["number"]] = RawIssue(
+            number=node["number"], title=node.get("title") or "",
+            state=node.get("state") or "", body="",
+            issue_type=(node.get("issueType") or {}).get("name"),
+            fields={}, sub_issues=(), parent=None, milestone=None,
+            labels=frozenset())
+    return out
+
+
+def remote_branches(remote: str = "origin") -> tuple[str, ...]:
+    """Branch names on the remote.
+
+    **The remote, not the local checkout.** A local branch is one person's
+    working state; a branch on the remote is the shared record, and R9 is about
+    the relationship between that record and the board. `verify.sh` already
+    reports merged locals left behind, which is a different question.
+
+    Raises `Unavailable` rather than returning nothing, for the reason the whole
+    module does: no branches and could-not-ask must not read alike.
+    """
+    try:
+        run = subprocess.run(["git", "ls-remote", "--heads", remote],
+                             capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Unavailable(f"could not list branches on {remote}: {exc}") from exc
+    if run.returncode != 0:
+        raise Unavailable(f"could not list branches on {remote}: "
+                          f"{run.stderr.strip()[:200]}")
+    names = []
+    for line in run.stdout.splitlines():
+        _, _, ref = line.partition("\t")
+        if ref.startswith("refs/heads/"):
+            names.append(ref[len("refs/heads/"):])
+    return tuple(sorted(names))
 
 
 def token_days_left() -> int | None:

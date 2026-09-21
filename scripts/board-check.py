@@ -28,7 +28,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from board.report import render          # noqa: E402
-from board.sources import Unavailable, fetch  # noqa: E402
+from board.branches import check as check_branches
+from board.branches import render as render_branches
+from board.branches import named_numbers
+from board.sources import (Unavailable, fetch, issues_by_number,
+                           remote_branches)  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -55,6 +59,26 @@ def main(argv=None) -> int:
         return 2
 
     text, failing = render(snapshot, args.issue, args.all)
+
+    # **R9, and only for the whole board.** Asked about one issue, the branches
+    # are not the question; printing them anyway is how a report starts being
+    # skimmed. A branch source that cannot answer is reported, not silently
+    # treated as no branches -- the distinction the whole module keeps.
+    if args.issue is None:
+        try:
+            names = remote_branches()
+            board = {i.number: i for i in snapshot.issues}
+            # Only the numbers the branches name, and only those the open
+            # snapshot does not already hold. Fetching the whole closed board
+            # for this took the report from 3.4s to 15s.
+            wanted = [n for n in named_numbers(names) if n not in board]
+            board.update(issues_by_number(wanted))
+            found = check_branches(names, board)
+            text += "\n\n" + render_branches(found, len(names))
+            failing = failing or bool(found)
+        except Unavailable as exc:
+            text += f"\n\n  branches: cannot say — {exc}"
+
     # Stripped at the boundary rather than threaded through the renderer:
     # nineteen call sites would each have to remember, and one that forgot
     # would put escape codes into a caller's captured output.
