@@ -88,6 +88,16 @@ Totals  160 met  1 missing  8 not checked
 check "findings report as a note"        "NOTE" "$(awk '{print $1; exit}' <<< "$out")"
 check "the issue is named in the detail" "1"    "$(grep -c '#309' <<< "$out")"
 
+# 1b — a section finding, which is not a `#N` line
+# The milestone check moved into board-check.py on 2026-09-21 and reports like
+# the other release-scoped sections, `  !! #N ...`. A detail filter that took
+# only `#N` lines turned the summary red and printed nothing under it.
+out="$(run_transitions 1 'MILESTONE  0.8.2 carries only built work
+  !! #268 WorkPackage #71 WP A: Core Game Lifecycle  no commit mentions this
+  !! unbuilt: #268
+')"
+check "a section finding reaches the detail" "1" "$(grep -c 'no commit mentions this' <<< "$out")"
+
 # 2 — the quiet case
 out="$(run_transitions 0 'ISSUE COMPLETENESS  R4 - each issue against its type and step
 

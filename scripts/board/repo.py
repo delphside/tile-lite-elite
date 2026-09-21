@@ -32,8 +32,22 @@ from pathlib import Path
 # the two as the same thing made an incidental mention of #10 in an old commit
 # report the Bot client harness as *released* while it sat at Scope, and then
 # reported the contradiction as though the board were at fault.
-CLOSES = re.compile(r"\b(?:Closes|Fixes|Resolves)\s+#(\d+)", re.I)
-MENTIONS = re.compile(r"\bRefs\s+#(\d+)", re.I)
+#
+# **Case-sensitive, like `issue-mentions.sh`.** All 890 trailers in the history
+# are capitalised, so matching case-insensitively does not tolerate drift, it
+# admits prose -- which is #320 again, in the one place that had been fixed
+# everywhere else. Measured 2026-09-21, exactly two commits were matched on
+# their prose and both said something the trailer would not have:
+#
+#     76d9ad1  "#391 no `Refs #N` - fixed, it now refs #301"
+#     7d43285  "That closes #311 Q1."
+#
+# The first credited #301, the parent whose delivery-2 package is the very
+# case #375 exists for. The second is worse: a prose `closes` read as a
+# *closing* trailer, the strongest evidence `state_of` has, so a sentence
+# about a question in #311 was the reason #311 read as closed by a commit.
+CLOSES = re.compile(r"\b(?:Closes|Fixes|Resolves)\s+#(\d+)")
+MENTIONS = re.compile(r"\bRefs\s+#(\d+)")
 
 
 def _git(*args: str) -> str:
@@ -141,38 +155,69 @@ def last_release_at() -> float | None:
         return None
 
 
+def _scope(rev: list[str], no_merges: bool = True) -> Scope:
+    """What the commits in `rev` say about each issue.
+
+    `no_merges` is a caller's decision rather than this function's, because the
+    two callers want opposite answers and both are right. `commits()` counts
+    work, and a merge commit is not work -- counting it would report the
+    branch's commits twice. The milestone check asks *does anything on main
+    claim this issue*, and a merge is a trailer somebody wrote: #362's only
+    `Refs` in the whole history is on `1cac857`, a merge into a release branch,
+    and dropping it would call a shipped package unbuilt.
+    """
+    scope = Scope()
+    args = ["log", "--format=%H%x1f%B%x1e"]
+    if no_merges:
+        args.insert(1, "--no-merges")
+    text = _git(*args, *rev)
+    for entry in text.split("\x1e"):
+        if "\x1f" not in entry:
+            continue
+        sha, body = entry.split("\x1f", 1)
+        closing = {int(n) for n in CLOSES.findall(body)}
+        for number in closing:
+            scope.closes.setdefault(number, []).append(sha.strip())
+        # A commit that closes an issue is not also merely referencing it.
+        for number in {int(n) for n in MENTIONS.findall(body)} - closing:
+            scope.refs.setdefault(number, []).append(sha.strip())
+    return scope
+
+
+def mentions_on(ref: str = "origin/main") -> Scope:
+    """Every trailer reachable from `ref`, merges included.
+
+    The milestone check's question, and deliberately the same one
+    `issue-mentions.sh` answers for `deploy.sh`'s gate: same trailers, same
+    case-sensitivity, merges counted. The pre-flight and the gate disagreeing
+    is worse than either being wrong on its own -- the pre-flight would pass
+    and the deploy would then refuse, with nothing saying why.
+
+    **`origin/main`, where `verify.sh` asked `HEAD`.** Built means built on
+    main; a commit sitting on a branch is `in progress`, which is a different
+    row of the same report. `verify.sh` asserts the two are equal anyway, one
+    check earlier.
+    """
+    return _scope([ref], no_merges=False)
+
+
 def commits(main: str = "origin/main") -> Commits:
     got = Commits()
-
-    def collect(rev: list[str]) -> Scope:
-        scope = Scope()
-        text = _git("log", "--no-merges", "--format=%H%x1f%B%x1e", *rev)
-        for entry in text.split("\x1e"):
-            if "\x1f" not in entry:
-                continue
-            sha, body = entry.split("\x1f", 1)
-            closing = {int(n) for n in CLOSES.findall(body)}
-            for number in closing:
-                scope.closes.setdefault(number, []).append(sha.strip())
-            # A commit that closes an issue is not also merely referencing it.
-            for number in {int(n) for n in MENTIONS.findall(body)} - closing:
-                scope.refs.setdefault(number, []).append(sha.strip())
-        return scope
 
     tags = [t for t in _git("tag", "--list", "prod-*", "--sort=-creatordate").split() if t]
     got.last_tag = tags[0] if tags else None
 
-    got.off_main = collect(["--all", f"^{main}"])
+    got.off_main = _scope(["--all", f"^{main}"])
     # Anything already in the last production tag is out, whatever the board
     # says. The board is a plan; the tag is what happened. What sits between
     # the tag and `main` is the other half, and the two must be asked
     # separately -- `released` walks all history reachable from the tag, so on
     # its own it cannot tell shipped-long-ago from shipped-and-since-changed.
     if got.last_tag:
-        got.released = collect([got.last_tag])
-        got.unreleased = collect([f"{got.last_tag}..{main}"])
+        got.released = _scope([got.last_tag])
+        got.unreleased = _scope([f"{got.last_tag}..{main}"])
     else:
-        got.unreleased = collect([main])
+        got.unreleased = _scope([main])
         count = _git("rev-list", "--no-merges", "--count",
                      f"{got.last_tag}..{main}").strip()
         got.unreleased_total = int(count) if count.isdigit() else 0

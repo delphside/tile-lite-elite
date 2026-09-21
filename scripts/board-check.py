@@ -31,13 +31,16 @@ from board.report import render          # noqa: E402
 from board.branches import check as check_branches
 from board.branches import render as render_branches
 from board.branches import named_numbers
+from board.milestone import carried
+from board.milestone import render as render_milestone
+from board.milestone import unbuilt
 from board.model import classify
 from board.overtaken import candidates
 from board.overtaken import check as check_overtaken
 from board.overtaken import render as render_overtaken
 from board.release import outstanding as tests_outstanding
 from board.release import render as render_tests
-from board.repo import last_release_at
+from board.repo import last_release_at, mentions_on
 from board.sources import (Unavailable, fetch, issues_by_number,
                            remote_branches, step_ages)  # noqa: E402
 
@@ -122,6 +125,22 @@ def main(argv=None) -> int:
             promised = tests_outstanding(typed, version)
             text += "\n\n" + render_tests(promised, version)
             failing = failing or bool(promised)
+
+            # Whether the milestone carries only work that exists. Moved from
+            # `verify.sh`'s `check_milestone`, which asked GitHub for the
+            # milestone, then per issue for its sub-issues and its parent.
+            #
+            # **The one section here that joins the board to git**, so it is
+            # the one whose answer can be wrong without looking wrong: an
+            # issue with no commit reads exactly like an issue whose commits
+            # were not counted. `repo.mentions_on` therefore counts what
+            # `issue-mentions.sh` counts for `deploy.sh`'s gate, down to the
+            # case of the trailer and the merge commits -- checked number by
+            # number across the whole history on 2026-09-21, not by reading
+            # the two regexes and agreeing they look alike.
+            rows = carried(typed, version, mentions_on().count)
+            text += "\n\n" + render_milestone(rows, version)
+            failing = failing or bool(unbuilt(rows))
 
     # Stripped at the boundary rather than threaded through the renderer:
     # nineteen call sites would each have to remember, and one that forgot

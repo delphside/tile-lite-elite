@@ -52,9 +52,6 @@ QUICK=0
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
-# How many commits mention an issue. Shared with `deploy.sh`: this file carried
-# the identical defective line, untouched, because it was a copy (#194).
-source "$(dirname "${BASH_SOURCE[0]}")/issue-mentions.sh"
 cd "$HERE"
 
 declare -A RESULT DETAIL LABEL
@@ -268,116 +265,6 @@ check_rehearsal() {
   esac
 }
 
-# **A parent is not a delivery** — D51. It owns the requirements, the design and
-# the documents while its work packages carry the artefacts, the test approach
-# and the commits. The owner, 2026-09-08: *"as with Route a parent does not need
-# a milestone, but one can be set. It should be ignored."*
-#
-# So a parent in a shipping list has no commits of its own and no test approach
-# of its own, and both checks below would have called that a defect. #71 carries
-# `1.0.0` as a target while #269-#272 carry the deliveries.
-#
-# The REST sub-issues endpoint, because `{owner}` and `{repo}` expand in a REST
-# path and not in a GraphQL document. A project with `Project` children is a
-# parent; folded requirements and owned decisions are children too, which is why
-# the type is filtered — counting them all made #295, #297 and #301 read as
-# parents in the obligations grid once.
-# The number of the issue this one is a work package of, or empty.
-#
-# A package built before it existed carries its parent's number in the commit
-# trailer, because that is the number that existed when the commit was written.
-# #373 was split out of #297 on 2026-09-10, after `1036e1c` had already landed
-# saying `Refs #297`, and no rewrite can fix that — the commit is the one being
-# deployed. So the answer is not to count the parent's commits as the package's,
-# which would make every package of a parent look built. It is to say *where*
-# the commits are, and let the reader judge. #375.
-parent_of() {
-  # `gh issue view --json parent`, not the REST issue object: REST carries
-  # `parent_issue_url` and no `parent.number`, so the obvious REST read returns
-  # empty for every issue and the check silently reverts to its old behaviour.
-  gh issue view "$1" --json parent --jq '.parent.number // ""' 2>/dev/null || true
-}
-
-is_parent() {
-  local n
-  n="$(gh api "repos/{owner}/{repo}/issues/$1/sub_issues" \
-    --jq '[.[] | select(.type.name == "Project")] | length' 2>/dev/null || echo 0)"
-  [[ "${n:-0}" != "0" ]]
-}
-
-LABEL[milestone]="Milestone carries only built work"
-check_milestone() {
-  local version ms unbuilt="" lines="" par parmentions
-  version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
-  if ! command -v gh > /dev/null; then
-    fail milestone "milestone $version not read — no 'gh' on PATH"; return
-  fi
-  if ! ms="$(gh issue list --milestone "$version" --state open \
-        --json number,title,issueType \
-        --jq '.[] | "\(.number)\t\(.issueType.name // "untyped")\t\(.title)"' 2>&1)"; then
-    fail milestone "milestone $version could not be read" "$ms"; return
-  fi
-  if [[ -z "$ms" ]]; then
-    pass milestone "milestone $version has no open issues"; return
-  fi
-  while IFS=$'\t' read -r num kind title; do
-    [[ -z "$num" ]] && continue
-    # `rev-list --count`, not `git log … | grep -q .`. The pipe was the defect:
-    # `grep -q` exits on the first match, `git log` takes SIGPIPE, and under
-    # `set -o pipefail` the pipeline reports failure — so an issue that *is*
-    # mentioned reported "no commit mentions this" once the history was long
-    # enough. `deploy.sh` carried the identical line and returned 141 on #174.
-    if is_parent "$num"; then
-      lines+="#$num ${kind:0:11} ${title:0:46} (a parent — its packages carry the commits)"$'\n'
-      continue
-    fi
-    mentions="$(commits_mentioning HEAD "$num")"
-    if (( mentions > 0 )); then
-      lines+="#$num ${kind:0:11} ${title:0:46} ($mentions commits)"$'\n'
-    else
-      # Nothing names it. A package split out after its commits landed carries
-      # the parent's number and cannot be made to carry its own — #373 was split
-      # from #297 the day after `1036e1c` said `Refs #297`.
-      #
-      # **It still counts as unbuilt, and the parent's commits are reported as a
-      # fact rather than as credit.** Crediting them was tried on 2026-09-10 and
-      # was wrong: #363 is delivery 2 of #301 and unstarted, and #301's
-      # delivery-1 commits made it read as merged. A parent with two packages
-      # cannot say which of them a commit belongs to, so claiming is a guess and
-      # the guess exonerates the very case the check exists for.
-      #
-      # So the reader gets the one fact they need to answer in a second, and the
-      # check keeps stopping. #375.
-      par="$(parent_of "$num")"
-      parmentions=0
-      [[ -n "$par" ]] && parmentions="$(commits_mentioning HEAD "$par")"
-      if [[ -n "$par" ]] && (( parmentions > 0 )); then
-        lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this (parent #$par has $parmentions)"$'\n'
-      else
-        lines+="#$num ${kind:0:11} ${title:0:46}   <-- no commit mentions this"$'\n'
-      fi
-      unbuilt="$unbuilt #$num"
-    fi
-  done <<< "$ms"
-  if [[ -n "$unbuilt" ]]; then
-    fail milestone "milestone $version carries unbuilt issues:$unbuilt" "$lines"
-  else
-    pass milestone "milestone $version — every issue has a commit" "$lines"
-  fi
-}
-
-# The lines of one "### <heading>" section of an issue body, up to the next
-# heading of any level. Sectioning matters: a box under Post-deployment checks
-# is an unanswered check, not an unrun test, and counting both would make the
-# report say something it does not mean.
-section_boxes() {
-  local body="$1" heading="$2"
-  awk -v h="$heading" '
-    /^#+ / { inside = index($0, h) > 0 ? 1 : 0; next }
-    inside { print }
-  ' <<< "$body"
-}
-
 LABEL[tests]="Tooling tests pass"
 check_tests() {
   if (( QUICK )); then skip tests "tooling tests skipped (--quick)"; return; fi
@@ -555,8 +442,15 @@ check_transitions() {
     note transitions "the transition check could not run" \
       "$(printf '%s' "$out" | tail -2)"
   else
+    # Both shapes board-check.py prints: `#N ...` for an issue against its
+    # own obligations, and `  !! ...` for the sections that ask a question
+    # about the release rather than about one issue -- the milestone's unbuilt
+    # work, the tests it promised, a project it overtook. Matching only the
+    # first meant those sections could turn this line red while saying nothing
+    # about why, which for the milestone check is the whole content: it is the
+    # pre-flight for a gate that will otherwise refuse the deploy.
     note transitions "some issues are further along than their content supports" \
-      "$(printf '%s' "$out" | grep -E '^#[0-9]' | head -8)"
+      "$(printf '%s' "$out" | grep -E '^(#[0-9]|  !!)' | head -8)"
   fi
 }
 
@@ -568,8 +462,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches token envs unreleased hosts rehearsal milestone transitions prstate ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests token envs unreleased hosts rehearsal milestone transitions prstate gates branches)
+RUN_ORDER=(tree pushed branches token envs unreleased hosts rehearsal transitions prstate ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests token envs unreleased hosts rehearsal transitions prstate gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done
