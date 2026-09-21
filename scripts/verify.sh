@@ -535,6 +535,45 @@ check_gates() {
   fi
 }
 
+LABEL[token]="The machine account's token is not about to expire"
+# **#309's cheaper half.** The token `gh` uses expires on a date, nothing warns,
+# and the first symptom is a command failing in the middle of something else —
+# pull requests, field mutations, milestones, every `gh`-calling script. Not
+# `git push`, which is SSH, and not CI, which uses Actions' own token.
+#
+# The named failure is #308, the same class one cause along: an enrolment
+# deadline nobody was tracking. This token was then found **by accident** while
+# verifying that one, which is the argument for reading it rather than
+# remembering it.
+#
+# GitHub returns the expiry as a header on any authenticated response, so this
+# costs one call and no new credential.
+#
+# **Thirty days**, because rotating is the owner's and needs a sitting. Under
+# seven it stops being a note: a week is little enough that the first symptom
+# could arrive before the next look at this.
+check_token() {
+  local raw days
+  raw="$(timeout 30 gh api -i user 2>/dev/null \
+         | sed -n 's/^[Gg]ithub-[Aa]uthentication-[Tt]oken-[Ee]xpiration: *//p' \
+         | tr -d '\r' | head -1)"
+  if [[ -z "$raw" ]]; then
+    # No header means a token that does not expire, or an app/SSH credential.
+    # Either way there is no date to warn about, and silence is the right answer.
+    pass token "no expiry is advertised for this credential"
+    return
+  fi
+  days=$(( ( $(date -u -d "${raw/ UTC/}" +%s) - $(date -u +%s) ) / 86400 ))
+  if (( days < 7 )); then
+    fail token "the token expires in $days day(s) — $raw"
+  elif (( days < 30 )); then
+    note token "the token expires in $days day(s) — $raw" \
+      "regenerate at Settings -> Developer settings -> Fine-grained tokens, then gh auth login --with-token (#309)"
+  else
+    pass token "expires in $days days"
+  fi
+}
+
 LABEL[hosts]="Rehearsal and production agree, and neither waits to reboot"
 # **The trigger for #360 R4's cadence.** The owner chose "when reboot-required
 # appears" over a calendar, which only works if something says when it appears.
@@ -620,8 +659,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches envs unreleased hosts rehearsal reviews milestone approach transitions prstate ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests envs unreleased hosts rehearsal reviews milestone approach transitions prstate gates branches)
+RUN_ORDER=(tree pushed branches token envs unreleased hosts rehearsal reviews milestone approach transitions prstate ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests token envs unreleased hosts rehearsal reviews milestone approach transitions prstate gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done
