@@ -41,6 +41,33 @@ run_case() {
   rm -rf "$tmp"
 }
 
+
+# **Section 1b is about the branch, so `run_case` cannot express it**: every
+# fixture there commits on `main`, which is the one branch 1b ignores.
+run_branch_case() {
+  local desc="$1" expect="$2" branch="$3"; shift 3
+  local tmp got=0; tmp="$(mktemp -d)"
+  (
+    cd "$tmp"
+    git init -q .
+    git config user.email t@t; git config user.name t
+    git config core.hooksPath /dev/null
+    mkdir -p docs scripts
+    printf 'x\n' > docs/3.0-tools.md
+    git add -A; git commit -qm "app 0.0.0 api 0.0: base"
+    git branch -M main
+    [ "$branch" = main ] || git switch -q -c "$branch"
+    for f in "$@"; do mkdir -p "$(dirname "$f")"; printf 'x\n' >> "$f"; git add "$f"; done
+    "$HOOK" > /dev/null 2>&1
+  ) || got=$?
+  if [ "$got" -eq "$expect" ]; then
+    echo "  ok       $desc"; PASS=$((PASS+1))
+  else
+    echo "  FAILED   $desc (expected exit $expect, got $got)"; FAIL=$((FAIL+1))
+  fi
+  rm -rf "$tmp"
+}
+
 # The version-bump exemption is about *which lines changed*, so `run_case`
 # cannot express it: appending `x` to Cargo.toml produces a diff of `+x`, and a
 # case built that way would pass or fail for a reason unrelated to the rule.
@@ -174,6 +201,20 @@ run_case "a crate integration test"       0 crates/rules-shared/tests/words.rs
 
 run_case "the gitignore"                  0 .gitignore
 run_case "a README beside the word lists" 0 crates/rules-shared/src/wordlists/README.md
+
+echo
+echo "the process's own documents live on main (1b):"
+# 2026-09-21: the ITIL rule, a CLAUDE.md clause and an obligations.py fix were
+# all written onto 399-database-failure-status. commit-msg cannot catch it --
+# a process edit carries no Refs, and a commit with no trailer is assumed to
+# belong to the branch.
+run_branch_case "CLAUDE.md on a project branch is refused"   1 399-x CLAUDE.md
+run_branch_case "so is the lifecycle document"               1 399-x docs/3.6-change-lifecycle.md
+run_branch_case "so is the workstreams document"             1 399-x docs/3.7-workstreams.md
+run_branch_case "and the generated document map"             1 399-x docs/1.6-document-map.md
+run_branch_case "on main they are ordinary"                  0 main  CLAUDE.md
+run_branch_case "a project's own document is fine on it"     0 399-x docs/4.3-api-schema.md
+run_branch_case "and so is a script"                         0 399-x scripts/thing.sh.tmp
 
 echo
 echo "$PASS passed, $FAIL failed"

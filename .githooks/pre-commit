@@ -129,6 +129,52 @@ if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
   fi
 fi
 
+# --- 1b. the process's own documents live on main -----------------------------
+#
+# **The mirror of section 1, and it is the direction that has no gate.** Section
+# 1 stops an image change reaching `main` without a pull request. Nothing stopped
+# the reverse: work that belongs on `main` being committed to whatever branch
+# happened to be checked out.
+#
+# `commit-msg` catches most of it, by refusing a message that names an issue the
+# branch is not for. **Its hole is a commit with no trailer at all**, which it
+# assumes belongs to the branch -- and process edits are exactly that shape,
+# because they record a rule rather than serving an issue. On 2026-09-21 the
+# ITIL rule, a CLAUDE.md clause and an obligations.py fix were all written onto
+# `399-database-failure-status` while #399's own change sat committed beneath
+# them. Caught by reading `git status`, which is not a gate.
+#
+# **These files are the process, and the process is not a project.** A document
+# saying how we work is true for every branch at once, so a copy of it living on
+# one of them is a copy that disagrees with `main` until it merges. That is the
+# living-documents rule: the documents live and the issues expire.
+#
+# **A project may still change them**, when it is the project that changes the
+# process, or when the document rides its release. So this refuses and offers
+# `--no-verify`, in the same shape as the check above it -- it is asking *did
+# you mean this*, not forbidding it.
+PROCESS_DOCS='^(CLAUDE\.md|docs/1\.6-document-map\.md|docs/3\.6-change-lifecycle\.md|docs/3\.7-workstreams\.md)$'
+
+if [ "$MERGING" -eq 0 ] && [ "$BRANCH" != "main" ]; then
+  ONMAIN="$(printf '%s\n' "$STAGED" | grep -v '^$' | grep -E "$PROCESS_DOCS" || true)"
+  if [ -n "$ONMAIN" ]; then
+    {
+      echo "commit refused: the process's own documents belong on main, not $BRANCH."
+      echo
+      printf '  %s\n' $ONMAIN
+      echo
+      echo "  A document saying how we work is true for every branch at once, so a"
+      echo "  copy on one branch disagrees with main until it merges. commit-msg"
+      echo "  cannot catch this: a process edit carries no Refs, and a commit with"
+      echo "  no trailer is assumed to belong to the branch."
+      echo
+      echo "  git stash push -u, switch to main, apply there — or --no-verify if"
+      echo "  this project is the one changing the process, and say so."
+    } >&2
+    exit 1
+  fi
+fi
+
 # --- 2. a new artefact is registered ------------------------------------------
 #
 # **Something permanent needs somewhere to be found.** Not an issue — the owner,
