@@ -250,16 +250,45 @@ trap '_st=$?; cleanup; run_log_finish $_st' EXIT
 rmdir "$WORKTREE_DIR"
 git worktree add --detach "$WORKTREE_DIR" "$COMMIT" >/dev/null
 
+# **The same artefact rehearsal and production load** — #214 via #355. Preview
+# used to run its own `docker build` here, which meant a full lap built the same
+# commit twice and preview ran bytes nothing else had seen. `build_artifact`
+# reuses an existing `artifacts/<full sha>.tar.gz` when there is one, so a lap
+# that has already deployed rehearsal costs this step nothing.
+#
+# **Sourced, not executed.** `deploy.sh`'s delivery phase is ssh/scp-only —
+# `REMOTE="$DEPLOY_USER@$DEPLOY_HOST"` is unconditional and there is no local
+# path — so `exec deploy.sh`, the shape rehearsal uses, would try to ssh to
+# production's default host for a run that must work with no network at all.
+# The guard at `deploy.sh`'s midpoint exposes the build half and runs none of
+# the rest.
+#
 # Build metadata baked into both binaries, and what `at prod`/`verify` read
 # back out of /health later — see docs/4.1-configuration.md's "Versioning"
-# section.
+# section. The short sha here matches what `deploy.sh` exports, so an image
+# built by either path reports the same version.
+export TILE_LITE_ELITE_BUILD_ID="$SHORT_SHA"
+# shellcheck source=scripts/deploy.sh
+DEPLOY_SH_FUNCTIONS_ONLY=1 . "$REPO_DIR/scripts/deploy.sh"
+
 echo "==> Building preview images from $REF ($SHORT_SHA)"
-docker build --target runtime-server \
-  --build-arg TILE_LITE_ELITE_BUILD_ID="$SHORT_SHA" \
-  -t tile-lite-elite-preview-server:latest "$WORKTREE_DIR"
-docker build --target runtime-web \
-  --build-arg TILE_LITE_ELITE_BUILD_ID="$SHORT_SHA" \
-  -t tile-lite-elite-preview-web:latest "$WORKTREE_DIR"
+if ! build_artifact "$COMMIT" "$WORKTREE_DIR"; then
+  echo "error: the image build failed. Nothing has been cached." >&2
+  exit 1
+fi
+# **The tar, not the sha.** `verify_artifact` takes a path — passing the
+# commit made it look for `<sha>.sha256` in the working directory and refuse
+# with "has no recorded digest" after a successful three-minute build.
+verify_artifact "$(artifact_path "$COMMIT")" > /dev/null || exit 1
+
+# **Loaded, then retagged.** `build_artifact` builds through the *production*
+# compose file, so the images inside are `tile-lite-elite-{server,web}:latest`.
+# Preview's compose expects its own names, and the retag is what lets the same
+# bytes serve both.
+echo "==> Loading the artefact into preview"
+gunzip -c "$(artifact_path "$COMMIT")" | docker load
+docker tag tile-lite-elite-server:latest tile-lite-elite-preview-server:latest
+docker tag tile-lite-elite-web:latest tile-lite-elite-preview-web:latest
 
 echo "==> Starting preview stack"
 "${COMPOSE[@]}" up -d --no-build
