@@ -61,7 +61,7 @@ than a list.
 **`no-release` is provisional and must not survive the close.** It says *not a
 release* before anybody knows how the change will reach `main`. Resolve it to
 `pre-approved` or a letter **before the issue closes**, or the record of how
-that change was delivered is lost. `check-transitions.sh` reports one that got
+that change was delivered is lost. `board-check.py` reports one that got
 through.
 
 **A delivery is a sub-project** (D51), so *project* above means the thing that
@@ -101,8 +101,8 @@ and reading one for the other made ten issues claim to reach users.
 ## Afterwards
 
 ```bash
-./scripts/check-transitions.sh    # has it done the work its stage claims?
-./scripts/actions.py              # is it now on somebody's list?
+./scripts/board-check.py    # has it done the work its stage claims?
+./scripts/board-actions.py  # is it now on somebody's list?
 ```
 
 **An issue that is triaged and on nobody's list is the failure to look for.**

@@ -34,7 +34,7 @@ all seven.
 | Deliveries | **owns** — the list, each row a sub-project or `pre-approved` | its own steps |
 | Post-deployment checks | only for a requirement no delivery satisfies | **owns** — a check is answered per delivery |
 
-**`check-transitions.sh` asks each for what it owes**, telling them apart by the
+**`board-check.py` asks each for what it owes**, telling them apart by the
 parent link, so a one-commit delivery is not made to carry a Requirements table.
 
 Each heading holds the content or a link to the document that holds it, never
@@ -122,7 +122,7 @@ statement of the work and does.
 **A decision is not a source requirement.** It routes work — it raises or adds
 requirements and is then closed — so it is named in the `from` column of the
 rows it produced, never in the source list. #301 listed decision #332 there on
-2026-09-09 and `check-transitions.sh` reported it as a source with no parent
+2026-09-09 and `board-check.py` reported it as a source with no parent
 link, which is exactly right: nothing folds a decision.
 
 **A project raised directly says so** rather than leaving the line out — `none —
@@ -225,7 +225,7 @@ id=$(gh api graphql -f query="{repository(owner:\"delphside\",name:\"tile-lite-e
 untyped**, found by #361 on 2026-09-09. A `updateIssue` mutation after creation
 works, but it is a separate action that can be forgotten, interrupted or fail
 quietly, and an issue with no type is skipped by every rule keyed on type rather
-than reported — `check-transitions.sh` branches on the three names and judges an
+than reported — `board-check.py` branches on the three names and judges an
 untyped issue by nothing at all. Worse, a typed filter drops it silently: the
 source-requirements check reported *"#252 parents no requirements"* while #331
 **was** parented, because `select(.issueType.name == "Requirement")` excluded it.
@@ -323,6 +323,22 @@ project's, so a converted issue carries a `Stage` that no longer means anything.
 gh api graphql -f query='mutation($i:ID!){deleteIssueFieldValue(input:{issueId:$i,fieldId:"IFSS_kgDOAsC7CA"}){clientMutationId}}' -f i="$id"
 ```
 
+**The mutation nests the field under `issueField`**, and it did not always —
+`updateIssueFieldValue(input:{issueId:…,fieldId:…,value:{…}})` was rejected on
+2026-09-21 with *"Argument 'issueField' on InputObject
+'UpdateIssueFieldValueInput' is required"*. The shape that works:
+
+```bash
+gh api graphql -f query='mutation($i:ID!){updateIssueFieldValue(input:{issueId:$i,issueField:{fieldId:"IFSS_kgDOAsBg2A",singleSelectOptionId:"IFSSO_kgDOBNDpVw"}}){clientMutationId}}' -f i="$id"
+```
+
+`deleteIssueFieldValue` still takes `fieldId` directly, so the two are not the
+same shape. When one is rejected, read the input type rather than guessing:
+
+```bash
+gh api graphql -f query='{__type(name:"IssueFieldCreateOrUpdateInput"){inputFields{name}}}'
+```
+
 **These ids are a cache and can go stale.** If one is rejected, re-read them:
 
 ```bash
@@ -382,7 +398,7 @@ enough."*
 ## Afterwards
 
 ```bash
-./scripts/check-transitions.sh          # has it done what its phase claims?
+./scripts/board-check.py                # has it done what its phase claims?
 ./scripts/roadmap-diagram.py --write    # regenerate docs/1.5
 ```
 
