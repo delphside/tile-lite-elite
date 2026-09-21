@@ -46,19 +46,32 @@ cumulative games played*, and the terminal sweep already handles the games peopl
 finish. What grows without limit is the games people **start and abandon** — which
 is the more common case, because abandoning costs nothing.
 
-## What would have to change
+## What would have to change: nothing new. The rule exists and is unbuilt
 
-**A waiting game needs an expiry**, and the shape already exists twice: a
-threshold on `last_activity_at`, swept on the same schedule, with the game
-aborted rather than deleted so a player who returns is told rather than finding
-nothing. `expire_old_terminal_games` then removes it a week later by its existing
-rule, so one new sweep composes with what is there rather than adding a second
-deletion path.
+**RET-3 already decides this**, in `docs/1.0-rules.md`:
 
-**The threshold is the owner's**, because it trades a player's chance of coming
-back against rows nobody will ever read. The existing clocks are a week for
-terminal games and the move limit for active ones; a waiting game is the least
-urgent of the three.
+> A game that never started runs a thirty-day countdown from its last activity.
+> Seven days in, its creator is asked what to do with it, and the question stands
+> until they answer or the countdown takes the game, so it may be answered on
+> day eight or on day twenty-nine.
+
+**So there is no threshold to choose and no sweep to design.** The build is
+issue #68, *Retention for games that never started*, closed into #270 (`#71 WP C:
+Additional Game Lifecycle`), where it sits decided and unbuilt alongside the
+scheduler that #166 designed.
+
+**What this project contributes is the measurement, not the answer.** R5 said
+*memory and startup stop growing with cumulative games played*, and the useful
+finding is which games those are: not the ones people finish, which the terminal
+sweep already clears, but the ones people start and abandon, which is the more
+common case because abandoning costs nothing. Seven of production's fifteen are
+in exactly that state.
+
+**Which makes R5 a dependency rather than a work item.** It is satisfied once
+the Additional Game Lifecycle package builds RET-3, and #291 should say so
+rather than carry a second design for the same rule. `#68` also records why it matters beyond tidiness: DEL-4 depends
+on it, because an unanswered invitation lives only on an unstarted game and can
+otherwise hold an account open indefinitely.
 
 ## R2 and R7 are one mechanism, and it does not exist
 
