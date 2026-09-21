@@ -49,6 +49,13 @@ one of them has a defect: fix it, don't work around it.
   description, workstream, priority, type of change. Then scope (options,
   dependencies, effort), then project planning. Outcomes: solo project,
   grouped project, straight to main, on hold, cancelled.
+- **Related change goes in one project, so it is designed once.** Owner,
+  2026-09-21: *"I am keen we keep related changes in the same project so they
+  can be designed together. I want to minimise having to coordinate design
+  across projects."* A different route is not a reason to split a project — it
+  is a reason to split a delivery, which is what a work package already is. Two
+  projects are right where deciding one does not constrain the other, and then
+  a link under *Dependencies and related work* is enough.
 - A project owns its requirements: sources are folded and closed. Its issue
   carries seven headings: requirements, design, impacted artefacts, test
   approach, dependencies and related work, deliveries, post-deployment
