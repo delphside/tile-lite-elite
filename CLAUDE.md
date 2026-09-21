@@ -251,5 +251,5 @@ one of them has a defect: fix it, don't work around it.
 | the lifecycle in full, and why | docs/3.6 |
 | workstreams and what each owns | docs/3.7 |
 | artefacts, their routes, and the strings tooling matches | docs/4.8 |
-| daily state | scripts/inbox.sh, scripts/board-status.py, scripts/board-actions.py |
+| daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |

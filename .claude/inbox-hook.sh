@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # inbox-hook.sh — SessionStart summary of GitHub activity, for Claude's context.
 #
-# Wraps scripts/inbox.sh. Lives in .claude/ (gitignored) rather than scripts/,
+# Wraps scripts/board-inbox.py. Lives in .claude/ (gitignored) rather than scripts/,
 # because it is about how Claude is driven, not about the project.
 #
 # **A summary, not a replay.** The full seven-day output is ~25KB, most of it
 # Claude's own comments being read back to itself. This emits which issues have
-# comments from Steve and what opened or closed; `./scripts/inbox.sh` gives the
+# comments from Steve and what opened or closed; `./scripts/board-inbox.py` gives the
 # detail on demand.
 #
 # Note the counts are only reliable from 2026-08-16, when Claude started
@@ -20,7 +20,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 0
 command -v gh > /dev/null 2>&1 || exit 0
 
-RAW="$(./scripts/inbox.sh 7 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')" || exit 0
+RAW="$(./scripts/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
 [[ -z "$RAW" ]] && exit 0
 
 SUMMARY="$(printf '%s\n' "$RAW" | awk '
@@ -90,6 +90,6 @@ if t:
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "SessionStart",
         "additionalContext":
-            "GitHub activity in the last 7 days. Run ./scripts/inbox.sh for the detail.\n\n" + t,
+            "GitHub activity in the last 7 days. Run ./scripts/board-inbox.py for the detail.\n\n" + t,
     }}))
 ' 2>/dev/null || exit 0

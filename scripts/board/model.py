@@ -80,6 +80,9 @@ class RawIssue:
     # rather than implying a precision it does not have.
     created_at: str | None = None
     updated_at: str | None = None
+    # Needed by R2, which asks what *changed* in a window: an issue closed in
+    # silence produces no comment at all, so a comment listing never reveals it.
+    closed_at: str | None = None
 
 
 # --------------------------------------------------------------------------

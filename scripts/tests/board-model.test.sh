@@ -252,6 +252,14 @@ print("PR State is read with sync-pr-state.sh's ladder, in its order")
 check("draft beats everything, approval included",
       "Drafting", pr_state(True, "APPROVED", 1))
 check("approved", "Approved", pr_state(False, "APPROVED", 0))
+# **Merged and closed are tested before anything else**, as sync-pr-state.sh
+# tests them. Without this rung a closed pull request read as "Drafting" --
+# #393 did, in R2's first run, hours after the board itself said "Closed".
+check("merged beats every other rung", "Merged",
+      pr_state(True, "CHANGES_REQUESTED", 3, "MERGED"))
+check("closed does too", "Closed", pr_state(False, "APPROVED", 0, "CLOSED"))
+check("an open one is unaffected", "Approved",
+      pr_state(False, "APPROVED", 0, "OPEN"))
 check("changes requested", "Changes requested", pr_state(False, "CHANGES_REQUESTED", 1))
 check("a requested reviewer and no decision is awaiting review",
       "Awaiting review", pr_state(False, None, 1))

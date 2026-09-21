@@ -30,7 +30,7 @@ query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
            orderBy:{field:CREATED_AT, direction:DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title state createdAt updatedAt %(body)s
+        number title state createdAt updatedAt closedAt %(body)s
         issueType { name }
         milestone { title }
         parent { number }
@@ -52,7 +52,7 @@ query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
 _PR_QUERY = """
 query($owner:String!, $repo:String!, $cursor:String) {
   repository(owner:$owner, name:$repo) {
-    pullRequests(first:50, after:$cursor, states:OPEN,
+    pullRequests(first:50, after:$cursor, states:%(pr_states)s,
                  orderBy:{field:CREATED_AT, direction:DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -68,14 +68,25 @@ query($owner:String!, $repo:String!, $cursor:String) {
 """
 
 
-def pr_state(draft: bool, review: str | None, reviewers: int) -> str:
+def pr_state(draft: bool, review: str | None, reviewers: int,
+             state: str | None = None) -> str:
     """GitHub's own state, read as the board's `PR State`.
 
     The same ladder, in the same order, as `scripts/sync-pr-state.sh`, which is
     what writes the field. Two answers to one question is the disagreement this
     model exists to remove, so this reproduces that script rather than deciding
-    for itself -- if they ever differ, the parallel run is meant to catch it.
+    for itself.
+
+    **It reproduced only part of it until 2026-09-21.** The script tests MERGED
+    and CLOSED before anything else; this began at `draft`, so a closed pull
+    request read as `Drafting` -- #393 did, in R2's first run, hours after the
+    board itself had been corrected to `Closed`. The comment claimed the
+    parallel run would catch a divergence, and nothing was comparing them.
     """
+    if state == "MERGED":
+        return "Merged"
+    if state == "CLOSED":
+        return "Closed"
     if draft:
         return "Drafting"
     if review == "APPROVED":
@@ -169,13 +180,15 @@ def _to_raw(node: dict) -> RawIssue:
         ),
         created_at=node.get("createdAt"),
         updated_at=node.get("updatedAt"),
+        closed_at=node.get("closedAt"),
     )
 
 
 def _pr_to_raw(node: dict) -> RawIssue:
     state = pr_state(bool(node.get("isDraft")),
                      node.get("reviewDecision") or None,
-                     (node.get("reviewRequests") or {}).get("totalCount", 0))
+                     (node.get("reviewRequests") or {}).get("totalCount", 0),
+                     node.get("state"))
     return RawIssue(
         number=node["number"],
         title=node.get("title") or "",
@@ -194,6 +207,7 @@ def _pr_to_raw(node: dict) -> RawIssue:
         ),
         created_at=node.get("createdAt"),
         updated_at=node.get("updatedAt"),
+        closed_at=node.get("closedAt"),
     )
 
 
@@ -260,6 +274,79 @@ def step_ages(wanted: Sequence[tuple[int, str, str]]) -> dict[int, float]:
     return ages
 
 
+@dataclass(frozen=True)
+class Remark:
+    """One thing somebody said, on an issue or on a diff."""
+
+    number: int
+    when: str
+    who: str          # "owner" | "claude" | "deploy"
+    text: str
+    on_diff: bool
+
+
+def comments_since(since_iso: str) -> tuple[Remark, ...]:
+    """Every comment on an issue or a pull request updated since `since_iso`.
+
+    **Two endpoints, because a review on a diff is not an issue comment.**
+    Inline code comments live on `pulls/comments` and would otherwise be
+    invisible -- which is the half `inbox.sh` had to learn twice.
+
+    **`since` is on *updated*, so an edited older comment surfaces**, and that
+    is right: an edit is a change you have not seen.
+
+    **Who typed it is decided by the account first, the footer second.** Claude
+    posts through `gh`, which authenticates as `SteveStyle-typed-by-Claude`; the
+    owner types in a browser as himself. The footer (#169) is the fallback, for
+    text of Claude's that somebody else posted.
+
+    **Getting this backwards is not a cosmetic error.** Written footer-only
+    first, it labelled 46 of Claude's own comments as the owner's -- and the
+    whole value of this report is that `>` marks what the owner typed.
+    **`deploy.sh` is tested first, and that is a fix.** It announces its own
+    releases through the same account, so an account-first test labelled them
+    Claude's and `inbox.sh`'s dimmed `[deploy.sh]` branch could never fire --
+    dead since it was written.
+
+    Raises `Unavailable` rather than returning nothing: a window that reports no
+    comments because the call failed reads exactly like a quiet week, which
+    `inbox.sh` did on a day four issues opened and four closed.
+    """
+    out: list[Remark] = []
+    for endpoint, url_key, on_diff in (
+        ("issues/comments", "issue_url", False),
+        ("pulls/comments", "pull_request_url", True),
+    ):
+        jq = (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
+              '(if (.body | test("^Released in prod-")) then "deploy" '
+              'elif (.user.login == "SteveStyle-typed-by-Claude") '
+              '     or (.body | test("Typed by Claude")) then "claude" '
+              'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150])] | @tsv')
+        try:
+            run = subprocess.run(
+                ["gh", "api",
+                 f"repos/{OWNER}/{REPO}/{endpoint}"
+                 f"?since={since_iso}&sort=updated&direction=asc&per_page=100",
+                 "--paginate", "--jq", jq],
+                capture_output=True, text=True, timeout=90)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise Unavailable(f"could not read {endpoint}: {exc}") from exc
+        if run.returncode != 0:
+            raise Unavailable(f"could not read {endpoint}: {run.stderr.strip()[:200]}")
+        for line in run.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) != 4:
+                continue
+            number, when, who, text = parts
+            try:
+                out.append(Remark(int(number), when, who, text, on_diff))
+            except ValueError:
+                continue
+    return tuple(sorted(out, key=lambda r: (r.number, r.when)))
+
+
 def token_days_left() -> int | None:
     """Days until the token `gh` runs on expires; None if it does not or the
     header is missing.
@@ -294,7 +381,8 @@ def token_days_left() -> int | None:
 
 
 def fetch(states: str = "OPEN", with_bodies: bool = True,
-          with_pull_requests: bool = True) -> Snapshot:
+          with_pull_requests: bool = True,
+          pr_states: str = "OPEN") -> Snapshot:
     """One snapshot of the board.
 
     Bodies are 2.7s of the 4.6s and 92% of the payload, so a consumer that
@@ -328,7 +416,8 @@ def fetch(states: str = "OPEN", with_bodies: bool = True,
     if with_pull_requests and states == "OPEN":
         cursor = None
         while True:
-            payload = _gh_graphql(_PR_QUERY, owner=OWNER, repo=REPO, cursor=cursor)
+            payload = _gh_graphql(_PR_QUERY % {"pr_states": pr_states},
+                                  owner=OWNER, repo=REPO, cursor=cursor)
             if "errors" in payload:
                 raise Unavailable(str(payload["errors"])[:300])
             block = payload["data"]["repository"]["pullRequests"]
