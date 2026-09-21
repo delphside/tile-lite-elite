@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Iterator, Mapping, Sequence
 
 # --------------------------------------------------------------------------
@@ -39,6 +39,43 @@ _BOX = re.compile(
     r"(?:\*\*(owner|Claude)\*\*[ \t]*[\u2014\u2013-][ \t]*)?"
     r"(.*)$",
     re.M | re.IGNORECASE)
+
+
+# `**Next review due:** 2026-12-21 — **Claude**`
+#
+# **A recurrence, and the only state it keeps is the date.** #291 R2: the
+# capacity plan is reviewed on a recurrence rather than when somebody
+# remembers. A job a machine runs is a scheduled job and belongs to #400; a
+# review two people do is this, because it has to reach a person and wait for
+# them. Owner, 2026-09-21: *"Reviewing the capacity plan requires Claude to
+# update and Steve to review, so an issue date makes more sense."*
+#
+# Doing the review moves the date on, which is what makes it recur. There is
+# no store, no last-run file and nothing to reconcile -- the same reasoning
+# #166 gives for the scheduler: rederive, and a restart is automatically
+# correct.
+#
+# Labelled like a checkbox and for the same reason: the label is on the line,
+# so a reader sees whose it is without scrolling up, and an unlabelled one is
+# waiting on nobody.
+_DUE = re.compile(
+    r"^[ \t]*\**[ \t]*Next[ \t]+[^:\n]{0,40}?due[ \t]*\**[ \t]*:?[ \t]*\**[ \t]*"
+    r"(\d{4}-\d{2}-\d{2})"
+    r"(?:[^\n]*?\*\*(owner|Claude)\*\*)?",
+    re.M | re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class Recurring:
+    """Something that falls due again every time it is done."""
+
+    due: date
+    who: str | None
+    text: str
+
+    def overdue_by(self, today: date) -> int:
+        """Days past due. Negative means it has not come round yet."""
+        return (today - self.due).days
 
 
 @dataclass(frozen=True)
@@ -189,6 +226,29 @@ class Issue:
             if who:
                 label = OWNER if who.lower() == "owner" else CLAUDE
             out.append(Box(mark.lower() == "x", label, text.strip()))
+        return out
+
+    @property
+    def recurrences(self) -> list[Recurring]:
+        out = []
+        for line in self.body.splitlines():
+            m = _DUE.search(line)
+            if not m:
+                continue
+            try:
+                when = date.fromisoformat(m.group(1))
+            except ValueError:
+                # A date-shaped string that is not a date -- 2026-13-40. Not a
+                # recurrence, and not worth failing a report over.
+                continue
+            who = m.group(2)
+            label = None
+            if who:
+                label = OWNER if who.lower() == "owner" else CLAUDE
+            # Asterisks stripped throughout, not just at the ends: the label
+            # sits mid-line, so `.strip("*")` leaves `review due:** 2026-…`.
+            out.append(Recurring(when, label,
+                                 line.replace("*", "").strip(" -\u2014\t")))
         return out
 
     def boxes_in(self, heading: str) -> list[Box]:

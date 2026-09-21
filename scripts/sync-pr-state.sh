@@ -108,10 +108,11 @@ derive() {
 # `global id of ''`. `board/sources.py` carries the same note; this walked
 # into it anyway on 2026-09-10.
 PRS="$(gh pr list --state all --limit 500 \
-  --json number,state,isDraft,reviewDecision,reviewRequests,id \
+  --json number,state,isDraft,reviewDecision,reviewRequests,reviews,id \
   --jq '.[] | [.number, .state, (.isDraft|tostring),
                (if (.reviewDecision // "") == "" then "none" else .reviewDecision end),
-               ((.reviewRequests|length)|tostring), .id] | @tsv')"
+               ((.reviewRequests|length)|tostring), .id,
+               ((.reviews|length)|tostring)] | @tsv')"
 
 # Every page of the board, because a partial read looks exactly like an absent
 # item — which is how "no pull requests are on the board" was reported on
@@ -131,8 +132,26 @@ while :; do
   cursor="\"$(printf '%s' "$page" | jq -r '.data.node.items.pageInfo.endCursor')\""
 done
 
+# **A pull request that requests nobody is waiting on nobody.** `CLAUDE.md`
+# requires the owner as reviewer at creation, and `gh pr create --reviewer`
+# **accepts a login it cannot use**: it prints the failure on stderr and creates
+# the pull request anyway, requesting no one. `docs/4.8` has carried the warning
+# and the correct login since it was found -- and on 2026-09-21 #401 was created
+# with `--reviewer stephenmor` regardless, which is the email prefix. Every pull
+# request in the history shows `requested=0`.
+#
+# The cost is not cosmetic: with no reviewer the derivation below says
+# `Drafting`, so the board column reads *not ready* and `board-actions.py` tells
+# the owner nothing is waiting on him. He found the earlier ones by looking.
+#
+# Reported, never fixed here. Requesting a review notifies somebody, and a
+# script that quietly sends notifications is not a script anybody should trust
+# at two in the morning.
+REVIEWER="${PR_REVIEWER:-SteveStyle}"
+unrequested=0
+
 added=0; changed=0; drift=0
-while IFS=$'\t' read -r num state draft review reviewers node; do
+while IFS=$'\t' read -r num state draft review reviewers node reviews; do
   [[ -n "$num" ]] || continue
   want="$(derive "$state" "$draft" "$review" "$reviewers")"
   line="$(awk -F'\t' -v k="$num" '$1==k{print; exit}' <<< "$ITEMS" || true)"
@@ -149,6 +168,14 @@ while IFS=$'\t' read -r num state draft review reviewers node; do
     added=$((added+1)); have=""
   fi
 
+  if [[ "$state" == "OPEN" && "$draft" != "true" && "$reviewers" == "0"
+        && "$review" == "none" && "${reviews:-0}" == "0" ]]; then
+    unrequested=$((unrequested+1))
+    echo "  #$num is open and requests nobody's review — it is waiting on nobody" >&2
+    echo "        gh api -X POST repos/{owner}/{repo}/pulls/$num/requested_reviewers \\" >&2
+    echo "          -f 'reviewers[]=$REVIEWER'" >&2
+  fi
+
   [[ "$have" == "$want" ]] && continue
   drift=$((drift+1))
   if (( CHECK )); then
@@ -161,7 +188,7 @@ while IFS=$'\t' read -r num state draft review reviewers node; do
 done <<< "$PRS"
 
 if (( CHECK )); then
-  (( drift == 0 )) && { echo "sync-pr-state: the board agrees with GitHub"; exit 0; }
-  echo "sync-pr-state: $drift pull request(s) drifted"; exit 1
+  (( drift == 0 && unrequested == 0 )) && { echo "sync-pr-state: the board agrees with GitHub"; exit 0; }
+  echo "sync-pr-state: $drift pull request(s) drifted, $unrequested requesting nobody"; exit 1
 fi
-echo "sync-pr-state: $added added, $changed corrected"
+echo "sync-pr-state: $added added, $changed corrected, $unrequested requesting nobody"

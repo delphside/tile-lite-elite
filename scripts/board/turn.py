@@ -30,6 +30,7 @@ evidence must not read as *nothing to do*.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import date
 
 from .model import (
     CLAUDE,
@@ -37,6 +38,7 @@ from .model import (
     Box,
     Decision,
     Issue,
+    Recurring,
     PullRequest,
     StandaloneProject,
     WorkPackage,
@@ -80,6 +82,16 @@ DUE_SECTIONS: dict[str, tuple[str, ...]] = {
 }
 
 PROJECTS = ("ParentProject", "WorkPackage", "StandaloneProject")
+
+
+# **A recurrence is due on its date, whatever phase its issue is in.** #291 R2.
+# `DUE_AT` gates *checkboxes*, because a box written at design describes work a
+# later step will do. A date does not describe anything -- it is the statement
+# that this comes round again, and a review that falls due while its project
+# sits at `Design and Test Approach` is due then, not when the project moves.
+def due_recurrences(issue: Issue, who: str, today: date) -> list[Recurring]:
+    return [r for r in issue.recurrences
+            if r.who == who and r.overdue_by(today) >= 0]
 
 
 def boxes_are_due(issue: Issue) -> bool:
@@ -159,6 +171,15 @@ def waiting_on_owner(issue: Issue) -> Waiting | None:
             return Waiting(issue, f"run {unticked} browser test{plural}",
                            "user testing")
 
+    # The fifth source, #291 R2: something that comes round again. Ahead of
+    # the boxes because a date that has passed is a stronger claim on
+    # somebody's attention than a box with no clock on it at all.
+    recurring = due_recurrences(issue, OWNER, date.today())
+    if recurring:
+        first = min(recurring, key=lambda r: r.due)
+        return Waiting(issue, first.text, "recurrence",
+                       days=float(first.overdue_by(date.today())), dated=True)
+
     # The fourth source. Anywhere in the body, on any type: a box he has to
     # tick is his move whatever section it sits in -- once it is due.
     his = due_boxes(issue, OWNER)
@@ -201,6 +222,12 @@ def waiting_on_claude(issue: Issue) -> Waiting | None:
         return Waiting(issue, "post-deployment review is due — "
                               "docs/templates/post-deployment-review.md",
                        "post-deployment", due_after=REVIEW_DUE_DAYS)
+
+    recurring = due_recurrences(issue, CLAUDE, date.today())
+    if recurring:
+        first = min(recurring, key=lambda r: r.due)
+        return Waiting(issue, first.text, "recurrence",
+                       days=float(first.overdue_by(date.today())), dated=True)
 
     mine = due_boxes(issue, CLAUDE)
     if mine:

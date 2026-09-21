@@ -371,6 +371,48 @@ check("an em dash is not required", 1,
       len(classify(issue(1, body="- [ ] **owner** - hyphen works\n")).unticked_for("owner")))
 
 print()
+print("a recurrence comes round again, and the date is its only state")
+# #291 R2: the capacity plan is reviewed on a recurrence rather than when
+# somebody remembers. A job a machine runs is #400's; a review two people do
+# is this, because it has to reach a person and wait for them. Doing the
+# review moves the date on -- there is no store and nothing to reconcile.
+def due(body, **fields):
+    f = {"Phase": "Scope", "Route": "x"}
+    f.update(fields)
+    return classify(issue(1, parent=2, fields=f, body=body))
+
+past = due("**Next review due:** 2020-01-01 — **Claude**\n")
+check("a date that has passed is waiting", "recurrence",
+      getattr(waiting_on_claude(past), "source", None))
+check("and it is reported as Claude's, not the owner's", None,
+      waiting_on_owner(past))
+check("the age is how long it has been overdue", True,
+      getattr(waiting_on_claude(past), "age", 0) > 2000)
+
+future = due("**Next review due:** 2099-01-01 — **Claude**\n")
+check("a date still ahead is not waiting", None, waiting_on_claude(future))
+
+his = due("Next capacity review due 2020-01-01 (**owner**)\n")
+check("the label decides whose it is", "recurrence",
+      getattr(waiting_on_owner(his), "source", None))
+check("so the other side sees nothing", None, waiting_on_claude(his))
+
+# The phase does not gate it, and that is deliberate: DUE_AT gates checkboxes
+# because a box written at design describes work a later step will do. A date
+# describes nothing -- it is the statement that this comes round again.
+designing = due("**Next review due:** 2020-01-01 — **Claude**\n",
+                **{"Phase": "Design and Test Approach"})
+check("a phase that gates boxes does not gate a date", "recurrence",
+      getattr(waiting_on_claude(designing), "source", None))
+
+# 2026-13-40 is date-shaped and is not a date. Not worth failing a report over.
+check("an impossible date is not a recurrence", 0,
+      len(due("Next review due: 2026-13-40\n").recurrences))
+check("an unlabelled one is waiting on nobody", 0,
+      len([r for r in due("Next review due: 2020-01-01\n").recurrences
+           if r.who is not None]))
+
+print()
 print("a delivery at closedown owes its lesson, or says who carries it")
 # This was a gap: the obligation existed with no evidence function, so #398
 # reached Project Closedown owing lessons learnt and read as complete. The
