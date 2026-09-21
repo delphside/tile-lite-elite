@@ -63,6 +63,10 @@ one of them has a defect: fix it, don't work around it.
   test is whether it would exist for only one caller. If it would, it belongs
   to that caller's project. docs/3.7 says which workstream owns which
   mechanism.
+- **A mechanism ships in the same release as its first customers**, so it is
+  tested against a real requirement rather than only against its own tests —
+  owner, 2026-09-21. Scoped and designed independently, scheduled jointly: its
+  milestone is the one its first callers carry.
 - A project owns its requirements: sources are folded and closed. Its issue
   carries seven headings: requirements, design, impacted artefacts, test
   approach, dependencies and related work, deliveries, post-deployment
