@@ -197,15 +197,22 @@ pub(crate) async fn list_player_invitations(
     Path(player_id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<GameInvitationDto>>, ApiProblem> {
+    // **`from_sqlx`, like every other database call.** These two were the last
+    // sites still answering `bad_request("Database error")` after #380 swept
+    // the rest on 2026-09-13, and the status code was the real defect rather
+    // than the string: a pool timeout that would clear in two seconds told the
+    // caller they had made a bad request and that retrying was pointless.
+    // `|_|` also discarded the error, so the failure reached neither the caller
+    // nor the log. #399.
     let invitations = persistence::get_invitations_for_player(&state.db, &player_id)
         .await
-        .map_err(|_| ApiProblem::bad_request("Database error"))?;
+        .map_err(ApiProblem::from_sqlx)?;
 
     let mut result = Vec::new();
     for inv in invitations {
         let inviting_player = persistence::get_player_by_id(&state.db, &inv.inviting_player_id)
             .await
-            .map_err(|_| ApiProblem::bad_request("Database error"))?;
+            .map_err(ApiProblem::from_sqlx)?;
 
         if let Some(inviter) = inviting_player {
             result.push(GameInvitationDto {
@@ -371,4 +378,44 @@ pub(crate) async fn reject_invitation(
     Ok(Json(serde_json::json!({
         "status": "rejected"
     })))
+}
+
+#[cfg(test)]
+mod database_failures {
+    use super::*;
+    use crate::app::tests::{create_test_state, test_database_url};
+
+    /// **A database failure here is a server fault, and the status has to say
+    /// so.** Until 2026-09-21 this endpoint answered `400 Database error`, so a
+    /// pool timeout that would clear in two seconds told the caller they had
+    /// made a bad request and that retrying was pointless. #399.
+    ///
+    /// **Closing the pool is the one transient failure a test can cause.**
+    /// `is_transient` classifies `PoolClosed` alongside `PoolTimedOut` and
+    /// SQLite's busy and locked codes, and those need real contention — which
+    /// is why #380's own classification rests on a throwaway measurement
+    /// against a live pool rather than on a unit test. What this asserts is the
+    /// half that matters here: the handler routes through `from_sqlx` at all,
+    /// rather than mapping to a status of its own.
+    #[tokio::test]
+    async fn listing_invitations_answers_503_when_the_pool_is_gone() {
+        let state = create_test_state(&test_database_url()).await;
+        state.db.close().await;
+
+        let problem = list_player_invitations(Path("any-player".to_string()), State(state))
+            .await
+            .expect_err("a closed pool cannot answer");
+
+        assert_eq!(
+            problem.status_for_test(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "a closed pool is load, not a bad request: {}",
+            problem.message_for_test()
+        );
+        assert!(
+            !problem.message_for_test().contains("Database"),
+            "the message still names the subsystem: {}",
+            problem.message_for_test()
+        );
+    }
 }
