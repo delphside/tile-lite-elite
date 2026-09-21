@@ -604,17 +604,35 @@ LABEL[prstate]="The board agrees with GitHub about pull requests"
 # of them merged. A generated field with no generator on any path is a field
 # that is right only by luck.
 #
-# `--check` so this reports and changes nothing; correcting it is
-# `sync-pr-state.sh` with no arguments, which the message says.
+# **It corrects rather than reports**, which is the difference between a derived
+# field and a judgement. `PR State` is computed from what GitHub already knows,
+# so there is nothing for anybody to disagree with: reporting the drift meant a
+# check, a glance, and then a command, for a value only one answer was ever
+# right for. `document-map.py --write` has the same shape for the same reason.
+#
+# Twice on 2026-09-21 the field was found stale in the owner's own view — #386,
+# #390, #391, #392 and #393 between them — each time because nothing had run the
+# thing that derives it.
+#
+# It still says what it changed. A silent correction is how a field starts being
+# wrong in a way nobody can see.
 check_prstate() {
   local out
   if ! command -v gh >/dev/null 2>&1; then
     fail prstate "not checked — no 'gh' on PATH"; return
   fi
-  if out="$(timeout 60 "$(dirname "${BASH_SOURCE[0]}")/sync-pr-state.sh" --check 2>&1)"; then
+  if ! out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/sync-pr-state.sh" 2>&1)"; then
+    fail prstate "could not reach the board to correct it" "$out"
+    return
+  fi
+  # The script prints one line per correction and a summary; a clean run
+  # corrects nothing, which is the ordinary case.
+  local corrected
+  corrected="$(sed -n 's/.*: \([0-9]*\) added, \([0-9]*\) corrected/\1 \2/p' <<< "$out")"
+  if [[ "$corrected" == "0 0" ]]; then
     pass prstate "every pull request's state matches GitHub"
   else
-    note prstate "the board disagrees with GitHub — run sync-pr-state.sh" "$out"
+    note prstate "corrected the board to match GitHub" "$out"
   fi
 }
 
