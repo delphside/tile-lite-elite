@@ -209,6 +209,12 @@ one of them has a defect: fix it, don't work around it.
 - Bump dev to the next patch straight after each production deploy; dev leads
   production by one.
 - Rehearsal is closed. scripts/rehearsal-access.sh grants access by QR code.
+- **Production access is the owner's to run**, reads included. An admin CLI
+  listing, a database query, a log dump: ask him for it, he runs it, Claude
+  works from what comes back. Owner, 2026-09-21: *"It makes sense if I do the
+  production access unless there is a specific reason."* The exception is the
+  scripted checks the tooling already makes — `verify.sh`, `check-hosts.sh`,
+  the `/health` reads — which are bounded, reviewed and unchanged by this.
 
 ## Tests, checks and decisions
 
