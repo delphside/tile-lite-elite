@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# A record of this run that outlives the terminal -- #328.
+# shellcheck source=scripts/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start deploy-preview.sh "$@"
+
+
 
 # deploy-preview.sh — Build and run the preview stack locally (e.g. inside
 # WSL), using the exact same Dockerfile/build process as scripts/deploy.sh,
@@ -236,7 +242,9 @@ WORKTREE_DIR="$(mktemp -d /tmp/tile-lite-elite-preview-worktree-XXXXXX)"
 cleanup() {
   git worktree remove --force "$WORKTREE_DIR" 2>/dev/null || rm -rf "$WORKTREE_DIR"
 }
-trap cleanup EXIT
+# Status captured before the cleanup: inside a trap `$?` is the previous
+# command's, so an unchained chain records what the cleanup returned. #328.
+trap '_st=$?; cleanup; run_log_finish $_st' EXIT
 # rmdir first: `git worktree add` refuses to target a directory mktemp
 # already created, even an empty one.
 rmdir "$WORKTREE_DIR"

@@ -8,7 +8,7 @@
 #
 #   . "$(dirname "$0")/run-log.sh"
 #   run_log_start deploy.sh "$@"
-#   run_log_event "gate" gate=milestone result=passed
+#   run_log_event "gate passed" gate=milestone
 #   # the exit status is recorded by the trap run_log_start installs
 #
 # **Outside the repository**, at `${XDG_STATE_HOME:-~/.local/state}/tile-lite-elite/`.

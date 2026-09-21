@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# A record of this run that outlives the terminal -- #328.
+# shellcheck source=scripts/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start rehearsal-limits.sh "$@"
+
+
 
 # rehearsal-limits.sh — switch rehearsal between production's rate limits and
 # ones a regression suite can survive.

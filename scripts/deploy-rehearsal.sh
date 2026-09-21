@@ -80,4 +80,8 @@ if [[ "${1:-}" == "reset" ]]; then
   exit 1
 fi
 
+# **Not wired for #328, deliberately.** `exec` replaces this process, so an
+# EXIT trap set here never fires -- the record would say `run started` and
+# never how it ended, which is worse than no record at all. `deploy.sh`
+# writes the run, and its `args` carry what was asked for.
 exec "$HERE/deploy.sh" "$@"

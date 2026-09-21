@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# A record of this run that outlives the terminal -- #328.
+# shellcheck source=scripts/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start rollback.sh "$@"
+
+
 
 for _tle_arg in "$@"; do
   if [[ "$_tle_arg" == "-h" || "$_tle_arg" == "--help" ]]; then

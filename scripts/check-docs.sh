@@ -114,6 +114,14 @@ bold "5. API errors"
 bold "6. mermaid diagrams"
 if ! node scripts/mermaid/check.mjs; then FAILED=1; fi
 
+# 7. script log events -- #328 R2. The server's declaration is held true by
+# `tests/log_schema.rs`; without the equivalent the script events drift within a
+# month, and a record whose fields nobody declared is a transcript rather than a
+# log. Run bare, as mermaid is: a pipe would report the pipe's status.
+echo
+bold "7. script log events"
+if ! "$HERE/scripts/check-run-log-events.py"; then FAILED=1; fi
+
 echo
 if (( FAILED )); then
   bold "FAILED"

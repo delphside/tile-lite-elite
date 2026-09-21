@@ -22,6 +22,12 @@
 # restored is a hypothesis, and the alarm on the restore marker exists to make
 # that happen about every hundred days.
 set -euo pipefail
+# A record of this run that outlives the terminal -- #328.
+# shellcheck source=scripts/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start restore-backup.sh "$@"
+
+
 
 PAR=""; INTO=""; OBJECT=""; MARK=""
 while [[ $# -gt 0 ]]; do
@@ -62,7 +68,9 @@ done
 [[ -n "$PAR" ]] || { echo "error: give me a read pre-authenticated request URL (see --help)" >&2; exit 1; }
 [[ "$PAR" == */o/ ]] || { echo "error: the PAR URL should end in /o/ — that is the bucket form" >&2; exit 1; }
 
-WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+WORK="$(mktemp -d)"; # Status captured before the cleanup: inside a trap `$?` is the previous
+# command's, so an unchained chain records what the cleanup returned. #328.
+trap '_st=$?; rm -rf "$WORK"; run_log_finish $_st' EXIT
 
 # --- pick the object ----------------------------------------------------------
 if [[ -z "$OBJECT" ]]; then
