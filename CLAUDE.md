@@ -56,6 +56,13 @@ one of them has a defect: fix it, don't work around it.
   is a reason to split a delivery, which is what a work package already is. Two
   projects are right where deciding one does not constrain the other, and then
   a link under *Dependencies and related work* is enough.
+- **The exception is a shared mechanism**, which is owned by one workstream and
+  designed to by the others — owner, 2026-09-21. It gets a delivery project of
+  its own, treating every use case as a customer feeding requirements for the
+  generic thing; each workstream then builds its own functionality on top. The
+  test is whether it would exist for only one caller. If it would, it belongs
+  to that caller's project. docs/3.7 says which workstream owns which
+  mechanism.
 - A project owns its requirements: sources are folded and closed. Its issue
   carries seven headings: requirements, design, impacted artefacts, test
   approach, dependencies and related work, deliveries, post-deployment
