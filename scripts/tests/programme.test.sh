@@ -152,6 +152,35 @@ check("a requirement, a decision and a parent are not deliveries",
       [4], [c.number for c in changes(snap, commits())])
 
 print()
+print("a change document is not a delivery")
+# `docs/changes/` holds a project's own design and test notes, which live on
+# main while the project is still in design. Counting one as delivery evidence
+# reported #291 as `merged, awaiting release` on the day its design note was
+# written, and then reported the contradiction against the board.
+LOG = ("\x1e" "aaaaaaa" "\x1f" "app 0.8.2 api 2.13: the design note\n\nRefs #291\n" "\x1f"
+       "docs/changes/workstreams/capacity-planning/291-capacity-plan/291-design.md\n"
+       "\x1e" "bbbbbbb" "\x1f" "app 0.8.2 api 2.13: the sweep\n\nRefs #292\n" "\x1f"
+       "crates/server-game/src/app/sweeps_capacity.rs\n"
+       "\x1e" "ccccccc" "\x1f" "app 0.8.2 api 2.13: both\n\nRefs #293\n" "\x1f"
+       "docs/changes/workstreams/x/293-y/293-design.md\nscripts/deploy.sh\n"
+       "\x1e" "ddddddd" "\x1f" "a merge\n\nRefs #294\n" "\x1f" "\n")
+real_git = repo._git
+repo._git = lambda *a: LOG
+try:
+    counted = repo._scope(["x"])
+    skipped = repo._scope(["x"], notes_count=False)
+finally:
+    repo._git = real_git
+check("a notes-only commit still answers 'does anything claim this issue'",
+      True, 291 in counted)
+check("but it is not evidence of a delivery", False, 291 in skipped)
+check("a commit changing a programme asset is", True, 292 in skipped)
+check("a commit doing both is, because of the other half", True, 293 in skipped)
+# `--name-only` prints no paths for a merge, and the milestone check counts
+# merges on purpose: #362's only `Refs` in the whole history is on a merge.
+check("no paths means unknown, not nothing", True, 294 in skipped)
+
+print()
 print("an environment that did not answer is not an empty one")
 check("an unparsable version yields no comparison", "", repo.behind_main(None))
 check("a version with no build sha yields none either", "", repo.behind_main("0.8.0"))

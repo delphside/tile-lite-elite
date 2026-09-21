@@ -155,7 +155,28 @@ def last_release_at() -> float | None:
         return None
 
 
-def _scope(rev: list[str], no_merges: bool = True) -> Scope:
+# **A change document is not a delivery.** `docs/changes/` holds a project's
+# own design, impact and test notes -- docs/3.6: *"a workstream's note lives on
+# `main` for the life of the workstream"*, which is why writing one lands on
+# `main` while the project is still in design. A commit touching nothing else
+# has therefore delivered nothing to anybody, and counting it as delivery
+# evidence reported #291 as *merged, awaiting release* on the day its design
+# note was written, and then reported the contradiction against the board.
+# 131 of the history's 1191 commits touch only this path.
+NOTES = "docs/changes/"
+
+
+def _delivers(paths: list[str]) -> bool:
+    """Did this commit change a programme asset, or only a project's notes?
+
+    An empty list is *unknown*, not *nothing*: `--name-only` prints no paths
+    for a merge commit, and the milestone check counts merges on purpose.
+    """
+    return not paths or any(not p.startswith(NOTES) for p in paths)
+
+
+def _scope(rev: list[str], no_merges: bool = True,
+           notes_count: bool = True) -> Scope:
     """What the commits in `rev` say about each issue.
 
     `no_merges` is a caller's decision rather than this function's, because the
@@ -165,16 +186,26 @@ def _scope(rev: list[str], no_merges: bool = True) -> Scope:
     claim this issue*, and a merge is a trailer somebody wrote: #362's only
     `Refs` in the whole history is on `1cac857`, a merge into a release branch,
     and dropping it would call a shipped package unbuilt.
+
+    `notes_count` is the same shape of decision. *Where has this change got to*
+    must not count a change document; *does anything on main claim this issue*
+    must, because that is the question `issue-mentions.sh` answers for
+    `deploy.sh`'s gate and the two disagreeing is worse than either being
+    wrong.
     """
     scope = Scope()
-    args = ["log", "--format=%H%x1f%B%x1e"]
+    args = ["log", "--format=%x1e%H%x1f%B%x1f", "--name-only"]
     if no_merges:
         args.insert(1, "--no-merges")
     text = _git(*args, *rev)
     for entry in text.split("\x1e"):
-        if "\x1f" not in entry:
+        if entry.count("\x1f") < 2:
             continue
-        sha, body = entry.split("\x1f", 1)
+        sha, body, names = entry.split("\x1f", 2)
+        if not notes_count:
+            paths = [line for line in names.splitlines() if line.strip()]
+            if not _delivers(paths):
+                continue
         closing = {int(n) for n in CLOSES.findall(body)}
         for number in closing:
             scope.closes.setdefault(number, []).append(sha.strip())
@@ -207,17 +238,18 @@ def commits(main: str = "origin/main") -> Commits:
     tags = [t for t in _git("tag", "--list", "prod-*", "--sort=-creatordate").split() if t]
     got.last_tag = tags[0] if tags else None
 
-    got.off_main = _scope(["--all", f"^{main}"])
+    got.off_main = _scope(["--all", f"^{main}"], notes_count=False)
     # Anything already in the last production tag is out, whatever the board
     # says. The board is a plan; the tag is what happened. What sits between
     # the tag and `main` is the other half, and the two must be asked
     # separately -- `released` walks all history reachable from the tag, so on
     # its own it cannot tell shipped-long-ago from shipped-and-since-changed.
     if got.last_tag:
-        got.released = _scope([got.last_tag])
-        got.unreleased = _scope([f"{got.last_tag}..{main}"])
+        got.released = _scope([got.last_tag], notes_count=False)
+        got.unreleased = _scope([f"{got.last_tag}..{main}"],
+                                notes_count=False)
     else:
-        got.unreleased = _scope([main])
+        got.unreleased = _scope([main], notes_count=False)
         count = _git("rev-list", "--no-merges", "--count",
                      f"{got.last_tag}..{main}").strip()
         got.unreleased_total = int(count) if count.isdigit() else 0
