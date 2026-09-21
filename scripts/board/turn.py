@@ -34,6 +34,7 @@ from dataclasses import dataclass, replace
 from .model import (
     CLAUDE,
     OWNER,
+    Box,
     Decision,
     Issue,
     PullRequest,
@@ -67,8 +68,39 @@ DUE_AT: dict[str, tuple[str, ...]] = {
 }
 
 
+# **One step is due in part, not in whole.** At `Design and Test Approach` most
+# of a project's boxes are future evidence -- the test approach describes what a
+# delivery will produce, and listing it now is the flood `DUE_AT` exists to
+# stop. A box under `Design` is the opposite: a question asked today, of
+# somebody who is here today. #291's two design questions were written on
+# 2026-09-21 and sat in *not yet due* the moment they were written, which is the
+# one place this report must not put a question.
+DUE_SECTIONS: dict[str, tuple[str, ...]] = {
+    "Design and Test Approach": ("Design",),
+}
+
+PROJECTS = ("ParentProject", "WorkPackage", "StandaloneProject")
+
+
 def boxes_are_due(issue: Issue) -> bool:
     return issue.step in DUE_AT.get(issue.kind, ())
+
+
+def due_boxes(issue: Issue, who: str) -> list[Box]:
+    """The boxes of `who`'s that are waiting now rather than eventually.
+
+    Whole-step first, then the part-step above. A step in neither owes
+    nothing: that is `DUE_AT`'s judgement and this does not soften it.
+    """
+    if boxes_are_due(issue):
+        return issue.unticked_for(who)
+    if issue.kind in PROJECTS and issue.step in DUE_SECTIONS:
+        out = []
+        for heading in DUE_SECTIONS[issue.step]:
+            out += [b for b in issue.boxes_in(heading)
+                    if not b.ticked and b.who == who]
+        return out
+    return []
 
 UNLABELLED = (
     "a checkbox with no owner",
@@ -129,7 +161,7 @@ def waiting_on_owner(issue: Issue) -> Waiting | None:
 
     # The fourth source. Anywhere in the body, on any type: a box he has to
     # tick is his move whatever section it sits in -- once it is due.
-    his = issue.unticked_for(OWNER) if boxes_are_due(issue) else []
+    his = due_boxes(issue, OWNER)
     if his:
         first = his[0].text
         more = f" (+{len(his) - 1} more)" if len(his) > 1 else ""
@@ -170,7 +202,7 @@ def waiting_on_claude(issue: Issue) -> Waiting | None:
                               "docs/templates/post-deployment-review.md",
                        "post-deployment", due_after=REVIEW_DUE_DAYS)
 
-    mine = issue.unticked_for(CLAUDE) if boxes_are_due(issue) else []
+    mine = due_boxes(issue, CLAUDE)
     if mine:
         first = mine[0].text
         more = f" (+{len(mine) - 1} more)" if len(mine) > 1 else ""
@@ -237,7 +269,8 @@ def render(snapshot: Snapshot, colour: bool = True, dated: bool = True,
                                   "labelled Claude is outstanding."))
 
     issues = [classify(raw) for raw in snapshot.issues]
-    later = sum(len(i.unticked_for(who)) for i in issues if not boxes_are_due(i))
+    later = sum(len(i.unticked_for(who)) - len(due_boxes(i, who))
+                for i in issues if not boxes_are_due(i))
     if later:
         out.append("")
         whose = "yours" if who == OWNER else "Claude's"

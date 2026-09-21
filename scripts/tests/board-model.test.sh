@@ -21,8 +21,8 @@ sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
 from board.obligations import Answer, assess
 from board.sources import pr_state
-from board.turn import (REVIEW_DUE_DAYS, boxes_are_due, waiting_on_claude,
-                        waiting_on_owner, whats_waiting)
+from board.turn import (REVIEW_DUE_DAYS, boxes_are_due, due_boxes,
+                        waiting_on_claude, waiting_on_owner, whats_waiting)
 from board.sources import Snapshot
 
 failures = 0
@@ -387,6 +387,25 @@ live = classify(issue(1, parent=2, fields={"Phase": "Post-deployment", "Route": 
 check("one at Post-deployment is", True, boxes_are_due(live))
 check("and it reports as the owner's", "checkbox",
       getattr(waiting_on_owner(live), "source", None))
+
+# **Design is due in part.** A test-approach box at that step is future
+# evidence and stays quiet; a box under `Design` is a question asked today.
+# #291's two design questions were written on 2026-09-21 and landed in
+# *not yet due* the moment they were written -- the one place a report that
+# answers "what needs you" must not put a question.
+designing = classify(issue(1, parent=2,
+                           fields={"Phase": "Design and Test Approach", "Route": "x"},
+                           body="## Design\n\n- [ ] **owner** — which recurrence\n\n"
+                                "## Test approach\n\n- [ ] **owner** — play a game\n"))
+check("the step as a whole is still not due", False, boxes_are_due(designing))
+check("but the Design box is", 1, len(due_boxes(designing, "owner")))
+check("and the test-approach box is not", "which recurrence",
+      due_boxes(designing, "owner")[0].text)
+check("so it reports as the owner's", "checkbox",
+      getattr(waiting_on_owner(designing), "source", None))
+# Only projects: a Requirement at no phase at all must not acquire boxes here.
+check("a requirement gains nothing from the section rule", 0,
+      len(due_boxes(req, "owner")))
 
 print()
 print("a red main is Claude's, and the Claude view says so")
