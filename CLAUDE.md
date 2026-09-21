@@ -28,6 +28,13 @@ one of them has a defect: fix it, don't work around it.
   document and to this page, with the argument in the commit message — no
   issue, no `D` number, nothing to close later. The test is whether anybody
   still has to be convinced.
+- **A settled decision is never maintained; the document carrying it is.**
+  Owner, 2026-09-21: *"we don't want to maintain a settled decision issue if
+  things change, only the documentation carrying the decision."* When the answer
+  changes, change the document and leave the issue alone — it records what was
+  argued and when, not what is true now. A one-line pointer written at the
+  moment it is superseded is a record; editing it to stay true is the thing to
+  avoid.
 - **Options live in the body, numbered, each saying what it constrains**, so one
   issue can be read and settled rather than assembled from a thread. Owner:
   *"being able to focus on one with options clearly presented in the body would
