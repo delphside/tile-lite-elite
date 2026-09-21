@@ -94,13 +94,18 @@ else
   FAILED=1
 fi
 
-# 5. API errors — a **check**, not a gate, so it never sets FAILED. An error the
-# document does not carry is a documentation debt, and a build must not go red
-# over writing that has not happened yet (#329). It prints and exits 0; the
-# number is what makes the debt visible.
+# 5. API errors -- a **gate** since 2026-09-21, and a check before that. While
+# the document carried none of the 44, a build going red over writing that had
+# not happened yet would have been wrong. All 70 are now documented against the
+# endpoints that return them, so what is left to protect is that staying true,
+# and a new error with no line in 4.3 is a regression rather than a debt (#329).
+#
+# **Run bare**, as 6 and 7 are: piping it through `sed` to indent reported
+# `sed`'s exit status and nothing else, which is how it could be a gate and
+# still never fail.
 echo
 bold "5. API errors"
-"$HERE/scripts/check-api-errors.py" 2>&1 | sed -n '2,$p' | sed 's/^/  /'
+if ! "$HERE/scripts/check-api-errors.py"; then FAILED=1; fi
 
 # 6. mermaid — #340. markdownlint sees a fenced block as opaque, so a diagram
 # that does not parse renders as an error box on GitHub and is caught by

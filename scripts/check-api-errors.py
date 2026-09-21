@@ -6,8 +6,14 @@
 carrying it, and the web client already renders whatever string the server
 sends — so the server's wording is on a player's screen, undeclared.
 
-**A check, not a gate.** It reports and a person decides. Documenting an error
-is writing, and writing is not something a build should refuse over.
+**A gate since 2026-09-21, and it was a check before that for a reason that has
+expired.** Documenting an error is writing, and a build must not go red over
+writing that has not happened yet — so while the debt was 44 it reported and a
+person decided. The debt is now nil: all 70 messages the API can construct are
+in 4.3, against the endpoints that return them. What is left to protect is that
+staying true, and a new error added without a line in the document is not a debt
+somebody is working through, it is a regression. #329's third acceptance
+condition asks for it to be *caught*, which a report cannot do.
 
 **Why a check and not a generator**, which is the design question #329 settled:
 a generator can list which literals an endpoint constructs, but not *why* two
@@ -18,9 +24,10 @@ decoy password on the miss so both paths cost the same. That is the behaviour a
 caller needs, and none of it is derivable from the source. So a person writes
 the entry and this verifies nothing was missed.
 
-Exit 0 always: `docs/4.8` reserves 1 for fatal and 3 for a non-fatal finding,
-but this is run from `check-docs.sh` alongside gates, and a documentation debt
-must not turn the docs job red. It prints and returns 0.
+Exit 1 on an undocumented message, per `docs/4.8`: 1 is fatal, and this is a
+gate. `check-docs.sh` runs it, and CI runs `check-docs.sh` on every push, so the
+message that reaches a player and the line describing it now ship together or
+not at all.
 """
 import re
 import sys
@@ -88,7 +95,7 @@ def main() -> int:
     print()
     print("  An error is part of the interface. Each belongs against the endpoint")
     print("  that returns it, as part of what that call does — #329.")
-    return 0
+    return 1
 
 
 if __name__ == "__main__":
