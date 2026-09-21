@@ -17,6 +17,40 @@ set -euo pipefail
 #   ./scripts/deploy-rehearsal.sh <commit-ish>
 #   ./scripts/deploy-rehearsal.sh reset        # empty the database and restart
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: deploy-rehearsal.sh              # deploy HEAD
+       deploy-rehearsal.sh <commit-ish>
+       deploy-rehearsal.sh reset        # empty the database and restart
+
+A wrapper that points deploy.sh at the rehearsal host for one command
+only, so nothing is left set in your shell. See the header comment
+above for why that matters: deploy.sh defaults every variable to
+production, so a half-applied environment goes live.
+
+`reset` destroys everything on the host, including any seeded
+production data (#252 R4, #315). It is run between testing phases,
+not between runs.
+
+Refuses (exit 1) when:
+  - `reset` is asked for and the target looks like production
+    -> "deploy-rehearsal: refusing to reset '<host>' — that is not
+        rehearsal."
+    The only way this fires is that rehearsal-target.sh is wrong,
+    since it exports DEPLOY_HOST unconditionally and a caller cannot
+    set it from outside.
+  - the remote `docker compose down -v && up -d` fails
+    -> "deploy-rehearsal: the reset failed — rehearsal may be down."
+  - the host does not answer /health within 60s of a reset
+    -> "deploy-rehearsal: it did not come back within 60s — check the
+        host."
+
+Every other refusal is deploy.sh's, which this execs: run
+`./scripts/deploy.sh --help` for those.
+EOF
+  exit 0
+fi
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/rehearsal-target.sh
 . "$HERE/rehearsal-target.sh"

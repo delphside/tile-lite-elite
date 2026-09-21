@@ -22,6 +22,40 @@ set -euo pipefail
 # Exit 1 when they diverge or a reboot is pending, so a caller can gate on it.
 # It still only reports: the remedy is a sentence at the end, never an action.
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: check-hosts.sh
+
+Reads the kernel, the Docker version and whether a reboot is pending
+from production and rehearsal, and compares them. Read-only: it never
+changes a host. See the header comment above for why (#360 R2, R3).
+
+Refuses (exit 2) when:
+  - either host cannot be read over ssh within 40 seconds
+    -> "could not read <host>"
+    A closed door and a dead host refuse identically here, so check
+    ssh access before reading this as an outage.
+
+Reports a finding (exit 1) when:
+  - the kernels differ
+    -> "!! different kernels — a release proven on rehearsal was
+        proven on another kernel"
+  - the Docker versions differ
+    -> "!! different Docker versions — the runtime under the image is
+        not the same runtime"
+  - either host has /var/run/reboot-required
+    -> "!! <host> has a reboot pending — installed fixes are on disk
+        and not running (#360 R2)"
+
+Exit 1 is a finding, not a fault: rehearsal may lead production
+deliberately while an upgrade is being proven there. It reports and
+you decide.
+
+Exit 0 when the two agree and neither is waiting to reboot.
+EOF
+  exit 0
+fi
+
 PROD_HOST="${PROD_SSH_HOST:-tile-lite-elite}"
 REHEARSAL_HOST="${REHEARSAL_SSH_HOST:-tile-lite-elite-rehearsal}"
 

@@ -17,6 +17,39 @@ set -euo pipefail
 #     needing a `wsl --shutdown`, which a script running inside the distro
 #     can't safely trigger on itself. This script checks and warns instead.
 
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'EOF'
+usage: setup-dev-environment.sh
+
+Bootstraps a fresh Ubuntu checkout into a working dev and deploy
+environment: Rust toolchain, wasm target, the exact-matched
+dioxus-cli and wasm-bindgen-cli versions this project needs, sccache,
+Docker Engine, and the shell aliases. Safe to re-run — every step
+checks whether it is already done.
+
+It does NOT restore the deploy SSH key (a secret, copied back by hand
+— docs/3.1) and it does NOT enable systemd in WSL (a Windows-side
+/etc/wsl.conf edit needing `wsl --shutdown`, which a script inside
+the distro cannot safely trigger on itself). It checks and warns.
+
+Refuses (exit 1) when:
+  - it is run from a linked git worktree
+    -> "setup-dev-environment: refusing — this is a linked worktree."
+    It writes sadev, sapre, dbdev and the rest for the tree it runs
+    in, so from a project worktree they would point at that tree and
+    its database, silently. Scripts are operated from main (docs/3.2,
+    #389). SETUP_ALLOW_WORKTREE=1 to do it anyway.
+
+Warns without failing when:
+  - wasm-bindgen's version cannot be read from Cargo.lock
+    -> "could not read wasm-bindgen version from Cargo.lock —
+        skipping, install manually"
+    A mismatched wasm-bindgen produces a client that builds and does
+    not run, so this one is worth acting on.
+EOF
+  exit 0
+fi
+
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 

@@ -20,6 +20,33 @@ set -euo pipefail
 #
 # Raised by #291 R7. Usage: ./scripts/bench-rehearsal.sh [games]
 
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  cat <<'EOF'
+usage: bench-rehearsal.sh [games] [edition]
+
+Runs the engine timing benchmark on rehearsal's hardware and records
+the row, as part of a release's technical tests. Defaults: 30 games,
+the official edition.
+
+A check, not a gate: it prints the new row beside the last one for the
+same host and exits 0 either way. Timings move for reasons that are
+not regressions, and a threshold that failed a release on a noisy p99
+would be routed around within two releases. See the header comment
+above for why rehearsal rather than CI (#291 R7, #304).
+
+Refuses (exit 1) when:
+  - fewer than 30 games are asked for
+    -> "refusing <n> games: a p99 needs about 1200 samples, which is
+        30 games"
+    30 games yields about 1229 samples. The older 10-game runs gave a
+    p99 from 411 samples, which is four data points.
+  - the benchmark produces no `row:` line on the host
+    -> "no row in the output — the benchmark did not complete:"
+       followed by everything the run printed
+EOF
+  exit 0
+fi
+
 GAMES="${1:-30}"
 EDITION="${2:-official}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

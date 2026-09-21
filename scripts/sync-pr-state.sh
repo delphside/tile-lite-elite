@@ -29,6 +29,43 @@ set -euo pipefail
 # Exits 0 when the board agrees with GitHub, 1 from `--check` when it does not.
 # A check reports and a person decides; the plain form is the person deciding.
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: sync-pr-state.sh            # add what is missing, set what is wrong
+       sync-pr-state.sh --check    # report the drift and change nothing
+
+Puts every pull request on the board and sets `PR State` from what
+GitHub already knows. The field is derived, never typed: if it
+disagrees with reviewDecision, the field is wrong. See the header
+comment above (#219, #338, #341).
+
+Refuses (exit 2) when:
+  - the project has no `PR State` single-select field, or it cannot be
+    read
+    -> "sync-pr-state: no 'PR State' field on the project — nothing
+        to sync"
+    An unreadable field and an absent one look the same from here, so
+    a token that cannot see the project lands in this message too.
+
+Reports drift (exit 1) from --check when:
+  - a pull request is not on the board
+    -> "  #N is not on the board — should be '<state>'"
+  - the board's value disagrees with GitHub's
+    -> "  #N says '<have>', GitHub says '<want>'"
+
+Warns without failing (the run continues, exit unaffected) when:
+  - an item could not be added to the board
+    -> "  #N could not be added"
+    A failed mutation yields nothing useful, and counting it as added
+    is how "2 added" was once reported for two adds that did not
+    happen.
+
+Exit 0 from --check when the board agrees with GitHub, and from the
+plain form once it has added and corrected what it found.
+EOF
+  exit 0
+fi
+
 PROJECT_ID="${PROJECT_ID:-PVT_kwDOEyOvmc4BhpOl}"
 FIELD_ID="${PR_STATE_FIELD_ID:-PVTSSF_lADOEyOvmc4BhpOlzhhydyI}"
 

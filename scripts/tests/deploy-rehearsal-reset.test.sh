@@ -72,9 +72,12 @@ check "reset never reaches deploy.sh" "0" "$(grep -c 'REACHED deploy.sh' <<< "$o
 check "the branch exits rather than falling through" "1" \
   "$(awk '/if \[\[ "\$\{1:-\}" == "reset" \]\]/,/^fi$/' "$HERE/scripts/deploy-rehearsal.sh" | grep -c 'exit 0')"
 
-# 4 — a verb nobody knows about is not a tool
-check "usage mentions reset" "1" \
-  "$(grep -c 'deploy-rehearsal.sh reset' "$HERE/scripts/deploy-rehearsal.sh")"
+# 4 — a verb nobody knows about is not a tool.
+# Asserted as "at least once", not "exactly once": the script now says it in
+# its header and again in `--help` (#329 R3), and an exact count made adding
+# the second one look like a regression.
+check "usage mentions reset" "yes" \
+  "$(grep -q 'deploy-rehearsal.sh reset' "$HERE/scripts/deploy-rehearsal.sh" && echo yes || echo no)"
 
 echo
 if (( failures )); then echo "  $failures check(s) failed"; exit 1; fi

@@ -97,6 +97,35 @@ case "${1:-show}" in
     echo "==> rehearsal restored to production's limits"
     ;;
 
+  -h|--help)
+    cat <<'EOF'
+usage: rehearsal-limits.sh [show|regression|production]
+
+Switches rehearsal's rate limits between production's and the relaxed
+set preview already uses, by editing the host's .env and restarting
+the server. `show` is the default and changes nothing.
+
+Why it exists: production's registration limit is 2/min burst 3, which
+stops a full regression suite before it starts. The relaxed values are
+preview's, so a suite proved against one is proved against the other.
+
+Refuses (exit 2) when:
+  - a verb other than show/regression/production is given
+    -> "usage: <path> [show|regression|production]"
+
+Refuses (exit 1) when:
+  - `show` cannot reach the host over ssh
+    -> "rehearsal-limits: could not reach <host>"
+
+`regression` leaves rehearsal on numbers nobody ships. Run
+`rehearsal-limits.sh production` when the run is done, or
+check-rate-limits.sh passes against the relaxed set and proves
+nothing.
+EOF
+    exit 0 ;;
+
   *)
-    echo "usage: $0 [show|regression|production]" >&2; exit 2 ;;
+    echo "usage: $0 [show|regression|production]" >&2
+    echo "       $0 --help   # and what each verb refuses" >&2
+    exit 2 ;;
 esac

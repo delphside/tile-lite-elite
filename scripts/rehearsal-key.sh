@@ -20,6 +20,29 @@ set -euo pipefail
 # at another environment, or run where there is no ssh access.
 # `REHEARSAL_SSH_HOST` names the host if it is not the configured alias.
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+usage: rehearsal-key.sh
+       KEY="$(scripts/rehearsal-key.sh)" || exit 1
+
+Prints rehearsal's access key on stdout, however it has to be
+obtained: REHEARSAL_ACCESS_KEY if it is set, otherwise read from the
+host's .env over ssh. One place knows, because two copies is how the
+same defect comes to exist twice and this one decides whether a test
+suite is testing the application or the door (#240, #371).
+
+REHEARSAL_SSH_HOST names the host if it is not the configured alias.
+
+Refuses (exit 1) when:
+  - no key can be obtained by either route
+    -> "rehearsal-key: no key. Set REHEARSAL_ACCESS_KEY, or check ssh
+        access to <host>."
+    A closed gate and a broken application refuse identically, so a
+    suite that runs without the key reports the door as a defect.
+EOF
+  exit 0
+fi
+
 if [[ -n "${REHEARSAL_ACCESS_KEY:-}" ]]; then
   printf '%s\n' "$REHEARSAL_ACCESS_KEY"
   exit 0

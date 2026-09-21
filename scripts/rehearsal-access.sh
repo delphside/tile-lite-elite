@@ -144,8 +144,45 @@ case "${1:-}" in
     fi
     ;;
 
+  -h|--help)
+    cat <<'EOF'
+usage: rehearsal-access.sh grant    # print the unlock URL, as a QR code
+       rehearsal-access.sh revoke   # rotate the secret: all devices out
+       rehearsal-access.sh status   # is a key configured, and is it live
+
+Rehearsal is closed by default (#240): the Caddyfile refuses every
+request for rehearsal's hostnames without a cookie holding the host's
+REHEARSAL_ACCESS_KEY. A cookie can only be set by the browser that
+will hold it, so this prints something to scan rather than reporting
+success. `grant` deliberately does not rotate — unlocking the phone
+would otherwise lock out the laptop.
+
+Refuses (exit 2) when:
+  - no verb, or one that is not grant/revoke/status, is given
+    -> the usage above
+
+Refuses (exit 1) when:
+  - `grant` or `revoke` cannot generate a key on the host
+    -> "rehearsal-access: could not generate a key"
+  - the new key cannot be written to the host's .env and applied
+    -> "rehearsal-access: could not write the key to the host"
+  - `status` finds the container running a different key from .env
+    -> "container: running a DIFFERENT key from .env — the file was
+        changed without 'docker compose up -d web'."
+    This reads exactly like a wrong key when a device is refused,
+    which is why it is a refusal and not a line of output.
+
+`status` exits 0 for every other state it reports, including a
+rehearsal with no key at all: locked to everybody is a configuration,
+not a fault.
+EOF
+    exit 0
+    ;;
+
   *)
     sed -n '4,8p' "$0" | sed 's/^# \{0,1\}//'
+    echo
+    echo "  './scripts/rehearsal-access.sh --help' lists what each verb refuses."
     exit 2
     ;;
 esac
