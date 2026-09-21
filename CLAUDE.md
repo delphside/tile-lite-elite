@@ -28,13 +28,8 @@ one of them has a defect: fix it, don't work around it.
   document and to this page, with the argument in the commit message — no
   issue, no `D` number, nothing to close later. The test is whether anybody
   still has to be convinced.
-- **A settled decision is never maintained; the document carrying it is.**
-  Owner, 2026-09-21: *"we don't want to maintain a settled decision issue if
-  things change, only the documentation carrying the decision."* When the answer
-  changes, change the document and leave the issue alone — it records what was
-  argued and when, not what is true now. A one-line pointer written at the
-  moment it is superseded is a record; editing it to stay true is the thing to
-  avoid.
+- **A settled decision is never maintained; the document carrying it is** —
+  the general rule under *Documentation*, applied to decisions.
 - **Options live in the body, numbered, each saying what it constrains**, so one
   issue can be read and settled rather than assembled from a thread. Owner:
   *"being able to focus on one with options clearly presented in the body would
@@ -253,6 +248,14 @@ one of them has a defect: fix it, don't work around it.
 
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
+- **The documents live; the issues expire.** Owner, 2026-09-21: *"The project
+  documents are living documents, the issues are only relevant while they are
+  open."* A `docs/N.N` file answers what is true now and is edited whenever that
+  changes. An issue answers what was argued and when, and once it closes that is
+  all it answers. So when something changes, change the document — do not edit a
+  closed issue to agree with it, and do not cite one as the authority for a
+  rule. A line added to a closed issue at the moment it is superseded is a
+  record; editing one to keep it true is the thing to avoid.
 - At a process step, consult the owning document. A process question with a
   choice still open is a **`Decision` issue** — the GitHub issue type, carrying
   `Decision State` and an `Agreed Decision` heading that `board-check.py`
