@@ -31,8 +31,13 @@ from board.report import render          # noqa: E402
 from board.branches import check as check_branches
 from board.branches import render as render_branches
 from board.branches import named_numbers
+from board.model import classify
+from board.overtaken import candidates
+from board.overtaken import check as check_overtaken
+from board.overtaken import render as render_overtaken
+from board.repo import last_release_at
 from board.sources import (Unavailable, fetch, issues_by_number,
-                           remote_branches)  # noqa: E402
+                           remote_branches, step_ages)  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -78,6 +83,23 @@ def main(argv=None) -> int:
             failing = failing or bool(found)
         except Unavailable as exc:
             text += f"\n\n  branches: cannot say — {exc}"
+
+        # A shipped project still open when the next release went out. Moved
+        # here from `verify.sh`'s `check_reviews`, which asked GitHub twice for
+        # what the model already holds -- the second of those calls, per issue,
+        # is the same timeline read `step_ages` does.
+        try:
+            typed = [classify(raw) for raw in snapshot.issues]
+            wanted = [(i.number, "Phase", "Post-deployment")
+                      for i in candidates(typed)]
+            ages = step_ages(wanted) if wanted else {}
+            now = time.time()
+            shipped_at = {n: now - days * 86400.0 for n, days in ages.items()}
+            found = check_overtaken(typed, shipped_at, last_release_at())
+            text += "\n\n" + render_overtaken(found)
+            failing = failing or bool(found)
+        except Unavailable as exc:
+            text += f"\n\n  overtaken: cannot say — {exc}"
 
     # Stripped at the boundary rather than threaded through the renderer:
     # nineteen call sites would each have to remember, and one that forgot

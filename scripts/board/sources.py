@@ -229,7 +229,14 @@ def _pr_to_raw(node: dict) -> RawIssue:
 
 
 def step_ages(wanted: Sequence[tuple[int, str, str]]) -> dict[int, float]:
-    """Days since each issue's step field last became the value it holds now.
+    """Days since each issue's field last became the value the caller asks for.
+
+    **The value is a parameter, not the current one.** R1 passes the step an
+    issue holds now, which is what this was written for; `overtaken.py` passes
+    `Post-deployment` for projects that have since moved to `Project Closedown`,
+    and gets the date it shipped rather than the date it stopped. The docstring
+    said "the value it holds now" until 2026-09-21 and the second caller had to
+    read the loop to be sure.
 
     **The clock is GitHub's, not ours.** A field *value* carries no timestamp,
     but the issue records every change: `IssueFieldChangedEvent` and

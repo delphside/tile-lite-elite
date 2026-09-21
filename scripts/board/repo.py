@@ -125,6 +125,22 @@ class Commits:
         return "not started"
 
 
+def last_release_at() -> float | None:
+    """When the most recent `prod-*` tag was created, as a unix time.
+
+    The clock a shipped-but-still-open project is measured against: a project
+    that shipped and was still open when the *next* release went out has been
+    overtaken, whatever its phase says.
+    """
+    out = _git("for-each-ref", "--sort=-creatordate",
+               "--format=%(creatordate:unix)", "refs/tags/prod-*")
+    first = out.split("\n")[0].strip() if out else ""
+    try:
+        return float(first)
+    except ValueError:
+        return None
+
+
 def commits(main: str = "origin/main") -> Commits:
     got = Commits()
 
