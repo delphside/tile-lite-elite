@@ -68,6 +68,7 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 ( timeout 25 ./scripts/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
 ( timeout 25 ./scripts/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
+( timeout 10 ./scripts/board-practices.py 2>/dev/null > "$TMP/practices" ) &
 wait
 
 # Only the findings. A clean run says nothing is missing, which is worth
@@ -76,10 +77,15 @@ wait
 # indented it — a difference that silently matched nothing for one commit.
 TRANS="$(grep -E '^#[0-9]+' "$TMP/trans" 2>/dev/null | head -20 || true)"
 ACTIONS="$(grep -E '^  #[0-9]+' "$TMP/actions" 2>/dev/null | head -40 || true)"
+# #407 R3: read every session, since a session start is not a repetition of
+# the previous one — there is nothing to debounce, unlike the weekly digest
+# `programme-activities.yml` sends the owner during an absence.
+PRACTICES="$(grep -E 'OVERDUE|never logged' "$TMP/practices" 2>/dev/null || true)"
 
 EXTRA=""
 [[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/3.8):"$'\n'"$PRACTICES"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 

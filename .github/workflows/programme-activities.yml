@@ -1,0 +1,94 @@
+# Reaches the owner while `board-actions.py` cannot — because nobody is at a
+# keyboard to run it. #407.
+#
+# **One of two readers, and this is the one that fires without anybody
+# asking.** `scripts/board-practices.py` is read every session by the
+# session-start hook too, but that only reaches Claude and only when a
+# session starts. This is what covers an absence.
+#
+# **Weekly, not daily.** Owner, 2026-09-22: *"Deriving actions from the
+# presence or absence of a document seems fragile"* settled how the record is
+# kept; how often to be told during an absence is a separate, smaller
+# question, and a weekly digest is enough to act on before anything genuinely
+# waits too long — the tightest frequency in the register today is seven days.
+#
+# Same shape as `advisories.yml`: open or update a standing issue by title
+# match, never close it automatically — closing is a decision, and this
+# workflow only reports.
+name: Programme activities
+
+on:
+  schedule:
+    # 07:00 UTC on Mondays. Off advisories.yml's daily 06:15 so the two do not
+    # contend for the same runner minute.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: overdue programme activities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: What is overdue
+        id: check
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/board-practices.py --exit-code 2>&1 | tee /tmp/practices.txt
+
+      - name: Open or update the report
+        if: always() && steps.check.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Programme activities are overdue"
+        run: |
+          set -euo pipefail
+          {
+            printf 'A scheduled check found programme activities overdue or never logged.\n\n'
+            printf 'Raised by `.github/workflows/programme-activities.yml` ([run](%s/%s/actions/runs/%s)).\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'The register is docs/3.8-programme-activities.md; the record of what has\n'
+            printf 'been done is docs/programme-activity-log.csv. A row appended there closes\n'
+            printf 'this.\n\n'
+            printf '```\n'
+            cat /tmp/practices.txt
+            printf '```\n'
+          } > /tmp/body.md
+
+          existing="$(gh issue list --state open --limit 200 --json number,title \
+                        --jq "[.[] | select(.title == \"$TITLE\") | .number] | first // empty")"
+
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body-file /tmp/body.md
+            echo "updated #$existing"
+          else
+            gh issue create --type Requirement --title "$TITLE" --body-file /tmp/body.md
+          fi
+
+      # **Close it when the run is clean**, unlike advisories.yml. A dependency
+      # finding needs a human decision even once fixed elsewhere; an overdue
+      # activity is fully answered by a log row, and the issue's only job is to
+      # notify — leaving it open after the activity was logged would be a
+      # standing false alarm.
+      - name: Close the report if everything is current
+        if: always() && steps.check.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Programme activities are overdue"
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --state open --limit 200 --json number,title \
+                        --jq "[.[] | select(.title == \"$TITLE\") | .number] | first // empty")"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "Everything in the register is current as of this run."
+            gh issue close "$existing" --reason completed
+            echo "closed #$existing"
+          fi
