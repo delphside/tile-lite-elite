@@ -325,6 +325,70 @@ three that disagree instead of two.
 measurement that would give each category a cost is #91's, and it has not
 happened.
 
+## Peak hour and spike, and the requirement is a spike *during* the peak hour
+
+Owner, 2026-09-22: *"The model also measured peak hour and spike. The
+requirement is to handle a spike during the peak hour."*
+
+**Three figures, not one.** Their forecast plotted *average* and *peak hour*
+separately, and the ceiling was tested against neither alone: the design case is
+a spike arriving while the peak hour is already running. An average is what you
+bill for; a peak hour is what you size for; a spike during the peak hour is what
+breaks.
+
+**Which composes with the degraded threshold.** The genuinely worst case is a
+spike, during the peak hour, while degraded — and a plan that reports one
+resting number is three steps away from that.
+
+### The concepts already exist here, as the limiter's two numbers
+
+Every rate class in `throttle.rs` is a **pair**, and the pair is exactly peak and
+spike:
+
+| class | per minute — the sustained rate | burst — the spike allowance |
+| --- | --- | --- |
+| register | 2 | 3 |
+| auth | 10 | 10 |
+| session | 240 | 60 |
+| global | 1,200 | 200 |
+
+**So the vocabulary is in the code and the capacity plan has never used it.**
+
+### And that turns the requirement into a question with an answer
+
+**A burst allowance is a permission, not a capability.** The limiter says what
+we will *accept*; nothing says what we can *serve*. If the two disagree, the
+limiter is not protecting anything — it is waving through a spike the service
+then fails under, which is the failure mode it exists to prevent.
+
+The costs to check it against are already measured:
+
+| | cost | bound |
+| --- | --- | --- |
+| an Argon2 hash | **~47 ms** of CPU on a 2 vCPU box, recorded in `throttle.rs` | `hash_limit` 4 |
+| an engine move | median **0.43 ms**, p99 **53 ms**, max **75 ms** on the rehearsal VM (`engine_timing_results.csv`, `1cac857`) | `engine_limit` 2 |
+
+**The engine's tail is the surprise.** Its median is a hundredth of an Argon2
+hash and its p99 is about the same as one. Sizing on the median would be sizing
+for the case that never hurts.
+
+**So the arithmetic the plan owes is roughly this**: a global burst of 200,
+arriving during the peak minute, of which some fraction is hash-bounded at 47 ms
+and some engine-bounded at up to 53 ms, served two cores at a time through
+semaphores of 4 and 2. Whether that clears in a second or in ten is a number
+nobody has worked out, and it is the first question the capacity plan should
+answer once it can.
+
+### What this adds
+
+**R8**, on the issue: *the service handles a spike during the peak hour, not
+merely the average*. Stated as a requirement rather than folded into R1, because
+R1 asks what is consumed and this asks what happens at the worst realistic
+moment — different questions with different evidence.
+
+**Still not built**, for the same reason as the rest: the measurement lives in
+the stress-testing requirement, #91.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
