@@ -151,6 +151,15 @@ two facts visible that are currently only in code comments: **the sweeps run
 inside `list_games`**, so nothing happens unless somebody looks, and **the games
 map is a single lock** that both the engine and ordinary handlers contend for.
 
+**Sharper since #408 (2026-09-22): two of those sweeps are `O(n)` over every
+resident game, under a write lock, on every call to `list_games`** —
+`expire_overdue_turns` and `send_move_time_reminders` both iterate the whole
+map. That is the ten-second poll every client makes, so a resident idle game
+is not a passive memory cost: it is work redone on the busiest path in the
+service, for every client, every poll. `expire_old_terminal_games` is the
+exception — it queries the database for what is stale first and only touches
+the map for the rows it removes.
+
 **#400 changes this diagram more than any other**, which is a good test of
 whether the view earns its place: a scheduler moves `Lazy` off the request
 arrow entirely.
