@@ -704,6 +704,70 @@ the point: the number is now checkable.
 that should come out of the utilisation threshold via the workload model, and
 nothing derives it. That is the narrower thing R9 now asks for.
 
+### So peak and spike are different kinds of thing, and only one is a measurement
+
+Owner, 2026-09-22: *"if we define peak to mean the modelable peak using Poisson,
+and spike to mean something unexpected due to an event, then spike cannot be
+measured and becomes an allowance."*
+
+**These are the definitions this document uses from here.**
+
+| | what it is | where the number comes from |
+| --- | --- | --- |
+| **peak** | the modellable maximum of organic arrivals | **derived** from the hourly count and the window, by the calculation above |
+| **spike** | something unexpected, caused by an event | **allowed for**. It cannot be derived, because the event that causes it has not happened |
+
+**A spike is a policy, not a finding.** Deciding to hold 30% headroom above the
+modelled peak is a decision about how much to pay for surviving the unforeseen,
+and it belongs to whoever is paying. What the analysis owes is the peak, stated
+honestly, so the allowance is added to a number rather than to a guess.
+
+**And it explains the shape of the prior art.** A launch and an outage were
+annotated on their chart precisely because they are the events a distribution
+cannot produce; the annotation is what keeps them out of the trend, and the
+allowance is what survives them.
+
+### The peak rises with how long you watch, and that is the other input
+
+Owner, same day: *"the other factor in the model is the number of hours we are
+considering, if it runs for long enough then unusual grouping will occur
+eventually."*
+
+**So the peak is not one number — it is a number and a period.** *Once an hour*
+and *once a year* are different peaks from the same distribution:
+
+| arrivals/hour | mean per 10 s | once an hour | once a day | once a month | once a year |
+| --- | --- | --- | --- | --- | --- |
+| 3,600 | 10 | 20 | 24 | 27 | 29 |
+| 36,000 | 100 | 129 | 139 | 148 | 154 |
+| 72,000 | 200 | **240** | 254 | 266 | **274** |
+
+**The growth is slow, and that is the useful part.** From once an hour to once a
+year is a factor of 8,760 in exposure and about 14% in the peak. A capacity plan
+can therefore quote a once-a-year peak almost for free, rather than sizing to an
+hourly figure and being surprised annually.
+
+**Which also means a service level is an input.** *How often are we willing to
+refuse organic traffic* picks the column, and nothing else does. That question is
+the owner's, and it is the second thing R9 needs after the utilisation threshold.
+
+### And the simulation had to be re-run over a longer period
+
+The bucket simulation above ran for an hour, which is exactly the mistake this
+section names. Re-run:
+
+| load, fraction of sustained rate | 1 hour | 1 day | 1 month |
+| --- | --- | --- | --- |
+| 80% | 0 | 0 | 0 |
+| 90% | 0 | 0 | 0 |
+| 95% | 0 | 0 | **0** |
+| 98% | 0 | 0 | **182** |
+
+**The conclusion survives and gets a boundary**: the burst of 200 holds to about
+95% of the sustained rate over a month, not merely over an hour, and gives way
+between 95% and 98%. A one-hour simulation could not have told the two apart, and
+would have reported 98% as safe.
+
 ### The assumption is load-bearing and names its own exceptions
 
 **Poisson requires independent arrivals**, and the interesting failures are
