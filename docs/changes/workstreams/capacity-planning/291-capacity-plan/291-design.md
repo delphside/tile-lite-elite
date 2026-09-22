@@ -592,6 +592,57 @@ sizing on a resting number, which is the mistake R8 exists to name one level up.
 does not wait on #91. Capturing a peak needs something sampling more often than
 monthly, which is #402's counters again.
 
+## Why an hour, and there are two intervals not one
+
+Owner, 2026-09-22: *"We took peak hour values because there is no pattern within
+an hour, and it is long enough to have a consistent rate."*
+
+**That is a criterion, and this document had been treating the hour as a
+convention.** The hour was chosen because it sits between two failures:
+
+| too short | too long |
+| --- | --- |
+| not enough transactions for the rate to be stable — you measure noise and call it a peak | you average across a pattern and the peak disappears into it |
+
+**The peak interval is therefore the shortest window over which the rate is both
+flat and stable.** Flat, because a window containing a pattern reports its
+average and hides its peak. Stable, because a rate computed from too few events
+is an artefact of arrival timing.
+
+### Which corrects a conflation earlier in this document
+
+The section on queueing constants concluded that the interval comes from
+`HASH_PERMIT_WAIT` and the buckets' refill times. **That is right for one
+interval and wrong for the other**, and they are different figures answering
+different questions:
+
+| figure | interval comes from | for this service |
+| --- | --- | --- |
+| the **peak rate** you size against | the workload's own statistics — the window where the rate is flat and stable | unknown; see below |
+| the **spike duration** you must survive | the service's queues and buckets — what it can absorb before refusing | 250 ms to ~10 s, derived above |
+
+**Both are needed and neither substitutes for the other.** A peak rate with no
+duration cannot be tested against a bucket; a spike duration with no underlying
+rate is a window with nothing in it.
+
+### And at our volume the hour fails the second test badly
+
+**Six accounts and fifteen games in about two months.** An hour of this service
+contains, typically, nothing at all — so an hourly rate is zero almost always and
+enormous occasionally, which is the definition of a window too short to have a
+consistent rate.
+
+**So the hour does not transfer; the criterion does.** Ours would have to be much
+longer today — a day or a week — and it **shrinks as volume grows**, which is
+worth writing down because it means the interval is not a constant to be chosen
+once. A capacity plan that fixes its interval at the start reports a stable rate
+early and a smoothed-away peak later, and nothing signals the change.
+
+**The practical consequence for the next report:** state the interval beside the
+peak, always, and re-derive it rather than inheriting it. The first time an hour
+contains a consistent rate is itself a finding worth reporting — it is the point
+at which this service starts having a peak hour at all.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
