@@ -12,6 +12,10 @@ month's: the series is what says whether a number is moving, which is the one
 question a single measurement cannot answer. docs/3.6, "Which document goes
 where".
 
+**Named `TLE_CP_<yyyy>_<mm>.md`**, because a report gets mailed, pasted and
+dropped on desktops, and the name has to mean something once it is off the
+path.
+
 **Where the numbers come from.** The application posts nothing — D49, because
 the instance principal is a host credential. Host figures are read on the box;
 games and accounts come from the admin CLI over loopback, which is the owner's
@@ -70,11 +74,39 @@ say so every time it is true rather than letting the table imply otherwise.
 
 Anything with no ceiling set belongs here until somebody sets one.
 
-## What changed since last month
+## History, and where it is heading
 
-Omit in the first report. Otherwise: which rows moved, by how much, and whether
-anything crossed a threshold that was not crossed before. **This is the part
-that needs the series**, and the reason each month gets its own file.
+**Carry enough history to see a trend and extrapolate from it** — one column per
+period, most recent last, so the direction is visible without opening another
+file.
+
+**How far back depends on how often it is measured.** Twelve months is the outer
+limit: enough to show a season, short enough that the table stays readable. If
+the cadence ever tightens — weekly, say — keep the same number of *rows* rather
+than the same number of months, because the table's job is to be read at a
+glance.
+
+| | *2026-09* | *2026-10* | *…* |
+| --- | --- | --- | --- |
+| memory | | | |
+| disk | | | |
+| journal | | | |
+| games | | | |
+| accounts | | | |
+
+**Then say what it means**, which the table cannot:
+
+- which rows are moving, and whether the movement is use or accumulation — a
+  number that grows because nothing deletes it is a different problem from one
+  that grows with players
+- for anything moving, **when it reaches its ceiling at this rate**, stated as a
+  date or as *not within the horizon*
+- whether any extrapolation here is worth acting on yet, and if not, what would
+  change that
+
+**A single measurement cannot answer any of this**, which is why the folder
+keeps every report and why each one carries the window rather than only its own
+column.
 
 ## How this was measured
 

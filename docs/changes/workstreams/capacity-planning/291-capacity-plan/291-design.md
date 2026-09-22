@@ -14,8 +14,8 @@ Owner, 2026-09-22:
 
 **So the plan lives in `docs/reports/capacity_plan/`, one file per month**, and
 this document keeps the argument rather than the numbers. The first is
-[`2026-09.md`](../../../../reports/capacity_plan/2026-09.md), measured on
-production 2026-09-21.
+[`TLE_CP_2026_09.md`](../../../../reports/capacity_plan/TLE_CP_2026_09.md),
+measured on production 2026-09-21.
 
 **That is a third kind of document and it did not exist before.** A numbered
 `docs/N.N` describes the programme and changes when the programme does. A change

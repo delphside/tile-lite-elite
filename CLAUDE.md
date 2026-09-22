@@ -293,7 +293,8 @@ one of them has a defect: fix it, don't work around it.
   A change document lives in its issue's folder under docs/changes/, named
   for the parent project — a work package has no folder of its own.
 - **A report the programme produces on a cadence goes in `docs/reports/<name>/`,
-  one file per period.** Owner, 2026-09-22. It is neither a numbered document
+  one file per period, named `TLE_<CODE>_<period>.md`.** Owner, 2026-09-22 —
+  the name has to mean something once it has left the folder. It is neither a numbered document
   nor a change document: it records what was true at a moment, is never edited
   afterwards, and is not superseded by the next one — the series is what carries
   the meaning. `docs/reports/capacity_plan/` is the first.

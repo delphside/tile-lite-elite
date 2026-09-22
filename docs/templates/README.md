@@ -36,7 +36,7 @@ form nobody will find at the moment they need it.
 | --- | --- | --- |
 | [test-design-specification.md](test-design-specification.md) | the project's folder — `docs/changes/projects/<name>/` — else the issue's | [user deletion](../changes/41-user-deletion-test-design.md) (#41, functional) · [rate limiting](../changes/25-rate-limiting-test-design.md) (#25, non-functional) |
 | [post-deployment-review.md](post-deployment-review.md) | the project's folder, once its last release has been live and used | none yet — the first project to finish writes it |
-| [capacity-plan.md](capacity-plan.md) | `docs/reports/capacity_plan/<YYYY-MM>.md`, monthly | [September 2026](../reports/capacity_plan/2026-09.md) (#291 R1, the first) |
+| [capacity-plan.md](capacity-plan.md) | `docs/reports/capacity_plan/TLE_CP_<yyyy>_<mm>.md`, monthly | [TLE_CP_2026_09](../reports/capacity_plan/TLE_CP_2026_09.md) (#291 R1, the first) |
 
 ## The other half, and why it is not here
 
