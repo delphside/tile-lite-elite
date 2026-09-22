@@ -316,6 +316,65 @@ a peak-and-average or peak-and-total pair. The schema question — additional
 columns, or additional metric rows per statistic — is #404's to answer when it
 is built; recorded here so it is not rediscovered as a surprise.
 
+### 4b. A rough model, to be worked out properly by the capacity-planning practice
+
+Owner, 2026-09-22, offering a sketch rather than a derivation:
+
+> Roughly, this needs working out properly which is the job of the capacity
+> planning practice: CPU requirement depends on peak CPU which depends on peak
+> transaction rates per throttling interval; memory requirement is driven by
+> auth transactions plus games in memory = games started per day / game
+> duration (after we filter games held in memory); disk usage, for database
+> and logs is driven by number of games not deleted, mean transactions per
+> day * days history kept. This is just to give the general idea.
+
+**Recorded as a sketch, not adopted as the answer.** What follows connects each
+line to what is already measured or already named, and marks what is this
+project's own inference rather than the owner's word.
+
+**CPU: peak CPU ← peak transaction rate, per throttling interval.** This is the
+interval work above, applied: each throttle class has its own characteristic
+interval — the global bucket's 10s, session's 15s, auth's 60s, registration's
+90s — and *"per throttling interval"* means the peak rate is read at the
+interval the relevant bucket actually cares about, not at one interval for
+everything. Weighted by #404's per-category cost (an Argon2 hash is not an
+engine move), this is the workload side of step 3's inversion.
+
+**Memory: auth transactions, plus games in memory by Little's Law.** Two
+terms, and the second names a real theorem rather than an ad-hoc formula:
+`games in memory = games started per day × mean time a game is held in
+memory`, which is **Little's Law**, `L = λW` — the long-run number of items in
+a system equals the arrival rate times the mean time each spends in it, with
+no assumption about the distribution of either. `λ` is games started per day;
+`W` is how long a game stays loaded before it is swept.
+
+**"After we filter games held in memory" is the load-bearing clause.** `W` is
+only a stable, meaningful number once RET-3 (#270) bounds the `waiting`
+state — today seven of fifteen games have been in memory 46 to 62 days with no
+sweep at all, so `W` measured now would be inflated by exactly the defect
+this project already found and unbounded besides. The model needs #270 built
+before `W` means anything.
+
+**The auth term is the hashing semaphore's own memory**, already quantified
+elsewhere in this document: up to `hash_limit` concurrent hashes at ~19 MB
+each.
+
+**Disk: games not deleted, plus mean transactions/day × days history kept.**
+The second half is the journal's own shape already: `100 MB / 7 days` is
+exactly *rate × retention window*. The first half is the terminal-games sweep
+(a week after `ended_at`) and RET-3 together — the stock of games not yet
+removed, which is Little's Law again, one level up: `L = λW` with `λ` = games
+ending per day and `W` = the retention window before deletion.
+
+**What this asks for.** #404 measures the inputs — costs per category, rates,
+and (from *4a* above) enough peak/average and peak/total pairs to fit `λ` and
+`W` rather than guess them. #405 is where the model is worked out properly and
+turned into limits. **And it does not stop there**: refining it as real data
+accumulates is the ongoing job, which is why *capacity-plan* is a row in
+[docs/3.8](../../../../3.8-programme-activities.md) rather than a one-time
+derivation — the sketch above is this month's starting point, not the answer the
+practice on #407 exists to keep re-checking.
+
 ## Load categories, and they already exist in the code
 
 Owner, 2026-09-22: *"We should capture tps by load category, in our case not all
