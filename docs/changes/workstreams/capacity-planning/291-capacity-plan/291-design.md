@@ -456,6 +456,76 @@ capacity plan cares most about, because it is what grows the account table.
 **Recorded, not built.** The limiter's curve is derivable now; nothing counts
 arrivals at any interval at all, which is #402's gap.
 
+### The limits are an output of this analysis, not an input to it
+
+Owner, 2026-09-22: *"the throttling limits should come out of this analysis. They
+are a mitigation that capacity planning uses to keep the utilisation within the
+thresholds."*
+
+**Which inverts everything above.** The sections before this treat `throttle.rs`
+as given and derive a curve from it. That is backwards. The chain runs:
+
+1. the hardware fixes a resource ceiling,
+2. capacity planning sets the **utilisation threshold** under it — normal, and
+   degraded,
+3. the model converts that resource threshold into a **workload threshold**,
+4. and the throttle limits are **chosen so that admitted load cannot exceed it**.
+
+**A limit is a mitigation, and it is one of several.** More hardware, cheaper
+code and a bigger semaphore are the others; throttling is the one that costs
+nothing and works immediately, which is why it is reached for first and why its
+numbers need a justification rather than a feel.
+
+### Today only one of the four is a capacity control, and it is the unjustified one
+
+Read 2026-09-22. Each limit's own comment says what it is for:
+
+| limit | its stated basis | what kind of control |
+| --- | --- | --- |
+| registration 2/min, burst 3 | *"nobody legitimately registers twice in a minute"* | **abuse** — behavioural |
+| auth 10/min, burst 10 | *"loose enough for somebody mistyping a password, tight enough that guessing is not worth attempting"* | **abuse** — behavioural |
+| session 240/min, burst 60 | *"generous, because a person playing…"* | **fairness** — behavioural |
+| global 1,200/min, burst 200 | *"a floor under the service as a whole… everybody together is asking for more than there is room for"* | **capacity** — and **no figure is given** |
+
+**The three behavioural ones are correctly derived** and this analysis should
+leave them alone: they answer *what would a real person do*, which is a question
+about people and not about hardware. **The global one is the capacity control**,
+it says so in its own comment, and 1,200 and 200 came from nowhere this document
+can find.
+
+### And the layers already disagree, which is provable without measuring anything
+
+A global burst of 200 auth requests — plausible from 200 distinct addresses,
+since each passes its own per-address limit with a full bucket — meets
+`hash_limit`: **4 permits, ~47 ms per Argon2 operation, 250 ms of patience**,
+on 2 cores.
+
+| | served within the patience window | refused 503 |
+| --- | --- | --- |
+| if the 4 permits ran fully parallel | ~21 | ~179 |
+| 4 permits contending for 2 cores | **~11** | **~189** |
+
+**So the global limiter admits about twenty times what the next layer can
+absorb.** Clearing all 200 as hashes would take about 4.7 seconds of wall time on
+two cores, against a queue that waits 250 ms.
+
+**That is not a bug** — the service refuses rather than falls over, which is what
+both mechanisms are for. It is a *symptom of the limits never having been derived
+together*: the burst of 200 protects nothing that `hash_limit` was not already
+protecting, and the two were sized against different questions.
+
+### What this asks for
+
+**R9**: the throttle limits are derived from the capacity thresholds and the
+derivation is recorded beside them, so a later reader can tell a number that was
+computed from one that was chosen. The three behavioural limits keep their
+behavioural justification, which is a legitimate derivation of a different kind —
+what R9 forbids is a capacity limit with no capacity behind it.
+
+**It cannot be answered yet**, and the ordering is the point: step 3 needs the
+workload-to-resource model, which needs #91's measurement. Until then the global
+burst is a guess, and the honest thing is that it is written down as one.
+
 ### What this adds
 
 **R8**, on the issue: *the service handles a spike during the peak hour, not
