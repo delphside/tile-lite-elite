@@ -256,6 +256,22 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "the other — but neither may stay silent",
         headings_answered("Test approach", "Impacted artefacts", "Deliveries"),
     ),
+    # **Added 2026-09-22**, with the eighth heading. Asked from `Design and Test
+    # Approach` onward and not at `Scope`, because the answer depends on the
+    # design: what a change costs and what it does when it fails are not
+    # knowable while the technical option is still open.
+    #
+    # It fires on every project that predates the heading, and that is the
+    # honest state rather than noise -- none of them answered the question,
+    # which is why #402 and #291 exist.
+    Obligation(
+        "parent-non-functional", (ParentProject,),
+        ("Design and Test Approach",) + BUILD_PHASES,
+        "`## Non-functional design` — capacity, failure, limits and timeouts, "
+        "secrets and access",
+        "asked per change it is cheap; unasked it accumulates into a project",
+        headings_answered("Non-functional design"),
+    ),
     Obligation(
         "parent-closedown", (ParentProject,), ("Project Closedown",),
         "lessons learnt, no unticked boxes, every child closed",
@@ -269,6 +285,18 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "a Route",
         "something must be able to say whether this reaches users",
         lambda i: bool(i.field("Route")),
+    ),
+    Obligation(
+        "wp-non-functional", DELIVERING,
+        ("Design and Test Approach",) + BUILD_PHASES,
+        "`## Non-functional design`, holding the answers or pointing at the "
+        "parent's",
+        "a delivery says what it costs and what it does when it fails",
+        # The heading, wherever the content lives. A package may point at its
+        # parent -- the same shape as `Test approach` -- but it may not be
+        # silent, because *the parent answered it* and *nobody asked* look
+        # identical from here.
+        headings_answered("Non-functional design"),
     ),
     Obligation(
         "wp-design-testable", DELIVERING, ("Design and Test Approach",),
