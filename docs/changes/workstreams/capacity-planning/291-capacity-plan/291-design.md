@@ -275,6 +275,47 @@ measurement. Until it exists there is no relationship to invert, which is why
 this is recorded and not scheduled: the prerequisite is a requirement this
 project already has and has not done.
 
+### 4a. What "measure the relationship" actually means: peak and average for a gauge, peak and total for a counter
+
+Owner, 2026-09-22: *"for CPU utilisation, memory utilisation, and application
+transactions we can capture peak and total values for different time
+periods. We need to learn what drives the model."* Corrected the same day:
+*"peak and average for utilisations, peak and total for application
+counts/transactions."*
+
+**Two kinds of thing, and each has its own honest summary.** CPU and memory
+utilisation are read at an instant and move up and down — a **gauge**, in the
+vocabulary Prometheus and OpenMetrics already standardised. A transaction is an
+event that happens once and is counted — a **counter**. Averaging a counter
+across a window is meaningless (an "average request" is not a thing); totalling
+a gauge is meaningless (a "total CPU percentage" is not a thing). So:
+
+| | kind | over a period, capture |
+| --- | --- | --- |
+| CPU utilisation, memory utilisation | gauge | **peak** and **average** |
+| application transactions, by load category | counter | **peak** (a rate) and **total** (a count) |
+
+**This is a generalisation of step 2 above, not a replacement for it.** The
+prior art's method correlated one peak against one peak, at one recorded
+moment. Capturing both statistics, at more than one period length, is what
+*"learn what drives the model"* asks for: not one correlation point but enough
+of them to see whether the relationship is real, and to notice when it is not.
+
+**It already has a candidate case where it is not.** This project's own finding
+(*What actually grows, and the one that is unbounded*, above) is that memory
+growth is driven by an **accumulating stock** — games created and never
+swept — not by a transaction **rate** at all. A rate-vs-rate correlation (peak
+transactions against peak memory) would miss that relationship entirely; a
+total-transactions-of-one-category-minus-total-of-another (creates minus
+RET-3 sweeps) is closer to the actual driver. That is offered as a hypothesis
+this measurement would test, not a conclusion — it has not been measured.
+
+**What this asks of #404's schema.** `measurements.csv` today carries one value
+per metric per period, which is enough for a resting sample and not enough for
+a peak-and-average or peak-and-total pair. The schema question — additional
+columns, or additional metric rows per statistic — is #404's to answer when it
+is built; recorded here so it is not rediscovered as a surprise.
+
 ## Load categories, and they already exist in the code
 
 Owner, 2026-09-22: *"We should capture tps by load category, in our case not all
