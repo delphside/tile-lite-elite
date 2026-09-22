@@ -273,13 +273,20 @@ one of them has a defect: fix it, don't work around it.
 
 ## Documentation
 
-- **Look up the industry's word before inventing one.** Owner, 2026-09-21:
-  *"Refer to ITIL, none of this is new to us. We should be reusing the industry
-  standard terminology and process."* Incident and problem management, event
-  classification, change types, release against deployment — take the term and
-  the shape of the practice, leave the ceremony that needs more people than
-  this has, and say which practice an answer came from. docs/3.6 has the
-  mapping tables.
+- **Look up the industry's word before inventing one, and look inside the
+  standard you have already adopted.** Owner, 2026-09-21: *"Refer to ITIL, none
+  of this is new to us. We should be reusing the industry standard terminology
+  and process."* And 2026-09-22: *"we are too quick to invent our own thing
+  rather than adopt industry standards."* Take the term and the shape of the
+  practice, leave the ceremony that needs more people than this has, and say
+  which practice an answer came from. docs/3.6 has the mapping tables.
+- **The first rule did not stop it, so here is the test.** On 2026-09-22, in the
+  commit adopting C4, I invented a view called *Runtime* that C4 already has as
+  *Dynamic*, and labelled a Deployment diagram as a Container one. Before naming
+  anything: **read the standard's own list, including its supplementary parts**,
+  then look at one neighbouring standard. A name only this repository knows is a
+  cost paid by every future reader, and *we named it ourselves* is never the
+  reason to keep one.
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
 - **The documents live; the issues expire.** Owner, 2026-09-21: *"The project

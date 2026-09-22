@@ -6,30 +6,46 @@
 system declares its view in the line above it, so a reader knows what they are
 looking at without inferring it from the contents.
 
-| view | whose | shows | zoom |
-| --- | --- | --- | --- |
-| **Context** | C4 | the service and who uses it | outermost |
-| **Container** | C4 | deployable processes and where they run | |
-| **Component** | C4 | what is inside one container | |
-| **Runtime** | **ours** | concurrency, sweeps and message flow — what happens over time, and what happens without a request | across all three |
+| view | whose | shows |
+| --- | --- | --- |
+| **System Context** | C4 | the service and who uses it |
+| **Container** | C4 | the deployable processes and what each is responsible for — *logical* |
+| **Component** | C4 | what is inside one container |
+| **Deployment** | C4 | which containers run on which infrastructure, per environment — *physical* |
+| **Dynamic** | C4 | how elements interact over time: a sequence or a collaboration |
+| **Concurrency** | Rozanski & Woods | what can run at the same time and how that is bounded — the semaphores, the sweeps, the scheduler |
 
-**Why C4.** It is built for this size, and *Container* means a deployable
-process, which is literally our two containers and the database. Adopting it was
-mostly a matter of declaring what the diagrams already were. 4+1's *Development
-view* is module ownership across teams, an empty box for one developer and one
-repository; arc42 is a twelve-section document template, and the numbered
-documents already do that job.
+**Nothing here is ours, and an earlier version of this table invented a view
+called *Runtime* that C4 already had.** Corrected 2026-09-22. Owner, the same
+day: *"we are too quick to invent our own thing rather than adopt industry
+standards."* C4's supplementary diagrams — System Landscape, **Dynamic**,
+**Deployment** — are part of the model, and *Dynamic* is precisely what *Runtime*
+was invented to mean.
 
-**Why Runtime is ours and says so.** C4 treats process and concurrency as
-supplementary rather than as a level, and much of this system's difficulty lives
-there — `hash_limit` at 4 and `engine_limit` at 2, the sweeps that run from
-`list_games`, the scheduler #400 will build. Naming it as a local extension is
-the difference between adopting a standard and quietly diverging from one.
+**Concurrency is the one C4 genuinely lacks**, so it is taken from Rozanski and
+Woods rather than named afresh: *"the parts of the system that can run at the
+same time and how this is controlled"*, which is `hash_limit` at 4,
+`engine_limit` at 2, and the scheduler #400 will build. Borrowing one named
+viewpoint from a second framework is a smaller cost than a name only this
+repository knows.
 
-**Container is the level the roadmap is drawn at.** It is the one that changes
-when the architecture changes and stays still when the code does: a roadmap at
-Component would move every release and say nothing, and one at Context would
-never move at all.
+**Why C4 as the base.** It is built for this size, and *Container* means a
+deployable process, which is literally our two containers and the database.
+4+1's *Development view* is module ownership across teams, an empty box for one
+developer and one repository; arc42 is a twelve-section document template, and
+the numbered documents already do that job; Rozanski's full seven viewpoints are
+heavier than three plus two supplementary ones.
+
+**Container and Deployment are different diagrams and the difference matters
+here.** Container is logical — what the processes are and what each is for.
+Deployment is physical — which of them run where, per environment. An earlier
+version of this table called `1.1` a Container view when it is a Deployment
+view, which is how the missing rehearsal environment stayed invisible: a logical
+diagram has no environments to be missing from.
+
+**Deployment is the level the roadmap is drawn at**, because architecture
+change here is change to what runs where. A roadmap at Component would move
+every release and say nothing; at Context it would never move at all.
 
 ### A process diagram is not a view
 
@@ -43,12 +59,12 @@ above describes the system, and a process diagram describes us.
 
 | diagram | view |
 | --- | --- |
-| [1.1](../1.1-architecture.md)'s deployment diagram | **Container** — environments and the processes in them |
+| [1.1](../1.1-architecture.md)'s deployment diagram | **Deployment** — which containers run in which environment |
 | [1.2](../1.2-components-and-interactions.md)'s component diagram | **Component**, with the clients drawn as Context around it |
-| 1.2's move-submission sequence | **Runtime** |
+| 1.2's move-submission sequence | **Dynamic** |
 | [3.3](../3.3-testing-ci-and-release.md)'s sequence diagram | process, not a view |
 | `release-flow`, `version-lifecycle`, `flavour-a` to `flavour-d` | process, not a view |
-| `roadmap.svg` | a plan, not a view — and note that #406 R3 will add a *Container* roadmap alongside it, answering *what will it look like* where this one answers *when does work happen* |
+| `roadmap.svg` | a plan, not a view — and note that #406 R3 will add a *Deployment* roadmap alongside it, answering *what will it look like* where this one answers *when does work happen* |
 
 ## Rendering
 
