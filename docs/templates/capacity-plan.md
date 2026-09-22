@@ -89,11 +89,20 @@ glance.
 Add the period's row to `measurements.csv`, then:
 
 ```bash
-scripts/capacity-chart.py --table    # the table below
-scripts/capacity-chart.py --write    # the charts
+scripts/capacity-chart.py --table      # the history table below
+scripts/capacity-chart.py --summary    # the forecast table below
+scripts/capacity-chart.py --write      # the charts
 ```
 
-Paste the table here.
+Paste the history table here.
+
+### What the forecast says, and how much to believe it
+
+Paste the summary table here. **The reliability column is the one to read
+first**: a straight line through noise looks exactly like a straight line
+through a trend, and RRMSE is what tells them apart. A row marked *inaccurate*
+should not be planned against — it should prompt either more measurements or a
+question about why the metric is that volatile.
 
 ### Each metric, against its ceiling
 

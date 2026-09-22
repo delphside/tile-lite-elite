@@ -25,9 +25,26 @@ the useful output is *"at this rate, this row meets its ceiling in March"* —
 which a straight line answers and a better model would answer no more usefully
 at six data points.
 
+**A forecast without bounds is a forecast pretending to be a fact.** So the
+projection is drawn as three lines: the fit, and a prediction interval either
+side of it that *widens with distance*, because extrapolating six months from
+six points is not as good as extrapolating one. The interval is the ordinary
+one — `s * sqrt(1 + 1/n + (x - x̄)² / Sxx)` at 95% — and it needs at least three
+points before there is any residual to measure.
+
+**And every forecast carries a stated reliability**, because a straight line
+through noise looks exactly like a straight line through a trend. The measure is
+RRMSE — root mean square error over the mean — and the labels are *reliable*,
+*possibly inaccurate* and *inaccurate*. **The form is the owner's prior art**: a
+2012 capacity forecast that tabled each resource with its reliability, its value
+at the end of the horizon, its forecast peak and its RRMSE, so a reader knew
+which rows to believe. The thresholds below are ours and chosen, not derived
+from it.
+
 **One point is not a trend, and the chart says so** rather than drawing a
 horizontal line through it, which would read as *flat* when the truth is
-*unknown*.
+*unknown*. Two points fit a line exactly and have no residual at all, so they
+get a trend with no interval and a reliability of *not enough data*.
 
 Written to survive GitHub's SVG sanitiser, like `board/roadmap.py`:
 presentation attributes only, no `<style>`, no `<defs>`, no `<marker>`, and an
@@ -51,10 +68,11 @@ CHARTS = FOLDER / "charts"
 # one hand drew them.
 INK, MUTED = "#111418", "#5a6472"
 BAR, TREND, CEILING = "#3d6fb4", "#1f883d", "#cf222e"
+BOUND = "#8fd19e"
 GRID = "#d0d7de"
 
-W, H = 560, 260
-PAD_L, PAD_R, PAD_T, PAD_B = 62, 18, 34, 46
+W, H = 560, 300
+PAD_L, PAD_R, PAD_T, PAD_B = 62, 18, 34, 86
 
 
 @dataclass(frozen=True)
@@ -87,6 +105,65 @@ class Series:
 
     def at(self, index: float) -> float:
         return self.intercept + (self.slope or 0.0) * index
+
+    @property
+    def residual_sigma(self) -> float | None:
+        """Standard error of the residuals. `None` below three points.
+
+        Two points fit a line exactly: the residuals are zero and the interval
+        would be zero-width, which is the most confident thing a chart can say
+        and the least true.
+        """
+        n = len(self.values)
+        if n < 3 or self.slope is None:
+            return None
+        rss = sum((y - self.at(i)) ** 2 for i, y in enumerate(self.values))
+        return (rss / (n - 2)) ** 0.5
+
+    @property
+    def rrmse(self) -> float | None:
+        """Root mean square error over the mean, as a fraction."""
+        n = len(self.values)
+        if n < 3 or self.slope is None:
+            return None
+        mean = sum(self.values) / n
+        if mean == 0:
+            return None
+        rmse = (sum((y - self.at(i)) ** 2 for i, y in enumerate(self.values)) / n) ** 0.5
+        return rmse / abs(mean)
+
+    @property
+    def reliability(self) -> str:
+        """How much to believe the projection.
+
+        Thresholds chosen here rather than derived: 5% and 15% of the mean are
+        where a monthly capacity figure stops being worth planning against, at
+        this size. Revisit them once there are a dozen reports to look back on.
+        """
+        if self.slope is None or self.rrmse is None:
+            return "not enough data"
+        if self.rrmse <= 0.05:
+            return "reliable"
+        if self.rrmse <= 0.15:
+            return "possibly inaccurate"
+        return "inaccurate"
+
+    def interval(self, index: float) -> float:
+        """Half-width of the 95% prediction interval at `index`.
+
+        Widens with distance from the measured mean, which is the whole point:
+        six periods out is a worse guess than one, and a constant band would
+        say otherwise.
+        """
+        sigma = self.residual_sigma
+        n = len(self.values)
+        if sigma is None:
+            return 0.0
+        mx = (n - 1) / 2
+        sxx = sum((x - mx) ** 2 for x in range(n))
+        if sxx == 0:
+            return 0.0
+        return 1.96 * sigma * (1 + 1 / n + (index - mx) ** 2 / sxx) ** 0.5
 
     def crosses_at(self) -> int | None:
         """The period index where the trend meets the ceiling, if it ever does.
@@ -135,7 +212,16 @@ def _esc(text: str) -> str:
 
 
 def _nice(value: float) -> str:
-    return f"{value:.0f}" if abs(value) >= 10 else f"{value:g}"
+    """Enough digits to be read, never enough to imply precision.
+
+    A projected 6.58857 GB claims five significant figures from a measurement
+    that had two, which is the chart telling a lie about itself.
+    """
+    if abs(value) >= 10:
+        return f"{value:.0f}"
+    if abs(value) >= 1:
+        return f"{value:.1f}".rstrip("0").rstrip(".")
+    return f"{value:.2g}"
 
 
 def draw(series: Series, horizon: int) -> str:
@@ -214,6 +300,23 @@ def draw(series: Series, horizon: int) -> str:
         out.append(f'<line x1="{x_of(n - 1):.1f}" y1="{y1:.1f}" '
                    f'x2="{x_of(slots - 1):.1f}" y2="{y2:.1f}" stroke="{TREND}" '
                    f'stroke-width="2" stroke-dasharray="5 4"/>')
+
+        # The prediction interval, as two dashed lines either side. Drawn as
+        # polylines rather than straight segments because the band is a curve:
+        # it widens with distance from the measured mean, and a straight edge
+        # would flatten exactly the property it exists to show.
+        if series.residual_sigma is not None:
+            for sign in (1, -1):
+                pts = []
+                i = 0.0
+                while i <= slots - 1 + 1e-9:
+                    v = max(0.0, series.at(i) + sign * series.interval(i))
+                    pts.append(f"{x_of(i):.1f},{min(max(y_of(v), PAD_T), PAD_T + plot_h):.1f}")
+                    i += 0.5
+                out.append(f'<polyline points="{" ".join(pts)}" fill="none" '
+                           f'stroke="{BOUND}" stroke-width="1.2" '
+                           f'stroke-dasharray="3 3"/>')
+
         out.append(f'<text x="{x_of(slots - 1):.1f}" y="{y2 - 6:.1f}" '
                    f'text-anchor="end" font-size="9.5" fill="{TREND}">'
                    f'{"rising" if series.slope > 0 else "falling"} '
@@ -225,6 +328,43 @@ def draw(series: Series, horizon: int) -> str:
 
     out.append(f'<line x1="{PAD_L}" y1="{PAD_T + plot_h}" x2="{W - PAD_R}" '
                f'y2="{PAD_T + plot_h}" stroke="{INK}" stroke-width="1"/>')
+
+    # **A legend naming every series**, because a chart read six months later
+    # is read by somebody who does not remember what green meant. The owner's
+    # prior art names all four series in full under every chart.
+    entries = [(BAR, "measured", "solid")]
+    if series.slope is not None:
+        entries.append((TREND, "trend, projected dashed", "line"))
+        if series.residual_sigma is not None:
+            entries.append((BOUND, "95% prediction interval", "dashed"))
+    if series.ceiling is not None:
+        entries.append((CEILING, f"ceiling {_nice(series.ceiling)} {series.unit}",
+                        "dashed"))
+    ly = H - PAD_B + 34
+    for k, (colour, label, kind) in enumerate(entries):
+        row, col = divmod(k, 2)
+        lx = PAD_L + col * 250
+        y = ly + row * 15
+        if kind == "solid":
+            out.append(f'<rect x="{lx}" y="{y - 6}" width="10" height="8" '
+                       f'fill="{colour}"/>')
+        else:
+            dash = ' stroke-dasharray="3 3"' if kind == "dashed" else ""
+            out.append(f'<line x1="{lx}" y1="{y - 2}" x2="{lx + 12}" '
+                       f'y2="{y - 2}" stroke="{colour}" stroke-width="2"{dash}/>')
+        out.append(f'<text x="{lx + 17}" y="{y + 1}" font-size="9" '
+                   f'fill="{MUTED}">{_esc(label)}</text>')
+
+    # Reliability, stated on the chart rather than only in the table: a
+    # projection nobody should believe must say so where it is looked at.
+    if series.slope is not None:
+        note = series.reliability
+        if series.rrmse is not None:
+            note += f" · RRMSE {series.rrmse * 100:.1f}%"
+        out.append(f'<text x="{W - PAD_R}" y="20" text-anchor="end" '
+                   f'font-size="9.5" font-style="italic" fill="{MUTED}">'
+                   f'{_esc(note)}</text>')
+
     out.append("</svg>")
     return "\n".join(out)
 
@@ -248,6 +388,40 @@ def verdict(series: Series, horizon: int) -> str:
             else "already at or past its ceiling"
     return (f"{series.metric}: {direction} {_nice(abs(series.slope))} "
             f"{series.unit}/period, {ceiling} — {when}")
+
+
+def summary(all_series: list[Series], horizon: int) -> str:
+    """Every metric's forecast, with how much to believe it.
+
+    **The form is the owner's prior art**: a 2012 capacity forecast tabled each
+    resource with a reliability word, the value at the end of the horizon, the
+    forecast peak and an RRMSE, so a reader could see at a glance which rows
+    were worth planning against. A chart pack without this makes every
+    projection look equally solid.
+    """
+    rows = ["| metric | forecast | value at +%d | peak | RRMSE | meets ceiling |"
+            % horizon,
+            "| --- | --- | --- | --- | --- | --- |"]
+    for s in all_series:
+        n = len(s.values)
+        if s.slope is None:
+            rows.append(f"| **{s.metric}** | not enough data | | | | |")
+            continue
+        end = s.at(n - 1 + horizon)
+        peak = max(s.at(i) for i in range(n + horizon))
+        rrmse = f"{s.rrmse * 100:.1f}%" if s.rrmse is not None else "—"
+        crossing = s.crosses_at()
+        if s.ceiling is None:
+            when = "no ceiling set"
+        elif crossing is None:
+            when = "not within the horizon"
+        else:
+            periods = crossing - (n - 1)
+            when = f"{periods} period(s)" if periods > 0 else "already past it"
+        rows.append(f"| **{s.metric}** | {s.reliability} | "
+                    f"{_nice(end)} {s.unit} | {_nice(peak)} {s.unit} | "
+                    f"{rrmse} | {when} |")
+    return "\n".join(rows)
 
 
 def slug(metric: str) -> str:
@@ -280,6 +454,8 @@ def main() -> int:
                     help="write the SVGs into the report folder's charts/")
     ap.add_argument("--table", action="store_true",
                     help="print the history table as markdown")
+    ap.add_argument("--summary", action="store_true",
+                    help="print the forecast summary table as markdown")
     ap.add_argument("--horizon", type=int, default=6,
                     help="periods to project the trend (default 6)")
     args = ap.parse_args()
@@ -291,6 +467,10 @@ def main() -> int:
 
     if args.table:
         print(table(all_series))
+        return 0
+
+    if args.summary:
+        print(summary(all_series, args.horizon))
         return 0
 
     if args.write:
