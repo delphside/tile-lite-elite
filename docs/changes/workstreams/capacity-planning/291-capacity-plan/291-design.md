@@ -379,6 +379,59 @@ semaphores of 4 and 2. Whether that clears in a second or in ten is a number
 nobody has worked out, and it is the first question the capacity plan should
 answer once it can.
 
+### The interval is not a convention, and the system already fixes it
+
+Owner, 2026-09-22: *"peak and spike are a function of the interval. The interval
+will have meaning based on the queuing and throttling that happens."*
+
+**A spike is only a spike relative to a window.** Two hundred requests in a
+second and two hundred spread over an hour are the same count and different
+events, so *peak* and *spike* mean nothing until the interval is stated. And the
+interval is not ours to pick by convention: it is set by how long this service
+can absorb an arrival before the arrival becomes a refusal.
+
+**Those constants are all in the code, and they span two and a half orders of
+magnitude.** Read 2026-09-22.
+
+| mechanism | constant | what it absorbs |
+| --- | --- | --- |
+| `hash_limit` queue | `HASH_PERMIT_WAIT` = **250 ms** | a hash arriving while four are running waits this long, then is refused 503 |
+| `engine_limit` queue | search bounded at `ENGINE_TURN_TIMEOUT` = **5 s** | a move waits behind at most two searches, each capped at five seconds |
+| global limiter | 1 permit per **50 ms**, burst 200 → **10 s** to refill | a full-bucket spike, absorbed and repaid over ten seconds |
+| session limiter | 1 permit per **250 ms**, burst 60 → **15 s** | the same, per signed-in caller |
+| auth limiter | 1 permit per **6 s**, burst 10 → **60 s** | the same, per address |
+| registration limiter | 1 permit per **30 s**, burst 3 → **90 s** | the tightest, deliberately |
+
+`governor` replenishes one permit per period rather than clearing on the minute,
+so the refill column is the honest spike window: it is how long a fully drained
+bucket takes to come back.
+
+### Which gives four intervals, each meaning something
+
+| interval | why it | what it answers |
+| --- | --- | --- |
+| **250 ms** | the hash queue's patience | below this, a burst is latency and never a refusal. Measuring finer tells you nothing a caller experienced |
+| **10 s** | the global bucket's refill | the natural **spike** window. A burst shorter than this is absorbed whole; a burst longer than this is a rate |
+| **1 minute** | the limiter's own denominator | the natural **peak** unit, and the one the limits are written in |
+| **1 hour** | the reporting convention | the **peak hour**, which is a business figure rather than a mechanical one |
+
+**The useful consequence: a spike measured over an hour is not a spike.** If the
+plan reports peak-hour and spike at intervals of an hour and a minute, it is
+describing two rates and calling one of them a spike — because the mechanism
+that would notice a real one operates at ten seconds and below. An interval
+chosen from the reporting habit rather than from the queue measures a thing the
+service cannot feel.
+
+**And the registration limiter is the outlier worth noticing**: its bucket takes
+ninety seconds to refill, which is longer than any reporting minute. A spike in
+registrations is therefore invisible at every interval the plan would naturally
+use, and yet registration is the one flow a capacity plan cares most about,
+because it is what grows the account table.
+
+**Recorded, not built.** The intervals are derived from constants that exist;
+what does not exist is anything counting requests at any interval at all, which
+is #402's gap.
+
 ### What this adds
 
 **R8**, on the issue: *the service handles a spike during the peak hour, not
