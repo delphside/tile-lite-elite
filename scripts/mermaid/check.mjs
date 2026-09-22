@@ -13,13 +13,30 @@
 // not a gate, until the dependency is a decided cost. `--require` makes their
 // absence a failure, which is what CI would pass once that is settled.
 //
-//   node scripts/mermaid/check.mjs [--require]
+//   node scripts/mermaid/check.mjs [--require] [path ...]
+//   node scripts/mermaid/check.mjs --help
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
 const SKIP = new Set(["node_modules", "target", ".git", "old-crates", "dist"]);
 const require_deps = process.argv.includes("--require");
+
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`usage: check.mjs [--require] [path ...]
+
+Parses every mermaid diagram it can find and reports the broken ones.
+
+  path ...    files or directories to check. Without any, the whole tree
+              below the working directory, skipping node_modules, target,
+              .git, old-crates and dist.
+  --require   exit 1 rather than 0 when mermaid and jsdom are not installed,
+              so CI can insist the check actually ran.
+
+Exits 0 when every diagram parses, 1 when one does not, and 2 when a path
+given on the command line does not exist.`);
+  process.exit(0);
+}
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -50,6 +67,30 @@ function diagrams(path) {
   return found;
 }
 
+// **Paths on the command line are checked instead of the whole tree.** Until
+// 2026-09-22 they were accepted and silently ignored, so
+// `check.mjs some/file.md` scanned the repository, reported everything else
+// passing, and said nothing about the file asked for. That is worse than
+// refusing the argument: it answers a question nobody asked, in a voice that
+// sounds like an answer to the one they did. Found by using it to verify a
+// diagram before it was committed -- the check passed and had not looked.
+//
+// **Above the dependency guard, deliberately.** It sat below until a review on
+// 2026-09-22 pointed out that the guard exits first: on a checkout without
+// `npm install --prefix scripts/mermaid`, a typo'd path printed *mermaid/jsdom
+// not installed* and exited 0, so a bad argument read as success. Validating an
+// argument needs no renderer, and a check that cannot run should still refuse
+// a question it cannot answer.
+const asked = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+for (const path of asked) {
+  try {
+    statSync(path);
+  } catch {
+    console.error(`mermaid: no such file: ${path}`);
+    process.exit(2);
+  }
+}
+
 let mermaid;
 try {
   const { JSDOM } = await import("jsdom");
@@ -64,22 +105,6 @@ try {
   process.exit(require_deps ? 1 : 0);
 }
 
-// **Paths on the command line are checked instead of the whole tree.** Until
-// 2026-09-22 they were accepted and silently ignored, so
-// `check.mjs some/file.md` scanned the repository, reported everything else
-// passing, and said nothing about the file asked for. That is worse than
-// refusing the argument: it answers a question nobody asked, in a voice that
-// sounds like an answer to the one they did. Found by using it to verify a
-// diagram before it was committed -- the check passed and had not looked.
-const asked = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-for (const path of asked) {
-  try {
-    statSync(path);
-  } catch {
-    console.error(`mermaid: no such file: ${path}`);
-    process.exit(2);
-  }
-}
 const files = asked.length
   ? asked.flatMap((p) => (statSync(p).isDirectory() ? walk(p) : [p]))
   : walk(ROOT);
