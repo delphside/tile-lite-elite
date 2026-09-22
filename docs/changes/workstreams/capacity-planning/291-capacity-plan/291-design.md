@@ -51,11 +51,37 @@ sweep already clears, but the ones people start and abandon, which is the more
 common case because abandoning costs nothing. Seven of production's fifteen are
 in exactly that state.
 
-**Which makes R5 a dependency rather than a work item.** It is satisfied once
-the Additional Game Lifecycle package builds RET-3, and #291 should say so
-rather than carry a second design for the same rule. `#68` also records why it matters beyond tidiness: DEL-4 depends
-on it, because an unanswered invitation lives only on an unstarted game and can
-otherwise hold an account open indefinitely.
+**Which makes half of R5 a dependency rather than a work item — and this
+document previously claimed it was the whole of R5, which was wrong.**
+Corrected 2026-09-22, owner: *"We have also recorded that all active games are
+loaded into memory regardless of whether there is any activity. They could be
+loaded on demand, and unloaded when inactive. I believe this is in the scope of
+the capacity planning issues."*
+
+**RET-3 bounds one leak: `waiting` games that never started.** It does nothing
+for the larger case, confirmed by reading the code — `sweeps_capacity.rs` has
+exactly one place anything is ever removed from the in-memory map,
+`expire_old_terminal_games`, and it fires a week after a game *ends*. **Nothing
+evicts an `active` game for being idle.** A turn-based game spends almost all
+its life waiting for the other player, so `active` — not `waiting` — is where
+most of the resident set actually is, and none of it is bounded by anything
+built or scheduled.
+
+**This is exactly what *R5's shape*, above, already named** — load on demand,
+with a cache policy and an eviction rule — and it is a separate, larger piece of
+work from RET-3, not satisfied by it. `#68` also records why the `waiting` half
+matters beyond tidiness: DEL-4 depends on it, because an unanswered invitation
+lives only on an unstarted game and can otherwise hold an account open
+indefinitely. That reason does not extend to `active` games, which is why the
+two need separate treatment rather than one fix covering both.
+
+**And retention and residency should not share a threshold**, for the same
+reason they are two packages. Owner, 2026-09-22: *"having lots of inactive
+games in the database is cheap, but having lots of inactive games in memory is
+expensive."* Disk sits at 86% headroom; memory's only unbounded consumer is
+this one. RET-3's thirty days is generous because disk is cheap enough to
+afford it — an eviction rule facing memory should be much tighter than that,
+not inherit the same number. Full reasoning on #408.
 
 ## R2 and R7 are two mechanisms, and the argument for one was wrong
 
@@ -194,7 +220,7 @@ settled at any time.
 | **R2** reviewed on a recurrence | designed: a due date in the issue body, surfaced by the board. Buildable now | here |
 | **R3** unusual growth noticed | this project supplies the rate; #402 supplies the mechanism | split |
 | **R4** where the service breaks | needs a harness. Measured against R1 | here |
-| **R5** memory and startup stop growing | **RET-3, already decided.** Satisfied when #270 builds it | #270 |
+| **R5** memory and startup stop growing | **split.** The `waiting` leak is RET-3, satisfied when #270 builds it. The general case — nothing evicts an idle `active` game — is unaddressed and is #408 | #270, #408 |
 | **R6** `Retry-After`'s margin | out of scope — see below | here, as a defect |
 | **R7** benchmark timings refreshed | a due date now, a scheduled job once #400 ships | here |
 
