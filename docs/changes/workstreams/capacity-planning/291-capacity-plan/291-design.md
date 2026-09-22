@@ -4,47 +4,31 @@
 when #291 reached `Design and Test Approach`. Owner, 2026-09-20: *"answer during
 design. This project will need a design doc."*
 
-## The plan is a table, and here is the first one
+## The plan is a report, not a section of this document
 
-R1 asks for *what is consumed, against what ceiling, and what would have to
-change before the ceiling is reached*. Measured on production, 2026-09-21:
+Owner, 2026-09-22:
 
-| | consumed | ceiling | headroom |
-| --- | --- | --- | --- |
-| **memory** | 469 MB | 954 MB | 51% |
-| — server container | 75 MB | | |
-| — web container | 34 MB | | |
-| **disk** | 6.1 GB | 45 GB | 86% |
-| **journal** | 51 MB | 100 MB / 7 days | 49% |
-| **CPU** | load 0.00 | 2 vCPU | effectively all of it |
-| **games in the database** | 15 | *unbounded — see below* | not knowable |
+> The Capacity Plan needs a folder containing each month's plan. It is a report
+> that is a product of the programme produced regularly. The numbered docs
+> describe the programme and would be static if the programme didn't change.
 
-**Nothing is close to a ceiling.** That is the useful result of measuring rather
-than arguing: the work this project owes is not relief, it is knowing *which*
-number moves first and what moves it.
+**So the plan lives in `docs/reports/capacity_plan/`, one file per month**, and
+this document keeps the argument rather than the numbers. The first is
+[`2026-09.md`](../../../../reports/capacity_plan/2026-09.md), measured on
+production 2026-09-21.
 
-## What actually grows, and the one that is unbounded
+**That is a third kind of document and it did not exist before.** A numbered
+`docs/N.N` describes the programme and changes when the programme does. A change
+document under `docs/changes/` belongs to an issue and expires with it. A report
+is neither: it is an output the programme produces on a cadence, and last
+month's is not superseded by this month's — it is the series that carries the
+meaning.
 
-**`AppState::new` loads every game into a `HashMap` at boot** —
-`persistence.rs:448`, `select id from games order by created_at desc`, no
-`where` clause. So boot time and resident memory scale with the row count of
-`games`, and the question is what bounds that count.
-
-| status | swept by | bounded |
-| --- | --- | --- |
-| `finished`, `aborted` | `expire_old_terminal_games` — a week after `ended_at` | **yes** |
-| `active` | `expire_overdue_turns` retires a seat past its move limit, ending the game | **yes, eventually** |
-| **`waiting`** | **nothing** | **no** |
-
-**Seven of production's fifteen games are `waiting`, with last activity 46 to 62
-days ago.** A waiting game has no current seat, so the move-timeout sweep never
-looks at it; it is not terminal, so the terminal sweep never looks at it either.
-It will be loaded into memory at every boot for the life of the service.
-
-**This is R5's real shape.** R5 says *memory and startup stop growing with
-cumulative games played*, and the terminal sweep already handles the games people
-finish. What grows without limit is the games people **start and abandon** — which
-is the more common case, because abandoning costs nothing.
+**What the first one found**, and it is what shaped the rest of this design:
+nothing is close to a ceiling, and exactly one number is unbounded — the games
+table, because `AppState::new` loads every game at boot and nothing sweeps a
+game that never started. Seven of production's fifteen were in that state, idle
+46 to 62 days.
 
 ## What would have to change: nothing new. The rule exists and is unbuilt
 

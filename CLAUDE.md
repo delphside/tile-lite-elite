@@ -292,6 +292,11 @@ one of them has a defect: fix it, don't work around it.
 - docs/N.N numbering: 1.x product, 2.x design, 3.x lifecycle, 4.x reference.
   A change document lives in its issue's folder under docs/changes/, named
   for the parent project — a work package has no folder of its own.
+- **A report the programme produces on a cadence goes in `docs/reports/<name>/`,
+  one file per period.** Owner, 2026-09-22. It is neither a numbered document
+  nor a change document: it records what was true at a moment, is never edited
+  afterwards, and is not superseded by the next one — the series is what carries
+  the meaning. `docs/reports/capacity_plan/` is the first.
 
 ## Where the detail is
 
