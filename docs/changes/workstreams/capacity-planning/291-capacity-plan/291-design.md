@@ -379,58 +379,82 @@ semaphores of 4 and 2. Whether that clears in a second or in ten is a number
 nobody has worked out, and it is the first question the capacity plan should
 answer once it can.
 
-### The interval is not a convention, and the system already fixes it
+### The interval is a duration, not an averaging window
 
 Owner, 2026-09-22: *"peak and spike are a function of the interval. The interval
-will have meaning based on the queuing and throttling that happens."*
+will have meaning based on the queuing and throttling that happens."* And then,
+correcting an earlier draft of this section: *"The comparison is not 200 per hour
+or per second, it is between a rate of 200 per second for one second or for an
+hour, or for a millisecond."*
 
-**A spike is only a spike relative to a window.** Two hundred requests in a
-second and two hundred spread over an hour are the same count and different
-events, so *peak* and *spike* mean nothing until the interval is stated. And the
-interval is not ours to pick by convention: it is set by how long this service
-can absorb an arrival before the arrival becomes a refusal.
+**That is the right framing and the first one here was wrong.** Holding a *count*
+fixed and varying the window is arithmetic — it only restates the rate. The
+question that matters holds the **rate** fixed and varies **how long it is
+sustained**: 200 per second for a millisecond is a fifth of a request, for a
+second it is a burst, and for an hour it is 720,000 requests against a service
+whose sustained limit is twenty a second.
 
-**Those constants are all in the code, and they span two and a half orders of
-magnitude.** Read 2026-09-22.
+**So *spike* is a rate with a duration**, and the capacity question is: at what
+arrival rate, held for how long, does the service start refusing?
 
-| mechanism | constant | what it absorbs |
+### Which is computable today, from the limiter alone
+
+A token bucket of capacity `B` refilling at `r` per second, meeting arrivals at
+`R` per second, drains in `B / (R − r)` seconds. Every one of those numbers is
+already in `throttle.rs`, so the sustainable duration at each rate needs no
+measurement at all:
+
+| arrival rate | global | session | auth | registration |
+| --- | --- | --- | --- | --- |
+| 1/s | forever | forever | 12 s | 3.1 s |
+| 5/s | forever | 60 s | 2.1 s | 0.6 s |
+| 20/s | forever | 3.8 s | 0.5 s | 0.2 s |
+| 50/s | 6.7 s | 1.3 s | 0.2 s | 0.06 s |
+| 200/s | **1.1 s** | 0.3 s | 0.05 s | 0.02 s |
+| 1000/s | 0.2 s | 0.06 s | 0.01 s | — |
+
+*forever* means the arrival rate is at or below the refill rate, so the bucket
+never empties.
+
+**The headline: 200 a second is admitted for about one second and then
+refused.** Not because anything measured the service — because that is what the
+configuration says. The burst of 200 is a *one-second* allowance at that rate,
+and calling it a spike allowance without saying for how long has been hiding
+that.
+
+### And the two halves of the question are different
+
+**The limiter says what is admitted; the queues say what survives being
+admitted.** Those are separate ceilings and only the first is known today:
+
+| mechanism | constant | what it bounds |
 | --- | --- | --- |
-| `hash_limit` queue | `HASH_PERMIT_WAIT` = **250 ms** | a hash arriving while four are running waits this long, then is refused 503 |
-| `engine_limit` queue | search bounded at `ENGINE_TURN_TIMEOUT` = **5 s** | a move waits behind at most two searches, each capped at five seconds |
-| global limiter | 1 permit per **50 ms**, burst 200 → **10 s** to refill | a full-bucket spike, absorbed and repaid over ten seconds |
-| session limiter | 1 permit per **250 ms**, burst 60 → **15 s** | the same, per signed-in caller |
-| auth limiter | 1 permit per **6 s**, burst 10 → **60 s** | the same, per address |
-| registration limiter | 1 permit per **30 s**, burst 3 → **90 s** | the tightest, deliberately |
+| `hash_limit` queue | `HASH_PERMIT_WAIT` = **250 ms** | how long a hash waits behind four others before 503 |
+| `engine_limit` queue | `ENGINE_TURN_TIMEOUT` = **5 s** | a single search, with two running at once |
+| the limiters | the table above | what is let through at all |
 
-`governor` replenishes one permit per period rather than clearing on the minute,
-so the refill column is the honest spike window: it is how long a fully drained
-bucket takes to come back.
+**So a rate held for less than 250 ms is invisible to everything**: it is latency
+inside a queue and never a refusal. Between 250 ms and about a second, the
+buckets absorb it. Past that, the sustained rate governs and the burst has
+stopped helping.
 
-### Which gives four intervals, each meaning something
+**The plan therefore owes two curves, not one number**: the rate-against-duration
+the *limiter* admits, which is above and derivable now, and the
+rate-against-duration the *service* can actually serve, which needs #91. Where
+the second is below the first, the limiter is admitting a spike the service
+fails under — which is the thing R8 exists to catch.
 
-| interval | why it | what it answers |
-| --- | --- | --- |
-| **250 ms** | the hash queue's patience | below this, a burst is latency and never a refusal. Measuring finer tells you nothing a caller experienced |
-| **10 s** | the global bucket's refill | the natural **spike** window. A burst shorter than this is absorbed whole; a burst longer than this is a rate |
-| **1 minute** | the limiter's own denominator | the natural **peak** unit, and the one the limits are written in |
-| **1 hour** | the reporting convention | the **peak hour**, which is a business figure rather than a mechanical one |
+### And registration is the outlier worth noticing
 
-**The useful consequence: a spike measured over an hour is not a spike.** If the
-plan reports peak-hour and spike at intervals of an hour and a minute, it is
-describing two rates and calling one of them a spike — because the mechanism
-that would notice a real one operates at ten seconds and below. An interval
-chosen from the reporting habit rather than from the queue measures a thing the
-service cannot feel.
+Its bucket holds three and refills one every thirty seconds, so **two
+registrations a second is sustainable for a second and a half**, and anything
+above that is refused almost at once. That is deliberate — a throwaway account is
+how every other limit gets worked around. But it means a registration spike is
+over before any reporting interval could see it, and registration is the flow a
+capacity plan cares most about, because it is what grows the account table.
 
-**And the registration limiter is the outlier worth noticing**: its bucket takes
-ninety seconds to refill, which is longer than any reporting minute. A spike in
-registrations is therefore invisible at every interval the plan would naturally
-use, and yet registration is the one flow a capacity plan cares most about,
-because it is what grows the account table.
-
-**Recorded, not built.** The intervals are derived from constants that exist;
-what does not exist is anything counting requests at any interval at all, which
-is #402's gap.
+**Recorded, not built.** The limiter's curve is derivable now; nothing counts
+arrivals at any interval at all, which is #402's gap.
 
 ### What this adds
 
