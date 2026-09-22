@@ -643,6 +643,79 @@ peak, always, and re-derive it rather than inheriting it. The first time an hour
 contains a consistent rate is itself a finding worth reporting — it is the point
 at which this service starts having a peak hour at all.
 
+## The within-hour distribution is random, so the spike is calculated, not measured
+
+Owner, 2026-09-22, sharpening the previous section: *"It is more accurate to say
+that the distribution of transactions within an hour is consistent with a random
+distribution, given that total count for the hour. So normal statistics can be
+used to predict the peak for any particular interval."*
+
+**That is a much stronger claim than *no pattern*, and it collapses the
+measurement problem.** If arrivals within the hour are Poisson conditional on the
+hour's total, then the peak in *any* shorter window follows from the hourly count
+alone. Nothing has to be sampled at second granularity — you measure at the
+interval where the rate is stationary, and derive everything below it.
+
+**Which makes *peak* and *spike* one measurement and one calculation**, where
+this document had been treating them as two measurements.
+
+### What it gives, at a level exceeded about once an hour
+
+| arrivals/hour | mean/s | peak in 1 s | peak in 10 s |
+| --- | --- | --- | --- |
+| 600 | 0.17 | 3 | 6 |
+| 3,600 | 1 | 6 | 20 |
+| 36,000 | 10 | 23 | 129 |
+| 72,000 | 20 | 37 | 240 |
+
+**The last row is this service at exactly the global limiter's sustained rate**
+of 1,200 a minute.
+
+### And the naive comparison against the bucket is wrong
+
+240 in ten seconds against a burst of 200 looks like a shortfall. **It is not**,
+and the error is worth recording because it is easy to repeat: a token bucket is
+not a counter over a window. It refills continuously, so what matters is the
+largest *excursion above the refill line*, not the raw count in an interval.
+
+Simulated — Poisson arrivals into the real bucket, capacity 200 refilling at 20 a
+second, an hour at a time:
+
+| load, as a fraction of the sustained rate | organic refusals per hour |
+| --- | --- |
+| 50% | 0 |
+| 80% | 0 |
+| 90% | 0 |
+| 95% | **0** |
+| 100% | **~95** |
+
+**So the burst of 200 is comfortable up to about 95% of the sustained rate**, and
+falls apart only at 100% — where it must, because the drift is zero and a
+zero-drift random walk drains any finite bucket given time.
+
+### Which narrows R9 rather than answering it
+
+**The burst is defensible.** 200 absorbs organic Poisson variation at every load
+short of saturation, and that is now a derivation rather than a feel. If it were
+halved to 100 the same simulation would say whether that still holds — which is
+the point: the number is now checkable.
+
+**The sustained rate is the one still unjustified.** 1,200 a minute is the figure
+that should come out of the utilisation threshold via the workload model, and
+nothing derives it. That is the narrower thing R9 now asks for.
+
+### The assumption is load-bearing and names its own exceptions
+
+**Poisson requires independent arrivals**, and the interesting failures are
+exactly where independence breaks: a bot harness (#10) driving many games at
+once, a retry storm after an outage, an emailed invitation batch landing
+together. Those are *correlated* arrivals, the model does not cover them, and
+they are the cases a capacity plan most wants to survive.
+
+**So the calculation gives the organic peak**, and correlated events remain a
+separate question — one that a spike test constructs deliberately rather than
+infers from a distribution.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
