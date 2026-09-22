@@ -81,7 +81,18 @@ games in the database is cheap, but having lots of inactive games in memory is
 expensive."* Disk sits at 86% headroom; memory's only unbounded consumer is
 this one. RET-3's thirty days is generous because disk is cheap enough to
 afford it — an eviction rule facing memory should be much tighter than that,
-not inherit the same number. Full reasoning on #408.
+not inherit the same number.
+
+**Settled into two actions, 2026-09-22, after a design thread on #408 that got
+the mechanism wrong twice before landing here** — a database query does not
+help, because without eviction the database and the resident map are the same
+set by construction, and a plain query examines that whole set exactly as the
+in-memory scan does. The full reasoning trail is on #408; the settled shape:
+
+| | delivers | package |
+| --- | --- | --- |
+| **Action 1** | change how games are managed in memory and the database — an in-memory deadline index (no database round trip), load on demand, eviction | #408 |
+| **Action 2** | use #400's scheduler to remove idle games, once it exists, replacing the lazy per-request check | #409, `waits on` #400 and #408 |
 
 ## R2 and R7 are two mechanisms, and the argument for one was wrong
 
