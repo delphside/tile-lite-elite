@@ -72,9 +72,18 @@ use serde::{Deserialize, Serialize};
 // a hash of the built bundle instead; see `watch_for_new_bundle` in
 // `tile-lite-elite-ui`, and docs/3.3's "Decide whether the API version
 // moves" for which changes bump this.
+// 2.14 — `GET /players/{player_id}/invitations` answered 400 on a database
+// failure and now answers 500, or 503 with `Retry-After` when the failure is
+// transient. A client can observe it and a retrying client behaves
+// differently, so it is a contract change. #399.
+//
+// **The precedent is `ec72268`**, which moved 2.10 to 2.11 for the same shape:
+// a status changed on a path that already existed. #380 made that kind of
+// change and did not bump, so this is the second time it was missed rather
+// than a settled exemption — docs/3.3's table has gained the row.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 2,
-    minor: 13,
+    minor: 14,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

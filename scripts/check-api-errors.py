@@ -50,6 +50,18 @@ CALL = re.compile(r'(?:ApiProblem|Self)::(\w+)\(\s*"([^"]+)"')
 # test's copy would let a message be "documented" by being tested.
 SKIP = {"tests.rs"}
 
+# **A historical mention disarms this check for the string it mentions.** The
+# match is against the whole document, so prose saying *it used to answer
+# `Database error`* is indistinguishable from an entry documenting that it
+# still does — and a reintroduction of the retired message then passes.
+#
+# Found on 2026-09-22, in a line this project had itself written a day earlier:
+# reverting one of #399's two call sites left the gate reporting all 70
+# documented. **So a retired message is described, never quoted**, and that is a
+# rule about writing this document rather than something the code can enforce.
+# Quoting it would need the match narrowed to the behaviour tables, which is a
+# larger change than the problem has so far justified.
+
 
 # A Rust string literal broken with a trailing `\` continues on the next line,
 # and the compiler drops the backslash, the newline and the leading whitespace.
