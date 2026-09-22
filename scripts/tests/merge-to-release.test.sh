@@ -49,12 +49,24 @@ exit 0
 STUB
 chmod +x "$BIN/ci-status.sh"
 
+# The board correction, stubbed for the same reason as `gh`: the test asserts
+# that a merge triggers it, not what it does. `SYNC_FAIL` makes it fail, which
+# is the case that must not fail the merge.
+cat > "$BIN/sync-pr-state.sh" <<'STUB'
+#!/usr/bin/env bash
+echo "ran" > "$STUB_DIR/SYNCED"
+[ -n "${SYNC_FAIL:-}" ] && exit 1
+exit 0
+STUB
+chmod +x "$BIN/sync-pr-state.sh"
+
 export PATH="$BIN:$PATH"
 export STUB_DIR="$DIR"
 export CI_STATUS="$BIN/ci-status.sh"
+export SYNC_PR_STATE="$BIN/sync-pr-state.sh"
 
 reset() {
-  rm -f "$DIR/MERGED" "$DIR/ASKED"
+  rm -f "$DIR/MERGED" "$DIR/ASKED" "$DIR/SYNCED"
   : > "$DIR/ASKED"
   printf '%s' '{"number":9,"headRefName":"301-x","headRefOid":"aaaaaaaaaaaa","baseRefName":"release/0.7.3","state":"OPEN","isDraft":false}' > "$DIR/pr.json"
   printf 'bbbbbbbbbbbb\n' > "$DIR/baseref"
@@ -68,6 +80,7 @@ check() { local d="$1" e="$2" g="$3"
 
 run() { rc=0; out="$("$SCRIPT" "$@" 2>&1)" || rc=$?; }
 merged() { [ -f "$DIR/MERGED" ] && echo yes || echo no; }
+synced() { [ -f "$DIR/SYNCED" ] && echo yes || echo no; }
 
 echo "merge-to-release.sh"
 
@@ -150,6 +163,25 @@ check "and never a rebase"                        "yes" \
   "$(grep -q -- '--rebase' "$DIR/MERGED" && echo 'no — a rebase rewrites the tested commit' || echo yes)"
 check "and the branch is still deleted"           "yes" \
   "$(grep -q -- '--delete-branch' "$DIR/MERGED" && echo yes || echo no)"
+
+# --- the board is corrected after a merge, and a failure there is not fatal ---
+#
+# `PR State` is derived from GitHub, never typed. The gap it goes stale in is
+# between a merge and the next `verify.sh`, and #401 sat in *Approved* long
+# enough on 2026-09-22 for the owner to notice before any script did.
+echo
+reset; run 9
+check "a merge corrects the board"                "yes" "$(synced)"
+
+reset; run --check-only 9
+check "--check-only merges nothing, corrects nothing" "no" "$(synced)"
+
+# The merge has already happened and cannot be undone by a board field, so a
+# failure here must print and leave the script reporting success.
+reset; SYNC_FAIL=1 run 9
+check "a failed correction still reports the merge" "0" "$rc"
+check "and says where to run it by hand"          "1" \
+  "$(grep -c 'run scripts/sync-pr-state.sh' <<< "$out")"
 
 if (( failures > 0 )); then echo "$failures failed"; exit 1; fi
 echo "all passed"
