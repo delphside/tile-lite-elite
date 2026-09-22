@@ -56,16 +56,22 @@ body:
     attributes:
       label: Impacted artefacts
       description: >-
-        Everything it touches, each new or modified, grouped by delivery. A guess
-        now, accurate once the design is agreed — and worth writing wrong,
-        because it is how two projects discover they collide. Route is derived
-        from the artefact; show it as a column.
+        Everything it touches, each **new**, **modified** or **reuse**, grouped by
+        delivery. A guess now, accurate once the design is agreed — and worth
+        writing wrong, because it is how two projects discover they collide.
+        Route is derived from the artefact; show it as a column.
+
+        **Reuse is not padding.** It is the difference between *we did not touch
+        it* and *we considered it and it needed nothing*, and only the second is
+        a design decision. From the owner's prior art, 2026-09-22, whose
+        component table carried New, Update and Reuse and asked the presenter to
+        explain the decision behind each.
       value: |
         *Provisional until the design is agreed.*
 
-        | artefact | | route |
-        | --- | --- | --- |
-        | | | |
+        | artefact | new · modified · reuse | why | route |
+        | --- | --- | --- | --- |
+        | | | | |
     validations:
       required: true
 

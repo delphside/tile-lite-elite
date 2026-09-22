@@ -1,5 +1,57 @@
 # Diagram sources
 
+## Which view a diagram takes, and saying so
+
+**Adopted 2026-09-22 (#406): C4, plus one view of our own.** A diagram of the
+system declares its view in the line above it, so a reader knows what they are
+looking at without inferring it from the contents.
+
+| view | whose | shows | zoom |
+| --- | --- | --- | --- |
+| **Context** | C4 | the service and who uses it | outermost |
+| **Container** | C4 | deployable processes and where they run | |
+| **Component** | C4 | what is inside one container | |
+| **Runtime** | **ours** | concurrency, sweeps and message flow — what happens over time, and what happens without a request | across all three |
+
+**Why C4.** It is built for this size, and *Container* means a deployable
+process, which is literally our two containers and the database. Adopting it was
+mostly a matter of declaring what the diagrams already were. 4+1's *Development
+view* is module ownership across teams, an empty box for one developer and one
+repository; arc42 is a twelve-section document template, and the numbered
+documents already do that job.
+
+**Why Runtime is ours and says so.** C4 treats process and concurrency as
+supplementary rather than as a level, and much of this system's difficulty lives
+there — `hash_limit` at 4 and `engine_limit` at 2, the sweeps that run from
+`list_games`, the scheduler #400 will build. Naming it as a local extension is
+the difference between adopting a standard and quietly diverging from one.
+
+**Container is the level the roadmap is drawn at.** It is the one that changes
+when the architecture changes and stays still when the code does: a roadmap at
+Component would move every release and say nothing, and one at Context would
+never move at all.
+
+### A process diagram is not a view
+
+**Most of the diagrams in this folder are not architecture at all.**
+`release-flow`, `version-lifecycle` and the four delivery flavours show how a
+*change* moves, not how the *system* is built, and `roadmap.svg` shows when work
+happens. They take no C4 view and should not be labelled with one — the set
+above describes the system, and a process diagram describes us.
+
+### What each diagram is today
+
+| diagram | view |
+| --- | --- |
+| [1.1](../1.1-architecture.md)'s deployment diagram | **Container** — environments and the processes in them |
+| [1.2](../1.2-components-and-interactions.md)'s component diagram | **Component**, with the clients drawn as Context around it |
+| 1.2's move-submission sequence | **Runtime** |
+| [3.3](../3.3-testing-ci-and-release.md)'s sequence diagram | process, not a view |
+| `release-flow`, `version-lifecycle`, `flavour-a` to `flavour-d` | process, not a view |
+| `roadmap.svg` | a plan, not a view — and note that #406 R3 will add a *Container* roadmap alongside it, answering *what will it look like* where this one answers *when does work happen* |
+
+## Rendering
+
 Each `.mmd` here is the source for the `.svg` beside it. Edit the `.mmd`,
 re-render, and commit both.
 
