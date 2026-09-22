@@ -68,10 +68,19 @@ one of them has a defect: fix it, don't work around it.
   owner, 2026-09-21. Scoped and designed independently, scheduled jointly: its
   milestone is the one its first callers carry.
 - A project owns its requirements: sources are folded and closed. Its issue
-  carries seven headings: requirements, design, impacted artefacts, test
-  approach, dependencies and related work, deliveries, post-deployment
-  checks against requirements. Under each heading is the content or a link
-  to the design document that holds it, never both.
+  carries eight headings: requirements, design, impacted artefacts,
+  **non-functional design**, test approach, dependencies and related work,
+  deliveries, post-deployment checks against requirements. Under each heading is
+  the content or a link to the design document that holds it, never both.
+- **Non-functional design is four questions and *none, because…* answers any of
+  them**: capacity, failure, limits and timeouts, secrets and access. Added
+  2026-09-22. #402 and #291 are both projects because nothing asked those
+  questions per change, and a project is the expensive way to answer what was
+  cheap at the time. A limit's answer says **where its number came from**.
+- **A dependency is declared from both ends.** `waits on` has an inverse,
+  `is needed by`, so a relation lives in both bodies rather than in whichever was
+  written second. #400's eight customers were found by going looking, not by
+  each having said so.
 - A project moves through the Phase field. The wording is the field's own
   stage descriptions:
 

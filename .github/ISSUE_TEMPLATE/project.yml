@@ -70,17 +70,54 @@ body:
       required: true
 
   - type: textarea
+    id: non-functional
+    attributes:
+      label: Non-functional design
+      description: >-
+        **Four questions, and *none, because…* is a complete answer to any of
+        them.** Most changes add no load and no timeout; what this section stops
+        is nobody having asked. From the owner's prior art, 2026-09-22, where
+        every design presentation answered capacity, error handling and retry,
+        timeouts and queue depths, and encryption and tokens.
+
+        **Why it is a heading rather than a habit.** #402 and #291 are both
+        projects partly because nothing asked the question per change. Error
+        handling accumulated into a project; so did capacity. Asked here it is
+        cheap, and asked nowhere it is expensive later.
+      value: |
+        **Capacity** — what this adds to load, against which ceiling in the
+        capacity plan. *None, because…*
+
+        **Failure** — what can go wrong, what the caller is told, what reaches
+        the log, and whether the server should act. *None, because…*
+
+        **Limits and timeouts** — any new timeout, queue depth, rate limit or
+        concurrency bound, **and where its number came from**. *None, because…*
+
+        **Secrets and access** — anything touching credentials, tokens, or who
+        can reach what. *None, because…*
+    validations:
+      required: true
+
+  - type: textarea
     id: dependencies
     attributes:
       label: Dependencies and related work
       description: >-
         One line per relation, naming the issue and the reason. **waits on** —
-        cannot start or ship until that one has. **overlaps** — touches the same
-        artefact, which comparing artefact lists will tell you. **anticipates** —
-        this design makes room for that project, and naming it is what keeps it
-        from being speculation.
+        cannot start or ship until that one has. **is needed by** — the same
+        edge, declared from this end, so a dependency exists in both bodies
+        rather than in whichever was written second. **overlaps** — touches the
+        same artefact, which comparing artefact lists will tell you.
+        **anticipates** — this design makes room for that project, and naming it
+        is what keeps it from being speculation.
+
+        **Both directions, deliberately.** #400's eight customers were found by
+        somebody going looking rather than by each having declared itself, which
+        is the failure this line exists to stop.
       value: |
         - **waits on #** — 
+        - **is needed by #** — 
         - **overlaps #** — 
         - **anticipates #** — 
     validations:
