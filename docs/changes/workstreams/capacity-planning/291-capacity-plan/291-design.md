@@ -169,6 +169,23 @@ what rate of registration is unusual, measured against the six accounts and the
 ceilings in the table above. That is answerable here and is not answerable
 anywhere else.
 
+## Who builds what
+
+**Three work packages, raised 2026-09-22.** This document is the design for all
+three; none of them re-derives it.
+
+| | | |
+| --- | --- | --- |
+| **#403** | R1, R2, R7's interim due date | delivered |
+| **#404** | R4 — measure where it breaks, by load category | the root of the chain; nothing blocks it |
+| **#405** | R8, R9, R3's rate — derive the thresholds and the limits | blocked on #404, deliberately |
+
+**#405 is where everything above this line is actioned.** It is blocked on
+purpose: a model built before the measurement is a model fitted to guesses, which
+is the failure this whole analysis exists to avoid. Its two owner inputs — the
+utilisation threshold and the service level — do not wait on #404 and can be
+settled at any time.
+
 ## Where this leaves each requirement
 
 | | state | owned by |
