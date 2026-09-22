@@ -12,6 +12,23 @@ depth, and an example alone leaves you guessing at what was optional.
 | [post-deployment-review.md](post-deployment-review.md) | the project's folder, once its last release has been live and used | none yet — the first project to finish writes it |
 | [capacity-plan.md](capacity-plan.md) | `docs/reports/capacity_plan/<YYYY-MM>.md`, monthly | [September 2026](../reports/capacity_plan/2026-09.md) (#291 R1, the first) |
 
+## The other half, and why it is not here
+
+**Templates for what you raise live in `.github/`, because GitHub requires it.**
+An issue form is only offered to you if it sits in `.github/ISSUE_TEMPLATE/`, and
+a pull request body is only pre-filled from `.github/PULL_REQUEST_TEMPLATE.md`.
+Neither can be moved.
+
+| template | offered when |
+| --- | --- |
+| [`Requirement`](../../.github/ISSUE_TEMPLATE/requirement.yml) · [`Project`](../../.github/ISSUE_TEMPLATE/project.yml) · [`Decision`](../../.github/ISSUE_TEMPLATE/decision.yml) | raising an issue of that type |
+| [`PULL_REQUEST_TEMPLATE.md`](../../.github/PULL_REQUEST_TEMPLATE.md) | opening a pull request |
+
+**So the split is by who fills it in, not by what it is.** GitHub fills those
+four in front of you; these ones you copy into the repository yourself. Listed
+here because somebody looking for *the templates* should find all of them from
+one place, whichever half they land on first.
+
 ## Notes
 
 **Why a template rather than the prose that describes it.** `docs/3.3`'s "How a
