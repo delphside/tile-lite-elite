@@ -1,0 +1,7 @@
+period,metric,value,ceiling,unit
+2026-09,memory,469,954,MB
+2026-09,disk,6.1,45,GB
+2026-09,journal,51,100,MB
+2026-09,games,15,,games
+2026-09,games waiting,7,,games
+2026-09,accounts,6,,accounts

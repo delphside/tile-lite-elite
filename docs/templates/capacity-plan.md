@@ -86,13 +86,30 @@ the cadence ever tightens — weekly, say — keep the same number of *rows* rat
 than the same number of months, because the table's job is to be read at a
 glance.
 
-| | *2026-09* | *2026-10* | *…* |
-| --- | --- | --- | --- |
-| memory | | | |
-| disk | | | |
-| journal | | | |
-| games | | | |
-| accounts | | | |
+Add the period's row to `measurements.csv`, then:
+
+```bash
+scripts/capacity-chart.py --table    # the table below
+scripts/capacity-chart.py --write    # the charts
+```
+
+Paste the table here.
+
+### Each metric, against its ceiling
+
+**A chart per metric: bars for what was measured, a regression line projected
+forward, and the ceiling marked.** Owner, 2026-09-22. Generated, never drawn —
+a chart maintained beside its data is stale the first time the data moves and
+stale in a way nobody can see.
+
+| | |
+| --- | --- |
+| ![memory](charts/memory.svg) | ![disk](charts/disk.svg) |
+| ![journal](charts/journal.svg) | ![games](charts/games.svg) |
+| ![games waiting](charts/games-waiting.svg) | ![accounts](charts/accounts.svg) |
+
+The ceiling is drawn even when nothing is near it: a threshold that appears only
+once it matters teaches the reader there is no threshold.
 
 **Then say what it means**, which the table cannot:
 
@@ -100,7 +117,8 @@ glance.
   number that grows because nothing deletes it is a different problem from one
   that grows with players
 - for anything moving, **when it reaches its ceiling at this rate**, stated as a
-  date or as *not within the horizon*
+  date or as *not within the horizon*. `capacity-chart.py` prints this line per
+  metric; check it rather than reading it off the chart by eye
 - whether any extrapolation here is worth acting on yet, and if not, what would
   change that
 
