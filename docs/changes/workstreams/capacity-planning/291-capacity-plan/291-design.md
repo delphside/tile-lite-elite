@@ -187,6 +187,77 @@ needs a mechanism that does not exist, and R3 needs half of one being built next
 door. What is left here is R1 (done), R2 (small), R4 (real work) and a rate for
 R3.
 
+## Four ideas from prior art, recorded and deliberately not built
+
+Owner, 2026-09-22, having pointed at a 2012 capacity forecast he ran on a
+telecoms integration platform: *"These are good ideas for the future, but do not
+change anything now."* Written down because the cost of losing them is that they
+get rediscovered badly in two years.
+
+**Nothing from that work is reproduced here** — it is a client's and
+proprietary. What follows is the method.
+
+### 1. Two thresholds, not one: normal, and degraded
+
+Their forecast carried a **normal running threshold** and a **single site
+threshold** — what the platform could take when half the hardware was gone. The
+second is the one that matters, because it is the one you meet on your worst
+day, and a plan that only knows the first says you have headroom right up to the
+moment you need it.
+
+**Our analogue is one VM with no second site**, so the degraded case is not half
+the hardware — it is a restart, a rebuild from backup, or running while a sweep
+holds a lock. Whatever it turns out to be, the point stands: a single ceiling
+describes a service that never has a bad day.
+
+### 2. A threshold is a step function, not a constant
+
+Theirs rose partway along the x axis, because a hardware upgrade was scheduled
+and the chart showed the ceiling moving when the project landed. So the forecast
+answered *do we breach before the upgrade arrives*, which is the actual question
+and is invisible on a chart with a flat line.
+
+**Ours are flat lines today** and would need to step the day the VM is resized.
+`measurements.csv` carries the ceiling per period already, so the data model
+supports this and only the chart does not.
+
+### 3. Measure what the business drives, not what the OS reports
+
+Theirs tracked **transactions per second** — peak hour and average, actual and
+forecast — rather than CPU. Workload is what grows for a reason you can reason
+about and forecast; CPU is a symptom of it, and forecasting a symptom means
+forecasting the code as well as the demand.
+
+**Our equivalent is moves, games started, registrations**, none of which the
+capacity plan currently carries. It counts games *stored*, which is a stock, not
+a rate.
+
+### 4. Invert the model: express a resource ceiling in workload terms
+
+The sharpest of the four, and the one that makes the other three pay. Their
+derivation sheet records it as a method:
+
+1. Take the resource threshold in resource terms — a CPU percentage.
+2. **Measure the relationship at a known point**: at a recorded moment, peak
+   workload and peak resource use were observed together, giving resource-use
+   per unit of workload.
+3. Invert it, so the threshold is restated **in transactions per second**.
+4. Track and forecast the workload figure, because that is the one with a
+   business meaning.
+
+So the answer is not *"CPU reaches 70% in March"* but *"we run out at N
+transactions per second, and we are at M"* — a number an owner can hold against
+a growth expectation without knowing anything about servers.
+
+**They recorded two derivations for one platform** and kept both: one from a
+load test at installation, one from the measured relationship in production.
+Two routes to the same ceiling disagreeing is itself information.
+
+**What this would need here.** #91 is the load test — it produces step 2's
+measurement. Until it exists there is no relationship to invert, which is why
+this is recorded and not scheduled: the prerequisite is a requirement this
+project already has and has not done.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
