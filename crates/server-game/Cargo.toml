@@ -34,3 +34,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # counters in /proc are 10 ms granular, which is 30x the thing being measured.
 # A dev-dependency, so nothing here reaches the image.
 libc = "0.2"
+# `?` across HTTP calls in stress_bench (#404), which is all it is used for.
+# A dev-dependency, like libc above — nothing here reaches the image.
+anyhow = "1"
