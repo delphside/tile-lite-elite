@@ -81,6 +81,18 @@ DUE_SECTIONS: dict[str, tuple[str, ...]] = {
     "Design and Test Approach": ("Design",),
 }
 
+# **The mirror case, found 2026-09-23.** `DUE_SECTIONS` makes a box due
+# *earlier* than the whole-issue default -- a Design question asked while
+# still at Design. A post-deployment check needs the opposite correction: it
+# must not be due as *early* as `DUE_AT`'s default says. `DUE_AT` opens at
+# `Deployment`, which is right for a test-approach box and wrong for one
+# asking whether the benefit arrived in production -- #399 sat at
+# `Deployment`, not yet released, and its check *"a database failure tells a
+# caller something it can act on"* was already being asked. The owner
+# noticed; nothing else would have.
+POST_DEPLOYMENT_HEADING = "Post-deployment checks against requirements"
+POST_DEPLOYMENT_DUE_AT = ("Post-deployment", "Project Closedown")
+
 PROJECTS = ("ParentProject", "WorkPackage", "StandaloneProject")
 
 
@@ -105,7 +117,11 @@ def due_boxes(issue: Issue, who: str) -> list[Box]:
     nothing: that is `DUE_AT`'s judgement and this does not soften it.
     """
     if boxes_are_due(issue):
-        return issue.unticked_for(who)
+        out = issue.unticked_for(who)
+        if issue.kind in PROJECTS and issue.step not in POST_DEPLOYMENT_DUE_AT:
+            not_yet = set(issue.boxes_in(POST_DEPLOYMENT_HEADING))
+            out = [b for b in out if b not in not_yet]
+        return out
     if issue.kind in PROJECTS and issue.step in DUE_SECTIONS:
         out = []
         for heading in DUE_SECTIONS[issue.step]:

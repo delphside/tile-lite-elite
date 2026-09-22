@@ -413,6 +413,39 @@ check("an unlabelled one is waiting on nobody", 0,
            if r.who is not None]))
 
 print()
+print("a post-deployment check is not due before the change reaches production")
+# The mirror of the Design-section fix above: DUE_AT opens at Deployment,
+# right for a test-approach box and wrong for one asking whether the benefit
+# arrived in production, which has not happened yet. #399 sat at Deployment,
+# not yet released, and its post-deployment check was already surfacing as
+# waiting on the owner -- he noticed, nothing else would have.
+at_deployment = classify(issue(1, parent=2,
+                               fields={"Phase": "Deployment", "Route": "x"},
+                               body="## Test approach\n\n- [ ] **owner** — run it\n\n"
+                                    "## Post-deployment checks against requirements\n\n"
+                                    "- [ ] **owner** — the benefit arrived\n"))
+check("a test-approach box is due at Deployment", 1,
+      len(due_boxes(at_deployment, "owner")))
+check("but the post-deployment box is not", "run it",
+      due_boxes(at_deployment, "owner")[0].text)
+check("so it does not report as waiting either", "checkbox",
+      getattr(waiting_on_owner(at_deployment), "source", None))
+
+at_post = classify(issue(1, parent=2,
+                         fields={"Phase": "Post-deployment", "Route": "x"},
+                         body="## Post-deployment checks against requirements\n\n"
+                              "- [ ] **owner** — the benefit arrived\n"))
+check("at Post-deployment the same box is due", 1,
+      len(due_boxes(at_post, "owner")))
+
+at_closedown = classify(issue(1, parent=2,
+                              fields={"Phase": "Project Closedown", "Route": "x"},
+                              body="## Post-deployment checks against requirements\n\n"
+                                   "- [ ] **owner** — the benefit arrived\n"))
+check("and still is at Project Closedown", 1,
+      len(due_boxes(at_closedown, "owner")))
+
+print()
 print("a delivery at closedown owes its lesson, or says who carries it")
 # This was a gap: the obligation existed with no evidence function, so #398
 # reached Project Closedown owing lessons learnt and read as complete. The
