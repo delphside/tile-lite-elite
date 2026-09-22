@@ -258,6 +258,73 @@ measurement. Until it exists there is no relationship to invert, which is why
 this is recorded and not scheduled: the prerequisite is a requirement this
 project already has and has not done.
 
+## Load categories, and they already exist in the code
+
+Owner, 2026-09-22: *"We should capture tps by load category, in our case not all
+transactions are equal, but I suspect they will neatly fall into low (/health),
+medium and high (auth, engine move)."*
+
+**The suspicion is right, and it is better than a suspicion: the server already
+classifies load, twice, and the two classifications do not agree.** Read
+2026-09-22.
+
+### What already bounds concurrency
+
+`AppState` carries two semaphores, and their comments say exactly why each
+exists and how it was sized for the production VM:
+
+| | limit | why that number |
+| --- | --- | --- |
+| `hash_limit` | **4** | an Argon2 hash is about 19 MB and awaits nothing, so four is ~76 MB and keeps both cores busy. Unbounded on tokio's blocking pool would be 512 threads and no memory |
+| `engine_limit` | **2** | a search is pure computation with nothing to overlap, so it matches the core count. Ten concurrent games meant ten blocking threads competing for two cores |
+
+**Everything else is unbounded** and constrained only by the rate limiter.
+
+### What already bounds rate
+
+`throttle.rs` has three classes, which are *not* the same two:
+
+| | per minute | burst |
+| --- | --- | --- |
+| auth | 10 | 10 |
+| session | 240 | 60 |
+| global | 1,200 | 200 |
+
+### So the categories are four, not three
+
+Putting the two together gives the boundaries the code actually enforces:
+
+| category | what it is | bounded by | example |
+| --- | --- | --- | --- |
+| **trivial** | no auth, no database, no compute | nothing | `/health`, `/version.txt` |
+| **ordinary** | session check plus a database query | session rate limit | the games list, invitations |
+| **hash-bounded** | one Argon2 operation | `hash_limit` 4, auth rate limit 10/min | register, login, change password, reset |
+| **engine-bounded** | a dictionary search | `engine_limit` 2 | a bot's move, a move preview |
+
+**The last two are both "high" and they are not interchangeable**, which is the
+part worth separating: one is memory-bound at four concurrent and the other is
+CPU-bound at two. A single *high* category would average a memory ceiling
+against a CPU ceiling and produce a number that describes neither.
+
+**And `/health` is genuinely free**, which matters more than it sounds: the
+external probe hits it every 60 seconds from three vantage points, so it is the
+highest-rate endpoint the service has and contributes nothing to any ceiling. A
+plan counting raw requests would be dominated by the one transaction that costs
+nothing.
+
+### What this changes, and it is nothing today
+
+**The categories exist; what does not exist is a count per category.** Nothing
+records how many of each kind arrive — the logs carry domain events, not
+requests, and that is #402's gap rather than this project's. When #402's counters
+land they should be keyed by these four, because the boundaries are already
+enforced in the code and inventing a fifth classification for the plan would make
+three that disagree instead of two.
+
+**Recorded, not scheduled**, on the same grounds as the four ideas above: the
+measurement that would give each category a cost is #91's, and it has not
+happened.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
