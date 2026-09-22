@@ -536,6 +536,62 @@ moment — different questions with different evidence.
 **Still not built**, for the same reason as the rest: the measurement lives in
 the stress-testing requirement, #91.
 
+## Two more from the prior art: annotation, and seasonality
+
+Owner, 2026-09-22.
+
+### The chart explains its own anomalies
+
+> *"the forecast is presented clearly so everything can be easily seen in one
+> chart, with bubble text noting key events (an outage and a new product
+> launch)."*
+
+**A spike with no note beside it is read twice**: once as a defect, and once more
+by the next person. Theirs carried callouts naming what happened — an outage, a
+launch — so a reader could tell a number that means *something broke* from one
+that means *the business grew*, without asking anybody.
+
+**It also protects the regression.** A launch is a step change and an outage is a
+hole; a straight line fitted through either without acknowledgement produces a
+trend that is an artefact of one event. Annotating is the cheap half of that;
+deciding whether the point belongs in the fit at all is the other half, and is a
+judgement a note makes visible.
+
+**What it would need here:** an `events.csv` beside `measurements.csv` — a
+period, a label, and whether the point is excluded from the fit. The generator
+already has the x-position; a callout is a line and a text element.
+
+### The baseline carries seasonality, at three scales
+
+> *"the baseline forecast includes a seasonal pattern, there is a christmas bump.
+> there is also a weekly pattern and a daily pattern."*
+
+**Three cycles, and a straight line sees none of them.** Annual (a Christmas
+bump), weekly, and daily. A regression over twelve monthly points fitted through
+an annual cycle will read the cycle as trend, and will do it most confidently
+exactly where the series is longest.
+
+**And this connects back to the interval, sharply.** Their monitoring column read
+*"Peak Message TPS by Month"* — a **monthly series of a peak figure**, not a
+monthly average. That is how a monthly report can size for a daily peak: you
+report monthly, but what you report is the peak the day contained.
+
+### Which is a criticism of the report already written
+
+**September's figures are single instantaneous readings.** Memory, disk, journal
+and load were read once, on 2026-09-21, from a service nobody was using. They are
+neither averages nor peaks — they are one sample, and the report says as much
+under *what is not known*, but the table presents them as though they were the
+month's figure.
+
+**So `measurements.csv` needs a shape it does not have**: per period, the
+average *and* the peak, with the peak's interval stated. Until then the plan is
+sizing on a resting number, which is the mistake R8 exists to name one level up.
+
+**Recorded, not built**, like the rest — but this one is the cheapest of them and
+does not wait on #91. Capturing a peak needs something sampling more often than
+monthly, which is #402's counters again.
+
 ## Out of scope, and why
 
 **R6** — `Retry-After`'s margin — is a defect that happens to be capacity-shaped,
