@@ -74,14 +74,27 @@ wait for them.
 
 | | mechanism | why |
 | --- | --- | --- |
-| **R7**, benchmark timings | a **scheduled job** | it runs unattended, produces a row, and needs nobody |
+| **R7**, benchmark timings | a **scheduled job**, and a due date until there is one | it runs unattended, produces a row, and needs nobody |
 | **R2**, the capacity plan review | a **due date on an issue** | Claude updates it, the owner reviews it. A job cannot do either half |
 
-**R7 therefore depends on the scheduler**, which is owned elsewhere.
-`docs/3.7` (2026-09-01) puts the mechanism in Application & Game Architecture and
-the individual jobs with the workstream whose rule they apply — so the benchmark
-run is Capacity Planning's job on somebody else's mechanism, and it cannot be
-built before that mechanism is. The delivery project for it is #400.
+**R7 will be a scheduled job and is not blocked on becoming one.** Owner,
+2026-09-22: *"The three game logic schedules. Capacity Planning schedules can be
+run manually on an ad-hoc basis for now."* So #400 ships with the four game-logic
+callers, and Capacity Planning's jobs — the benchmark run, the daily size
+measurement, growth alerting — are run by hand until the mechanism is there to
+move them onto.
+
+**Which makes R7 a due date too, for now.** The same mechanism R2 uses: a line in
+the issue body saying when the next run falls due, surfaced by the board. That is
+a workaround for an absent scheduler and it should say so, so nobody later
+mistakes it for the design — `docs/3.7` puts the mechanism in Application & Game
+Architecture and the individual jobs with the workstream whose rule they apply,
+and that does not change because the first few runs are manual.
+
+**The difference between the two is then only who does the work**, and it is
+worth keeping in view: R2's review needs Claude to update a document and the
+owner to read it, and will always need both. R7's run needs nobody once there is
+something to run it.
 
 **R2 needs nothing that does not exist.** A date in the issue body and a report
 that surfaces it when the date passes; the board model's `turn.py` already
@@ -166,7 +179,7 @@ anywhere else.
 | **R4** where the service breaks | needs a harness. Measured against R1 | here |
 | **R5** memory and startup stop growing | **RET-3, already decided.** Satisfied when #270 builds it | #270 |
 | **R6** `Retry-After`'s margin | out of scope — see below | here, as a defect |
-| **R7** benchmark timings refreshed | a scheduled job, blocked behind #400 | here, on #400's mechanism |
+| **R7** benchmark timings refreshed | a due date now, a scheduled job once #400 ships | here |
 
 **Three of the seven are not this project's to build**, which is the useful
 result of the design rather than a disappointment: R5 was already decided, R7
