@@ -13,8 +13,9 @@
 # waits too long — the tightest frequency in the register today is seven days.
 #
 # Same shape as `advisories.yml`: open or update a standing issue by title
-# match, never close it automatically — closing is a decision, and this
-# workflow only reports.
+# match. Unlike `advisories.yml`, this one closes itself once the register
+# goes clean — an overdue activity is fully answered by a log row, and
+# leaving the issue open after that would be a standing false alarm.
 name: Programme activities
 
 on:
