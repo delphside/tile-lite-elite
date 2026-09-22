@@ -135,6 +135,33 @@ once it matters teaches the reader there is no threshold.
 keeps every report and why each one carries the window rather than only its own
 column.
 
+## Transaction thresholds and throttle limits
+
+*Empty until #405 lands. Scaffolded now so the first report that can fill it
+in has a shape to fill rather than a decision to make about where it goes.*
+
+The six-step chain #405 builds: the hardware ceiling, the owner's utilisation
+threshold, the workload threshold (the ceiling inverted into transactions per
+second), the peak at the chosen service level, the owner's spike allowance,
+and the throttle limits that follow.
+
+**Recomputed every month, not derived once.** Owner, 2026-09-22: *"When we
+have the numbers to do the analysis the report will include calculations of
+transaction thresholds and throttling limits."* If a month's costs move, the
+recomputed threshold disagrees with the limits actually configured, and that
+disagreement is read here rather than discovered by an incident.
+
+| step | this month |
+| --- | --- |
+| utilisation threshold (normal / degraded) | |
+| workload threshold (transactions/s) | |
+| peak, at the service level | |
+| spike allowance | |
+
+| limit | derived | configured | agree? |
+| --- | --- | --- | --- |
+| | | | |
+
 ## How this was measured
 
 The commands, so the next one is comparable. Name who ran what, where a figure
