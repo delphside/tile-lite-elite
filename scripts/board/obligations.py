@@ -143,6 +143,24 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "of them and reads as compliant — #361",
         lambda i: not i.type_was_defaulted,
     ),
+    # **`Type of change` is a different field from the issue *type* above**, and
+    # the names are close enough that `type-set` looked like it covered both.
+    # It did not: five queued projects carried no `Type of change` and nothing
+    # said so until the owner noticed on 2026-09-22.
+    #
+    # Projects only. A `Decision` ships nothing and routes work, so asking it
+    # what kind of change it is invites an answer that then reads like a
+    # delivery; a `PullRequest` inherits from the issue it serves, and a second
+    # copy is a second thing that can disagree. Owner, 2026-09-22: *"It doesn't
+    # apply to decisions or pull requests."*
+    Obligation(
+        "change-type-set", (ParentProject, WorkPackage, StandaloneProject),
+        ANY_STEP,
+        "a `Type of change`",
+        "triage owes it — CLAUDE.md's minimum, and docs/3.6: every issue "
+        "carries one and it is a field",
+        lambda i: bool(i.field("Type of change")),
+    ),
     Obligation(
         "stage-set", (Requirement,), ANY_STEP,
         "a Stage",
