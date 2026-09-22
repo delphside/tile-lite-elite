@@ -6,6 +6,32 @@ A template says **what must be included**; the worked examples beside it show
 **how to complete it**. Both matter — a template alone leaves you guessing at
 depth, and an example alone leaves you guessing at what was optional.
 
+**These belong to the numbered documents, and are filed together anyway.** Owner,
+2026-09-22: *"Templates fit into numbered programme docs but it seems convenient
+to keep them together and reference from the numbered docs."* A template is part
+of the programme description — it is the rule in the form you work from — so by
+*one fact, one home* it would sit inside whichever `docs/N.N` states that rule.
+
+**Convenience wins, and the reference is what pays for it.** A template is looked
+for as a template: you know you are about to write a post-deployment review and
+you want the form, not the chapter. Scattering four of them across four numbered
+documents makes each one findable only by someone who already knows which
+document owns it.
+
+**So the rule is: the numbered document owns the rule and links to the template;
+the template carries no reasoning and links back.** A template that argues with
+you while you fill it in is one people stop opening, and a numbered document that
+inlines a form is one nobody can copy.
+
+| template | the numbered document that owns its rule |
+| --- | --- |
+| [test-design-specification.md](test-design-specification.md) | [3.3](../3.3-testing-ci-and-release.md), *How a test design specification is built* |
+| [post-deployment-review.md](post-deployment-review.md) | [3.6](../3.6-change-lifecycle.md), the `Post-deployment` phase and lessons learnt |
+| [capacity-plan.md](capacity-plan.md) | [3.6](../3.6-change-lifecycle.md), *Which document goes where* — reports |
+
+**A new template owes that row.** Until a numbered document links to it, it is a
+form nobody will find at the moment they need it.
+
 | template | copy it to | worked examples |
 | --- | --- | --- |
 | [test-design-specification.md](test-design-specification.md) | the project's folder — `docs/changes/projects/<name>/` — else the issue's | [user deletion](../changes/41-user-deletion-test-design.md) (#41, functional) · [rate limiting](../changes/25-rate-limiting-test-design.md) (#25, non-functional) |

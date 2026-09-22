@@ -297,6 +297,14 @@ one of them has a defect: fix it, don't work around it.
   nor a change document: it records what was true at a moment, is never edited
   afterwards, and is not superseded by the next one — the series is what carries
   the meaning. `docs/reports/capacity_plan/` is the first.
+- **Templates live together in `docs/templates/`, and the numbered document that
+  owns the rule links to them.** Owner, 2026-09-22: *"Templates fit into
+  numbered programme docs but it seems convenient to keep them together and
+  reference from the numbered docs."* The document owns the rule and carries the
+  reasoning; the template carries the form and no argument. A new template owes
+  that link, or nobody finds it at the moment they need it. The four GitHub
+  fills in for you stay in `.github/`, because it will not read them anywhere
+  else.
 
 ## Where the detail is
 
