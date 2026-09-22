@@ -47,6 +47,47 @@ diagram has no environments to be missing from.
 change here is change to what runs where. A roadmap at Component would move
 every release and say nothing; at Context it would never move at all.
 
+### Change state: one key, and the roadmap adds a fifth value
+
+**A diagram that shows a change colours every box and every line by what happens
+to it.** Two diagrams use it: a project's single overview diagram (#406 R4) and
+the roadmap drawn per horizon (#406 R3).
+
+| state | class | means |
+| --- | --- | --- |
+| unchanged | `unchanged` | it exists and this change does not touch it |
+| new | `new` | it does not exist yet |
+| changed | `changed` | it exists and this change modifies it |
+| removed | `removed` | it exists and this change takes it away |
+| aspirational | `aspirational` | **roadmap only** — wanted, not committed |
+
+```text
+classDef unchanged    fill:#f6f8fa,stroke:#8c959f,color:#1f2328
+classDef new          fill:#dafbe1,stroke:#1a7f37,color:#0a3622
+classDef changed      fill:#fff8c5,stroke:#9a6700,color:#4d2d00
+classDef removed      fill:#ffebe9,stroke:#cf222e,color:#6e0a12
+classDef aspirational fill:#ffffff,stroke:#8250df,color:#3f1a7a
+```
+
+**Lines carry state too, and separately from boxes.** A change that touches no
+component but changes a protocol between two of them is invisible if only boxes
+are coloured. Mermaid has no `classDef` for edges, so an edge's state goes in its
+label — `-- new -->`, `-- changed -->` — and a removed edge is drawn dotted with
+a `removed` label rather than deleted, because a line that is simply absent is
+indistinguishable from one nobody drew.
+
+**Four values on a project diagram, not two.** An earlier note here said a
+project diagram takes a two-value key, *affected* and *unaffected*. That was read
+off the prior art's **context** diagram and missed that its **component** diagram
+used *new, update, unchanged* — three. The detail level is where the distinction
+earns its place, and one diagram per project means our one diagram is the detail
+level. Corrected 2026-09-22.
+
+**The roadmap's fifth value is the one that admits doubt.** *Aspirational*
+marks something wanted and not committed, and the prior art drew such boxes with
+`TBC ???` inside them rather than leaving them out — a diagram that omits what is
+undecided reads as a plan with no gaps.
+
 ### A process diagram is not a view
 
 **Most of the diagrams in this folder are not architecture at all.**

@@ -64,7 +64,25 @@ try {
   process.exit(require_deps ? 1 : 0);
 }
 
-const files = walk(ROOT);
+// **Paths on the command line are checked instead of the whole tree.** Until
+// 2026-09-22 they were accepted and silently ignored, so
+// `check.mjs some/file.md` scanned the repository, reported everything else
+// passing, and said nothing about the file asked for. That is worse than
+// refusing the argument: it answers a question nobody asked, in a voice that
+// sounds like an answer to the one they did. Found by using it to verify a
+// diagram before it was committed -- the check passed and had not looked.
+const asked = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+for (const path of asked) {
+  try {
+    statSync(path);
+  } catch {
+    console.error(`mermaid: no such file: ${path}`);
+    process.exit(2);
+  }
+}
+const files = asked.length
+  ? asked.flatMap((p) => (statSync(p).isDirectory() ? walk(p) : [p]))
+  : walk(ROOT);
 let count = 0, bad = 0;
 for (const path of files) {
   for (const { line, source } of diagrams(path)) {
