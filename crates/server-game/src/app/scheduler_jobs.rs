@@ -3,8 +3,17 @@
 //! `Job`, `run_once` or `spawn`, so growing the list carries no risk of
 //! changing behaviour those already have tests for.
 
+use std::time::Duration;
+
 use super::AppState;
 use super::scheduler::{FAST_INTERVAL, Job, SLOW_INTERVAL, SchedulerHealth, spawn};
+
+/// The watchdog's own cadence — deliberately a distinct constant from
+/// `FAST_INTERVAL` even though it happens to share the same value, so
+/// nothing here is "the watchdog runs on `FAST_INTERVAL`" by an
+/// assumption that could later stop being true if `FAST_INTERVAL` changed
+/// for a reason of its own.
+const WATCHDOG_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A margin over a job's own `expected_interval` before its staleness
 /// counts as stalled rather than ordinary jitter — generous enough that a
@@ -63,29 +72,23 @@ async fn check_for_stalled_jobs(scheduler_health: &SchedulerHealth) -> u64 {
 /// two already exist and already run (lazily, from `list_games`); this
 /// moves *when* they run, not what they do.
 ///
-/// **`check_for_stalled_jobs` runs on `FAST`, watching `SLOW`.** Either
-/// tier can only reliably watch the *other* one — `run_once` runs a
-/// tier's jobs in sequence, so a hang earlier in the same tier's list
-/// would freeze the watchdog too. `FAST` is the choice because turn
-/// expiry (the job that most needs prompt detection) is the one a
-/// same-tier watchdog could never reliably cover anyway, so putting the
-/// watchdog here at least gets `SLOW`'s hang risk onto active alerting;
-/// `FAST`'s own risk stays exactly where it was, passive-only.
+/// **`check_for_stalled_jobs` runs on a tier of its own**, third alongside
+/// `FAST` and `SLOW` — not sharing either. `run_once` runs a tier's jobs
+/// in sequence, so a watchdog sharing a tier with anything else can only
+/// ever reliably watch the *other* tier: a hang earlier in its own tier's
+/// list freezes it too. On its own tier nothing can share that fate —
+/// each tier is an independent `tokio::spawn`ed task, so a hang in
+/// `expire_overdue_turns` or `send_move_time_reminders` cannot block the
+/// watchdog's task, and the watchdog itself has nothing in it that could
+/// hang (a mutex lock and a map iteration, no I/O). It still watches
+/// every job's health regardless of which tier that job is on.
 pub fn spawn_scheduler(state: AppState) {
-    let fast = vec![
-        Job::new(
-            "expire_overdue_turns",
-            FAST_INTERVAL,
-            state.clone(),
-            |state| async move { super::sweeps_game::expire_overdue_turns(&state).await },
-        ),
-        Job::new(
-            "check_for_stalled_jobs",
-            FAST_INTERVAL,
-            state.clone(),
-            |state| async move { check_for_stalled_jobs(&state.scheduler_health).await },
-        ),
-    ];
+    let fast = vec![Job::new(
+        "expire_overdue_turns",
+        FAST_INTERVAL,
+        state.clone(),
+        |state| async move { super::sweeps_game::expire_overdue_turns(&state).await },
+    )];
     spawn(fast, FAST_INTERVAL, state.scheduler_health.clone());
 
     let slow = vec![Job::new(
@@ -95,6 +98,14 @@ pub fn spawn_scheduler(state: AppState) {
         |state| async move { super::sweeps_game::send_move_time_reminders(&state).await },
     )];
     spawn(slow, SLOW_INTERVAL, state.scheduler_health.clone());
+
+    let watchdog = vec![Job::new(
+        "check_for_stalled_jobs",
+        WATCHDOG_INTERVAL,
+        state.clone(),
+        |state| async move { check_for_stalled_jobs(&state.scheduler_health).await },
+    )];
+    spawn(watchdog, WATCHDOG_INTERVAL, state.scheduler_health.clone());
 }
 
 #[cfg(test)]
