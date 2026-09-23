@@ -5,11 +5,12 @@ description: A nudge to run through RIGHT-BICEP/CORRECT before calling a change'
 
 # Unit test checklist
 
-**The checklist itself lives in one place**: `docs/3.3-testing-ci-and-release.md`, under
-"Unit Test Coverage Checklist" (search for that heading — it sits inside the
-section on the third Test approach heading, `### Unit tests`). Read it there
-rather than trusting a copy here, so a later edit to the checklist cannot
-drift from what this skill tells you to do.
+**The checklist itself lives in one place**: `docs/3.3-testing-ci-and-release.md`,
+§2.4.4 "What a unit test is expected to cover" — under `### 2.4 Running
+Tests`, the section the document map already gives as the test *strategy*,
+holding across every change. Read it there rather than trusting a copy
+here, so a later edit to the checklist cannot drift from what this skill
+tells you to do.
 
 ## When this fires
 
