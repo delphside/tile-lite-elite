@@ -15,11 +15,11 @@ pub(crate) async fn list_games(
         .await
         .ok_or_else(|| ApiProblem::unauthorized("Sign in to see your games"))?;
 
-    expire_overdue_turns(&state).await;
-    send_move_time_reminders(&state).await;
+    // Turn expiry and move-time reminders run on the scheduler now (#400,
+    // `scheduler::spawn_scheduler`), not here. Retention and the daily size
+    // measurement stay lazy — deferred by the owner, 2026-09-22, until
+    // Capacity Planning's own schedules are ready.
     expire_old_terminal_games(&state).await;
-    // Measurement, on the same lazy path and for the same reason: no scheduler
-    // exists on the VM, and this runs whenever anybody uses the service.
     record_database_size(&state).await;
     if let Err(error) = persistence::delete_expired_sessions(&state.db).await {
         tracing::error!(%error, "failed to delete expired sessions");

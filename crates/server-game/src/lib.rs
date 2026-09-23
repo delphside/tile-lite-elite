@@ -7,4 +7,4 @@ pub mod stats;
 #[cfg(test)]
 mod tests_display_name;
 
-pub use app::{AppState, app_version, build_router};
+pub use app::{AppState, app_version, build_router, spawn_scheduler};

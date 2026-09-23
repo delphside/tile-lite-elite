@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use server_game::email::EmailConfig;
-use server_game::{AppState, app_version, build_router};
+use server_game::{AppState, app_version, build_router, spawn_scheduler};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -80,6 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let state = AppState::new(&database_url, public_base_url, email_config).await?;
+    // Turn expiry and move-time reminders (#400) — everything else this
+    // server does lazily stays lazy; see `docs/3.7`.
+    spawn_scheduler(state.clone());
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(bind.parse::<SocketAddr>()?).await?;
 

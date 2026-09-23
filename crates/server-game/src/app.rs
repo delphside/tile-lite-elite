@@ -47,6 +47,7 @@ mod games;
 mod invitations;
 mod ratings;
 mod roster;
+mod scheduler;
 mod sweeps_capacity;
 mod sweeps_game;
 #[cfg(test)]
@@ -67,6 +68,8 @@ use self::ratings::*;
 use self::roster::*;
 use self::sweeps_capacity::*;
 use self::sweeps_game::*;
+
+pub use self::scheduler::spawn_scheduler;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -105,6 +108,11 @@ pub struct AppState {
     /// ten blocking threads competing for two cores, and a bot harness (#10)
     /// makes that the normal case rather than the unlucky one.
     pub engine_limit: Arc<Semaphore>,
+    /// When each scheduled job (#400) last completed a pass, and how many
+    /// items on that pass errored. Empty until `spawn_scheduler` runs a job
+    /// for the first time — read by `admin_scheduler_health`, never written
+    /// outside `scheduler::run_once`.
+    pub(crate) scheduler_health: scheduler::SchedulerHealth,
 }
 
 /// Read a concurrency limit from the environment, falling back to a default
@@ -162,6 +170,7 @@ impl AppState {
             schema_version,
             hash_limit,
             engine_limit,
+            scheduler_health: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         })
     }
 }
@@ -175,6 +184,7 @@ pub fn build_router(state: AppState) -> Router {
     let admin_routes = Router::new()
         .route("/admin/users", get(admin_list_users))
         .route("/admin/database-size", get(admin_list_database_size))
+        .route("/admin/scheduler-health", get(admin_scheduler_health))
         .route("/admin/users/{player_id}", delete(admin_delete_user))
         .route(
             "/admin/users/{player_id}/sign-out",

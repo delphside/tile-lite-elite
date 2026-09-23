@@ -37,3 +37,8 @@ libc = "0.2"
 # `?` across HTTP calls in stress_bench (#404), which is all it is used for.
 # A dev-dependency, like libc above — nothing here reaches the image.
 anyhow = "1"
+# `tokio::time::{pause, advance}` for scheduler.rs's tests (#400) — proving
+# an interval's first-tick and no-pile-up behaviour without a real clock.
+# Cargo unions this with the main tokio entry above for test builds only, so
+# `test-util` never reaches the image.
+tokio = { version = "1", features = ["test-util"] }

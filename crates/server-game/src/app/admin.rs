@@ -29,6 +29,26 @@ pub(crate) async fn admin_list_database_size(
     ))
 }
 
+/// R5 (#400): when each scheduled job last completed, and how many items on
+/// that pass errored — read here rather than `/health`, which is public and
+/// polled unauthenticated by monitoring and `deploy.sh`'s smoke test; this
+/// is an operator question, same shape as `admin_list_database_size`.
+pub(crate) async fn admin_scheduler_health(
+    State(state): State<AppState>,
+) -> Json<Vec<api::AdminSchedulerJobHealthDto>> {
+    let health = state.scheduler_health.lock().await;
+    let mut rows: Vec<api::AdminSchedulerJobHealthDto> = health
+        .iter()
+        .map(|(name, h)| api::AdminSchedulerJobHealthDto {
+            job: name.to_string(),
+            last_completed_at: h.last_completed_at,
+            errored_last_pass: h.errored_last_pass,
+        })
+        .collect();
+    rows.sort_by(|a, b| a.job.cmp(&b.job));
+    Json(rows)
+}
+
 pub(crate) async fn require_loopback(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     request: Request,

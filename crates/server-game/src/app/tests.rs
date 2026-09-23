@@ -6086,14 +6086,11 @@ async fn move_time_reminder_fires_once_when_a_long_limit_game_runs_low_on_time()
 
     let log = start_capturing_log_on_this_thread();
 
-    let response = send_empty_auth(
-        app.clone(),
-        Method::GET,
-        "/games",
-        Some(&started.alice.session_token),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    // The sweep runs on the scheduler now (#400), not on a request — call
+    // it directly, the same function `scheduler::spawn_scheduler` calls on
+    // its slow interval.
+    let errored = send_move_time_reminders(&state).await;
+    assert_eq!(errored, 0);
 
     let log_text = log.text();
     assert!(
@@ -6105,15 +6102,9 @@ async fn move_time_reminder_fires_once_when_a_long_limit_game_runs_low_on_time()
         "expected the move-reminder email's subject, got log:\n{log_text}"
     );
 
-    // A second sweep on the same turn must not send a second reminder.
-    let response = send_empty_auth(
-        app,
-        Method::GET,
-        "/games",
-        Some(&started.alice.session_token),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    // A second pass on the same turn must not send a second reminder.
+    let errored = send_move_time_reminders(&state).await;
+    assert_eq!(errored, 0);
     let occurrences = log.text().matches("move is due soon").count();
     assert_eq!(
         occurrences,
@@ -6204,8 +6195,8 @@ async fn move_time_reminder_does_not_fire_for_a_same_day_limit_game() {
     }
 
     let log = start_capturing_log_on_this_thread();
-    let response = send_empty_auth(app, Method::GET, "/games", Some(&alice.session_token)).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    let errored = send_move_time_reminders(&state).await;
+    assert_eq!(errored, 0);
 
     let log_text = log.text();
     assert!(
@@ -6755,6 +6746,35 @@ async fn rejecting_a_named_invitation_removes_it_without_claiming_the_seat() {
     )
     .await;
     assert_eq!(fetched.participants[1].player_id, None);
+}
+
+/// R1 (#400): a job runs with no request having arrived, proven without
+/// touching a handler. `expire_overdue_turns` is now the scheduler's job,
+/// not `list_games`'s — this calls it exactly as `scheduler::spawn_scheduler`
+/// does, and nothing here builds a router or sends a request.
+#[tokio::test]
+async fn expire_overdue_turns_retires_a_seat_with_no_request_involved() {
+    let database_url = test_database_url();
+    let state = create_test_state(&database_url).await;
+    let app = build_router(state.clone());
+
+    let started = create_two_human_game(app).await;
+    {
+        let mut games = state.games.write().await;
+        let game = games.get_mut(&started.game.id).expect("game should exist");
+        game.turn_started_at = 0;
+    }
+
+    let errored = expire_overdue_turns(&state).await;
+    assert_eq!(errored, 0);
+
+    let games = state.games.read().await;
+    let game = games.get(&started.game.id).expect("game should exist");
+    assert_eq!(
+        game.status,
+        api::GameStatus::Finished,
+        "the overdue seat should have been auto-retired by the sweep alone"
+    );
 }
 
 #[tokio::test]

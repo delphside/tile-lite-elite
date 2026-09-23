@@ -81,9 +81,12 @@ use serde::{Deserialize, Serialize};
 // a status changed on a path that already existed. #380 made that kind of
 // change and did not bump, so this is the second time it was missed rather
 // than a settled exemption — docs/3.3's table has gained the row.
+// 2.15 — `GET /admin/scheduler-health` joins the admin surface, for #400's
+// R5 (last-completed and errored-item-count per scheduled job). Minor by
+// the 2.4 test: loopback-only, one client, ships in the same container.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 2,
-    minor: 14,
+    minor: 15,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -720,6 +723,19 @@ pub struct AdminDatabaseSizeDto {
     pub chat_messages: i64,
     pub database_bytes: i64,
     pub games_in_memory: i64,
+}
+
+/// One scheduled job's (#400) most recent pass, for
+/// `GET /admin/scheduler-health` — an operator with terminal access asking
+/// "did it run, and did it run clean", not a player-facing status.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdminSchedulerJobHealthDto {
+    pub job: String,
+    /// `None` only for a job that has never completed a pass — distinct
+    /// from a pass that completed clean, same reasoning as
+    /// `HealthDto::schema_version`.
+    pub last_completed_at: Option<i64>,
+    pub errored_last_pass: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

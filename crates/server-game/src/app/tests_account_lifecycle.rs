@@ -162,9 +162,12 @@ async fn game_rows(state: &AppState, game_id: &str) -> i64 {
         .expect("counting games should work")
 }
 
-/// Both sweeps are lazy — no scheduler in this server — so listing games is
-/// what runs them (`sweeps::expire_overdue_turns`, `expire_old_terminal_games`).
-async fn trigger_sweeps(app: Router, token: &str) {
+/// `expire_old_terminal_games` is still lazy (#400 deferred it), so listing
+/// games is what runs it. `expire_overdue_turns` moved onto the scheduler
+/// (#400) and is no longer on this path at all, so it is called directly —
+/// exactly what `scheduler::spawn_scheduler` does on its fast interval.
+async fn trigger_sweeps(app: Router, state: &AppState, token: &str) {
+    expire_overdue_turns(state).await;
     let response = send_empty_auth(app, Method::GET, "/games", Some(token)).await;
     assert_eq!(response.status(), StatusCode::OK);
 }
@@ -182,7 +185,7 @@ async fn sweep_away(app: Router, state: &AppState, game_id: &str, token: &str) {
         .await
         .expect("backdating the end should work");
 
-    trigger_sweeps(app, token).await;
+    trigger_sweeps(app, state, token).await;
 
     assert_eq!(
         game_rows(state, game_id).await,
@@ -900,7 +903,7 @@ async fn retention_sweeps_games_past_the_window_and_keeps_the_rest() {
             .expect("backdating should work");
     }
 
-    trigger_sweeps(app, &alice.session_token).await;
+    trigger_sweeps(app, &state, &alice.session_token).await;
 
     assert_eq!(game_rows(&state, &ended[0]).await, 0, "8 days old: swept");
     assert_eq!(game_rows(&state, &ended[1]).await, 1, "6 days old: kept");
@@ -984,7 +987,7 @@ async fn a_game_in_play_ends_itself_when_the_clock_runs_out() {
         .len();
 
     run_the_clock_out(&state, &playing.game.id).await;
-    trigger_sweeps(app.clone(), &playing.alice.session_token).await;
+    trigger_sweeps(app.clone(), &state, &playing.alice.session_token).await;
 
     {
         let games = state.games.read().await;
@@ -1025,7 +1028,7 @@ async fn a_timed_out_seat_leaves_the_others_playing() {
     let playing = create_three_human_game(app.clone()).await;
 
     run_the_clock_out(&state, &playing.game.id).await;
-    trigger_sweeps(app.clone(), &playing.alice.session_token).await;
+    trigger_sweeps(app.clone(), &state, &playing.alice.session_token).await;
 
     {
         let games = state.games.read().await;
@@ -1285,7 +1288,7 @@ async fn a_timeout_announces_a_finish_only_when_the_game_finishes() {
     let three = create_three_human_game(app.clone()).await;
     let mut events = state.events.subscribe();
     run_the_clock_out(&state, &three.game.id).await;
-    trigger_sweeps(app.clone(), &three.alice.session_token).await;
+    trigger_sweeps(app.clone(), &state, &three.alice.session_token).await;
 
     let mut announced_finished = false;
     let mut announced_update = false;
@@ -1313,7 +1316,7 @@ async fn a_timeout_announces_a_finish_only_when_the_game_finishes() {
     let two = create_two_human_game(app.clone()).await;
     let mut events = state.events.subscribe();
     run_the_clock_out(&state, &two.game.id).await;
-    trigger_sweeps(app.clone(), &two.alice.session_token).await;
+    trigger_sweeps(app.clone(), &state, &two.alice.session_token).await;
 
     let mut finished_dto = None;
     while let Ok(event) = events.try_recv() {

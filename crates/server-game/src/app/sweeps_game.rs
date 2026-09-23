@@ -4,26 +4,34 @@
 //! service's housekeeping — turn expiry decides whose turn it is and
 //! broadcasts the result (docs/3.7, #256).
 //!
-//! Retention and the daily size measurement live in `sweeps_capacity.rs`.
+//! Retention and the daily size measurement live in `sweeps_capacity.rs`
+//! and stay lazy — the owner's decision, 2026-09-22, defers them until
+//! Capacity Planning's own schedules are ready.
 //!
-//! **The mechanism is also this workstream's**, including the scheduler when
-//! it is built (#166). Until then every sweep runs lazily from the game-list
-//! handler, which is the defect #166 records, not a design.
+//! **The mechanism is this workstream's too** (#166), and `expire_overdue_turns`
+//! and `send_move_time_reminders` are its first two customers (#400):
+//! `scheduler::spawn_scheduler` runs them on a cadence now, not the
+//! game-list handler. `expire_overdue_turn` (singular, below) is unrelated
+//! and stays lazy — a handler that already knows which one game it cares
+//! about checking that game alone is cheaper than waiting for the next pass.
 
 use super::*;
 
-/// There's no background scheduler in this server, so overdue-turn
-/// retirement is checked lazily: call this at the top of any handler that
-/// reads or acts on live games, and any seat that's overrun its
-/// `move_time_limit_seconds` gets auto-retired (same effect as resigning)
-/// before the rest of the handler runs. Persists and broadcasts every game
-/// it changes.
-pub(crate) async fn expire_overdue_turns(state: &AppState) {
+/// Auto-retires any seat that has overrun its `move_time_limit_seconds`
+/// (same effect as resigning). Runs on the scheduler's fast interval
+/// (`scheduler::FAST_INTERVAL`) rather than from a handler — see this
+/// module's doc comment — because this is the one deadline somebody is
+/// watching expire. Persists and broadcasts every game it changes, and
+/// returns how many of those saves or lookups failed, for R5's health
+/// numbers; a failure is still logged at its own call site exactly as
+/// before.
+pub(crate) async fn expire_overdue_turns(state: &AppState) -> u64 {
     // Named `retired` rather than `finished` because retiring a seat is not
     // the same as ending the game: `apply_move_timeout` returns true whenever
     // it takes a seat, and `handle_seat_exit` only finishes the game once at
     // most one seat is still playing. With three or more, the others play on.
     let mut retired = Vec::new();
+    let mut errored = 0u64;
     {
         let mut games = state.games.write().await;
         for game in games.values_mut() {
@@ -31,6 +39,7 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) {
                 tracing::info!(game_id = %game.id, seat = game.current_seat, "seat auto-retired for exceeding the move time limit");
                 if let Err(error) = persistence::save_game(&state.db, game).await {
                     tracing::error!(game_id = %game.id, %error, "failed to persist timeout retirement");
+                    errored += 1;
                 }
                 retired.push(game.to_dto());
             }
@@ -39,6 +48,7 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) {
     for dto in &mut retired {
         if let Err(error) = stats::attach_current_ratings(&state.db, dto).await {
             tracing::error!(game_id = %dto.id, %error, "failed to read current ratings after timeout retirement");
+            errored += 1;
         }
     }
     // Always a no-op — a timeout never moves rating (see
@@ -47,6 +57,7 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) {
     for dto in &mut retired {
         if let Err(error) = stats::attach_rating_deltas(&state.db, dto).await {
             tracing::error!(game_id = %dto.id, %error, "failed to read rating deltas after timeout retirement");
+            errored += 1;
         }
     }
     // The same conditional every other exit path uses — see
@@ -61,6 +72,7 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) {
         };
         let _ = state.events.send(event);
     }
+    errored
 }
 
 /// Move-time-limit fraction remaining at which a reminder email fires —
@@ -71,16 +83,18 @@ pub(crate) const REMINDER_REMAINING_FRACTION: u64 = 3;
 /// that short doesn't leave enough runway for one to be useful.
 pub(crate) const REMINDER_MIN_TIME_LIMIT_SECONDS: u64 = 24 * 60 * 60;
 
-/// Same lazy-sweep pattern as `expire_overdue_turns` (no background
-/// scheduler in this server — see its doc comment): called from
-/// `list_games`, checks every active game whose `move_time_limit_seconds`
+/// Runs on the scheduler's slow interval (`scheduler::SLOW_INTERVAL`) —
+/// see this module's doc comment — since an hour's tolerance is ample for a
+/// reminder. Checks every active game whose `move_time_limit_seconds`
 /// exceeds a day, and emails the seat on turn once its remaining time
 /// drops to a third of that limit (e.g. 24h remaining on the default 72h
 /// limit). Fires at most once per turn, tracked via
 /// `ParticipantState::reminder_sent_turn`, and only for claimed human
 /// seats — engines never run out the clock in a way anyone needs telling
-/// about, and an unclaimed seat has no one to email.
-pub(crate) async fn send_move_time_reminders(state: &AppState) {
+/// about, and an unclaimed seat has no one to email. Returns how many
+/// persists or lookups failed on this pass, for R5's health numbers; a
+/// failure is still logged at its own call site exactly as before.
+pub(crate) async fn send_move_time_reminders(state: &AppState) -> u64 {
     struct Reminder {
         game_id: String,
         seat: u8,
@@ -90,6 +104,7 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) {
     }
 
     let mut reminders = Vec::new();
+    let mut errored = 0u64;
     {
         let mut games = state.games.write().await;
         for game in games.values_mut() {
@@ -120,6 +135,7 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) {
 
             if let Err(error) = persistence::save_game(&state.db, game).await {
                 tracing::error!(game_id = %game.id, %error, "failed to persist move-time reminder flag");
+                errored += 1;
             }
             reminders.push(Reminder {
                 game_id: game.id.clone(),
@@ -137,6 +153,7 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) {
             Ok(None) => continue,
             Err(error) => {
                 tracing::error!(game_id = %reminder.game_id, seat = reminder.seat, %error, "failed to look up player for move-time reminder");
+                errored += 1;
                 continue;
             }
         };
@@ -151,6 +168,7 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) {
         )
         .await;
     }
+    errored
 }
 
 /// "1 day 4 hours" / "1 day" / "4 hours" style label for the reminder
@@ -210,22 +228,22 @@ pub(crate) async fn expire_overdue_turn(state: &AppState, game_id: &str) {
 
 #[cfg(test)]
 mod tests {
-    /// The four sweeps run from one place, in one order, because this server
-    /// has no scheduler (#166). Splitting them across two modules by owner
-    /// (#256) must not change **when** any of them runs.
+    /// The two sweeps the owner deferred (#400) still run from one place, in
+    /// one order, because nothing schedules them yet. `expire_overdue_turns`
+    /// and `send_move_time_reminders` left this list when the scheduler
+    /// became their trigger — see `scheduler::spawn_scheduler` — which is
+    /// what shrank this from four names to two; it is not a relaxation of
+    /// the rule, only of its scope.
     ///
     /// This reads the handler's source rather than its behaviour, which is
-    /// unusual and deliberate: every one of these is invisible when it does
-    /// not happen. A turn that should have expired simply does not, and a
-    /// missing day in the size series is — by that table's own schema comment
-    /// — "quiet, not broken". There is nothing to observe, so the thing worth
-    /// guarding is the call site itself.
+    /// unusual and deliberate: both remaining sweeps are invisible when they
+    /// do not happen. A missing day in the size series is — by that table's
+    /// own schema comment — "quiet, not broken". There is nothing to
+    /// observe, so the thing worth guarding is the call site itself.
     #[test]
-    fn the_four_sweeps_still_run_in_order_from_one_place() {
+    fn the_two_lazy_sweeps_still_run_in_order_from_one_place() {
         let games = include_str!("games.rs");
         let order: Vec<&str> = [
-            "expire_overdue_turns(&state)",
-            "send_move_time_reminders(&state)",
             "expire_old_terminal_games(&state)",
             "record_database_size(&state)",
         ]
