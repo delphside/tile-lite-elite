@@ -35,6 +35,12 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) -> u64 {
     {
         let mut games = state.games.write().await;
         for game in games.values_mut() {
+            // Unconditional, before anything that could panic — a game that
+            // never qualifies for retirement leaves no other trace, and
+            // HashMap's iteration order isn't reproducible from outside the
+            // process, so this is what tells a reader which game a panic
+            // interrupted rather than only which one last succeeded.
+            tracing::debug!(game_id = %game.id, "examining for overdue-turn retirement");
             if game.apply_move_timeout() {
                 tracing::info!(game_id = %game.id, seat = game.current_seat, "seat auto-retired for exceeding the move time limit");
                 if let Err(error) = persistence::save_game(&state.db, game).await {
@@ -108,6 +114,9 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) -> u64 {
     {
         let mut games = state.games.write().await;
         for game in games.values_mut() {
+            // Unconditional, before anything that could panic — see the
+            // matching comment in `expire_overdue_turns`.
+            tracing::debug!(game_id = %game.id, "examining for a move-time reminder");
             if game.move_time_limit_seconds <= REMINDER_MIN_TIME_LIMIT_SECONDS {
                 continue;
             }
