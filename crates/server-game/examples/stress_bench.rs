@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 
 use api::{
     CreateGameRequest, CreateSeatRequest, GameActionRequest, LoginPlayerRequest, PlayerActionDto,
-    PlayerSessionDto, RegisterPlayerRequest, SeatClaim, SeatKind,
+    PlayerSessionDto, RegisterPlayerRequest, SeatClaim, SeatKind, StartGameRequest,
 };
 use reqwest::Client;
 
@@ -249,6 +249,7 @@ async fn create_engine_game(
     let start = client
         .post(format!("{base}/games/{}/start", created.id))
         .bearer_auth(&identity.session_token)
+        .json(&StartGameRequest {})
         .send()
         .await?;
     if !start.status().is_success() {
