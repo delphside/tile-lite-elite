@@ -74,9 +74,19 @@ impl Job {
 /// job has ever completed a pass, which reads the same as "never run" —
 /// the check this exists for (`admin_scheduler_health`) is read by an
 /// operator who already knows whether the server just started.
+///
+/// `last_completed_instant` carries the same moment on `Instant`, which
+/// `check_for_stalled_jobs` (`scheduler_jobs.rs`) reads instead of
+/// `last_completed_at` for exactly the reason `Instant` exists: it is
+/// guaranteed monotonic, where `last_completed_at`'s wall clock can jump
+/// in either direction (NTP sync, VM resume) and silently mask a real
+/// stall or manufacture a false one. `last_completed_at` stays the field
+/// `/admin/scheduler-health` reports, since an operator wants a real
+/// calendar time, not an opaque monotonic tick.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct JobHealth {
     pub(crate) last_completed_at: Option<i64>,
+    pub(crate) last_completed_instant: Option<std::time::Instant>,
     pub(crate) errored_last_pass: u64,
     pub(crate) expected_interval: Duration,
 }
@@ -109,6 +119,7 @@ pub(crate) async fn run_once(jobs: &[Job], health: &SchedulerHealth) {
             job.name,
             JobHealth {
                 last_completed_at: Some(now_unix_seconds()),
+                last_completed_instant: Some(std::time::Instant::now()),
                 errored_last_pass: errored,
                 expected_interval: job.expected_interval,
             },

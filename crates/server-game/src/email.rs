@@ -154,7 +154,11 @@ pub async fn send_password_reset(config: &EmailConfig, to: &str, player_id: &str
 
 /// Sent at most once per turn, only once remaining time drops to a third
 /// of the game's move-time-limit — see `app::send_move_time_reminders`.
-/// `time_remaining` is a pre-formatted label like "1 day 4 hours".
+/// `time_remaining` is a pre-formatted label like "1 day 4 hours". Returns
+/// whether the send succeeded (or was a legitimate no-op — no provider
+/// configured) — unlike `send`'s other callers, this one is a scheduled
+/// job that reports its own failures via R5's health numbers rather than
+/// failing a player's request, so it is the one caller that needs to know.
 pub async fn send_move_time_reminder(
     config: &EmailConfig,
     to: &str,
@@ -162,7 +166,7 @@ pub async fn send_move_time_reminder(
     display_name: &str,
     time_remaining: &str,
     base_url: &str,
-) {
+) -> bool {
     let (subject, body) = render(
         MOVE_REMINDER_TEMPLATE,
         &[
@@ -179,7 +183,7 @@ pub async fn send_move_time_reminder(
         MessageKind::MoveTimeReminder,
         Some(player_id),
     )
-    .await;
+    .await
 }
 
 /// Template format: a `Subject: ...` first line, a blank line, then the
@@ -209,6 +213,14 @@ fn render(template: &str, values: &[(&str, &str)]) -> (String, String) {
 /// succeed on their own merits — none of them ought to depend on Resend
 /// being reachable, same principle as everything else in this codebase that
 /// treats a notification as best-effort rather than load-bearing.
+///
+/// Returns whether the send succeeded, or was a legitimate no-op (no
+/// provider configured) — `false` only for a real failure (a non-2xx
+/// response or a transport error). Every caller but
+/// `send_move_time_reminder` discards this, which is exactly the
+/// fire-and-forget behaviour this doc comment describes; that one caller
+/// is a scheduled job reporting its own failures rather than serving a
+/// request, so it is the one place the outcome needs to travel further.
 async fn send(
     config: &EmailConfig,
     to: &str,
@@ -216,7 +228,7 @@ async fn send(
     text_body: &str,
     kind: MessageKind,
     player_id: Option<&str>,
-) {
+) -> bool {
     // Empty rather than absent when there is no account behind the address —
     // a field that is always present keeps `docs/4.7`'s schema simple, and the
     // one case that produces it (a join invitation) is documented there.
@@ -268,7 +280,7 @@ async fn send(
                 "email not sent: no RESEND_API_KEY configured"
             );
         }
-        return;
+        return true;
     };
 
     let client = reqwest::Client::new();
@@ -287,6 +299,7 @@ async fn send(
     match response {
         Ok(response) if response.status().is_success() => {
             tracing::info!(kind = kind.as_str(), player_id, "email sent");
+            true
         }
         Ok(response) => {
             // The provider's response body is dropped: it echoes the request,
@@ -300,6 +313,7 @@ async fn send(
                 %status,
                 "email send failed"
             );
+            false
         }
         Err(error) => {
             tracing::warn!(
@@ -308,6 +322,7 @@ async fn send(
                 %error,
                 "email send failed"
             );
+            false
         }
     }
 }

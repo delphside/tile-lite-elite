@@ -5,7 +5,6 @@
 
 use super::AppState;
 use super::scheduler::{FAST_INTERVAL, Job, SLOW_INTERVAL, SchedulerHealth, spawn};
-use crate::game_state::now_unix_seconds;
 
 /// A margin over a job's own `expected_interval` before its staleness
 /// counts as stalled rather than ordinary jitter — generous enough that a
@@ -27,20 +26,31 @@ const STALL_MARGIN: u32 = 3;
 /// rather than `&AppState` — the only thing it reads — so a test can build
 /// one directly instead of standing up a whole application.
 ///
+/// **Judges staleness by `last_completed_instant`, never `last_completed_at`.**
+/// The latter is wall-clock and can jump either way — an NTP sync or a VM
+/// resume-from-suspend would otherwise mask a genuine stall (clock stepped
+/// backward) or manufacture a false one (clock stepped forward) on exactly
+/// the mechanism built to catch a hang without anyone watching for it.
+/// `Instant` is guaranteed monotonic against exactly that.
+///
 /// A job that has never completed a single pass is not flagged — the
 /// first tick resolves immediately (R2), so "never run" should only ever
 /// be momentarily true right after startup, and flagging it would be a
 /// false positive on every boot.
 async fn check_for_stalled_jobs(scheduler_health: &SchedulerHealth) -> u64 {
-    let now = now_unix_seconds();
+    let now = std::time::Instant::now();
     let mut stalled = 0u64;
     for (name, health) in scheduler_health.lock().await.iter() {
-        let Some(last_completed_at) = health.last_completed_at else {
+        let Some(last_completed_instant) = health.last_completed_instant else {
             continue;
         };
-        let allowed = health.expected_interval.as_secs() as i64 * i64::from(STALL_MARGIN);
-        if now - last_completed_at > allowed {
-            tracing::error!(job = name, last_completed_at, "job appears stalled");
+        let allowed = health.expected_interval * STALL_MARGIN;
+        if now.duration_since(last_completed_instant) > allowed {
+            tracing::error!(
+                job = name,
+                last_completed_at = health.last_completed_at,
+                "job appears stalled"
+            );
             stalled += 1;
         }
     }
@@ -91,18 +101,25 @@ pub fn spawn_scheduler(state: AppState) {
 mod tests {
     use super::*;
     use crate::app::scheduler::JobHealth;
+    use crate::game_state::now_unix_seconds;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tokio::sync::Mutex;
 
-    fn health_with(entries: &[(&'static str, Option<i64>, Duration)]) -> SchedulerHealth {
+    /// `ago: None` means never run; `Some(d)` means last completed `d` ago,
+    /// as a real (not tokio-paused) `Instant` — `check_for_stalled_jobs`
+    /// reads `last_completed_instant`, which paused tokio time does not
+    /// affect, so tests build genuine past instants by subtracting rather
+    /// than by advancing a virtual clock.
+    fn health_with(entries: &[(&'static str, Option<Duration>, Duration)]) -> SchedulerHealth {
         let mut map = HashMap::new();
-        for (name, last_completed_at, expected_interval) in entries {
+        for (name, ago, expected_interval) in entries {
             map.insert(
                 *name,
                 JobHealth {
-                    last_completed_at: *last_completed_at,
+                    last_completed_at: ago.map(|_| now_unix_seconds()),
+                    last_completed_instant: ago.map(|ago| Instant::now() - ago),
                     errored_last_pass: 0,
                     expected_interval: *expected_interval,
                 },
@@ -113,15 +130,18 @@ mod tests {
 
     #[tokio::test]
     async fn a_job_within_its_margin_is_not_stalled() {
-        let health = health_with(&[("on-time", Some(now_unix_seconds()), Duration::from_secs(5))]);
+        let health = health_with(&[("on-time", Some(Duration::ZERO), Duration::from_secs(5))]);
 
         assert_eq!(check_for_stalled_jobs(&health).await, 0);
     }
 
     #[tokio::test]
     async fn a_job_well_past_its_margin_is_stalled() {
-        let long_ago = now_unix_seconds() - 3600;
-        let health = health_with(&[("stuck", Some(long_ago), Duration::from_secs(5))]);
+        let health = health_with(&[(
+            "stuck",
+            Some(Duration::from_secs(3600)),
+            Duration::from_secs(5),
+        )]);
 
         assert_eq!(check_for_stalled_jobs(&health).await, 1);
     }
@@ -139,12 +159,39 @@ mod tests {
 
     #[tokio::test]
     async fn only_the_stalled_job_is_counted_not_every_job_present() {
-        let long_ago = now_unix_seconds() - 3600;
         let health = health_with(&[
-            ("stuck", Some(long_ago), Duration::from_secs(5)),
-            ("fine", Some(now_unix_seconds()), Duration::from_secs(5)),
+            (
+                "stuck",
+                Some(Duration::from_secs(3600)),
+                Duration::from_secs(5),
+            ),
+            ("fine", Some(Duration::ZERO), Duration::from_secs(5)),
         ]);
 
         assert_eq!(check_for_stalled_jobs(&health).await, 1);
+    }
+
+    #[tokio::test]
+    async fn a_misleading_wall_clock_timestamp_does_not_change_the_verdict() {
+        // R4/R5 fix: a health entry can carry a `last_completed_at` that
+        // looks perfectly fresh — exactly what a wall-clock jump would
+        // produce — while the real, monotonic instant is genuinely stale.
+        // The verdict must follow the instant, not the epoch field.
+        let health = HashMap::from([(
+            "stuck-but-looks-fresh",
+            JobHealth {
+                last_completed_at: Some(now_unix_seconds()),
+                last_completed_instant: Some(Instant::now() - Duration::from_secs(3600)),
+                errored_last_pass: 0,
+                expected_interval: Duration::from_secs(5),
+            },
+        )]);
+        let health = Arc::new(Mutex::new(health));
+
+        assert_eq!(
+            check_for_stalled_jobs(&health).await,
+            1,
+            "a fresh-looking last_completed_at must not mask a stale last_completed_instant"
+        );
     }
 }

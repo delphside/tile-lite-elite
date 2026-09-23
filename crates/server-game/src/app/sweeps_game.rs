@@ -32,23 +32,33 @@ pub(crate) async fn expire_overdue_turns(state: &AppState) -> u64 {
     // most one seat is still playing. With three or more, the others play on.
     let mut retired = Vec::new();
     let mut errored = 0u64;
-    {
+
+    // One game's write lock at a time, not the whole map for the whole
+    // pass — the same pattern `games::start_game` already uses around its
+    // own single `save_game` call. Held across `save_game`'s await either
+    // way (matching that precedent), but no longer accumulates across
+    // every retiring game in one pass: a burst of several overdue turns
+    // no longer blocks every other handler touching `state.games` for the
+    // cumulative time of every save in it, only for one game's at a time.
+    let game_ids: Vec<String> = state.games.read().await.keys().cloned().collect();
+    for game_id in game_ids {
         let mut games = state.games.write().await;
-        for game in games.values_mut() {
-            // Unconditional, before anything that could panic — a game that
-            // never qualifies for retirement leaves no other trace, and
-            // HashMap's iteration order isn't reproducible from outside the
-            // process, so this is what tells a reader which game a panic
-            // interrupted rather than only which one last succeeded.
-            tracing::debug!(game_id = %game.id, "examining for overdue-turn retirement");
-            if game.apply_move_timeout() {
-                tracing::info!(game_id = %game.id, seat = game.current_seat, "seat auto-retired for exceeding the move time limit");
-                if let Err(error) = persistence::save_game(&state.db, game).await {
-                    tracing::error!(game_id = %game.id, %error, "failed to persist timeout retirement");
-                    errored += 1;
-                }
-                retired.push(game.to_dto());
+        let Some(game) = games.get_mut(&game_id) else {
+            continue;
+        };
+        // Unconditional, before anything that could panic — a game that
+        // never qualifies for retirement leaves no other trace, and
+        // HashMap's iteration order isn't reproducible from outside the
+        // process, so this is what tells a reader which game a panic
+        // interrupted rather than only which one last succeeded.
+        tracing::debug!(game_id = %game.id, "examining for overdue-turn retirement");
+        if game.apply_move_timeout() {
+            tracing::info!(game_id = %game.id, seat = game.current_seat, "seat auto-retired for exceeding the move time limit");
+            if let Err(error) = persistence::save_game(&state.db, game).await {
+                tracing::error!(game_id = %game.id, %error, "failed to persist timeout retirement");
+                errored += 1;
             }
+            retired.push(game.to_dto());
         }
     }
     for dto in &mut retired {
@@ -111,49 +121,54 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) -> u64 {
 
     let mut reminders = Vec::new();
     let mut errored = 0u64;
-    {
-        let mut games = state.games.write().await;
-        for game in games.values_mut() {
-            // Unconditional, before anything that could panic — see the
-            // matching comment in `expire_overdue_turns`.
-            tracing::debug!(game_id = %game.id, "examining for a move-time reminder");
-            if game.move_time_limit_seconds <= REMINDER_MIN_TIME_LIMIT_SECONDS {
-                continue;
-            }
-            let Some(remaining) = game.seconds_remaining_on_turn() else {
-                continue;
-            };
-            if remaining * REMINDER_REMAINING_FRACTION > game.move_time_limit_seconds {
-                continue;
-            }
-            let seat = game.current_seat;
-            let turn_number = game.turn_number;
-            let Some(participant) = game.participants.get_mut(seat as usize) else {
-                continue;
-            };
-            if participant.kind != api::SeatKind::Human
-                || participant.reminder_sent_turn == Some(turn_number)
-            {
-                continue;
-            }
-            let Some(player_id) = participant.player_id.clone() else {
-                continue;
-            };
-            participant.reminder_sent_turn = Some(turn_number);
-            let display_name = participant.display_name.clone();
 
-            if let Err(error) = persistence::save_game(&state.db, game).await {
-                tracing::error!(game_id = %game.id, %error, "failed to persist move-time reminder flag");
-                errored += 1;
-            }
-            reminders.push(Reminder {
-                game_id: game.id.clone(),
-                seat,
-                player_id,
-                display_name,
-                remaining_seconds: remaining,
-            });
+    // One game's write lock at a time — see the matching comment in
+    // `expire_overdue_turns`.
+    let game_ids: Vec<String> = state.games.read().await.keys().cloned().collect();
+    for game_id in game_ids {
+        let mut games = state.games.write().await;
+        let Some(game) = games.get_mut(&game_id) else {
+            continue;
+        };
+        // Unconditional, before anything that could panic — see the
+        // matching comment in `expire_overdue_turns`.
+        tracing::debug!(game_id = %game.id, "examining for a move-time reminder");
+        if game.move_time_limit_seconds <= REMINDER_MIN_TIME_LIMIT_SECONDS {
+            continue;
         }
+        let Some(remaining) = game.seconds_remaining_on_turn() else {
+            continue;
+        };
+        if remaining * REMINDER_REMAINING_FRACTION > game.move_time_limit_seconds {
+            continue;
+        }
+        let seat = game.current_seat;
+        let turn_number = game.turn_number;
+        let Some(participant) = game.participants.get_mut(seat as usize) else {
+            continue;
+        };
+        if participant.kind != api::SeatKind::Human
+            || participant.reminder_sent_turn == Some(turn_number)
+        {
+            continue;
+        }
+        let Some(player_id) = participant.player_id.clone() else {
+            continue;
+        };
+        participant.reminder_sent_turn = Some(turn_number);
+        let display_name = participant.display_name.clone();
+
+        if let Err(error) = persistence::save_game(&state.db, game).await {
+            tracing::error!(game_id = %game.id, %error, "failed to persist move-time reminder flag");
+            errored += 1;
+        }
+        reminders.push(Reminder {
+            game_id: game.id.clone(),
+            seat,
+            player_id,
+            display_name,
+            remaining_seconds: remaining,
+        });
     }
 
     for reminder in reminders {
@@ -167,7 +182,13 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) -> u64 {
             }
         };
         tracing::info!(game_id = %reminder.game_id, seat = reminder.seat, "move-time reminder sent");
-        crate::email::send_move_time_reminder(
+        // `send_move_time_reminder`'s own return says whether it actually
+        // reached the provider — `false` is a real failure (never a "no
+        // provider configured" no-op, which returns `true`), so unlike
+        // every other caller of the `email` module this one counts it:
+        // this is a scheduled job reporting through R5's health numbers,
+        // not a request that must succeed regardless of Resend.
+        let sent = crate::email::send_move_time_reminder(
             &state.email,
             &player.email,
             &player.id,
@@ -176,6 +197,9 @@ pub(crate) async fn send_move_time_reminders(state: &AppState) -> u64 {
             &state.public_base_url,
         )
         .await;
+        if !sent {
+            errored += 1;
+        }
     }
     errored
 }
