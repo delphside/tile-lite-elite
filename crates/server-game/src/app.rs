@@ -48,6 +48,7 @@ mod invitations;
 mod ratings;
 mod roster;
 mod scheduler;
+mod scheduler_jobs;
 mod sweeps_capacity;
 mod sweeps_game;
 #[cfg(test)]
@@ -69,7 +70,7 @@ use self::roster::*;
 use self::sweeps_capacity::*;
 use self::sweeps_game::*;
 
-pub use self::scheduler::spawn_scheduler;
+pub use self::scheduler_jobs::spawn_scheduler;
 
 #[derive(Clone)]
 pub struct AppState {

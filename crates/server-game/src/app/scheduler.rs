@@ -5,10 +5,11 @@
 //! chased, and two frequency scales because most deadlines have hour-scale
 //! tolerance and the retirement broadcast does not.
 //!
-//! **A workstream adds a job by adding it to the list it builds at
-//! startup** (`spawn_scheduler`, below) — nothing in this module names a
-//! job, so R6 ("design to it") is a fact about the shape of this file, not
-//! a promise about it.
+//! **A workstream adds a job by adding it to the list built at startup** —
+//! `scheduler_jobs::spawn_scheduler`, deliberately a separate file, not
+//! this one. Nothing here names a job, so R6 ("design to it") is a fact
+//! about the shape of this module, not a promise about it — and it stays
+//! true because growing the job list can never touch the engine below.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -102,27 +103,6 @@ pub(crate) fn spawn(jobs: Vec<Job>, interval: Duration, health: SchedulerHealth)
             run_once(&jobs, &health).await;
         }
     });
-}
-
-/// Wires the scheduler's first two customers — `#400`'s deliveries table
-/// names four; `#87`'s message-arrived notification and RET-3's countdown
-/// are new game behaviour and stay off this until built and reviewed. These
-/// two already exist and already run (lazily, from `list_games`); this
-/// moves *when* they run, not what they do.
-pub fn spawn_scheduler(state: AppState) {
-    let fast = vec![Job::new(
-        "expire_overdue_turns",
-        state.clone(),
-        |state| async move { super::sweeps_game::expire_overdue_turns(&state).await },
-    )];
-    spawn(fast, FAST_INTERVAL, state.scheduler_health.clone());
-
-    let slow = vec![Job::new(
-        "send_move_time_reminders",
-        state.clone(),
-        |state| async move { super::sweeps_game::send_move_time_reminders(&state).await },
-    )];
-    spawn(slow, SLOW_INTERVAL, state.scheduler_health.clone());
 }
 
 #[cfg(test)]
