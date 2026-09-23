@@ -72,9 +72,24 @@ pub(crate) type SchedulerHealth = Arc<Mutex<HashMap<&'static str, JobHealth>>>;
 /// each. Split out from the interval loop so a job running "without a
 /// request having arrived" (R1) is something a test can call directly,
 /// with no clock to wait on and no handler in the call stack.
+///
+/// **Each job runs in its own `tokio::spawn`ed task, awaited here rather
+/// than polled directly.** A job that panics would otherwise unwind
+/// straight through this function and the `loop` in `spawn` around it,
+/// silently ending that whole frequency tier until a restart — nothing
+/// would increment `errored_last_pass`, and `last_completed_at` would
+/// simply stop advancing with no signal beyond its own staleness. Awaiting
+/// a `JoinHandle` isolates the panic: a broken job becomes a recorded
+/// failure and the pass, and the next job in the list, carry on.
 pub(crate) async fn run_once(jobs: &[Job], health: &SchedulerHealth) {
     for job in jobs {
-        let errored = (job.run)().await;
+        let errored = match tokio::spawn((job.run)()).await {
+            Ok(errored) => errored,
+            Err(join_error) => {
+                tracing::error!(job = job.name, %join_error, "job panicked");
+                1
+            }
+        };
         health.lock().await.insert(
             job.name,
             JobHealth {
@@ -141,6 +156,41 @@ mod tests {
             "R5: an errored pass is a different number from a clean one"
         );
         assert!(dirty.last_completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_panicking_job_is_recorded_as_errored_rather_than_killing_the_pass() {
+        let health = empty_health();
+        let jobs = vec![
+            Job {
+                name: "panics",
+                run: Box::new(|| Box::pin(async { panic!("deliberately broken") })),
+            },
+            Job {
+                name: "still-runs-after",
+                run: Box::new(|| Box::pin(async { 0u64 })),
+            },
+        ];
+
+        run_once(&jobs, &health).await;
+
+        let recorded = health.lock().await;
+        let panicked = recorded
+            .get("panics")
+            .expect("a panicking job should still be recorded, not just vanish");
+        assert!(
+            panicked.errored_last_pass > 0,
+            "a panic must count as an errored pass"
+        );
+        assert!(
+            panicked.last_completed_at.is_some(),
+            "last_completed_at must keep moving, or a repeatedly panicking job reads as merely stale rather than broken"
+        );
+
+        let after = recorded
+            .get("still-runs-after")
+            .expect("the job after the panicking one must still run in the same pass");
+        assert_eq!(after.errored_last_pass, 0);
     }
 
     #[tokio::test]
