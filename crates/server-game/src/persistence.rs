@@ -161,6 +161,28 @@ fn default_move_time_limit_seconds() -> u64 {
     crate::game_state::DEFAULT_MOVE_TIME_LIMIT_SECONDS
 }
 
+/// Same shape as `app::concurrency_from_env`, duplicated rather than shared:
+/// this module has no dependency on `app` today, and one field read at
+/// startup isn't worth introducing one. A nonsense value falls back rather
+/// than failing — a typo in an environment variable should not stop the
+/// server booting. Takes `var` rather than reading the real name directly
+/// so a test can exercise it under a name nothing else reads.
+fn positive_u32_from_env(var: &str, default: u32) -> u32 {
+    std::env::var(var)
+        .ok()
+        .and_then(|raw| raw.parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default)
+}
+
+/// `TILE_LITE_ELITE_DB_MAX_CONNECTIONS` — production has no reason to
+/// change this from sqlx's default-sized pool, but #399's rehearsal drill
+/// needs to exhaust the pool on purpose, and holding five concurrent slow
+/// connections just to force that is a heavier test than setting this to 1.
+fn db_max_connections_from_env() -> u32 {
+    positive_u32_from_env("TILE_LITE_ELITE_DB_MAX_CONNECTIONS", 5)
+}
+
 pub async fn connect(database_url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
     // WAL rather than the default rollback-journal mode: readers (game
     // fetches, the games list, WebSocket state pushes) no longer block
@@ -172,7 +194,7 @@ pub async fn connect(database_url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal);
     let pool = SqlitePoolOptions::new()
-        .max_connections(5)
+        .max_connections(db_max_connections_from_env())
         .connect_with(options)
         .await?;
     migrate(&pool).await?;
@@ -1674,3 +1696,37 @@ fn kind_name(kind: &SeatKind) -> &'static str {
 
 #[allow(dead_code)]
 fn _keep_types(_: &ParticipantState, _: &MoveRecord) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive_u32_from_env_falls_back_on_nonsense_values() {
+        // A dedicated var name, not the real one — tests run in parallel in
+        // this crate, and a shared name would race against anything else
+        // reading it.
+        unsafe { std::env::set_var("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", "not-a-number") };
+        assert_eq!(
+            positive_u32_from_env("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", 5),
+            5
+        );
+        unsafe { std::env::set_var("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", "0") };
+        assert_eq!(
+            positive_u32_from_env("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", 5),
+            5,
+            "zero connections would never let anything through, so it must not be accepted"
+        );
+        unsafe { std::env::set_var("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", "1") };
+        assert_eq!(
+            positive_u32_from_env("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", 5),
+            1
+        );
+        unsafe { std::env::remove_var("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS") };
+        assert_eq!(
+            positive_u32_from_env("TILE_LITE_ELITE_TEST_MAX_CONNECTIONS", 5),
+            5,
+            "unset must fall back the same as nonsense, not panic on a missing var"
+        );
+    }
+}
