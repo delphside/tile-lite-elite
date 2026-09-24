@@ -95,6 +95,13 @@ request — everything the delivery touches goes on it, documentation included.*
 
 ## Dependencies and related work
 
+**waits on #nnn** — why. **is needed by #nnn** — why.
+
+Each `waits on` and `is needed by` here is also set as a GitHub dependency link
+(`addBlockedBy`), one link serving both ends — the context header shows the
+links, and `board-check.py` reports a line with none behind it. Only this
+section is read.
+
 ## Deliveries
 | # | what it delivers | milestone | steps |
 | --- | --- | --- | --- |
@@ -398,9 +405,15 @@ enough."*
 ## Afterwards
 
 ```bash
+./scripts/board-context.py --write N    # the context header, for N's whole family
 ./scripts/board-check.py                # has it done what its phase claims?
 ./scripts/roadmap-diagram.py --write    # regenerate docs/1.5
 ```
+
+**Never write the context header by hand.** It is generated from the family's
+fields, milestones, pull requests and dependency links, and rewritten whole, so
+a hand edit inside its markers is lost on the next run. Set the facts and
+regenerate.
 
 Commit the regenerated `docs/1.5` — the diagram is derived, so it should not sit
 stale in the working tree.

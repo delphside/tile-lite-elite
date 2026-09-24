@@ -31,6 +31,8 @@ from board.report import render          # noqa: E402
 from board.branches import check as check_branches
 from board.branches import render as render_branches
 from board.branches import named_numbers
+from board.context import render_findings as render_context
+from board.context import stale, undeclared_links, wanted_titles
 from board.milestone import carried
 from board.milestone import render as render_milestone
 from board.milestone import unbuilt
@@ -141,6 +143,22 @@ def main(argv=None) -> int:
             rows = carried(typed, version, mentions_on().count)
             text += "\n\n" + render_milestone(rows, version)
             failing = failing or bool(unbuilt(rows))
+
+        # R10 and R11: the generated header, and the dependencies it shows.
+        # Titles outside the open board are fetched only for the numbers a
+        # dependency names, for the same reason R9 fetches only its handful.
+        try:
+            typed = [classify(raw) for raw in snapshot.issues]
+            board = {i.number: i for i in typed}
+            titles = {n: i.title for n, i in board.items()}
+            missing = [n for n in wanted_titles(typed) if n not in titles]
+            titles.update({n: r.title for n, r in issues_by_number(missing).items()})
+            stale_found = stale(board, titles)
+            links = undeclared_links(board)
+            text += "\n\n" + render_context(stale_found, links)
+            failing = failing or bool(stale_found) or bool(links)
+        except Unavailable as exc:
+            text += f"\n\n  context: cannot say — {exc}"
 
     # Stripped at the boundary rather than threaded through the renderer:
     # nineteen call sites would each have to remember, and one that forgot
