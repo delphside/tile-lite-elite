@@ -29,6 +29,55 @@ to every view:
 | `Priority` | a judgement, deliberately not derived |
 | `Type of change` | `bug · functional · cosmetic · documentation · tooling` |
 
+**A title is a short, pithy, memorable name, not a teaser.** Owner, 2026-09-24:
+*"When I look at the board I want to quickly recall what each issue is about
+without reading the body, a short memorable name containing the key words
+related to the change would help."* #292's original title — *"The word lists:
+one greylist for every edition, and a generated file nothing checks"* — reads
+like a hook for the body to resolve, where it should simply have named the
+file. Say what the thing is; curiosity belongs in a poster, not a board. This
+applies to a project's title as much as a requirement's — #400 was renamed
+from a full sentence to *TLE Scheduler* the same day. Retitle on sight when an
+existing title fails this test, not only at raise.
+
+**A first pass still says too much — cut further than feels natural.**
+Owner, 2026-09-24, tightening a round of retitles further:
+
+| issue | too long | short |
+| --- | --- | --- |
+| #224 | Monitoring and alarming: closing the remaining gaps | Monitoring and alarming gaps |
+| #241 | Disaster recovery: untested VM rebuild | Test VM rebuild |
+| #293 | Desktop client: is it a product, and where to get it | Desktop client download |
+| #301 | Display name rules | User name format |
+| #326 | Board tooling: verify matched field values still exist | Project Board: check field values exist |
+| #360 | Rehearsal and production: infrastructure drift, no update procedure | VM updates |
+
+Four things generalise from the set:
+
+- **Drop the words that describe rather than identify.** *"closing the
+  remaining"*, *"is it a product, and where to get it"*, *"verify … still
+  exist"* — none of these narrow down which issue it is; the noun after them
+  already does. A qualifier earns its place only if removing it would make two
+  issues look the same.
+- **Fold a short answer into the noun phrase; keep the colon only for a
+  genuine two-part subject.** *"X: closing the gaps"* → *"X gaps"*. The colon
+  survives in #326 because *"Project Board"* and *"check field values exist"*
+  are still two different things to say — but each side is as short as it can
+  be.
+- **Name the actionable subject, not the symptom.** #360 was a description of
+  *drift*; the title is the thing to do about it, *updates*. Ask what the
+  issue is actually for, not what is currently wrong.
+- **Pick the word a reader recognises with no other context, even over this
+  codebase's own term, and especially where the game's own vocabulary would
+  collide.** *Display name* is the precise internal term; *user name* is what
+  means something out of context. *Board* on its own reads as the Scrabble
+  board in this codebase; *Project Board* does not. Precision loses to
+  disambiguation here — the body still carries the exact term.
+
+The `#N MAIN PROJECT:`/`#N WP A:` prefix is structural — its own convention,
+in [`docs/3.6`](../../../docs/3.6-change-lifecycle.md) — and is never cut;
+these rules apply to what follows it.
+
 **2 · Scope.** Options, dependencies, `Effort`. `Stage` moves to *Scope,
 Options and Dependencies*.
 
