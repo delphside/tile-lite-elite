@@ -51,10 +51,15 @@ node_modules/
 # The two hooks are tooling by the same test, and tooling is an artefact
 # whether it runs in production or not (owner, 2026-09-03). They were invisible
 # to the repo until then, which is how turn-check.sh came to be filtering on a
-# convention that nothing had written for weeks. settings.json stays ignored:
-# it is one machine's permissions and absolute paths, not process.
+# convention that nothing had written for weeks.
 !.claude/turn-check.sh
 !.claude/inbox-hook.sh
+# settings.json wires those hooks up, so without it they are versioned and
+# never run: a worktree or a rebuilt machine had the scripts and no hooks
+# (owner, 2026-09-24). It holds the hooks and nothing else. One machine's
+# permissions and absolute paths belong in settings.local.json, which stays
+# ignored.
+!.claude/settings.json
 
 # PID files written by scripts/services.sh
 .pid.server

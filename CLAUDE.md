@@ -80,7 +80,8 @@ one of them has a defect: fix it, don't work around it.
 - **A dependency is declared from both ends.** `waits on` has an inverse,
   `is needed by`, so a relation lives in both bodies rather than in whichever was
   written second. #400's eight customers were found by going looking, not by
-  each having said so.
+  each having said so. The edge is also a GitHub dependency link, which the
+  generated context header shows and `board-check.py` checks.
 - A project moves through the Phase field. The wording is the field's own
   stage descriptions:
 
@@ -333,3 +334,5 @@ one of them has a defect: fix it, don't work around it.
 | artefacts, their routes, and the strings tooling matches | docs/4.8 |
 | daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
+| raising or retitling any issue | the triage skill |
+| raising a project or work package: load it before creating the issue | the raise-project skill |

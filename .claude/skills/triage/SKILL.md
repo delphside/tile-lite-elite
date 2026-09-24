@@ -1,3 +1,8 @@
+---
+name: triage
+description: Raise, title and triage any issue — requirement, project or decision. The minimum fields, how to write a short title that names the thing rather than teasing it, what carries a milestone, and when Claude triages alone. Use when raising or retitling an issue, or when sweeping the board for untriaged ones.
+---
+
 # Triage
 
 **Triage is joint, except where D54 gives it to Claude.** Raising a project

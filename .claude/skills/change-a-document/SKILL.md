@@ -1,3 +1,8 @@
+---
+name: change-a-document
+description: Find the section that owns a fact before adding it to anything in docs/, CLAUDE.md or a skill — one fact, one home. Use before writing to any document, not after.
+---
+
 # Changing a document
 
 **Read this before adding text to anything in `docs/`.** Not after.
