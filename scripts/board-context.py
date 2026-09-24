@@ -6,14 +6,17 @@
     scripts/board-context.py --write      # rewrite every stale header
     scripts/board-context.py --write 414  # just that one family's members
 
-The header is the parent and its work packages, each with phase, route,
+The header opens `## Context as of <date>`, the day its facts last changed,
+and the text below it is titled `## Introduction` where it opened with prose.
+It is the parent and its work packages, each with phase, route,
 milestone and open pull request, then what the family waits on and is needed
 by. It is identical on every member of a family, and generated from the board
 model, so it is never edited by hand: `board-check.py` reports one that is
 missing or stale, and this rewrites it.
 
-Refuses (exit 2) when GitHub cannot be read, rather than writing headers from a
-partial board.
+Refuses (exit 2) when GitHub cannot be read, or when no project has a Phase --
+a token that cannot see issue fields -- rather than writing headers from a
+partial board. `.github/workflows/context.yml` runs `--write` daily.
 
 Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
 """
@@ -28,8 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board.context import (family, family_root, headers,  # noqa: E402
-                           wanted_titles, with_header, current)
+from board.context import (family, family_root, fields_visible,  # noqa: E402
+                           headers, needs_writing, wanted_titles, with_header)
 from board.model import classify  # noqa: E402
 from board.sources import REPO, OWNER, Unavailable, fetch, issues_by_number  # noqa: E402
 
@@ -58,6 +61,13 @@ def main(argv=None) -> int:
         print(f"cannot say: {exc}", file=sys.stderr)
         return 2
 
+    # Before anything is written: a token that cannot see issue fields reads
+    # every phase as blank, and would write that onto every project.
+    if not fields_visible(board):
+        print("cannot say: no project has a Phase, so this token cannot see "
+              "issue fields; nothing written", file=sys.stderr)
+        return 2
+
     wanted = headers(board, titles)
     if args.issue is not None:
         if args.issue not in wanted:
@@ -71,7 +81,9 @@ def main(argv=None) -> int:
     else:
         targets = sorted(wanted)
 
-    changed = [n for n in targets if current(board[n]) != wanted[n]]
+    # Written only when the facts moved, never for the date alone: every write
+    # moves `updatedAt`, which R1 reads as the last sign of life.
+    changed = [n for n in targets if needs_writing(board[n], wanted[n])]
     if not args.write:
         for n in changed:
             print(f"#{n} {board[n].title}")

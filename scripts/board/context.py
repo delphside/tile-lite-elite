@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Mapping, Sequence
 
 from .model import Issue, ParentProject, Project, PullRequest
@@ -97,12 +98,31 @@ def _cell(value: str | None) -> str:
     return value.replace("|", "\\|") if value else "—"
 
 
+_DATED = re.compile(r"^## Context as of .*\n\n?", re.M)
+
+
+def as_of(day: date) -> str:
+    """`## Context as of Thursday 24 September 2026`."""
+    return f"## Context as of {day:%A} {day.day} {day:%B %Y}"
+
+
+def undated(header: str | None) -> str | None:
+    """A header with its date taken out, for asking whether the facts moved.
+
+    **The date is not a fact about the family**, so a header is stale when its
+    content differs, never because a day has passed. Rewriting on the date
+    alone would edit every project daily, and each edit moves `updatedAt`,
+    which R1 falls back on for *N days quiet*.
+    """
+    return None if header is None else _DATED.sub("", header, count=1)
+
+
 def render(root: Issue, board: Mapping[int, Issue],
-           titles: Mapping[int, str]) -> str:
+           titles: Mapping[int, str], day: date | None = None) -> str:
     """The header for a family, identical on every member.
 
     `titles` resolves a dependency outside the open board — a closed issue a
-    project waits on still needs its name shown.
+    project waits on still needs its name shown. `day` is when it was written.
     """
     members = family(root, board)
     prs = open_prs(board)
@@ -128,15 +148,27 @@ def render(root: Issue, board: Mapping[int, Issue],
         return " · ".join(f"#{n} {short_title(titles.get(n, ''), outside=True)}".rstrip()
                           for n in numbers)
 
-    lines = [START, *rows, "",
+    lines = [START, as_of(day or date.today()), "", *rows, "",
              f"Waits on: {names(waits)}",
              f"Needed by: {names(needed)}",
              END]
     return "\n".join(lines)
 
 
+INTRODUCTION = "## Introduction"
+
+
 def with_header(body: str, header: str) -> str:
-    return header + "\n\n" + strip(body).lstrip("\n")
+    """The body with this header on top, and the text under it titled.
+
+    A body that opens with prose gets `## Introduction` above it, so the
+    header's heading does not read as the title of the body's first paragraph.
+    One that already opens with a heading keeps it.
+    """
+    rest = strip(body).lstrip("\n")
+    if rest and not rest.startswith("#"):
+        rest = f"{INTRODUCTION}\n\n{rest}"
+    return header + "\n\n" + rest
 
 
 def current(issue: Issue) -> str | None:
@@ -149,15 +181,35 @@ def wanted_titles(projects: Sequence[Issue]) -> set[int]:
     return {n for p in projects for n in (*p.raw.blocked_by, *p.raw.blocks)}
 
 
-def headers(board: Mapping[int, Issue],
-            titles: Mapping[int, str]) -> dict[int, str]:
+def headers(board: Mapping[int, Issue], titles: Mapping[int, str],
+            day: date | None = None) -> dict[int, str]:
     """Every open project's header, by issue number."""
     out: dict[int, str] = {}
     for issue in board.values():
         if not isinstance(issue, Project) or issue.state != "OPEN":
             continue
-        out[issue.number] = render(family_root(issue, board), board, titles)
+        out[issue.number] = render(family_root(issue, board), board, titles, day)
     return out
+
+
+def needs_writing(issue: Issue, header: str) -> bool:
+    """Missing, out of date in its facts, or its text below untitled."""
+    have = current(issue)
+    return (have is None or not _DATED.search(have)
+            or undated(have) != undated(header)
+            or strip(issue.body).lstrip("\n")[:1] not in ("#", ""))
+
+
+def fields_visible(board: Mapping[int, Issue]) -> bool:
+    """Whether the token that fetched this board can see issue fields at all.
+
+    A token that cannot answers with no fields rather than an error, and a
+    header written from that shows every phase as blank — on every project,
+    and looking entirely deliberate. Checked on the population, not per issue:
+    one project with no Phase is plausible, all of them is the token.
+    """
+    projects = [i for i in board.values() if isinstance(i, Project)]
+    return any(p.field("Phase") for p in projects) if projects else True
 
 
 def stale(board: Mapping[int, Issue],
@@ -168,8 +220,12 @@ def stale(board: Mapping[int, Issue],
         have = current(board[number])
         if have is None:
             found.append((number, "no header"))
-        elif have != header:
+        elif undated(have) != undated(header):
             found.append((number, "out of date"))
+        elif not _DATED.search(have):
+            found.append((number, "undated"))
+        elif strip(board[number].body).lstrip("\n")[:1] not in ("#", ""):
+            found.append((number, "the text below it has no heading"))
     return found
 
 

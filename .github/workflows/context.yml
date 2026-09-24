@@ -1,0 +1,40 @@
+# Keeps the context header on every open project current. #383 R10.
+#
+# **Daily, because the header is a view of facts that move without it.** A
+# phase set, a pull request opened or merged, a dependency linked: none of
+# them touches the body the header lives in, so nothing else would rewrite
+# it. Owner, 2026-09-24: "It needs to be regenerated regularly or it will go
+# out of date."
+#
+# **It writes only headers whose facts changed.** The date line is not a fact,
+# and rewriting for it alone would edit every project daily -- each edit
+# moves `updatedAt`, which board-actions.py reads as the last sign of life.
+#
+# **It refuses rather than guessing** when the token cannot see issue fields:
+# every phase would read as blank and be written onto every project. A failed
+# run here is that refusal, and says so in its log.
+name: Context headers
+
+on:
+  schedule:
+    # 06:30 UTC daily. Between advisories.yml (06:15) and
+    # programme-activities.yml (07:00 Mondays).
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  write:
+    name: rewrite stale context headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rewrite
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/board-context.py --write

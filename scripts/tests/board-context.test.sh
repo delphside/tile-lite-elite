@@ -19,7 +19,9 @@ python3 - <<'PY'
 import sys
 sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
-from board.context import (current, declared, headers, short_title, stale,
+from datetime import date
+from board.context import (INTRODUCTION, current, declared, fields_visible,
+                           headers, needs_writing, short_title, stale,
                            undeclared_links, with_header)
 
 failures = 0
@@ -67,7 +69,8 @@ board = board_of(
 )
 titles = {n: i.title for n, i in board.items()}
 titles[256] = "Split sweeps along purpose"
-h = headers(board, titles)
+TODAY = date(2026, 9, 24)
+h = headers(board, titles, TODAY)
 
 print("R10: one header per family")
 expect("parent and both packages carry the same header", 1,
@@ -81,12 +84,22 @@ expect("waits on is named, and #414 -> #415 inside the family is left out", True
 expect("needed by is named", True,
        "Needed by: #224 Monitoring and alarming gaps" in h[400])
 
+expect("it opens with the day it was written",
+       "## Context as of Thursday 24 September 2026", h[400].split("\n")[1])
+
 print("R10: writing it")
 body = "## Requirements\n\nR1\n"
 once = with_header(body, h[400])
 twice = with_header(once, h[400])
 expect("writing twice changes nothing", once, twice)
 expect("the rest of the body survives", True, once.endswith(body))
+prose = with_header("Raised 2026-09-22.\n\n## Requirements\n", h[400])
+expect("prose under the header is titled", True,
+       f"<!-- /context -->\n\n{INTRODUCTION}\n\nRaised 2026-09-22." in prose)
+expect("and titled once, however often it is written", prose,
+       with_header(prose, h[400]))
+expect("a body opening with a heading gets no introduction", False,
+       INTRODUCTION in once)
 fresh = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
                      fields={"Phase": "Scope"},
                      subs=[RawSubIssue(414, "Project"), RawSubIssue(415, "Project")],
@@ -94,6 +107,24 @@ fresh = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
 expect("the header read back is the one written", h[400], current(fresh))
 expect("a body without one is reported", True,
        (224, "no header") in stale(board, titles))
+tomorrow = headers(board, titles, date(2026, 9, 25))[400]
+expect("the next day, unchanged facts need no write", False,
+       needs_writing(fresh, tomorrow))
+expect("nor does board-check call it stale", [], [f for f in stale(
+    {**board, 400: fresh}, titles) if f[0] == 400])
+moved = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
+                     fields={"Phase": "Design and Test Approach"},
+                     subs=[RawSubIssue(414, "Project"), RawSubIssue(415, "Project")],
+                     blocks=(224,)))
+moved = {**board, **moved}
+expect("a phase that moved does need one", True,
+       needs_writing(moved[400], headers(moved, titles, TODAY)[400]))
+
+print("R10: a token that cannot see fields")
+blind = board_of(raw(1, "a"), raw(2, "b"))
+expect("no project with a Phase means the fields are not visible", False,
+       fields_visible(blind))
+expect("one with a Phase is enough", True, fields_visible(board))
 
 print("R11: declared in the Dependencies section")
 expect("several numbers after one phrase, with an R suffix", [
