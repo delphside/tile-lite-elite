@@ -45,6 +45,8 @@ expect("parent prefix dropped", "TLE Scheduler",
        short_title("#400 MAIN PROJECT: TLE Scheduler"))
 expect("package letter kept, counts dropped", "WP A: Scheduler core",
        short_title("#400 WP A Del 1 of 1, pt 1 of 2: Scheduler core"))
+expect("outside its family a package keeps its parent", "Additional Game Lifecycle (#71 WP C)",
+       short_title("#71 WP C: Additional Game Lifecycle", outside=True))
 expect("an unprefixed title is left alone", "Idle game removal",
        short_title("Idle game removal"))
 

@@ -31,16 +31,25 @@ _BLOCK = re.compile(re.escape(START.split(";")[0]) + r".*?" + re.escape(END) + r
                     re.S)
 
 # `#400 MAIN PROJECT: TLE Scheduler`, `#400 WP A Del 1 of 1, pt 1 of 2: Scheduler core`
-_PREFIX = re.compile(r"^#\d+\s+(MAIN PROJECT|WP\s+([A-Z]+)[^:]*):\s*")
+_PREFIX = re.compile(r"^#(\d+)\s+(MAIN PROJECT|WP\s+([A-Z]+)[^:]*):\s*")
 
 
-def short_title(title: str) -> str:
-    """The name without the family prefix, keeping the package letter."""
+def short_title(title: str, outside: bool = False) -> str:
+    """The name without the family prefix, keeping the package letter.
+
+    `outside` keeps the parent's number on a package from another family:
+    inside its own header `WP C` is unambiguous, beside other projects it
+    reads `Additional Game Lifecycle (#71 WP C)`.
+    """
     m = _PREFIX.match(title)
     if not m:
         return title
     rest = title[m.end():]
-    return f"WP {m.group(2)}: {rest}" if m.group(2) else rest
+    if not m.group(3):
+        return rest
+    if outside:
+        return f"{rest} (#{m.group(1)} WP {m.group(3)})"
+    return f"WP {m.group(3)}: {rest}"
 
 
 def strip(body: str) -> str:
@@ -116,7 +125,7 @@ def render(root: Issue, board: Mapping[int, Issue],
     def names(numbers: Sequence[int]) -> str:
         if not numbers:
             return "none"
-        return " · ".join(f"#{n} {short_title(titles.get(n, ''))}".rstrip()
+        return " · ".join(f"#{n} {short_title(titles.get(n, ''), outside=True)}".rstrip()
                           for n in numbers)
 
     lines = [START, *rows, "",
