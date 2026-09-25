@@ -33,6 +33,12 @@ It does NOT restore the deploy SSH key (a secret, copied back by hand
 the distro cannot safely trigger on itself). It checks and warns.
 
 Refuses (exit 1) when:
+  - it is run as root, e.g. under sudo
+    -> "setup-dev-environment: refusing — run this as yourself, not root."
+    Every path it writes is under $HOME, so as root the toolchain, the
+    aliases and the ssh config land in /root, and the repo's
+    .git/config is left owned by root. It calls sudo itself for the
+    steps that need it.
   - it is run from a linked git worktree
     -> "setup-dev-environment: refusing — this is a linked worktree."
     It writes sadev, sapre, dbdev and the rest for the tree it runs
@@ -48,6 +54,19 @@ Warns without failing when:
     not run, so this one is worth acting on.
 EOF
   exit 0
+fi
+
+# --- refuse to run as root ------------------------------------------------ #419
+#
+# Run under sudo on 2026-09-25, it installed a second Rust toolchain and sccache
+# into /root, wrote the aliases and ssh config into root's home, and left
+# .git/config owned by root, so the owner's own git could no longer write it.
+# Nothing failed; every step reported success. Refused, like the worktree case
+# below, because the wrong outcome is silent.
+if [ "$(id -u)" -eq 0 ]; then
+    echo "setup-dev-environment: refusing — run this as yourself, not root." >&2
+    echo "    It calls sudo itself for the steps that need it." >&2
+    exit 1
 fi
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
