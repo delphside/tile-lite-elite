@@ -38,22 +38,26 @@ pub fn format_relative_time(epoch_seconds: i64) -> String {
 
 /// How long is left on the current turn before the seat gets auto-retired
 /// (see `GameSession::apply_move_timeout` on the server), given when the
-/// turn started and the game's move-time-limit — both in the same "seconds
-/// since the Unix epoch" string format as `format_relative_time`. Shown as
-/// combined days+hours while more than an hour remains, then switches to
-/// minutes-only for the final hour (rounded up, so any time still left
-/// reads as at least "1m left" rather than a misleading "0m left").
+/// turn started and the game's move-time-limit, both in seconds since the
+/// Unix epoch. The wording is `remaining_label`'s.
 pub fn format_time_remaining(turn_started_at: i64, move_time_limit_seconds: u64) -> String {
     let deadline = turn_started_at.max(0) as u64 + move_time_limit_seconds;
     let now = now_epoch_seconds();
     if now >= deadline {
         return "overdue".to_string();
     }
-    let remaining = deadline - now;
+    remaining_label(deadline - now)
+}
 
-    if remaining <= 3_600 {
-        let minutes = remaining.div_ceil(60);
-        format!("{minutes}m left")
+/// The countdown for `remaining` seconds, per `docs/1.0` CLOCK-5 and CLOCK-6:
+/// at most two adjacent units, truncated rather than rounded up, and `<1m`
+/// for the last minute, because `0m` says the turn is lost and `1m` promises
+/// time that may not exist. Days and hours above an hour, minutes below it.
+fn remaining_label(remaining: u64) -> String {
+    if remaining < 60 {
+        "<1m left".to_string()
+    } else if remaining < 3_600 {
+        format!("{}m left", remaining / 60)
     } else {
         let days = remaining / 86_400;
         let hours = (remaining % 86_400) / 3_600;
@@ -90,45 +94,56 @@ pub fn format_move_time(elapsed_us: u64) -> String {
 mod tests {
     use super::*;
 
-    fn started_seconds_ago(seconds_ago: u64) -> i64 {
-        (now_epoch_seconds() - seconds_ago) as i64
+    // CLOCK-5 and CLOCK-6, docs/1.0: two adjacent units at most, truncated,
+    // and nothing that claims time the player may not have.
+
+    #[test]
+    fn shows_days_and_hours_above_a_day() {
+        assert_eq!(
+            remaining_label(2 * 86_400 + 4 * 3_600 + 59 * 60),
+            "2d 4h left"
+        );
     }
 
     #[test]
-    fn shows_days_and_hours_above_one_hour_remaining() {
-        // 72h limit, 20h elapsed -> 52h (2d 4h) remaining.
-        let started = started_seconds_ago(20 * 3_600);
-        assert_eq!(format_time_remaining(started, 72 * 3_600), "2d 4h left");
+    fn shows_hours_only_under_a_day() {
+        assert_eq!(remaining_label(4 * 3_600 + 59 * 60), "4h left");
     }
 
     #[test]
-    fn shows_hours_only_when_under_a_day_remains() {
-        // 72h limit, 68h elapsed -> 4h remaining.
-        let started = started_seconds_ago(68 * 3_600);
-        assert_eq!(format_time_remaining(started, 72 * 3_600), "4h left");
+    fn exactly_one_hour_reads_as_an_hour() {
+        assert_eq!(remaining_label(3_600), "1h left");
     }
 
     #[test]
-    fn switches_to_minutes_at_exactly_one_hour_remaining() {
-        let started = started_seconds_ago(71 * 3_600);
-        assert_eq!(format_time_remaining(started, 72 * 3_600), "60m left");
+    fn minutes_are_truncated_not_rounded_up() {
+        assert_eq!(remaining_label(3_599), "59m left");
+        assert_eq!(remaining_label(30 * 60 + 59), "30m left");
     }
 
     #[test]
-    fn shows_minutes_under_one_hour_remaining() {
-        let started = started_seconds_ago(72 * 3_600 - 30 * 60);
+    fn the_last_full_minute_still_reads_one_minute() {
+        assert_eq!(remaining_label(60), "1m left");
+    }
+
+    #[test]
+    fn under_a_minute_claims_neither_zero_nor_one() {
+        // CLOCK-6: "0m left" says the turn is lost; "1m left" promises
+        // seconds that may not exist.
+        assert_eq!(remaining_label(59), "<1m left");
+        assert_eq!(remaining_label(1), "<1m left");
+    }
+
+    #[test]
+    fn a_turn_in_progress_reads_through_the_label() {
+        // Well away from any boundary, since the clock is read twice.
+        let started = (now_epoch_seconds() - (72 * 3_600 - 30 * 60 - 30)) as i64;
         assert_eq!(format_time_remaining(started, 72 * 3_600), "30m left");
     }
 
     #[test]
-    fn rounds_up_so_any_remaining_time_shows_at_least_one_minute() {
-        let started = started_seconds_ago(72 * 3_600 - 10);
-        assert_eq!(format_time_remaining(started, 72 * 3_600), "1m left");
-    }
-
-    #[test]
     fn reports_overdue_once_the_deadline_has_passed() {
-        let started = started_seconds_ago(73 * 3_600);
+        let started = (now_epoch_seconds() - 73 * 3_600) as i64;
         assert_eq!(format_time_remaining(started, 72 * 3_600), "overdue");
     }
 
