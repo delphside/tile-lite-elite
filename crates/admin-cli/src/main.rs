@@ -59,6 +59,13 @@ enum Command {
     /// Recorded by a sweep that runs when somebody uses the service, so a
     /// missing day means the service was quiet — not that anything broke.
     Size,
+    /// When each scheduled job last finished a pass, and how many items
+    /// errored on it.
+    ///
+    /// A job that has stopped shows an old time; one that fails shows a
+    /// count. Times are UTC, to the second, because the fastest job runs
+    /// every five seconds and a stall would hide inside a minute.
+    SchedulerHealth,
 }
 
 #[derive(Subcommand)]
@@ -130,6 +137,7 @@ fn main() {
         Command::Users { action } => run_users(&client, &cli.server, output, action),
         Command::Games { action } => run_games(&client, &cli.server, output, action),
         Command::Size => run_size(&client, &cli.server, output),
+        Command::SchedulerHealth => run_scheduler_health(&client, &cli.server, output),
     };
 
     if let Err(error) = result {
@@ -209,6 +217,48 @@ fn run_size(
             .collect(),
     );
     Ok(())
+}
+
+/// One row per job, in the order the server reports them.
+fn run_scheduler_health(
+    client: &reqwest::blocking::Client,
+    server: &str,
+    output: Output,
+) -> Result<(), String> {
+    let rows: Vec<api::AdminSchedulerJobHealthDto> = check_response(
+        client
+            .get(format!("{server}/admin/scheduler-health"))
+            .send()
+            .map_err(fmt_err)?,
+    )?
+    .json()
+    .map_err(fmt_err)?;
+    if output.json {
+        return print_json(&rows);
+    }
+    if rows.is_empty() {
+        println!("No scheduled job has reported yet — the server may have only just started.");
+        return Ok(());
+    }
+    print_table(
+        &["JOB", "LAST COMPLETED (UTC)", "ERRORED LAST PASS"],
+        scheduler_health_rows(&rows),
+    );
+    Ok(())
+}
+
+fn scheduler_health_rows(rows: &[api::AdminSchedulerJobHealthDto]) -> Vec<Vec<String>> {
+    rows.iter()
+        .map(|row| {
+            vec![
+                row.job.clone(),
+                row.last_completed_at
+                    .map(format_timestamp_seconds)
+                    .unwrap_or_else(|| "never".to_string()),
+                row.errored_last_pass.to_string(),
+            ]
+        })
+        .collect()
 }
 
 fn run_users(
@@ -492,6 +542,13 @@ fn format_timestamp(epoch_seconds: i64) -> String {
         .unwrap_or_else(|| epoch_seconds.to_string())
 }
 
+/// `format_timestamp` to the second, for the scheduler's five-second jobs.
+fn format_timestamp_seconds(epoch_seconds: i64) -> String {
+    chrono::DateTime::from_timestamp(epoch_seconds, 0)
+        .map(|moment| moment.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| epoch_seconds.to_string())
+}
+
 fn fmt_err(error: reqwest::Error) -> String {
     format!(
         "could not reach {}: {error}",
@@ -611,5 +668,36 @@ mod tests {
     #[test]
     fn falls_back_to_the_raw_value_when_it_cannot_be_a_date() {
         assert_eq!(format_timestamp(i64::MAX), i64::MAX.to_string());
+    }
+
+    #[test]
+    fn scheduler_times_are_shown_to_the_second() {
+        assert_eq!(
+            format_timestamp_seconds(1_785_073_922),
+            "2026-07-26 13:52:02"
+        );
+    }
+
+    /// A job that has never completed must not read as one that completed
+    /// at the epoch, nor as blank.
+    #[test]
+    fn a_job_that_never_ran_says_so() {
+        let rows = scheduler_health_rows(&[
+            api::AdminSchedulerJobHealthDto {
+                job: "expire_overdue_turns".into(),
+                last_completed_at: Some(1_785_073_922),
+                errored_last_pass: 2,
+            },
+            api::AdminSchedulerJobHealthDto {
+                job: "send_move_time_reminders".into(),
+                last_completed_at: None,
+                errored_last_pass: 0,
+            },
+        ]);
+        assert_eq!(
+            rows[0],
+            ["expire_overdue_turns", "2026-07-26 13:52:02", "2"]
+        );
+        assert_eq!(rows[1], ["send_move_time_reminders", "never", "0"]);
     }
 }
