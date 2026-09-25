@@ -5217,6 +5217,73 @@ async fn admin_endpoints_reject_non_loopback_callers() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
+/// #415: the scheduler's unit tests read `SchedulerHealth` directly; this is
+/// the endpoint an operator (and `admin-cli scheduler-health`) actually
+/// calls, through the router and its loopback guard.
+#[tokio::test]
+async fn admin_scheduler_health_reports_every_job_through_the_router() {
+    let database_url = test_database_url();
+    let state = create_test_state(&database_url).await;
+    let app = build_router(state.clone());
+
+    let before: Vec<api::AdminSchedulerJobHealthDto> = read_json(
+        send_admin::<()>(
+            app.clone(),
+            Method::GET,
+            "/admin/scheduler-health",
+            loopback_peer(),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert!(
+        before.is_empty(),
+        "nothing has run yet, so nothing is reported"
+    );
+
+    for (interval, jobs) in super::scheduler_jobs::tiers(&state) {
+        super::scheduler::run_once(&jobs, interval, &state.scheduler_health).await;
+    }
+
+    let response = send_admin::<()>(
+        app.clone(),
+        Method::GET,
+        "/admin/scheduler-health",
+        loopback_peer(),
+        None,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let after: Vec<api::AdminSchedulerJobHealthDto> = read_json(response).await;
+    let mut names: Vec<&str> = after.iter().map(|row| row.job.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "check_for_stalled_jobs",
+            "expire_overdue_turns",
+            "send_move_time_reminders"
+        ]
+    );
+    assert!(
+        after
+            .iter()
+            .all(|row| row.last_completed_at.is_some() && row.errored_last_pass == 0),
+        "one clean pass of every tier: {after:?}"
+    );
+
+    let remote = send_admin::<()>(
+        app,
+        Method::GET,
+        "/admin/scheduler-health",
+        remote_peer(),
+        None,
+    )
+    .await;
+    assert_eq!(remote.status(), StatusCode::FORBIDDEN);
+}
+
 #[tokio::test]
 async fn admin_can_list_and_delete_users() {
     let database_url = test_database_url();
