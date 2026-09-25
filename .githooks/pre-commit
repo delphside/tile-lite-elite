@@ -144,16 +144,23 @@ fi
 # `399-database-failure-status` while #399's own change sat committed beneath
 # them. Caught by reading `git status`, which is not a gate.
 #
-# **These files are the process, and the process is not a project.** A document
-# saying how we work is true for every branch at once, so a copy of it living on
-# one of them is a copy that disagrees with `main` until it merges. That is the
-# living-documents rule: the documents live and the issues expire.
+# **These files are the process, and the process is not a project.** A process
+# document describes the programme and how it operates; a technical document
+# describes the application. The technical ones change with the code, on the
+# project branch. The process ones belong to no project, so they change on
+# `main`: a copy on a branch disagrees with `main` until it merges, and makes the
+# process wait on a project it has nothing to do with (owner, 2026-09-25).
+#
+# **docs/1.6 is not on the list, because it is generated.** It is the map of the
+# headings on whichever branch it is built from, so a branch that adds headings
+# needs its own. Regenerated after the rebase that precedes a merge (docs/3.3
+# §1.9), it is exactly the map `main` will have once the branch fast-forwards.
 #
 # **A project may still change them**, when it is the project that changes the
 # process, or when the document rides its release. So this refuses and offers
 # `--no-verify`, in the same shape as the check above it -- it is asking *did
 # you mean this*, not forbidding it.
-PROCESS_DOCS='^(CLAUDE\.md|docs/1\.6-document-map\.md|docs/3\.6-change-lifecycle\.md|docs/3\.7-workstreams\.md)$'
+PROCESS_DOCS='^(CLAUDE\.md|docs/3\.6-change-lifecycle\.md|docs/3\.7-workstreams\.md)$'
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" != "main" ]; then
   ONMAIN="$(printf '%s\n' "$STAGED" | grep -v '^$' | grep -E "$PROCESS_DOCS" || true)"

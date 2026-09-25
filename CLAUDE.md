@@ -117,7 +117,10 @@ one of them has a defect: fix it, don't work around it.
   to main, which is what pre-approved means. A document-only change never takes a
   branch: they live too long, main moves, and the review does not happen. Approval is
   the `pre-approved` milestone; anything else, including none, means not pre-approved. One branch per project, and everything
-  the project touches goes on it, documentation included.
+  the project touches goes on it, its technical documentation included. Process
+  documents (`CLAUDE.md`, `docs/3.6`, `docs/3.7`) belong to no project and change
+  on main; `docs/1.6` is generated and is regenerated on the branch after its
+  rebase.
 - A pull request is what gives a review mechanics: a diff, a place to comment,
   a recorded approval, a merge that waits for a tick. Pre-approved does not mean
   unreviewed — it means the discussion was the review, which is enough where a
