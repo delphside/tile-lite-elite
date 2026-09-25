@@ -83,29 +83,41 @@ async fn check_for_stalled_jobs(scheduler_health: &SchedulerHealth) -> u64 {
 /// hang (a mutex lock and a map iteration, no I/O). It still watches
 /// every job's health regardless of which tier that job is on.
 pub fn spawn_scheduler(state: AppState) {
-    let fast = vec![Job::new(
-        "expire_overdue_turns",
-        FAST_INTERVAL,
-        state.clone(),
-        |state| async move { super::sweeps_game::expire_overdue_turns(&state).await },
-    )];
-    spawn(fast, FAST_INTERVAL, state.scheduler_health.clone());
+    for (interval, jobs) in tiers(&state) {
+        spawn(jobs, interval, state.scheduler_health.clone());
+    }
+}
 
-    let slow = vec![Job::new(
-        "send_move_time_reminders",
-        SLOW_INTERVAL,
-        state.clone(),
-        |state| async move { super::sweeps_game::send_move_time_reminders(&state).await },
-    )];
-    spawn(slow, SLOW_INTERVAL, state.scheduler_health.clone());
-
-    let watchdog = vec![Job::new(
-        "check_for_stalled_jobs",
-        WATCHDOG_INTERVAL,
-        state.clone(),
-        |state| async move { check_for_stalled_jobs(&state.scheduler_health).await },
-    )];
-    spawn(watchdog, WATCHDOG_INTERVAL, state.scheduler_health.clone());
+/// Every tier, as its interval and the jobs that run on it. The interval
+/// is written here once per tier and nowhere per job (`scheduler::Job`), and
+/// this is what a test reads to prove each job is on the tier it belongs to.
+pub(crate) fn tiers(state: &AppState) -> Vec<(Duration, Vec<Job>)> {
+    vec![
+        (
+            FAST_INTERVAL,
+            vec![Job::new(
+                "expire_overdue_turns",
+                state.clone(),
+                |state| async move { super::sweeps_game::expire_overdue_turns(&state).await },
+            )],
+        ),
+        (
+            SLOW_INTERVAL,
+            vec![Job::new(
+                "send_move_time_reminders",
+                state.clone(),
+                |state| async move { super::sweeps_game::send_move_time_reminders(&state).await },
+            )],
+        ),
+        (
+            WATCHDOG_INTERVAL,
+            vec![Job::new(
+                "check_for_stalled_jobs",
+                state.clone(),
+                |state| async move { check_for_stalled_jobs(&state.scheduler_health).await },
+            )],
+        ),
+    ]
 }
 
 #[cfg(test)]
@@ -137,6 +149,34 @@ mod tests {
             );
         }
         Arc::new(Mutex::new(map))
+    }
+
+    /// #415: nothing else would notice a job on the wrong tier. Its work
+    /// would still be done, only at the wrong cadence: turn expiry hourly,
+    /// or the watchdog sharing a tier with a job it is meant to outlive.
+    #[tokio::test]
+    async fn each_job_is_on_the_tier_it_belongs_to() {
+        let url = crate::app::tests::test_database_url();
+        let state = crate::app::tests::create_test_state(&url).await;
+
+        let placed: Vec<(Duration, Vec<&str>)> = tiers(&state)
+            .into_iter()
+            .map(|(interval, jobs)| (interval, jobs.iter().map(|job| job.name).collect()))
+            .collect();
+
+        assert_eq!(
+            placed,
+            vec![
+                (Duration::from_secs(5), vec!["expire_overdue_turns"]),
+                (
+                    Duration::from_secs(60 * 60),
+                    vec!["send_move_time_reminders"]
+                ),
+                (Duration::from_secs(5), vec!["check_for_stalled_jobs"]),
+            ],
+            "turn expiry is watched as it happens (#166), reminders tolerate an \
+             hour, and the watchdog has a tier to itself"
+        );
     }
 
     #[tokio::test]

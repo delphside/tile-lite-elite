@@ -32,14 +32,15 @@ pub(crate) const SLOW_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// One thing to run on a cadence. `run` does the work and returns how many
 /// items in that pass errored — `0` for a clean pass. Errors are still
 /// logged at the call site exactly as before; this count is what R5's
-/// health numbers read, not a replacement for the log. `expected_interval`
-/// is carried here rather than declared separately wherever a job is
-/// registered, so the cadence a job actually runs on and the cadence
-/// `check_for_stalled_jobs` (`scheduler_jobs.rs`) judges it against can
-/// never drift apart by being written down twice.
+/// health numbers read, not a replacement for the log.
+///
+/// **A job carries no interval of its own.** The tier it is spawned on
+/// (`spawn`) has one, and `run_once` records that as the job's
+/// `expected_interval`. Written once, so the cadence a job runs on and the
+/// cadence `check_for_stalled_jobs` judges it against cannot drift apart;
+/// when both were arguments, nothing stopped them disagreeing (#415).
 pub(crate) struct Job {
     pub(crate) name: &'static str,
-    pub(crate) expected_interval: Duration,
     run: Box<dyn Fn() -> Pin<Box<dyn Future<Output = u64> + Send>> + Send + Sync>,
 }
 
@@ -47,22 +48,14 @@ impl Job {
     /// Wraps an `async fn(&AppState) -> u64` as a job, cloning `state` into
     /// the closure once and re-cloning it (cheap — every field is an `Arc`,
     /// a `Pool`, or a `Sender`) on each call, since a job runs forever and a
-    /// borrow can't outlive one pass. `expected_interval` should be the
-    /// same value the job's list is later passed to `spawn` with — see the
-    /// struct's own doc comment for why that is a reference, not a copy.
-    pub(crate) fn new<F, Fut>(
-        name: &'static str,
-        expected_interval: Duration,
-        state: AppState,
-        run: F,
-    ) -> Self
+    /// borrow can't outlive one pass.
+    pub(crate) fn new<F, Fut>(name: &'static str, state: AppState, run: F) -> Self
     where
         F: Fn(AppState) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = u64> + Send + 'static,
     {
         Self {
             name,
-            expected_interval,
             run: Box::new(move || Box::pin(run(state.clone()))),
         }
     }
@@ -106,7 +99,7 @@ pub(crate) type SchedulerHealth = Arc<Mutex<HashMap<&'static str, JobHealth>>>;
 /// simply stop advancing with no signal beyond its own staleness. Awaiting
 /// a `JoinHandle` isolates the panic: a broken job becomes a recorded
 /// failure and the pass, and the next job in the list, carry on.
-pub(crate) async fn run_once(jobs: &[Job], health: &SchedulerHealth) {
+pub(crate) async fn run_once(jobs: &[Job], expected_interval: Duration, health: &SchedulerHealth) {
     for job in jobs {
         let errored = match tokio::spawn((job.run)()).await {
             Ok(errored) => errored,
@@ -121,7 +114,7 @@ pub(crate) async fn run_once(jobs: &[Job], health: &SchedulerHealth) {
                 last_completed_at: Some(now_unix_seconds()),
                 last_completed_instant: Some(std::time::Instant::now()),
                 errored_last_pass: errored,
-                expected_interval: job.expected_interval,
+                expected_interval,
             },
         );
     }
@@ -142,7 +135,7 @@ pub(crate) fn spawn(jobs: Vec<Job>, interval: Duration, health: SchedulerHealth)
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
             ticker.tick().await;
-            run_once(&jobs, &health).await;
+            run_once(&jobs, interval, &health).await;
         }
     });
 }
@@ -162,17 +155,15 @@ mod tests {
         let jobs = vec![
             Job {
                 name: "clean",
-                expected_interval: Duration::from_secs(1),
                 run: Box::new(|| Box::pin(async { 0u64 })),
             },
             Job {
                 name: "dirty",
-                expected_interval: Duration::from_secs(1),
                 run: Box::new(|| Box::pin(async { 2u64 })),
             },
         ];
 
-        run_once(&jobs, &health).await;
+        run_once(&jobs, Duration::from_secs(1), &health).await;
 
         let recorded = health.lock().await;
         let clean = recorded.get("clean").expect("clean job should have run");
@@ -193,17 +184,15 @@ mod tests {
         let jobs = vec![
             Job {
                 name: "panics",
-                expected_interval: Duration::from_secs(1),
                 run: Box::new(|| Box::pin(async { panic!("deliberately broken") })),
             },
             Job {
                 name: "still-runs-after",
-                expected_interval: Duration::from_secs(1),
                 run: Box::new(|| Box::pin(async { 0u64 })),
             },
         ];
 
-        run_once(&jobs, &health).await;
+        run_once(&jobs, Duration::from_secs(1), &health).await;
 
         let recorded = health.lock().await;
         let panicked = recorded
@@ -225,6 +214,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_expected_interval_recorded_is_the_tiers_own() {
+        // #415: the cadence a job is judged against comes from the tier it
+        // ran on, so it cannot disagree with the cadence it actually has.
+        let health = empty_health();
+        let jobs = vec![Job {
+            name: "on-a-tier",
+            run: Box::new(|| Box::pin(async { 0u64 })),
+        }];
+
+        run_once(&jobs, Duration::from_secs(3600), &health).await;
+
+        let recorded = health.lock().await;
+        assert_eq!(
+            recorded.get("on-a-tier").map(|h| h.expected_interval),
+            Some(Duration::from_secs(3600))
+        );
+    }
+
+    #[tokio::test]
     async fn run_once_runs_a_job_that_never_touches_a_handler() {
         // R1: proven without a handler in the call stack — this test never
         // builds a router or sends a request, and the job still runs.
@@ -232,7 +240,6 @@ mod tests {
         let counter = ran.clone();
         let jobs = vec![Job {
             name: "counts-its-own-runs",
-            expected_interval: Duration::from_secs(1),
             run: Box::new(move || {
                 let counter = counter.clone();
                 Box::pin(async move {
@@ -242,7 +249,7 @@ mod tests {
             }),
         }];
 
-        run_once(&jobs, &empty_health()).await;
+        run_once(&jobs, Duration::from_secs(1), &empty_health()).await;
 
         assert_eq!(ran.load(Ordering::SeqCst), 1);
     }
