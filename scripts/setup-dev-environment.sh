@@ -168,6 +168,44 @@ else
     echo "    already installed: $(docker --version)"
 fi
 
+echo "==> Docker build cache limit"
+# Docker prunes its build cache by itself, but sizes the limit from the disk it
+# can see. Inside WSL that is the virtual disk, 1 TB here, not the Windows drive
+# behind it, so it allowed 750 GB and kept everything under 60 days: the cache
+# reached 305 GB on 2026-09-25 (#419). A fixed ceiling replaces that. 20GB is
+# Docker's own documented `defaultKeepStorage` example, not a number of ours.
+#
+# Merged into any existing daemon.json rather than overwriting it, and Docker
+# is restarted only when the file changed. A restart stops running containers;
+# the preview stack's come back by themselves (`restart: unless-stopped`).
+DOCKER_KEEP_STORAGE="20GB"
+gc_result="$(sudo python3 - "$DOCKER_KEEP_STORAGE" /etc/docker/daemon.json <<'PY'
+import json, os, sys
+keep, path = sys.argv[1], sys.argv[2]
+conf = {}
+if os.path.exists(path):
+    text = open(path).read().strip()
+    conf = json.loads(text) if text else {}
+gc = conf.setdefault("builder", {}).setdefault("gc", {})
+if gc.get("enabled") is True and gc.get("defaultKeepStorage") == keep:
+    print("unchanged")
+    sys.exit(0)
+gc["enabled"] = True
+gc["defaultKeepStorage"] = keep
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as f:
+    json.dump(conf, f, indent=2)
+    f.write("\n")
+print("written")
+PY
+)"
+if [ "$gc_result" = "written" ]; then
+    sudo systemctl restart docker || echo "    (restart failed — the limit applies from Docker's next start)"
+    echo "    build cache capped at $DOCKER_KEEP_STORAGE"
+else
+    echo "    already capped at $DOCKER_KEEP_STORAGE"
+fi
+
 echo "==> SSH host aliases"
 # The deploy scripts pass `-i <key>` explicitly and need none of this. What
 # needs it is everything a person types: docs/3.4's `ssh tile-lite-elite`, and
