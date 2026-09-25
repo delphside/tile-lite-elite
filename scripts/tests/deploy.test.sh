@@ -335,7 +335,13 @@ fi
 # The commits are found rather than hardcoded: the newest commit that touches
 # the image, and its parent as what production is running. A fixed sha would
 # stop testing anything the day it aged out of the range.
-IMG_NEW="$(git -C "$HERE" log --format=%H -1 -- Cargo.lock 'crates/*' 2>/dev/null || true)"
+#
+# **Found on `origin/main`, not `HEAD`.** On a project branch the newest image
+# commit is the branch's own, not yet on main, and the gate rightly asks only
+# about commits already on main -- so every assertion below failed on
+# 400-scheduler-mechanism, 2026-09-25, while deploy.sh was correct.
+IMG_REF="$(git -C "$HERE" rev-parse --verify --quiet origin/main 2>/dev/null || echo HEAD)"
+IMG_NEW="$(git -C "$HERE" log "$IMG_REF" --format=%H -1 -- Cargo.lock 'crates/*' 2>/dev/null || true)"
 IMG_OLD="$(git -C "$HERE" rev-parse --verify --quiet "${IMG_NEW}^" 2>/dev/null || true)"
 
 if [[ -n "$IMG_NEW" && -n "$IMG_OLD" ]]; then
@@ -360,6 +366,14 @@ if [[ -n "$IMG_NEW" && -n "$IMG_OLD" ]]; then
     run_gates "$GREEN_MAIN" "$GREEN_JOBS" "$(all_current $IMG_OLD)" "$IMG_NEW"
 else
   echo "ok   (skipped: no image-touching commit with a parent to compare)"
+fi
+
+# **Counted again after this section.** The check above ran before it, so a
+# failure here printed FAIL and the suite still exited 0 -- found 2026-09-25,
+# when four of these failed on a project branch and CI stayed green.
+if (( failures > 0 )); then
+  echo "$failures test(s) failed" >&2
+  exit 1
 fi
 
 echo "All deploy gate tests passed."
