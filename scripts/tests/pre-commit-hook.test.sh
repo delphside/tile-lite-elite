@@ -211,10 +211,13 @@ echo "the process's own documents live on main (1b):"
 run_branch_case "CLAUDE.md on a project branch is refused"   1 399-x CLAUDE.md
 run_branch_case "so is the lifecycle document"               1 399-x docs/3.6-change-lifecycle.md
 run_branch_case "so is the workstreams document"             1 399-x docs/3.7-workstreams.md
-run_branch_case "and the generated document map"             1 399-x docs/1.6-document-map.md
 run_branch_case "on main they are ordinary"                  0 main  CLAUDE.md
 run_branch_case "a project's own document is fine on it"     0 399-x docs/4.3-api-schema.md
 run_branch_case "and so is a script"                         0 399-x scripts/thing.sh.tmp
+# 2026-09-25: docs/1.6 is generated from the branch's own headings, so it is
+# regenerated on the branch after the rebase that precedes a merge. It was on
+# the process list by mistake (docs/3.6, "Where a project has a branch").
+run_branch_case "and so is the generated document map"       0 399-x docs/1.6-document-map.md
 
 echo
 echo "$PASS passed, $FAIL failed"
