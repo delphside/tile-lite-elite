@@ -34,31 +34,17 @@ case "$*" in
 esac
 STUB
   chmod +x "$BIN/gh"
-  # `git rev-list --count --grep` is what commits_mentioning runs. The stub
-  # answers per issue number, so "mentioned" is set per test rather than by
-  # constructing a repository.
-  #
-  # It matches the **trailer** pattern the real function now uses (D40, #320).
-  # It matched `--grep=#N` until 2026-09-06, and when the function changed the
-  # stub simply stopped recognising anything and answered 0 — every case passed
-  # its "silent" assertions and failed its "named" ones, which is the loud
-  # version of a stub going stale. An unrecognised `--grep` is now an error
-  # rather than a zero, so the next change cannot pass quietly.
-  cat > "$BIN/git" <<'STUB'
-#!/usr/bin/env bash
-case "$*" in
-  *rev-list*--grep=*)
-    for n in ${MENTIONED:-}; do
-      case "$*" in *"--grep=(Refs|Closes) #$n\b"*) echo 1; exit 0 ;; esac
-    done
-    case "$*" in
-      *"--grep=(Refs|Closes) #"*) echo 0 ;;
-      *) echo "stub: unrecognised --grep shape: $*" >&2; exit 1 ;;
-    esac ;;
-  *) exit 0 ;;
-esac
-STUB
-  chmod +x "$BIN/git"
+  # **Stubbed at the function, not at git.** This suite tests which issues
+  # placeholder_shipping names, given which ones the release mentions. How a
+  # mention is recognised is the model's (`board/refs.py`, #421) and tested
+  # there. The stub used to mimic `git rev-list --grep` with the trailer
+  # pattern's exact shape, and went stale twice when that implementation
+  # changed; answering at `commits_mentioning` cannot.
+  commits_mentioning() {
+    local n
+    for n in ${MENTIONED:-}; do [[ "$2" == "$n" ]] && { echo 1; return; }; done
+    echo 0
+  }
   PATH="$BIN:$PATH"
   unset PATCH_ISSUES MINOR_ISSUES MAJOR_ISSUES MENTIONED 2>/dev/null || true
 }

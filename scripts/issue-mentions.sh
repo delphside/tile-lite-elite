@@ -49,7 +49,11 @@
 # `|| echo 0` because an unknown ref must not abort a deploy that has already
 # passed every other gate: not knowing is reported as "nothing mentions it",
 # which is the safe direction — it warns rather than closing an issue silently.
+#
+# **The rule is the model's** (`scripts/board/refs.py`, #421): this asks it
+# through `board-refs.py` rather than keeping its own pattern.
 commits_mentioning() {
   local ref="$1" num="$2"
-  git rev-list --count "$ref" -E --grep="(Refs|Closes) #${num}\b" 2>/dev/null || echo 0
+  python3 "$(dirname "${BASH_SOURCE[0]}")/board-refs.py" -C "${REPO_DIR:-.}" count "$ref" "$num" \
+    </dev/null 2>/dev/null || echo 0
 }

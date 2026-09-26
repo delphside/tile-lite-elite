@@ -332,6 +332,40 @@ This also fixes the failure mode this sweep found. The grid said a parent owes a
 4. **Two facts that look alike are distinguished in code, not in a comment.** `commits_naming_it` and `commits_naming_its_parent` are separate properties because conflating them caused #375.
 5. **Every derived fact carries the issue number that made it necessary**, as `is_parent` does above. A fact nobody can attribute is a fact nobody can delete, and deleting is in scope.
 
+### The bash side still keeps copies, and they move into the model
+
+The rules above were written for Python consumers. **The hooks, `deploy.sh` and
+the sourced bash helpers hold copies of model rules too**, and on 2026-09-26 those
+copies had drifted (#421, *Rules decided in more than one place*). Owner, the same
+day: *"We are focussing on a single python model for the tooling. We want to
+always refactor correctly, not just build patch on top of patch."*
+
+So a bash caller does not re-express a rule; it runs a model command and uses the
+answer. `scripts/board-refs.py` and its successors are thin: parse arguments,
+call the model, print.
+
+| rule | owner in the model | callers that held a copy |
+| --- | --- | --- |
+| which issue a commit or pull request names | `board/refs.py` | `issue-mentions.sh` (and so `deploy.sh`'s gate), four spots in `deploy.sh`, `.githooks/commit-msg`, `board/repo.py`, `board/context.py`, `board/merge.py` |
+| which issue a branch is for | `board/refs.py` | `.githooks/commit-msg`, `board/branches.py`, `board/merge.py` |
+| what reaches the image | next: `board/shipping.py` | `shipping-paths.sh` today, sourced by the hooks, `deploy.sh`, `verify.sh` and CI |
+| which documents are process documents | next | `.githooks/pre-commit` |
+
+**The grammar for "names an issue" is the measured one, not GitHub's.** GitHub
+closes an issue on nine keywords in any case. The question the model answers is
+a different one: *does this commit belong to issue N*, which is our trailer,
+`Refs #N` or `Closes #N`, capitalised, followed by one space. `issue-mentions.sh`
+recorded why at `9293893`: the case-sensitive form drops exactly the prose
+mentions and keeps every real trailer, and counting prose once nearly settled
+two projects that had shipped nothing. Measured again on 2026-09-26 across the
+whole history: `Refs` 1050, `Closes` 31, `Fixes` and `Resolves` none, and four
+lowercase mentions in prose. The copies that accepted `Fixes`, `Resolves` or any
+case had drifted from it; narrowing them loses nothing real.
+
+**A pull request names an issue** in its title's leading `#N` or in its body's
+trailers. **A branch is for the issue** its name begins with: `N-…`, or the
+older `issue-N-…`.
+
 ## Writing through the model
 
 Owner, 2026-09-17: *"Do we want to update via the python? Let's take the opportunity that using a high level language gives us to build a mini app in so far as that is useful. It should operate a bit like the cli admin tool, but being careful not to go too far and start duplicating GitHub and git."*

@@ -20,14 +20,12 @@ Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from . import refs
 from .model import RawIssue
 
-# `214-build-once`, `290-dioxus-07`, and the older `issue-` form.
-_NAMED = re.compile(r"^(?:issue-)?(\d+)-")
 
 
 def named_numbers(branches, protected=("main",)) -> tuple[int, ...]:
@@ -39,9 +37,9 @@ def named_numbers(branches, protected=("main",)) -> tuple[int, ...]:
     for branch in branches:
         if branch in protected or branch.startswith("release/"):
             continue
-        m = _NAMED.match(branch)
-        if m:
-            out.append(int(m.group(1)))
+        issue = refs.branch_issue(branch)
+        if issue is not None:
+            out.append(issue)
     return tuple(sorted(set(out)))
 
 
@@ -69,10 +67,9 @@ def check(branches: Sequence[str],
     for branch in branches:
         if branch in protected or branch.startswith("release/"):
             continue
-        m = _NAMED.match(branch)
-        if not m:
+        number = refs.branch_issue(branch)
+        if number is None:
             continue
-        number = int(m.group(1))
         raw = issues.get(number)
         if raw is None:
             out.append(Finding(branch, number,

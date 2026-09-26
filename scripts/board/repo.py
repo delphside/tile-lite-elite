@@ -22,6 +22,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import refs
+
 # **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
 # 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/3.6 §1132) is that
 # commits say `Refs #N` and **the deploy** is what closes them -- `Closes #N`
@@ -46,8 +48,6 @@ from pathlib import Path
 # case #375 exists for. The second is worse: a prose `closes` read as a
 # *closing* trailer, the strongest evidence `state_of` has, so a sentence
 # about a question in #311 was the reason #311 read as closed by a commit.
-CLOSES = re.compile(r"\b(?:Closes|Fixes|Resolves)\s+#(\d+)")
-MENTIONS = re.compile(r"\bRefs\s+#(\d+)")
 
 
 def _git(*args: str) -> str:
@@ -206,21 +206,38 @@ def _scope(rev: list[str], no_merges: bool = True,
             paths = [line for line in names.splitlines() if line.strip()]
             if not _delivers(paths):
                 continue
-        closing = {int(n) for n in CLOSES.findall(body)}
+        closing = refs.closes(body)
         for number in closing:
             scope.closes.setdefault(number, []).append(sha.strip())
         # A commit that closes an issue is not also merely referencing it.
-        for number in {int(n) for n in MENTIONS.findall(body)} - closing:
+        for number in refs.named(body) - closing:
             scope.refs.setdefault(number, []).append(sha.strip())
     return scope
+
+
+def messages(rev: str) -> list[tuple[str, str]]:
+    """(sha, message) for every commit `git log <rev>` lists, merges included.
+
+    `rev` is anything `git log` takes: a ref, or a range like `A..B`. An unknown
+    one gives an empty list, which callers read as "nothing names it", the safe
+    direction for a gate: it warns rather than settling an issue silently.
+    """
+    text = _git("log", "--format=%x1e%H%x1f%B", rev)
+    out = []
+    for entry in text.split("\x1e"):
+        if "\x1f" in entry:
+            sha, body = entry.split("\x1f", 1)
+            out.append((sha.strip(), body))
+    return out
 
 
 def mentions_on(ref: str = "origin/main") -> Scope:
     """Every trailer reachable from `ref`, merges included.
 
-    The milestone check's question, and deliberately the same one
-    `issue-mentions.sh` answers for `deploy.sh`'s gate: same trailers, same
-    case-sensitivity, merges counted. The pre-flight and the gate disagreeing
+    The milestone check's question, and the same one `issue-mentions.sh`
+    answers for `deploy.sh`'s gate: both read `board/refs.py`, so the trailers
+    and their case are one definition rather than two kept equal (#421). Merges
+    are counted by both. The pre-flight and the gate disagreeing
     is worse than either being wrong on its own -- the pre-flight would pass
     and the deploy would then refuse, with nothing saying why.
 

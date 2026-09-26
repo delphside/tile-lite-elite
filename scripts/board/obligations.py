@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
+from . import refs
 from .model import (
     Decision,
     Issue,
@@ -414,7 +415,7 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "pr-linked", (PullRequest,), ANY_STEP,
         "a linked issue — `Refs #N` or `Closes #N`",
         "a change with no issue has no requirement",
-        lambda i: bool(re.search(r"\b(Refs|Closes) #\d+", i.body)),
+        lambda i: bool(refs.named(i.body)),
     ),
     Obligation(
         "pr-scope-stated", (PullRequest,),

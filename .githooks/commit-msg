@@ -80,9 +80,13 @@ fi
 # A branch named for an issue (`214-build-once`, `290-dioxus-07`) says which
 # project owns it. If the message names a different one, that is the mistake.
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
-if [[ "$BRANCH" =~ ^(issue-)?([0-9]+)- ]]; then
-  BRANCH_ISSUE="${BASH_REMATCH[2]}"
-  MENTIONED="$(grep -oE '\b(Refs|Closes|Fixes) #[0-9]+' "$MSG_FILE" | grep -oE '[0-9]+' || true)"
+# Both rules are the model's (`scripts/board/refs.py`, #421), asked through
+# `board-refs.py` rather than copied here: which issue a branch is for, and
+# which a message names.
+REFS="$(dirname "$0")/../scripts/board-refs.py"
+BRANCH_ISSUE="$(python3 "$REFS" branch "$BRANCH" 2>/dev/null || true)"
+if [[ -n "$BRANCH_ISSUE" ]]; then
+  MENTIONED="$(python3 "$REFS" named < "$MSG_FILE" 2>/dev/null || true)"
   if [[ -n "$MENTIONED" ]] && ! printf '%s\n' "$MENTIONED" | grep -qx "$BRANCH_ISSUE"; then
     echo "commit refused: this is branch $BRANCH, but the message names #$(printf '%s' "$MENTIONED" | head -1)." >&2
     echo >&2

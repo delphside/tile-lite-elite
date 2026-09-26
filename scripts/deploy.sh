@@ -355,8 +355,8 @@ issues claimed in this range
     while IFS= read -r num; do
       [[ -n "$num" ]] || continue
       printf '  #%-6s %s commit(s)%s
-' "$num"         "$(git -C "$REPO_DIR" rev-list --count "$range" -E --grep="(Refs|Closes) #${num}\b" 2>/dev/null || echo 0)"         "$(issue_touches_image "$num" "$range" && printf ', reaches the image' || true)"
-    done < <(git -C "$REPO_DIR" log --format=%B "$range" 2>/dev/null                | grep -oE '(Refs|Closes) #[0-9]+' | grep -oE '[0-9]+' | sort -un || true)
+' "$num"         "$(python3 "$(dirname "${BASH_SOURCE[0]}")/board-refs.py" -C "$REPO_DIR" count "$range" "$num" </dev/null 2>/dev/null || echo 0)"         "$(issue_touches_image "$num" "$range" && printf ', reaches the image' || true)"
+    done < <(python3 "$(dirname "${BASH_SOURCE[0]}")/board-refs.py" -C "$REPO_DIR" numbers "$range" </dev/null 2>/dev/null || true)
   } > "$out"
   printf '%s' "$out"
 }
@@ -367,7 +367,7 @@ issue_touches_image() {
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
     touches_image "$c" && return 0
-  done < <(git -C "$REPO_DIR" rev-list "$range" -E --grep="(Refs|Closes) #${num}\b" 2>/dev/null || true)
+  done < <(python3 "$(dirname "${BASH_SOURCE[0]}")/board-refs.py" -C "$REPO_DIR" commits "$range" "$num" </dev/null 2>/dev/null || true)
   return 1
 }
 
@@ -418,8 +418,7 @@ report_plan_disagreement() {
     # this far — not a Requirement, and carrying no milestone — can reach it.
     is_parent "$num" && continue
     unfiled="$unfiled $num"
-  done < <(git -C "$REPO_DIR" log --format=%B "$range" </dev/null 2>/dev/null \
-             | grep -oE '(Refs|Closes) #[0-9]+' | grep -oE '[0-9]+' | sort -un || true)
+  done < <(python3 "$(dirname "${BASH_SOURCE[0]}")/board-refs.py" -C "$REPO_DIR" numbers "$range" </dev/null 2>/dev/null || true)
 
   if [[ -n "$unfiled" ]]; then
     echo "==> These reach the image and are in no milestone:$unfiled" >&2
