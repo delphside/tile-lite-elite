@@ -97,6 +97,13 @@ one of them has a defect: fix it, don't work around it.
   | Project Closedown | Lessons learnt completed. |
 
   The post-deployment check has one row per requirement.
+- **A problem found in testing is fixed on the branch, and the branch is
+  retested.** One found after the merge either reopens the package (a new
+  branch, back to Development, tested again) or goes in a later package. A
+  merge moves a Production Release package to Deployment and a Repository
+  Change one to Post-deployment; docs/3.6 §2.1 has why. Owner, 2026-09-26.
+- **One work package, one deliverable.** Building a tool and running it are two
+  deliveries with different routes, so two packages (#404 and #422).
 
 ## Changes
 
