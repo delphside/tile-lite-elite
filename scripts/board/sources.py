@@ -56,7 +56,7 @@ query($owner:String!, $repo:String!, $cursor:String) {
                  orderBy:{field:CREATED_AT, direction:DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        number title state body createdAt updatedAt
+        number title state body createdAt updatedAt headRefName
         isDraft reviewDecision
         reviewRequests(first:1) { totalCount }
         milestone { title }
@@ -225,6 +225,7 @@ def _pr_to_raw(node: dict) -> RawIssue:
         created_at=node.get("createdAt"),
         updated_at=node.get("updatedAt"),
         closed_at=node.get("closedAt"),
+        head_ref=node.get("headRefName"),
     )
 
 

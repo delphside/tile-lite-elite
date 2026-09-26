@@ -120,6 +120,8 @@ class RawIssue:
     # Needed by R2, which asks what *changed* in a window: an issue closed in
     # silence produces no comment at all, so a comment listing never reveals it.
     closed_at: str | None = None
+    # A pull request's branch. None for an issue.
+    head_ref: str | None = None
 
 
 # --------------------------------------------------------------------------

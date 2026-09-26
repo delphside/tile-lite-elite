@@ -290,6 +290,47 @@ def behind_main(version: str | None, main: str = "origin/main") -> str:
     return f"{changes} change{'' if changes == '1' else 's'} behind main{suffix}"
 
 
+@dataclass(frozen=True)
+class RunningOn:
+    """Where an environment's commit sits, for a reader asking what it runs.
+
+    **"Up to date with main" was true and misleading.** Preview ran a project
+    branch's tip, which had everything on `main` and more, so it counted
+    nothing behind and said "up to date with main" -- while running a pull
+    request that was not on `main` at all (#420, 2026-09-26). A commit that is
+    not on `main` is described by the branch it is on.
+    """
+
+    on_main: bool
+    branch: str | None = None      # a remote branch holding the commit
+    at_tip: bool = False           # that branch's newest commit is this one
+
+
+def running_on(version: str | None, main: str = "origin/main") -> RunningOn | None:
+    """None when the version carries no commit or the commit is not here."""
+    if not version or "+" not in version:
+        return None
+    sha = version.split("+", 1)[1]
+    full = _git("rev-parse", "-q", "--verify", f"{sha}^{{commit}}").strip()
+    if not full:
+        return None
+    if subprocess.run(["git", "merge-base", "--is-ancestor", full, main],
+                      capture_output=True).returncode == 0:
+        return RunningOn(on_main=True)
+    main_name = main.removeprefix("origin/")
+    at_tip = [line.strip().removeprefix("origin/") for line in
+              _git("for-each-ref", "--points-at", full, "--format=%(refname:short)",
+                   "refs/remotes/origin").splitlines()]
+    at_tip = [b for b in at_tip if b and b not in (main_name, "HEAD", "origin")]
+    if at_tip:
+        return RunningOn(on_main=False, branch=sorted(at_tip)[0], at_tip=True)
+    holding = [line.strip().removeprefix("origin/") for line in
+               _git("branch", "-r", "--contains", full,
+                    "--format=%(refname:short)").splitlines()]
+    holding = [b for b in holding if b and b not in (main_name, "HEAD", "origin")]
+    return RunningOn(on_main=False, branch=sorted(holding)[0] if holding else None)
+
+
 def ci_red_on_main() -> str | None:
     """The `push:main` run's conclusion, if it concluded and failed.
 

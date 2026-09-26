@@ -51,6 +51,22 @@ def _rehearsal_url() -> str:
     return out.stdout.strip()
 
 
+def branch_line(where: "repo.RunningOn | None", prs: dict[str, tuple[int, str]]) -> str | None:
+    """The second line under an environment not running `main`, or None."""
+    if where is None or where.on_main:
+        return None
+    if where.branch is None:
+        return "not on main, and on no branch pushed here"
+    tip = "its latest commit" if where.at_tip else "an older commit on it"
+    line = f"branch {where.branch}, {tip}"
+    if where.branch in prs:
+        number, title = prs[where.branch]
+        # A pull request is titled for its work package, "#415 Admin CLI…".
+        joiner = " for " if re.match(r"#\d+ ", title) else " "
+        line += f" · PR #{number}{joiner}{title}"
+    return line
+
+
 def environments() -> list[tuple[str, str, str, str]]:
     urls = [
         ("production", os.environ.get("PROD_URL", "https://tileliteelite.com"),
@@ -65,8 +81,13 @@ def environments() -> list[tuple[str, str, str, str]]:
     for name, url, meaning in urls:
         version = repo.live_version(url) if url else None
         # "did not answer" is not "not deployed"; the report must not merge them.
-        rows.append((name, version or "did not answer",
-                     repo.behind_main(version), meaning))
+        where = repo.running_on(version)
+        behind = repo.behind_main(version)
+        if where is not None and not where.on_main:
+            # Not on main, and possibly also missing commits that are.
+            behind = ("not on main" if behind.startswith("up to date")
+                      else f"not on main, {behind}")
+        rows.append((name, version or "did not answer", behind, meaning))
     return rows
 
 
@@ -190,8 +211,14 @@ def render(snapshot: Snapshot, got: repo.Commits, colour: bool = True) -> str:
     out: list[str] = []
 
     out.append(paint(BOLD, "Environments"))
+    prs = {i.raw.head_ref: (i.number, i.title) for i in
+           (classify(r) for r in snapshot.issues)
+           if i.kind == "PullRequest" and i.raw.head_ref and i.state == "OPEN"}
     for name, version, behind, meaning in environments():
         out.append(f"  {name:<12}{version:<20}{behind:<34}{paint(DIM, meaning)}")
+        extra = branch_line(repo.running_on(version), prs)
+        if extra:
+            out.append(f"  {'':<12}{paint(DIM, extra)}")
 
     out.append("")
     out.append(paint(BOLD, "A release from main would ship"))
