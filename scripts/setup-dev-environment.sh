@@ -129,12 +129,13 @@ EOF
     fi
 fi
 
-echo "==> System packages (build tools + dioxus-desktop's webview deps)"
+echo "==> System packages (build tools, dioxus-desktop's webview deps, and bats for the tooling's tests)"
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
     build-essential pkg-config curl ca-certificates git \
     libssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
-    libayatana-appindicator3-dev librsvg2-dev
+    libayatana-appindicator3-dev librsvg2-dev \
+    bats bats-support bats-assert
 
 echo "==> Rust toolchain"
 if ! command -v rustc >/dev/null 2>&1; then

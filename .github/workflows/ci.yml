@@ -116,6 +116,15 @@ jobs:
       - name: Python model tests
         run: python3 -m unittest discover -s scripts -t scripts -v
 
+      # bats-core runs the shell tooling's tests (docs/3.3 §2.4), with the
+      # standard bats-support and bats-assert helpers. None is on the image.
+      - name: Shell tooling tests (bats)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats bats-support bats-assert
+          bats scripts/tests
+
+      # The suites not yet moved to bats (#421).
       - name: Shell script tests
         run: |
           # Every suite in the directory, not a list. The list was hand-maintained
