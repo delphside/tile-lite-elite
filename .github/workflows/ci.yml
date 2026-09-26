@@ -110,6 +110,12 @@ jobs:
       # only by deploying — so the branch where each says *no* almost never
       # ran, which is how two of them came to fail open and a third to refuse
       # every rehearsal for a day.
+      # The Python model's tests, on the standard library's runner (docs/3.3
+      # §2.4). Suites move here from scripts/tests/*.test.sh as #421 migrates
+      # them; the loop below runs whatever has not moved yet.
+      - name: Python model tests
+        run: python3 -m unittest discover -s scripts/board/tests -t scripts -v
+
       - name: Shell script tests
         run: |
           # Every suite in the directory, not a list. The list was hand-maintained
