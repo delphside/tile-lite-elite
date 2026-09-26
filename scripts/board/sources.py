@@ -407,6 +407,31 @@ def issues_by_number(numbers: Sequence[int]) -> dict[int, RawIssue]:
     return out
 
 
+_FULL_FIELDS = """number title state createdAt updatedAt closedAt
+  issueType { name } milestone { title } parent { number }
+  labels(first:20) { nodes { name } }
+  subIssues(first:50) { nodes { number issueType { name } } }
+  blockedBy(first:20) { nodes { number } } blocking(first:20) { nodes { number } }
+  issueFieldValues(first:20) { nodes { ... on IssueFieldSingleSelectValue {
+    value field { ... on IssueFieldCommon { name } } } } }"""
+
+
+def issues_in_full(numbers: Sequence[int]) -> dict[int, RawIssue]:
+    """These issues with their fields and milestone, whatever their state.
+
+    For a closed work package that still belongs in its family's context
+    header: the snapshot holds only open issues, and `issues_by_number` only
+    titles. No bodies -- the header never reads one.
+    """
+    if not numbers:
+        return {}
+    parts = " ".join(f"i{n}: issue(number:{n}) {{ {_FULL_FIELDS} }}"
+                     for n in sorted(set(numbers)))
+    query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+    repo = (_gh_graphql(query, partial=True).get("data") or {}).get("repository") or {}
+    return {node["number"]: _to_raw(node) for node in repo.values() if node}
+
+
 def remote_branches(remote: str = "origin") -> tuple[str, ...]:
     """Branch names on the remote.
 

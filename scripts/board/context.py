@@ -135,7 +135,10 @@ def render(root: Issue, board: Mapping[int, Issue],
         route = None if is_parent else m.field("Route")
         milestone = None if is_parent else m.raw.milestone
         pr = ", ".join(f"#{n}" for n in prs.get(m.number, []))
-        rows.append(f"| {_cell(f'#{m.number} {short_title(m.title)}')} | {_cell(m.field('Phase'))} "
+        phase = m.field("Phase")
+        if m.state == "CLOSED":
+            phase = f"{phase}, closed" if phase else "closed"
+        rows.append(f"| {_cell(f'#{m.number} {short_title(m.title)}')} | {_cell(phase)} "
                     f"| {_cell(route)} | {_cell(milestone)} | {_cell(pr)} |")
 
     inside = {m.number for m in members}
@@ -175,6 +178,17 @@ def current(issue: Issue) -> str | None:
     """The header the body carries now, or None."""
     m = _BLOCK.search(issue.body)
     return m.group(0).rstrip("\n") if m else None
+
+
+def missing_members(board: Mapping[int, Issue]) -> list[int]:
+    """Work packages of an open parent that the open board does not hold.
+
+    Closed ones, in practice. They still belong in the header -- a family is
+    all its packages, delivered or not -- so they are fetched and listed, and
+    never written to: a closed issue is history and is not edited.
+    """
+    return sorted({n for i in board.values() if isinstance(i, ParentProject)
+                   for n in i.work_packages if n not in board})
 
 
 def wanted_titles(projects: Sequence[Issue]) -> set[int]:

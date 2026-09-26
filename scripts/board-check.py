@@ -32,7 +32,7 @@ from board.branches import check as check_branches
 from board.branches import render as render_branches
 from board.branches import named_numbers
 from board.context import render_findings as render_context
-from board.context import stale, undeclared_links, wanted_titles
+from board.context import missing_members, stale, undeclared_links, wanted_titles
 from board.milestone import carried
 from board.milestone import render as render_milestone
 from board.milestone import unbuilt
@@ -43,7 +43,7 @@ from board.overtaken import render as render_overtaken
 from board.release import outstanding as tests_outstanding
 from board.release import render as render_tests
 from board.repo import last_release_at, mentions_on
-from board.sources import (Unavailable, fetch, issues_by_number,
+from board.sources import (Unavailable, fetch, issues_by_number, issues_in_full,
                            remote_branches, step_ages)  # noqa: E402
 
 
@@ -150,6 +150,10 @@ def main(argv=None) -> int:
         try:
             typed = [classify(raw) for raw in snapshot.issues]
             board = {i.number: i for i in typed}
+            # The same closed packages board-context.py writes into a header,
+            # or every header naming one would read as stale here.
+            board.update({n: classify(r) for n, r in
+                          issues_in_full(missing_members(board)).items()})
             titles = {n: i.title for n, i in board.items()}
             missing = [n for n in wanted_titles(typed) if n not in titles]
             titles.update({n: r.title for n, r in issues_by_number(missing).items()})

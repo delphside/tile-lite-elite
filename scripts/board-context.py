@@ -32,14 +32,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from board.context import (family, family_root, fields_visible,  # noqa: E402
-                           headers, needs_writing, wanted_titles, with_header)
+                           headers, missing_members, needs_writing,
+                           wanted_titles, with_header)
 from board.model import classify  # noqa: E402
-from board.sources import REPO, OWNER, Unavailable, fetch, issues_by_number  # noqa: E402
+from board.sources import (REPO, OWNER, Unavailable, fetch,  # noqa: E402
+                           issues_by_number, issues_in_full)
 
 
 def load():
     snapshot = fetch()
     board = {i.number: i for i in (classify(r) for r in snapshot.issues)}
+    board.update({n: classify(r) for n, r in issues_in_full(missing_members(board)).items()})
     titles = {n: i.title for n, i in board.items()}
     missing = [n for n in wanted_titles(list(board.values())) if n not in titles]
     titles.update({n: r.title for n, r in issues_by_number(missing).items()})

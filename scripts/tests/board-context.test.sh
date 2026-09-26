@@ -21,8 +21,8 @@ sys.path.insert(0, ".")
 from board.model import RawIssue, RawSubIssue, classify
 from datetime import date
 from board.context import (INTRODUCTION, current, declared, fields_visible,
-                           headers, needs_writing, short_title, stale,
-                           undeclared_links, with_header)
+                           headers, missing_members, needs_writing,
+                           short_title, stale, undeclared_links, with_header)
 
 failures = 0
 def expect(name, want, got):
@@ -119,6 +119,24 @@ moved = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
 moved = {**board, **moved}
 expect("a phase that moved does need one", True,
        needs_writing(moved[400], headers(moved, titles, TODAY)[400]))
+
+print("R10: a closed package is still part of the family")
+fam = board_of(
+    raw(329, "#329 MAIN PROJECT: document and generalise errors",
+        fields={"Phase": "Design and Test Approach"},
+        subs=[RawSubIssue(398, "Project"), RawSubIssue(399, "Project")]),
+    raw(399, "#329 WP B Del 2 of 2: Generalise API database errors", parent=329,
+        fields={"Phase": "Deployment"}, milestone="0.8.2"),
+)
+expect("the open board lacks it, so it is asked for", [398], missing_members(fam))
+fam.update(board_of(raw(398, "#329 WP A Del 1 of 2: the errors documented", parent=329,
+                        fields={"Phase": "Project Closedown"}, milestone="pre-approved",
+                        state="CLOSED")))
+ht = headers(fam, {n: i.title for n, i in fam.items()}, TODAY)
+expect("it is listed, and says it is closed", True,
+       "| #398 WP A: the errors documented | Project Closedown, closed |" in ht[329])
+expect("the closed package is given no header of its own", False, 398 in ht)
+expect("and nothing more is missing", [], missing_members(fam))
 
 print("R10: a token that cannot see fields")
 blind = board_of(raw(1, "a"), raw(2, "b"))
