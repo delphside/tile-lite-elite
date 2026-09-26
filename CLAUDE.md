@@ -102,8 +102,10 @@ one of them has a defect: fix it, don't work around it.
   branch, back to Development, tested again) or goes in a later package. A
   merge moves a Production Release package to Deployment and a Repository
   Change one to Post-deployment; docs/3.6 §2.1 has why. Owner, 2026-09-26.
-- **One work package, one deliverable.** Building a tool and running it are two
-  deliveries with different routes, so two packages (#404 and #422).
+- **A work package is at most one delivery, and so one route.** A delivery may
+  carry several packages; a package never spans two deliveries. Building a tool
+  and running it are two deliveries with different routes, so two packages
+  (#404 and #422). Owner, 2026-09-27.
 
 ## Changes
 
