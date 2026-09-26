@@ -34,3 +34,11 @@ touches_image() {
 touches_image_range() {
   python3 "$_SHIPPING_CMD" -C "${REPO_DIR:-.}" range "$1" "$2" </dev/null 2>/dev/null
 }
+
+# ships <commit-ish> -> 0 if it carries anything to release: it reaches the
+# image and is more than the version moving. The version bump after a release
+# touches Cargo.toml and ships nothing, so a question about unreleased work asks
+# this rather than touches_image.
+ships() {
+  python3 "$_SHIPPING_CMD" -C "${REPO_DIR:-.}" ships "$1" </dev/null 2>/dev/null
+}

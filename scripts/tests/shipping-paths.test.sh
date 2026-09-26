@@ -80,6 +80,24 @@ touches_image_range "$BASE_SHA" "$HEAD_SHA" || status=$?
 check "a pull request touching only scripts/ does not reach the image" 1 "$status"
 teardown
 
+# ships: the version bump after a release reaches the image by path and ships
+# nothing, so deploy.sh's emergency check must not count it; a crate change
+# beside it must.
+setup
+printf '[workspace.package]\nversion = "0.9.0"\n' > "$REPO_DIR/Cargo.toml"; git -C "$REPO_DIR" add -A
+git -C "$REPO_DIR" commit -q -m "release 0.9.0"
+sed -i 's/0.9.0/0.9.1/' "$REPO_DIR/Cargo.toml"; git -C "$REPO_DIR" add -A
+git -C "$REPO_DIR" commit -q -m "bump to 0.9.1"
+status=0; ships HEAD || status=$?
+check "a version bump alone does not ship" 1 "$status"
+status=0; touches_image HEAD || status=$?
+check "though it touches the image by path" 0 "$status"
+echo "fn main() {}" > "$REPO_DIR/crates/ui/src/lib.rs"; git -C "$REPO_DIR" add -A
+git -C "$REPO_DIR" commit -q -m "a crate change"
+status=0; ships HEAD || status=$?
+check "a crate change ships" 0 "$status"
+teardown
+
 if (( failures )); then
   echo "  $failures check(s) failed"
   exit 1

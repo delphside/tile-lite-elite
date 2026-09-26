@@ -1027,7 +1027,10 @@ if [[ -n "$EMERGENCY" && "$DEPLOY_ENV" == "production" ]]; then
     while read -r esha; do
       [[ -n "$esha" ]] || continue
       git merge-base --is-ancestor "$esha" origin/main 2>/dev/null || continue
-      if touches_image "$esha"; then
+      # `ships`, not `touches_image`: the version bump after each release is
+      # on main and touches Cargo.toml, and asking about it here would be a
+      # false alarm on every emergency cut from main after a release.
+      if ships "$esha"; then
         EMERG_EXTRA+="      $(git log -1 --format='%h %s' "$esha" | cut -c1-90)"$'\n'
       fi
     done < <(git log --format=%H "$EMERG_LIVE..$TARGET_FULL_SHA" 2>/dev/null)

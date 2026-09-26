@@ -342,15 +342,17 @@ fi
 # 400-scheduler-mechanism, 2026-09-25, while deploy.sh was correct.
 IMG_REF="$(git -C "$HERE" rev-parse --verify --quiet origin/main 2>/dev/null || echo HEAD)"
 #
-# **And judged by `touches_image`, not by a path pattern.** `crates/*` also
+# **And judged by the gate's own test, not by a path pattern.** `crates/*` also
 # matches `crates/*/examples/`, which does not ship: on 2026-09-26 the newest
 # such commit was a benchmark's result rows, the gate rightly said nothing,
 # and the test failed. The fixture now asks the same question the gate does.
+# Since 2026-09-26 that question is `ships`: the version bump after 0.9.0 was
+# the newest image commit, the gate rightly ignored it, and four cases failed.
 # shellcheck source=../shipping-paths.sh
 . "$HERE/scripts/shipping-paths.sh"
 IMG_NEW=""
 while read -r candidate; do
-  if REPO_DIR="$HERE" touches_image "$candidate"; then IMG_NEW="$candidate"; break; fi
+  if REPO_DIR="$HERE" ships "$candidate"; then IMG_NEW="$candidate"; break; fi
 done < <(git -C "$HERE" log "$IMG_REF" --format=%H -50 2>/dev/null || true)
 IMG_OLD="$(git -C "$HERE" rev-parse --verify --quiet "${IMG_NEW}^" 2>/dev/null || true)"
 
