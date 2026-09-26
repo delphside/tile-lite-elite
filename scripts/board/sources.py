@@ -432,6 +432,53 @@ def issues_in_full(numbers: Sequence[int]) -> dict[int, RawIssue]:
     return {node["number"]: _to_raw(node) for node in repo.values() if node}
 
 
+def pull_request_for(branch: str) -> tuple[int, str, str] | None:
+    """(number, title, body) of the newest pull request from `branch`, any state.
+
+    Any state, because the post-merge hook runs after the local fast-forward
+    and before the push that marks the pull request merged.
+    """
+    query = """query($owner:String!, $repo:String!, $head:String!) {
+      repository(owner:$owner, name:$repo) {
+        pullRequests(headRefName:$head, first:1, orderBy:{field:CREATED_AT, direction:DESC}) {
+          nodes { number title body } } } }"""
+    payload = _gh_graphql(query, owner=OWNER, repo=REPO, head=branch)
+    nodes = (((payload.get("data") or {}).get("repository") or {})
+             .get("pullRequests") or {}).get("nodes") or []
+    if not nodes:
+        return None
+    node = nodes[0]
+    return node["number"], node.get("title") or "", node.get("body") or ""
+
+
+def set_field(number: int, field: str, value: str) -> None:
+    """Set an issue field by NAME and option NAME.
+
+    The ids are looked up here, per call, rather than written into the
+    caller -- the rule this module exists to keep. A name that does not exist
+    raises, rather than setting nothing and looking as if it worked.
+    """
+    fields = _gh_graphql(f"""{{ organization(login:"{OWNER}") {{ issueFields(first:30) {{
+      nodes {{ ... on IssueFieldSingleSelect {{ id name options {{ id name }} }} }} }} }} }}""")
+    nodes = ((((fields.get("data") or {}).get("organization") or {})
+              .get("issueFields") or {}).get("nodes") or [])
+    chosen = next((f for f in nodes if f and f.get("name") == field), None)
+    if chosen is None:
+        raise Unavailable(f"no issue field named {field!r}")
+    option = next((o for o in chosen["options"] if o["name"] == value), None)
+    if option is None:
+        raise Unavailable(f"field {field!r} has no option {value!r}")
+    issue = _gh_graphql(f"""{{ repository(owner:"{OWNER}", name:"{REPO}") {{
+      issue(number:{number}) {{ id }} }} }}""")
+    issue_id = (((issue.get("data") or {}).get("repository") or {})
+                .get("issue") or {}).get("id")
+    if not issue_id:
+        raise Unavailable(f"#{number} not found")
+    _gh_graphql(f"""mutation {{ setIssueFieldValue(input:{{issueId:"{issue_id}",
+      issueFields:[{{fieldId:"{chosen['id']}", singleSelectOptionId:"{option['id']}"}}]}})
+      {{ clientMutationId }} }}""")
+
+
 def remote_branches(remote: str = "origin") -> tuple[str, ...]:
     """Branch names on the remote.
 
