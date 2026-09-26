@@ -348,7 +348,7 @@ call the model, print.
 | --- | --- | --- |
 | which issue a commit or pull request names | `board/refs.py` | `issue-mentions.sh` (and so `deploy.sh`'s gate), four spots in `deploy.sh`, `.githooks/commit-msg`, `board/repo.py`, `board/context.py`, `board/merge.py` |
 | which issue a branch is for | `board/refs.py` | `.githooks/commit-msg`, `board/branches.py`, `board/merge.py` |
-| what reaches the image | next: `board/shipping.py` | `shipping-paths.sh` today, sourced by the hooks, `deploy.sh`, `verify.sh` and CI |
+| what reaches the image | `board/shipping.py` | `shipping-paths.sh`'s `NON_SHIPPING`, used by the pre-commit hook directly and by `deploy.sh`, `verify.sh` and CI through its functions, which now ask the model |
 | which documents are process documents | next | `.githooks/pre-commit` |
 
 **The grammar for "names an issue" is the measured one, not GitHub's.** GitHub

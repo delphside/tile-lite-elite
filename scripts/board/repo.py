@@ -215,6 +215,19 @@ def _scope(rev: list[str], no_merges: bool = True,
     return scope
 
 
+def changed_paths(sha: str) -> list[str]:
+    """The paths one commit changed, against its first parent for a merge.
+
+    An unknown commit gives an empty list.
+    """
+    return [p for p in _git("show", "--name-only", "--format=", sha).splitlines() if p.strip()]
+
+
+def changed_paths_between(base: str, head: str) -> list[str]:
+    """The paths that differ between two commits, as one change."""
+    return [p for p in _git("diff", "--name-only", base, head).splitlines() if p.strip()]
+
+
 def messages(rev: str) -> list[tuple[str, str]]:
     """(sha, message) for every commit `git log <rev>` lists, merges included.
 

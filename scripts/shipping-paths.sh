@@ -8,47 +8,23 @@
 # comes to exist in two places, and this one decides both whether a commit is
 # refused and whether a release is described correctly.
 #
-# **`docs/4.8` is the authority**, under *The route an artefact takes*: anything
-# built into the image is Production Release — `crates/**`, the word lists,
-# `Caddyfile`, `docker-compose.yml`, `Dockerfile` — and everything else in the
-# repository is Repository Change. This is that rule in the form a script can
-# apply, written as the *exceptions* rather than the members: the list of things
-# that ship grows whenever a crate is added, and the list of things that do not
-# is stable.
+# **The rule is the model's**, `scripts/board/shipping.py`, since 2026-09-26
+# (#421): it was `NON_SHIPPING` here, and the reasoning moved with it. This file
+# keeps the two functions its callers source, and each asks
+# `scripts/board-shipping.py` rather than holding a pattern of its own.
 #
-# Test code is excluded deliberately — `docs/4.8`, *What counts as an artefact*:
-# a test exists to hold an artefact to its behaviour and is delivered with it.
+# `-C "${REPO_DIR:-.}"` because deploy.sh addresses its repository explicitly
+# everywhere else and this must agree with it; bare `git` reads the current
+# directory, which under test inspected the real repository instead of the
+# fixture. `</dev/null` because these run inside `while read` loops in
+# deploy.sh, where a command inheriting the loop's stdin consumes lines it has
+# not read yet.
 
-# shellcheck disable=SC2034  # consumed by the sourcing script
-# `.cargo/audit.toml` and not `.cargo/` — the file, deliberately. It configures
-# `cargo audit` and is read by nothing else, so it cannot reach a build.
-# `.cargo/config.toml` sets rustflags, the target directory and registries, and
-# would change the bytes; a directory-wide exception would let that onto `main`
-# with no branch. Added 2026-09-10, when the image rule refused #374 and was
-# right to ask. `docs/4.8` carries the same split.
-NON_SHIPPING='^(docs/|scripts/|e2e/|\.github/|\.githooks/|\.claude/|\.cargo/audit\.toml$|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$)'
+_SHIPPING_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/board-shipping.py"
 
 # touches_image <commit-ish> -> 0 if any path it changed reaches the image.
-#
-# `--name-only` against a single commit, so a merge is compared against its
-# first parent — which is what "did this commit change the image" means to
-# somebody reading a range.
 touches_image() {
-  local sha="$1" changed
-  # `</dev/null` because this runs inside `while read` loops in deploy.sh, and a
-  # git command that inherits the loop's stdin consumes the lines it has not
-  # read yet. The manifest printed three of ten issues before this was added,
-  # and printed them correctly — a truncation that looks like a filter working.
-  # `-C "${REPO_DIR:-.}"` because deploy.sh addresses its repository explicitly
-  # everywhere else and this must agree with it. Bare `git` reads the current
-  # directory, which is the right repo when the hook runs and the wrong one
-  # whenever the caller is working against another — including under test,
-  # where it inspected the real repository instead of the fixture and marked
-  # nothing as reaching the image. A manifest that says "no commit touches the
-  # image" is a plausible answer, which is what makes it dangerous.
-  changed="$(git -C "${REPO_DIR:-.}" show --name-only --format= "$sha" </dev/null 2>/dev/null | grep -v '^$' || true)"
-  [[ -n "$changed" ]] || return 1
-  printf '%s\n' "$changed" | grep -qvE "$NON_SHIPPING"
+  python3 "$_SHIPPING_CMD" -C "${REPO_DIR:-.}" commit "$1" </dev/null 2>/dev/null
 }
 
 # touches_image_range <base> <head> -> 0 if the diff between the two reaches
@@ -56,8 +32,5 @@ touches_image() {
 # one commit: CI asks this once per pull request, not once per commit in it
 # (#348).
 touches_image_range() {
-  local base="$1" head="$2" changed
-  changed="$(git -C "${REPO_DIR:-.}" diff --name-only "$base" "$head" </dev/null 2>/dev/null | grep -v '^$' || true)"
-  [[ -n "$changed" ]] || return 1
-  printf '%s\n' "$changed" | grep -qvE "$NON_SHIPPING"
+  python3 "$_SHIPPING_CMD" -C "${REPO_DIR:-.}" range "$1" "$2" </dev/null 2>/dev/null
 }

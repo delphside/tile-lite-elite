@@ -105,7 +105,7 @@ version_bump_only() {
 }
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
-  IMAGE="$(printf '%s\n' "$STAGED" | grep -v '^$' | grep -vE "$NON_SHIPPING" || true)"
+  IMAGE="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" paths 2>/dev/null || true)"
   if [ -n "$IMAGE" ] && version_bump_only; then
     IMAGE=""
   fi
@@ -122,8 +122,8 @@ if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
       echo "  git switch -c <issue>-<name> and commit there, or --no-verify with"
       echo "  the reason in the message."
       echo
-      echo "  If one of those genuinely does not ship, add it to NON_SHIPPING in"
-      echo "  .githooks/pre-commit and say why."
+      echo "  If one of those genuinely does not ship, add it to the exceptions in"
+      echo "  scripts/board/shipping.py and say why."
     } >&2
     exit 1
   fi
