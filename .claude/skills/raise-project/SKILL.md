@@ -179,6 +179,15 @@ says nothing. It is what makes a shared delivery visible from a listing.
 
 The parent's number is repeated in every child so a title sort groups the family.
 
+**A branch is named for the work package, not the parent** — `415-admin-cli-…`,
+not `400-…`. Commits say `Refs` the branch's number, and the board credits a
+work package only with commits naming it. **Splitting a project that already has a
+branch means renaming the branch to the package it now carries**, before the next
+commit. Scheduler core (#414) was built on `400-scheduler-mechanism`, so all
+seventeen of its commits named the parent and `board-status.py` reported it *not
+started* after it had merged. The post-merge hook finds the package from the pull
+request and moves its Phase anyway; the commits it cannot fix.
+
 **A delivery's steps live in one place** — in its sub-project, or under the
 parent's list for a pre-approved one. Never both.
 
