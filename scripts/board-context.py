@@ -80,7 +80,9 @@ def main(argv=None) -> int:
             print(wanted[args.issue])
             return 0
         root = family_root(board[args.issue], board)
-        targets = [m.number for m in family(root, board)]
+        # Only members that carry a header: a closed package is listed in its
+        # family's header but is not written to.
+        targets = [m.number for m in family(root, board) if m.number in wanted]
     else:
         targets = sorted(wanted)
 
