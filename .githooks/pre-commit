@@ -160,10 +160,12 @@ fi
 # process, or when the document rides its release. So this refuses and offers
 # `--no-verify`, in the same shape as the check above it -- it is asking *did
 # you mean this*, not forbidding it.
-PROCESS_DOCS='^(CLAUDE\.md|docs/3\.6-change-lifecycle\.md|docs/3\.7-workstreams\.md)$'
+#
+# **The list is the model's**, `scripts/board/documents.py` (#421), asked
+# through `board-documents.py` rather than held here.
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" != "main" ]; then
-  ONMAIN="$(printf '%s\n' "$STAGED" | grep -v '^$' | grep -E "$PROCESS_DOCS" || true)"
+  ONMAIN="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-documents.py" process 2>/dev/null || true)"
   if [ -n "$ONMAIN" ]; then
     {
       echo "commit refused: the process's own documents belong on main, not $BRANCH."

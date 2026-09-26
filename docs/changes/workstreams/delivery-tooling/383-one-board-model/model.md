@@ -349,7 +349,7 @@ call the model, print.
 | which issue a commit or pull request names | `board/refs.py` | `issue-mentions.sh` (and so `deploy.sh`'s gate), four spots in `deploy.sh`, `.githooks/commit-msg`, `board/repo.py`, `board/context.py`, `board/merge.py` |
 | which issue a branch is for | `board/refs.py` | `.githooks/commit-msg`, `board/branches.py`, `board/merge.py` |
 | what reaches the image | `board/shipping.py` | `shipping-paths.sh`'s `NON_SHIPPING`, used by the pre-commit hook directly and by `deploy.sh`, `verify.sh` and CI through its functions, which now ask the model |
-| which documents are process documents | next | `.githooks/pre-commit` |
+| which documents are process documents | `board/documents.py` | `.githooks/pre-commit`, and in prose `CLAUDE.md`, `docs/3.6` and `docs/3.0`, which now point to it |
 
 **The grammar for "names an issue" is the measured one, not GitHub's.** GitHub
 closes an issue on nine keywords in any case. The question the model answers is
