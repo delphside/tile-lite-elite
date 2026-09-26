@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 python3 - <<'PY'
 import sys
 sys.path.insert(0, ".")
-from board.shipping import image_paths, reaches_image, touches_image
+from board.shipping import image_paths, reaches_image, ships, touches_image, version_bump_only
 
 failures = 0
 def expect(name, want, got):
@@ -40,6 +40,21 @@ for path in ("docs/3.3-testing-ci-and-release.md", "scripts/deploy.sh", "e2e/tes
 print("a change")
 expect("one shipping path among many", ["Cargo.lock"], image_paths(["docs/a.md", "Cargo.lock", "scripts/x.sh"]))
 expect("a change that touched nothing reaches nothing", False, touches_image([]))
+
+print("a version bump")
+bump = ['-version = "0.9.0"', '+version = "0.9.1"']
+expect("Cargo.toml alone, version lines only", True, version_bump_only(["Cargo.toml"], bump))
+expect("with Cargo.lock, version lines only", True, version_bump_only(["Cargo.lock", "Cargo.toml"], bump * 8))
+expect("a dependency line is not a bump", False, version_bump_only(["Cargo.toml"], bump + ['+anyhow = "1"']))
+expect("another file alongside is not a bump", False, version_bump_only(["Cargo.toml", "crates/api/src/lib.rs"], bump))
+expect("no changed lines is not a bump", False, version_bump_only(["Cargo.toml"], []))
+expect("a two-part version is not ours", False, version_bump_only(["Cargo.toml"], ['+version = "1.0"']))
+
+print("ships")
+expect("the post-release bump ships nothing", False, ships(["Cargo.lock", "Cargo.toml"], bump))
+expect("a Dockerfile change ships", True, ships(["Dockerfile"], []))
+expect("a document ships nothing", False, ships(["docs/a.md"], []))
+expect("a crate change ships", True, ships(["crates/ui/src/app.rs"], []))
 sys.exit(1 if failures else 0)
 PY
 

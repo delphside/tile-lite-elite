@@ -203,15 +203,17 @@ check_unreleased() {
       "fetch, or production is running something this checkout does not have"
     return
   fi
-  # shellcheck source=scripts/shipping-paths.sh
-  . "$(dirname "${BASH_SOURCE[0]}")/shipping-paths.sh"
+  # **What ships, not what touches the image** (#421): after a release `main`
+  # holds the next version's bump, which reaches the image by path and ships
+  # nothing. The rule is `board/shipping.py`'s `ships`.
   while read -r sha; do
     [[ -n "$sha" ]] || continue
-    if touches_image "$sha"; then
+    if python3 "$(dirname "${BASH_SOURCE[0]}")/board-shipping.py" ships "$sha" </dev/null 2>/dev/null; then
       n=$((n + 1))
       line+="$(git log -1 --format='%h %s' "$sha" | cut -c1-96)"$'\n'
     fi
   done < <(git log --format=%H "$prod..origin/main" 2>/dev/null)
+  UNRELEASED_SHIPPING="$n"
   if (( n == 0 )); then
     pass unreleased "production is level with main on everything that ships"
   else
@@ -292,6 +294,15 @@ check_tests() {
 LABEL[gates]="A production deploy would be allowed"
 check_gates() {
   if (( QUICK )); then skip gates "deploy gates skipped (--quick)"; return; fi
+  # **Nothing to judge when nothing ships** (#421). Straight after a release
+  # `HEAD` is the next version's bump, which preview and rehearsal never hold,
+  # so asking whether it could deploy failed after every release by
+  # construction, on the check whose exit status the lap says to trust.
+  # `check_unreleased` runs first and says whether anything on main ships.
+  if [[ "${UNRELEASED_SHIPPING:-}" == "0" ]]; then
+    pass gates "nothing on main ships beyond production, so there is no deploy to judge"
+    return
+  fi
   local out status=0
   # Bounded. deploy.sh's CI gate polls with --wait, which is right for a deploy
   # and wrong here — it once made this sit for ten minutes against a run that

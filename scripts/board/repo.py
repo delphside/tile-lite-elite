@@ -223,6 +223,22 @@ def changed_paths(sha: str) -> list[str]:
     return [p for p in _git("show", "--name-only", "--format=", sha).splitlines() if p.strip()]
 
 
+def version_lines(sha: str) -> list[str]:
+    """One commit's changed lines in `Cargo.toml` and `Cargo.lock`, `+`/`-` only."""
+    return [line for line in _git("show", "-U0", "--format=", sha, "--", "Cargo.toml",
+                                  "Cargo.lock").splitlines()
+            if line[:1] in "+-" and not line.startswith(("+++", "---"))]
+
+
+def staged() -> tuple[list[str], list[str]]:
+    """The staged paths, and the staged changed lines in `Cargo.toml`/`Cargo.lock`."""
+    files = [p for p in _git("diff", "--cached", "--name-only").splitlines() if p.strip()]
+    lines = [line for line in _git("diff", "--cached", "-U0", "--", "Cargo.toml",
+                                   "Cargo.lock").splitlines()
+             if line[:1] in "+-" and not line.startswith(("+++", "---"))]
+    return files, lines
+
+
 def changed_paths_between(base: str, head: str) -> list[str]:
     """The paths that differ between two commits, as one change."""
     return [p for p in _git("diff", "--name-only", base, head).splitlines() if p.strip()]

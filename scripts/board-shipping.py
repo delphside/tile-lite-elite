@@ -4,6 +4,8 @@
     board-shipping.py commit <sha>           # exit 0 if the commit reaches the image, 1 if not
     board-shipping.py range <base> <head>    # the same for the change between two commits
     board-shipping.py paths < path-list      # print the paths, of those given, that reach it
+    board-shipping.py ships <sha>            # exit 0 if it reaches the image and is more than a version bump
+    board-shipping.py version-bump --staged  # exit 0 if what is staged is only the app version moving
     board-shipping.py -C <dir> ...           # against the repository at <dir>
 
 The rule is `scripts/board/shipping.py`'s. This is the command the bash tooling
@@ -21,7 +23,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from board import shipping  # noqa: E402
-from board.repo import changed_paths, changed_paths_between  # noqa: E402
+from board.repo import (changed_paths, changed_paths_between,  # noqa: E402
+                        staged, version_lines)
 
 
 def main(argv: list[str]) -> int:
@@ -36,6 +39,10 @@ def main(argv: list[str]) -> int:
         return 0 if shipping.touches_image(changed_paths(args[0])) else 1
     if cmd == "range" and len(args) == 2:
         return 0 if shipping.touches_image(changed_paths_between(*args)) else 1
+    if cmd == "ships" and len(args) == 1:
+        return 0 if shipping.ships(changed_paths(args[0]), version_lines(args[0])) else 1
+    if cmd == "version-bump" and args == ["--staged"]:
+        return 0 if shipping.version_bump_only(*staged()) else 1
     if cmd == "paths" and not args:
         for path in shipping.image_paths(line.strip() for line in sys.stdin):
             print(path)

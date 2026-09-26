@@ -86,22 +86,11 @@ MERGING=0
 # writer takes SIGPIPE, and under `pipefail` the pipeline reports 141 — so the
 # test would silently invert. That defect has already cost this project a
 # production deploy; see scripts/issue-mentions.sh.
+# **The rule is the model's**, `scripts/board/shipping.py`'s `version_bump_only`
+# (#421), asked through `board-shipping.py` rather than held here.
 version_bump_only() {
-  local files changed
-  files="$(printf '%s\n' "$STAGED" | grep -v '^$' | sort | tr '\n' ' ')"
-  case "$files" in
-    "Cargo.toml " | "Cargo.lock Cargo.toml ") ;;
-    *) return 1 ;;
-  esac
-  changed="$(git diff --cached -U0 -- Cargo.toml Cargo.lock \
-             | grep -E '^[-+]' | grep -vE '^(\+\+\+|---)' || true)"
-  # An empty diff is not a bump. Nothing should reach here with one, but
-  # "no changed lines" must not read as "no disallowed lines".
-  [ -n "$changed" ] || return 1
-  if grep -qvE '^[-+]version = "[0-9]+\.[0-9]+\.[0-9]+"$' <<< "$changed"; then
-    return 1
-  fi
-  return 0
+  python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" version-bump --staged \
+    </dev/null 2>/dev/null
 }
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
