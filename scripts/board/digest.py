@@ -17,9 +17,10 @@ report*, because an empty section and an unanswerable question look identical.
 
 **The measure is docs/3.7's, not the one first proposed.** Owner, 2026-09-21:
 *"The test is that we produce fewer issues and that they take less of my
-time"*, narrowed the same day to non-functional issues. So the headline is the
-count of `tooling` and `documentation` issues raised in the window, beside the
-week before, and what the board reports as waiting on the owner. The tooling
+time"*, and 2026-09-27, that the issues he meant are programme overhead,
+`tooling` and `documentation`. So the headline is that count beside the week
+before, every other type is counted with docs/3.7's reading of it, and what
+the board reports as waiting on the owner. The tooling
 share stays as an observation: its 45% figure is provisional and its horizon is
 #383 finishing, not a date. Until 2026-09-27 this module still reported the
 share against a 45% threshold and a 2026-10-17 date, and asked for a
@@ -44,8 +45,21 @@ from .model import classify
 from .sources import Snapshot
 from .turn import waiting_on_owner
 
-# docs/3.7's brake: non-functional means these two types of change.
-NON_FUNCTIONAL = ("tooling", "documentation")
+# docs/3.7's brake: programme overhead is these two types of change. Not the
+# type called `non-functional`, which is work on the application (owner,
+# 2026-09-27).
+OVERHEAD = ("tooling", "documentation")
+
+# Every type, in docs/3.7's order and with its reading, so the digest counts
+# them all rather than only the overhead.
+READINGS = (
+    ("functional", "the most constructive use of your time"),
+    ("non-functional", "constructive where it enhances the application"),
+    ("bug", "not constructive; #71's refactor exists to reduce them"),
+    ("tooling", "programme overhead"),
+    ("documentation", "programme overhead"),
+    ("unset", "not yet triaged"),
+)
 # The share when D54 was agreed, kept so the observation says where it moved
 # from. Not a target.
 MEASURED_AT = 55
@@ -66,8 +80,13 @@ class Digest:
     by_type: collections.Counter = field(default_factory=collections.Counter)
     closed: list[tuple[int, str]] = field(default_factory=list)
     raised: list[tuple[int, str]] = field(default_factory=list)
-    non_functional: list[tuple[int, str]] = field(default_factory=list)
-    non_functional_before: int = 0
+    overhead: list[tuple[int, str]] = field(default_factory=list)
+    raised_by_type: collections.Counter = field(default_factory=collections.Counter)
+    raised_before_by_type: collections.Counter = field(default_factory=collections.Counter)
+
+    @property
+    def overhead_before(self) -> int:
+        return sum(self.raised_before_by_type[t] for t in OVERHEAD)
     waiting: list[tuple[int, str, str]] = field(default_factory=list)
 
     @property
@@ -98,8 +117,9 @@ def window_start(since: str) -> str:
 
 
 def in_window(open_raw, closed_raw, start: str):
-    """(raised, non-functional raised, non-functional raised the week before,
-    closed), each within the window beginning `start`, a YYYY-MM-DD date.
+    """(raised, overhead raised, raised by type, raised by type the week
+    before, closed), each within the window beginning `start`, a YYYY-MM-DD
+    date. Types are `Type of change`, or "unset".
 
     Raised whatever state it is in now: an issue raised and closed inside the
     week was still raised. Until 2026-09-27 only the open ones were counted,
@@ -107,21 +127,22 @@ def in_window(open_raw, closed_raw, start: str):
     listed it as closed this week.
     """
     before = (date.fromisoformat(start) - timedelta(days=7)).isoformat()
-    raised, non_functional, closed = [], [], []
-    non_functional_before = 0
+    raised, overhead, closed = [], [], []
+    by_type, before_by_type = collections.Counter(), collections.Counter()
     for raw in list(open_raw) + list(closed_raw):
         created = (raw.created_at or "")[:10]
-        is_nf = (raw.fields or {}).get("Type of change") in NON_FUNCTIONAL
+        kind = (raw.fields or {}).get("Type of change") or "unset"
         if created >= start:
             raised.append((raw.number, raw.title))
-            if is_nf:
-                non_functional.append((raw.number, raw.title))
-        elif created >= before and is_nf:
-            non_functional_before += 1
+            by_type[kind] += 1
+            if kind in OVERHEAD:
+                overhead.append((raw.number, raw.title))
+        elif created >= before:
+            before_by_type[kind] += 1
     for raw in closed_raw:
         if (raw.closed_at or "")[:10] >= start:
             closed.append((raw.number, raw.title))
-    return sorted(raised), sorted(non_functional), non_functional_before, closed
+    return sorted(raised), sorted(overhead), by_type, before_by_type, closed
 
 
 def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
@@ -161,7 +182,7 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
             d.waiting.append((issue.number, issue.title, w.asked))
 
     closed_raw = list(closed_snapshot.issues) if closed_snapshot else []
-    (d.raised, d.non_functional, d.non_functional_before,
+    (d.raised, d.overhead, d.raised_by_type, d.raised_before_by_type,
      d.closed) = in_window([i.raw for i in issues], closed_raw, start)
     return d
 
@@ -172,15 +193,26 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
 
     # docs/3.7's brake, limit 1: fewer non-functional issues, and less of the
     # owner's time. Both counted, neither argued.
-    out.append("## The brake: fewer non-functional issues, less of your time")
+    out.append("## The brake: less programme overhead, less of your time")
     out.append("")
-    nf = len(d.non_functional)
-    out.append(f"**{nf}** non-functional issues raised (`tooling` or `documentation`), "
-               f"against **{d.non_functional_before}** in the seven days before.")
-    if d.non_functional:
+    out.append(f"**{len(d.overhead)}** programme overhead issues raised (`tooling` or "
+               f"`documentation`), against **{d.overhead_before}** in the seven days before.")
+    if d.overhead:
         out.append("")
-    for number, title in d.non_functional:
+    for number, title in d.overhead:
         out.append(f"- #{number} {title}")
+    out.append("")
+    # Every type, because each says something different about the owner's
+    # time (docs/3.7). A type with nothing either week still gets its row, so
+    # a quiet week for bugs is visible rather than absent.
+    out.append("| issues raised, by type of change | this week | week before | reads as |")
+    out.append("| --- | --- | --- | --- |")
+    known = {kind for kind, _ in READINGS}
+    for kind, reading in READINGS:
+        out.append(f"| `{kind}` | {d.raised_by_type[kind]} | {d.raised_before_by_type[kind]} | {reading} |")
+    for kind in sorted(set(d.raised_by_type) | set(d.raised_before_by_type)):
+        if kind not in known:
+            out.append(f"| `{kind}` | {d.raised_by_type[kind]} | {d.raised_before_by_type[kind]} | not in docs/3.7 |")
     out.append("")
     if d.waiting:
         things = "thing" if len(d.waiting) == 1 else "things"

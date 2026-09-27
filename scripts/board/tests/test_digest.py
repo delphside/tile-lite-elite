@@ -3,9 +3,11 @@
 From docs/3.7's brake, not from the code. The cases that matter are the ones
 where a bug would flatter the report or repeat a settled question:
 
-  the measure     non-functional issues raised per week (types `tooling` and
-                  `documentation`), beside the week before, and what is
-                  waiting on the owner. Owner, 2026-09-21.
+  the measure     programme overhead raised per week (types `tooling` and
+                  `documentation`, not the type called `non-functional`),
+                  beside the week before; every other type counted with its
+                  reading; and what is waiting on the owner. Owner, 2026-09-21
+                  and 2026-09-27.
   the share       an observation, not the target: no threshold verdict, no
                   date, and no request to confirm what the owner has already
                   answered. Until 2026-09-27 the digest still asked.
@@ -39,11 +41,22 @@ def issue(n, kind_of_change, created, closed=None):
 
 
 class TheBrake(Cases):
-    def test_non_functional_issues_raised_are_counted_beside_the_week_before(self):
-        text = render(digest(non_functional=[(401, "a tooling fix")], non_functional_before=3))
-        self.expect("this week's count", True, "**1** non-functional issues raised" in text)
-        self.expect("beside the week before", True, "against **3** in the seven days before" in text)
+    def test_overhead_raised_is_counted_beside_the_week_before(self):
+        text = render(digest(overhead=[(401, "a tooling fix")],
+                             raised_before_by_type=collections.Counter({"tooling": 2, "documentation": 1, "bug": 5})))
+        self.expect("this week's count", True, "**1** programme overhead issues raised" in text)
+        self.expect("beside the week before, overhead only", True, "against **3** in the seven days before" in text)
         self.expect("and each is named", True, "#401 a tooling fix" in text)
+
+    def test_every_type_is_counted_with_its_reading(self):
+        text = render(digest(raised_by_type=collections.Counter({"functional": 4, "bug": 1}),
+                             raised_before_by_type=collections.Counter({"bug": 3})))
+        self.expect("functional", True, "| `functional` | 4 | 0 | the most constructive use of your time |" in text)
+        self.expect("bugs, beside the week before", True, "| `bug` | 1 | 3 | not constructive" in text)
+        # A quiet type still gets its row, so a week with no bugs is visible.
+        self.expect("a type with nothing either week is still shown", True, "| `documentation` | 0 | 0 |" in text)
+        odd = render(digest(raised_by_type=collections.Counter({"spike": 1})))
+        self.expect("a type docs/3.7 does not name is shown, not dropped", True, "| `spike` | 1 | 0 | not in docs/3.7 |" in odd)
 
     def test_what_is_waiting_on_the_owner_is_listed_or_said_to_be_nothing(self):
         self.expect("nothing waiting says nothing", True,
@@ -70,31 +83,33 @@ class TheWindow(Cases):
     START = "2026-09-21"
 
     def test_raised_counts_open_and_closed_alike(self):
-        raised, nf, before, closed = in_window(
+        raised, overhead, _, _, closed = in_window(
             [issue(1, "tooling", "2026-09-22T10:00:00Z")],
             [issue(2, "documentation", "2026-09-23T10:00:00Z", closed="2026-09-24T10:00:00Z")],
             self.START)
         self.expect("both are raised", [1, 2], [n for n, _ in raised])
-        self.expect("both are non-functional", [1, 2], [n for n, _ in nf])
+        self.expect("both are overhead", [1, 2], [n for n, _ in overhead])
         self.expect("and the one closed in the week is closed", [2], [n for n, _ in closed])
 
-    def test_non_functional_means_tooling_and_documentation(self):
-        _, nf, _, _ = in_window([issue(1, "functional", "2026-09-22T10:00:00Z"),
-                                 issue(2, "non-functional", "2026-09-22T10:00:00Z"),
-                                 issue(3, None, "2026-09-22T10:00:00Z"),
-                                 issue(4, "documentation", "2026-09-22T10:00:00Z")], [], self.START)
-        # docs/3.7: "the count is Type of change tooling and documentation".
-        self.expect("only those two types", [4], [n for n, _ in nf])
+    def test_overhead_means_tooling_and_documentation_not_the_type_called_non_functional(self):
+        _, overhead, by_type, _, _ = in_window([issue(1, "functional", "2026-09-22T10:00:00Z"),
+                                                issue(2, "non-functional", "2026-09-22T10:00:00Z"),
+                                                issue(3, None, "2026-09-22T10:00:00Z"),
+                                                issue(4, "documentation", "2026-09-22T10:00:00Z")], [], self.START)
+        # docs/3.7, owner 2026-09-27: the overhead is tooling and documentation.
+        self.expect("only those two types", [4], [n for n, _ in overhead])
+        self.expect("every type is still counted", {"functional": 1, "non-functional": 1, "unset": 1, "documentation": 1},
+                    dict(by_type))
 
     def test_the_week_before_is_the_seven_days_before_the_window(self):
-        _, _, before, _ = in_window([issue(1, "tooling", "2026-09-14T00:00:00Z"),
-                                     issue(2, "tooling", "2026-09-20T23:59:00Z"),
-                                     issue(3, "tooling", "2026-09-13T23:59:00Z")], [], self.START)
-        self.expect("the 14th and the 20th, not the 13th", 2, before)
+        _, _, _, before, _ = in_window([issue(1, "tooling", "2026-09-14T00:00:00Z"),
+                                        issue(2, "bug", "2026-09-20T23:59:00Z"),
+                                        issue(3, "tooling", "2026-09-13T23:59:00Z")], [], self.START)
+        self.expect("the 14th and the 20th, not the 13th", {"tooling": 1, "bug": 1}, dict(before))
 
     def test_an_old_issue_closed_before_the_window_is_not_closed_in_it(self):
-        _, _, _, closed = in_window([], [issue(5, "tooling", "2026-08-01T00:00:00Z",
-                                               closed="2026-09-01T00:00:00Z")], self.START)
+        _, _, _, _, closed = in_window([], [issue(5, "tooling", "2026-08-01T00:00:00Z",
+                                                  closed="2026-09-01T00:00:00Z")], self.START)
         self.expect("not listed", [], closed)
 
 
