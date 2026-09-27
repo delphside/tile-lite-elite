@@ -44,8 +44,8 @@ In the review's order of leverage.
    authentication pilot; R4, `3.1`.
 2. Done: `3.6` in passes, then `4.8`, whose process material went to `3.6`
    §2.15.
-3. `3.3` and the rest.
-4. R8, the signal count.
+3. Done: `3.3` and the rest, including `3.6` §1.0's retired release queues.
+4. Done: R8, `doc-signals.py`: 170 lines at the start, 6 at the end.
 
 ## What the pilot showed
 
