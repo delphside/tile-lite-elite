@@ -40,11 +40,40 @@ In the review's order of leverage.
 
 ## Order of work
 
-1. R1 into `3.9` and `CLAUDE.md`; R2, the README.
-2. The authentication pilot, 2.5 to 2.7, to find the pattern on a contained
-   subject.
-3. `3.1`, `4.8`, then `3.6` in sections, then `3.3` and the rest.
-4. R8, the signal count, once the pilot shows which phrases matter.
+1. Done: R1 into `3.9` and `CLAUDE.md`; R2, the README; R3, the
+   authentication pilot; R4, `3.1`.
+2. `3.6` in passes, one part a commit, then `4.8`, whose process material goes
+   to `3.6`'s new shape rather than to its old one.
+3. `3.3` and the rest.
+4. R8, the signal count.
+
+## What the pilot showed
+
+- A 2.x document carrying request and response detail duplicates 4.3, and
+  loses it.
+- A dated status ledger becomes the current model, each value checked against
+  the code before it is kept.
+- Intentions ("next steps", "future enhancements") leave for issues, listed on
+  #427 for the owner rather than deleted silently.
+- Restructuring finds wrong facts: 4.3 described a behaviour the code does not
+  have. A document is checked against the code, not against another document.
+
+## 3.6 and 4.8
+
+`3.6` is 3,029 lines in three parts: the flow, the rules, and notes on release
+scope and versions. Target:
+
+| part | now | target |
+| --- | --- | --- |
+| opening | *Why this process exists*, 56 lines of argument | a paragraph: what the document holds, and that `CLAUDE.md` is its one-page summary |
+| 1, the flow | the flow, with *1.1 What a milestone says* at 607 lines | the flow and its steps; 1.1 split into milestones, deliveries and work packages, each rule stated once |
+| 2, the rules | 23 rules, each with its history | each rule and a line of reason; incidents and dates to the issues they came from |
+| templates inline | the triage comment and the dependencies heading, fenced in the text | `docs/templates/`, per `CLAUDE.md`, linked from the rule |
+| 3, notes | release scope, the two version numbers, priority's reversal, why deploy needs no approval | versions to `4.1`'s versioning; what remains a rule into part 2; history removed |
+| from 4.8 | *Every way a change is categorised*, *The route an artefact takes* | merged with 3.6's *Type of change* and *Classifying a change*, one home for each scheme and for the routes; `shipping.py`'s docstring and `CLAUDE.md` repointed |
+
+`4.8` then keeps its registers (the host, Oracle Cloud, GitHub, what the
+tooling reads) and the exit-status convention, as reference.
 
 Nothing is lost: what leaves a document is either already in an issue or a
 commit, or goes into the commit that removes it.

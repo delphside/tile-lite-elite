@@ -32,7 +32,7 @@ to every view:
 | a clear short description | the title is what is read in a list of forty |
 | `Workstream` | who owns it. **Unset is the triage queue**, so leaving it blank is a state, not an omission |
 | `Priority` | a judgement, deliberately not derived |
-| `Type of change` | `bug · functional · cosmetic · documentation · tooling` |
+| `Type of change` | `bug · functional · non-functional · cosmetic · documentation · tooling` |
 
 **A title is a short, pithy, memorable name, not a teaser.** Owner, 2026-09-24:
 *"When I look at the board I want to quickly recall what each issue is about
