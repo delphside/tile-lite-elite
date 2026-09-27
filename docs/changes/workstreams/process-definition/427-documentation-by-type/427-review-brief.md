@@ -108,8 +108,22 @@ is run and read, the machine difference and the raw measurements.
 
 ### Findings
 
-*The reviewer writes here.*
+Copilot's review was done on its branch `427-review-round-3` (719a0f9), which
+it could not push: its tools open a pull request only from the branch its task
+began on. The owner relayed its summary, and Claude recorded it here.
+
+- Q1 and Q2, the 2.8 and 3.10 split: no finding.
+- Q3, round 2's fixes to 1.1, 2.4 and 4.2 checked against the code: no finding.
+- Q4: `docs/2.1-rules-engine.md` still states intended design as current
+  truth, beyond #428's list.
 
 ### Response
 
-*Claude writes here, under each finding's number.*
+Q4, verified: 2.1 is written as a proposal ("Proposed Rust Shape", "Suggested
+API Direction", a "Recommendation" section, "should" throughout), framed as
+turning `first-try`'s model into a design. It is 2.2's pair, and both describe
+`rules-shared`, so they are best rewritten together from the code. Added
+to #428 (Functional design documents) rather than patched here.
+
+**For the next round:** start it as a new Copilot task, so its branch is the
+one its pull-request tool can publish.
