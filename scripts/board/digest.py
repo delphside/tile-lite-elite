@@ -50,16 +50,16 @@ from .turn import waiting_on_owner
 # 2026-09-27).
 OVERHEAD = ("tooling", "documentation")
 
-# Every type, in docs/3.7's order and with its reading, so the digest counts
-# them all rather than only the overhead.
+# Every type, in docs/3.7's order and with its reading in the owner's words
+# (2026-09-27), so the digest counts them all rather than only the overhead.
 READINGS = (
-    ("functional", "the most constructive use of your time"),
-    ("cosmetic", "counted separately, credited as functional"),
-    ("non-functional", "constructive where it enhances the application"),
-    ("bug", "not constructive; #71's refactor exists to reduce them"),
+    ("functional", "constructive"),
+    ("cosmetic", "constructive"),
+    ("non-functional", "constructive if an enhancement"),
+    ("bug", "poor quality overhead"),
     ("tooling", "programme overhead"),
     ("documentation", "programme overhead"),
-    ("unset", "not yet triaged"),
+    ("unset", "not categorised"),
 )
 # The share when D54 was agreed, kept so the observation says where it moved
 # from. Not a target.
@@ -244,7 +244,7 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
     # Grouped by week, owner 2026-09-27: raised, closed and open for this
     # week, then the same for last week. Markdown has one header row, so the
     # week names the first column of each group.
-    out.append("| type of change | this week: raised | closed | open | last week: raised | closed | open | reads as |")
+    out.append("| type of change | this week: raised | closed | open | last week: raised | closed | open | use of Steve's time |")
     out.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     known = {kind for kind, _ in READINGS}
     others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)

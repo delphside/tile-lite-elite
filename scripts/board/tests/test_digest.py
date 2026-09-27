@@ -62,14 +62,14 @@ class TheBrake(Cases):
         text = render(d)
         # Owner, 2026-09-27: this week raised, closed, open; then last week the same.
         self.expect("grouped by week", True,
-                    "| type of change | this week: raised | closed | open | last week: raised | closed | open | reads as |" in text)
-        self.expect("functional", True, "| `functional` | 4 | 0 | 10 | 0 | 1 | 0 | the most constructive use of your time |" in text)
-        self.expect("bugs", True, "| `bug` | 1 | 2 | 2 | 3 | 0 | 0 | not constructive" in text)
+                    "| type of change | this week: raised | closed | open | last week: raised | closed | open | use of Steve's time |" in text)
+        self.expect("functional", True, "| `functional` | 4 | 0 | 10 | 0 | 1 | 0 | constructive |" in text)
+        self.expect("bugs", True, "| `bug` | 1 | 2 | 2 | 3 | 0 | 0 | poor quality overhead" in text)
         # A quiet type still gets its row, so a week with no bugs is visible.
         self.expect("a type with nothing is still shown", True, "| `documentation` | 0 | 0 | 0 | 0 | 0 | 0 |" in text)
         # Owner, 2026-09-27: cosmetic is counted separately and credited as functional.
         self.expect("cosmetic reads as functional", True,
-                    "| `cosmetic` | 0 | 0 | 0 | 0 | 0 | 0 | counted separately, credited as functional |" in text)
+                    "| `cosmetic` | 0 | 0 | 0 | 0 | 0 | 0 | constructive |" in text)
         odd = render(digest(window=Window(raised_by_type=collections.Counter({"spike": 1}))))
         self.expect("a type docs/3.7 does not name is shown, not dropped", True,
                     "| `spike` | 1 | 0 | 0 | 0 | 0 | 0 | not in docs/3.7 |" in odd)
