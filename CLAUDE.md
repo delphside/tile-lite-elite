@@ -28,6 +28,9 @@ one of them has a defect: fix it, don't work around it.
   document and to this page, with the argument in the commit message — no
   issue, no `D` number, nothing to close later. The test is whether anybody
   still has to be convinced.
+- **Whether to do something is a Requirement; how to do it is a Decision.**
+  Owner, 2026-09-27. A requirement can be rejected or folded into a project,
+  so an idea not yet agreed is raised as one, not as a Decision.
 - **A settled decision is never maintained; the document carrying it is** —
   the general rule under *Documentation*, applied to decisions.
 - **Options live in the body, numbered, each saying what it constrains**, so one
