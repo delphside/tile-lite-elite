@@ -54,6 +54,7 @@ OVERHEAD = ("tooling", "documentation")
 # them all rather than only the overhead.
 READINGS = (
     ("functional", "the most constructive use of your time"),
+    ("cosmetic", "counted separately, credited as functional"),
     ("non-functional", "constructive where it enhances the application"),
     ("bug", "not constructive; #71's refactor exists to reduce them"),
     ("tooling", "programme overhead"),
@@ -80,13 +81,15 @@ class Digest:
     by_type: collections.Counter = field(default_factory=collections.Counter)
     closed: list[tuple[int, str]] = field(default_factory=list)
     raised: list[tuple[int, str]] = field(default_factory=list)
-    overhead: list[tuple[int, str]] = field(default_factory=list)
-    raised_by_type: collections.Counter = field(default_factory=collections.Counter)
-    raised_before_by_type: collections.Counter = field(default_factory=collections.Counter)
+    window: "Window" = field(default_factory=lambda: Window())
+
+    @property
+    def overhead(self) -> list[tuple[int, str]]:
+        return self.window.overhead
 
     @property
     def overhead_before(self) -> int:
-        return sum(self.raised_before_by_type[t] for t in OVERHEAD)
+        return sum(self.window.raised_before[t] for t in OVERHEAD)
     waiting: list[tuple[int, str, str]] = field(default_factory=list)
 
     @property
@@ -116,33 +119,52 @@ def window_start(since: str) -> str:
     return repo._git("log", "-1", "--format=%cs", since).strip() or since
 
 
-def in_window(open_raw, closed_raw, start: str):
-    """(raised, overhead raised, raised by type, raised by type the week
-    before, closed), each within the window beginning `start`, a YYYY-MM-DD
-    date. Types are `Type of change`, or "unset".
+@dataclass
+class Window:
+    """Issues raised and closed in the window and the seven days before it,
+    counted by `Type of change` ("unset" where it has none)."""
+
+    raised: list[tuple[int, str]] = field(default_factory=list)
+    overhead: list[tuple[int, str]] = field(default_factory=list)
+    closed: list[tuple[int, str]] = field(default_factory=list)
+    raised_by_type: collections.Counter = field(default_factory=collections.Counter)
+    closed_by_type: collections.Counter = field(default_factory=collections.Counter)
+    raised_before: collections.Counter = field(default_factory=collections.Counter)
+    closed_before: collections.Counter = field(default_factory=collections.Counter)
+
+
+def in_window(open_raw, closed_raw, start: str) -> Window:
+    """What was raised and closed in the window beginning `start`, a
+    YYYY-MM-DD date, and in the seven days before it.
 
     Raised whatever state it is in now: an issue raised and closed inside the
     week was still raised. Until 2026-09-27 only the open ones were counted,
     and closed was read from `updated_at`, so a comment on an old closed issue
-    listed it as closed this week.
+    listed it as closed this week. Closed is counted beside raised (owner,
+    2026-09-27): raised alone says what arrived, not whether it is being
+    cleared.
     """
     before = (date.fromisoformat(start) - timedelta(days=7)).isoformat()
-    raised, overhead, closed = [], [], []
-    by_type, before_by_type = collections.Counter(), collections.Counter()
+    w = Window()
+    kind_of = lambda raw: (raw.fields or {}).get("Type of change") or "unset"
     for raw in list(open_raw) + list(closed_raw):
         created = (raw.created_at or "")[:10]
-        kind = (raw.fields or {}).get("Type of change") or "unset"
         if created >= start:
-            raised.append((raw.number, raw.title))
-            by_type[kind] += 1
-            if kind in OVERHEAD:
-                overhead.append((raw.number, raw.title))
+            w.raised.append((raw.number, raw.title))
+            w.raised_by_type[kind_of(raw)] += 1
+            if kind_of(raw) in OVERHEAD:
+                w.overhead.append((raw.number, raw.title))
         elif created >= before:
-            before_by_type[kind] += 1
+            w.raised_before[kind_of(raw)] += 1
     for raw in closed_raw:
-        if (raw.closed_at or "")[:10] >= start:
-            closed.append((raw.number, raw.title))
-    return sorted(raised), sorted(overhead), by_type, before_by_type, closed
+        closed = (raw.closed_at or "")[:10]
+        if closed >= start:
+            w.closed.append((raw.number, raw.title))
+            w.closed_by_type[kind_of(raw)] += 1
+        elif closed >= before:
+            w.closed_before[kind_of(raw)] += 1
+    w.raised.sort(); w.overhead.sort(); w.closed.sort()
+    return w
 
 
 def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
@@ -182,8 +204,8 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
             d.waiting.append((issue.number, issue.title, w.asked))
 
     closed_raw = list(closed_snapshot.issues) if closed_snapshot else []
-    (d.raised, d.overhead, d.raised_by_type, d.raised_before_by_type,
-     d.closed) = in_window([i.raw for i in issues], closed_raw, start)
+    d.window = in_window([i.raw for i in issues], closed_raw, start)
+    d.raised, d.closed = d.window.raised, d.window.closed
     return d
 
 
@@ -195,8 +217,12 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
     # owner's time. Both counted, neither argued.
     out.append("## The brake: less programme overhead, less of your time")
     out.append("")
+    w = d.window
+    closed_now = sum(w.closed_by_type[t] for t in OVERHEAD)
+    closed_then = sum(w.closed_before[t] for t in OVERHEAD)
     out.append(f"**{len(d.overhead)}** programme overhead issues raised (`tooling` or "
-               f"`documentation`), against **{d.overhead_before}** in the seven days before.")
+               f"`documentation`) and **{closed_now}** closed, against **{d.overhead_before}** "
+               f"raised and **{closed_then}** closed in the seven days before.")
     if d.overhead:
         out.append("")
     for number, title in d.overhead:
@@ -205,14 +231,17 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
     # Every type, because each says something different about the owner's
     # time (docs/3.7). A type with nothing either week still gets its row, so
     # a quiet week for bugs is visible rather than absent.
-    out.append("| issues raised, by type of change | this week | week before | reads as |")
-    out.append("| --- | --- | --- | --- |")
+    # Raised, closed and open by type: what arrived, what was cleared, and
+    # what stands (owner, 2026-09-27). Every type in docs/3.7's order, a quiet
+    # one included, so a week with no bugs is visible rather than absent.
+    out.append("| type of change | raised | closed | raised, week before | closed, week before | open now | reads as |")
+    out.append("| --- | --- | --- | --- | --- | --- | --- |")
     known = {kind for kind, _ in READINGS}
-    for kind, reading in READINGS:
-        out.append(f"| `{kind}` | {d.raised_by_type[kind]} | {d.raised_before_by_type[kind]} | {reading} |")
-    for kind in sorted(set(d.raised_by_type) | set(d.raised_before_by_type)):
-        if kind not in known:
-            out.append(f"| `{kind}` | {d.raised_by_type[kind]} | {d.raised_before_by_type[kind]} | not in docs/3.7 |")
+    others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)
+                     | set(w.closed_before) | set(d.by_type)) - known)
+    for kind, reading in list(READINGS) + [(k, "not in docs/3.7") for k in others]:
+        out.append(f"| `{kind}` | {w.raised_by_type[kind]} | {w.closed_by_type[kind]} | "
+                   f"{w.raised_before[kind]} | {w.closed_before[kind]} | {d.by_type[kind]} | {reading} |")
     out.append("")
     if d.waiting:
         things = "thing" if len(d.waiting) == 1 else "things"
@@ -229,12 +258,6 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
                f"issues are `tooling`, **{d.share}%**, against {MEASURED_AT}% when D54 "
                "was agreed. Not the target: the 45% figure is provisional until "
                "#383's model has replaced the tooling it is replacing.")
-    out.append("")
-    out.append("| type | open | share |")
-    out.append("| --- | --- | --- |")
-    for kind, count in d.by_type.most_common():
-        out.append(f"| `{kind}` | {count} | {count * 100 // max(1, d.total)}% |")
-
     out.append("")
     out.append(f"## What landed — {len(d.landed)} commits")
     out.append("")
