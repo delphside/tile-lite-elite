@@ -67,3 +67,7 @@ owner read the result.
 
 **Not in scope:** the gaps #428 lists, and anything production-side, which
 needs the owner's evidence.
+
+**Result:** six findings, all verified and fixed in `6495521`; Q2 and Q4 had
+none. Finding 4 was a code defect as well: the engine concurrency setting is
+never applied, folded into #71 as #429. The response is on #427.
