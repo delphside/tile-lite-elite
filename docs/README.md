@@ -14,7 +14,8 @@ groups. Each group holds one kind of content ([3.9](3.9-writing-documents.md)):
 
 | task | read |
 | --- | --- |
-| set up a machine | [3.1 Setup](3.1-setup.md) |
+| set up a development machine | [3.1 Setup](3.1-setup.md) |
+| build a production or rehearsal host | [3.4 Building a host](3.4-production-environment.md#building-a-host) |
 | run it locally | [3.2 Development](3.2-development.md) |
 | test, release or roll back | [3.3 Testing, CI & Release](3.3-testing-ci-and-release.md) |
 | operate production | [3.4 Production Environment](3.4-production-environment.md) |
@@ -50,10 +51,10 @@ history in the issue or the commit.
 ## 3.x Lifecycle
 
 - [3.0 Tools](3.0-tools.md) — every script, linking to where it's explained
-- [3.1 Setup](3.1-setup.md) — one-time: dev machine, Oracle VM, HTTPS, troubleshooting
+- [3.1 Setup](3.1-setup.md) — one-time: the development machine, and troubleshooting its build
 - [3.2 Development](3.2-development.md) — running services locally, building, resetting local state
 - [3.3 Testing, CI & Release](3.3-testing-ci-and-release.md) — `cargo test`, GitHub Actions CI, the local preview environment, the end-to-end release runbook, and how `deploy.sh` ships an image
-- [3.4 Production Environment & Operations](3.4-production-environment.md) — the running system: container topology, secrets, admin CLI, inspecting the database, logging, backups, wiping production
+- [3.4 Production Environment & Operations](3.4-production-environment.md) — building a host, and the running system: container topology, secrets, admin CLI, inspecting the database, logging, backups, wiping production
 - [3.5 Word Lists & Dictionaries](3.5-word-lists-and-dictionaries.md) — how a published word list becomes the trie the engine searches: sourcing, normalising, generating the denylist and greylist, and the runbooks for changing either
 - [3.6 The Change Lifecycle](3.6-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
 - [3.7 Workstreams](3.7-workstreams.md) — the nine capabilities work is filed against, what each owns, and where the boundary between each pair was argued
