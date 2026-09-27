@@ -37,6 +37,7 @@ history in the issue or the commit.
 - [1.3 Technology Decisions](1.3-technology-decisions.md) — why Axum/SQLite/Dioxus/etc.
 - [1.4 Roadmap](1.4-roadmap.md) — CLI prototype → UI direction → MVP → v1 → Later
 - [1.5 Work in progress](1.5-work-in-progress.md) — what is in flight, drawn from the issues and regenerated, never typed
+- [1.7 Programme](1.7-programme.md) — how the work is organised: who decides, the workstreams, how a change is made, and where things are recorded
 
 ## 2.x Functional design
 
