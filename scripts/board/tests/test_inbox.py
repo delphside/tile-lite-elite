@@ -11,7 +11,7 @@ from .cases import Cases
 
 from board.inbox import build, render
 from board.model import RawIssue
-from board.sources import Remark
+from board.sources import Remark, Report
 
 def issue(n, title="t", created=None, closed=None, state="OPEN"):
     return RawIssue(n, title, state, "", "Requirement", {}, (), None, None,
@@ -68,6 +68,56 @@ class TheInbox(Cases):
         self.expect("the owner's remark is marked", True, "> 2026-09-15T09:00  mine" in out)
         self.expect("a quiet window says so", True,
               "nothing opened or closed" in render(build([], (), SINCE), colour=False))
+
+
+class WhoTypedIt(Cases):
+    """sources.comment_jq, run through the real jq on canned comments. The rule
+    lived untested in a string, which is how a bot's comment read as the
+    owner's until 2026-09-27."""
+
+    def who(self, login, kind, body="a comment"):
+        import json, shutil, subprocess
+        if not shutil.which("jq"):
+            self.skipTest("jq is not installed")
+        from board.sources import comment_jq
+        comment = [{"issue_url": "https://api.github.com/repos/o/r/issues/7", "updated_at": "2026-09-27T10:00:00Z",
+                    "user": {"login": login, "type": kind}, "body": body}]
+        out = subprocess.run(["jq", "-r", comment_jq("issue_url")], input=json.dumps(comment),
+                             capture_output=True, text=True, check=True).stdout
+        return out.split("\t")[2]
+
+    def test_each_account_is_read_as_what_it_is(self):
+        self.expect("the owner", "owner", self.who("SteveStyle", "User"))
+        self.expect("Claude", "claude", self.who("SteveStyle-typed-by-Claude", "User"))
+        self.expect("a workflow", "bot", self.who("github-actions[bot]", "Bot"))
+        self.expect("Dependabot", "bot", self.who("dependabot[bot]", "Bot"))
+        self.expect("deploy.sh's announcement", "deploy",
+                    self.who("SteveStyle-typed-by-Claude", "User", "Released in prod-0.9.0"))
+
+
+class Reports(Cases):
+    """Owner, 2026-09-27: "can you add a hook so you notice a new report?" The
+    workflows report by writing an issue, which leaves no comment behind."""
+
+    def test_a_bot_is_not_the_owner(self):
+        # Everything not Claude's account was the owner's until 2026-09-27.
+        inbox = build([issue(393)], (Remark(393, "2026-09-19T10:00", "bot", "Dependabot will rebase", False),), SINCE)
+        self.expect("a bot's comment is not counted as his", 0, inbox.from_owner)
+        self.expect("and is shown as a bot's", True, "[bot] Dependabot will rebase" in render(inbox, colour=False))
+
+    def test_a_report_has_its_own_section(self):
+        inbox = build([], (), SINCE, (Report(384, "Dependency advisories need review", "OPEN", "2026-09-19T19:36"),))
+        text = render(inbox, colour=False)
+        self.expect("under its heading", True, "REPORTS FROM THE SCHEDULED WORKFLOWS" in text)
+        self.expect("named, with its state", True, "#384   open" in text and "Dependency advisories" in text)
+
+    def test_a_cleared_report_is_news_too(self):
+        text = render(build([], (), SINCE, (Report(384, "advisories", "CLOSED", "2026-09-20T06:15"),)), colour=False)
+        self.expect("a closed report is listed as closed", True, "#384   closed" in text)
+
+    def test_no_report_says_so(self):
+        text = render(build([], (), SINCE), colour=False)
+        self.expect("rather than an empty heading", True, "no report opened, updated or closed" in text)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from .model import Issue, RawIssue, classify
-from .sources import Remark
+from .sources import Remark, Report
 
 
 @dataclass(frozen=True)
@@ -49,6 +49,10 @@ class Inbox:
     since: str
     threads: tuple[Thread, ...]
     events: tuple[Event, ...]
+    # What the scheduled workflows wrote: owner, 2026-09-27, "can you add a
+    # hook so you notice a new report?" Its own section, because a report is
+    # neither something somebody said nor a decision somebody made.
+    reports: tuple[Report, ...] = ()
 
     @property
     def from_owner(self) -> int:
@@ -56,7 +60,7 @@ class Inbox:
 
 
 def build(issues: Sequence[RawIssue], remarks: Sequence[Remark],
-          since_iso: str) -> Inbox:
+          since_iso: str, reports: Sequence[Report] = ()) -> Inbox:
     """Group remarks under the issues they were made on, and list what opened
     or closed in the window.
 
@@ -96,7 +100,8 @@ def build(issues: Sequence[RawIssue], remarks: Sequence[Remark],
         events.append(Event(raw.number, raw.title, what))
     events.sort(key=lambda e: e.number)
 
-    return Inbox(since=since_iso, threads=tuple(threads), events=tuple(events))
+    return Inbox(since=since_iso, threads=tuple(threads), events=tuple(events),
+                 reports=tuple(reports))
 
 
 def render(inbox: Inbox, colour: bool = True) -> str:
@@ -118,10 +123,20 @@ def render(inbox: Inbox, colour: bool = True) -> str:
             prefix = "(review) " if r.on_diff else ""
             if r.who == "owner":
                 out.append(f"  {bold('>')} {dim(r.when)}  {prefix}{r.text}")
+            elif r.who == "bot":
+                out.append(f"    {dim(r.when)}  {dim('[bot] ' + prefix + r.text)}")
             elif r.who == "deploy":
                 out.append(f"    {dim(r.when)}  {dim('[deploy.sh] ' + prefix + r.text)}")
             else:
                 out.append(f"    {dim(r.when)}  {dim(prefix + r.text)}")
+
+    out.append("")
+    out.append(bold("REPORTS FROM THE SCHEDULED WORKFLOWS"))
+    if not inbox.reports:
+        out.append(f"  {dim('no report opened, updated or closed')}")
+    for r in inbox.reports:
+        # Closed is the workflow clearing its own report, which is news too.
+        out.append(f"  #{r.number:<5} {r.state.lower():<7} {r.when}  {r.title[:52]}")
 
     out.append("")
     out.append(bold("OPENED OR CLOSED"))

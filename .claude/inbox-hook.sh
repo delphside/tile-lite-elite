@@ -82,7 +82,16 @@ ACTIONS="$(grep -E '^  #[0-9]+' "$TMP/actions" 2>/dev/null | head -40 || true)"
 # `programme-activities.yml` sends the owner during an absence.
 PRACTICES="$(grep -E 'OVERDUE|never logged' "$TMP/practices" 2>/dev/null || true)"
 
+# **Reports from the scheduled workflows.** Owner, 2026-09-27: "can you add a
+# hook so you notice a new report?" The workflows report by writing an issue
+# as the github-actions bot and editing it on later runs, which leaves no
+# comment for the summary above to count. board-inbox.py lists them in their
+# own section; this passes that section on, and nothing when it is empty.
+REPORTS="$(printf '%s\n' "$RAW" | sed -n '/^REPORTS FROM THE SCHEDULED WORKFLOWS/,/^$/p' \
+  | grep -E '^  #[0-9]+' || true)"
+
 EXTRA=""
+[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/board-inbox.py):"$'\n'"$REPORTS"
 [[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
 [[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/3.8):"$'\n'"$PRACTICES"

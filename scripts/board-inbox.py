@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from board.inbox import build, render                          # noqa: E402
-from board.sources import Unavailable, comments_since, fetch   # noqa: E402
+from board.sources import Unavailable, comments_since, fetch, reports_since  # noqa: E402
 
 
 def main() -> int:
@@ -57,6 +57,7 @@ def main() -> int:
                        pr_states="[OPEN, CLOSED, MERGED]")
         closed = fetch("CLOSED", with_bodies=False, with_pull_requests=False)
         remarks = comments_since(since)
+        reports = reports_since(since)
     except Unavailable as exc:
         # Refuse rather than report a quiet week. `inbox.sh` reported nothing on
         # a day four issues opened and four closed, because a malformed call
@@ -64,7 +65,7 @@ def main() -> int:
         print(f"board-inbox: {exc}", file=sys.stderr)
         return 1
 
-    inbox = build(opened.issues + closed.issues, remarks, since)
+    inbox = build(opened.issues + closed.issues, remarks, since, reports)
     print(render(inbox, colour=not args.no_colour))
     return 0
 

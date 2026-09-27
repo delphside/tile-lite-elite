@@ -305,9 +305,21 @@ class Remark:
 
     number: int
     when: str
-    who: str          # "owner" | "claude" | "deploy"
+    who: str          # "owner" | "claude" | "deploy" | "bot"
     text: str
     on_diff: bool
+
+
+def comment_jq(url_key: str) -> str:
+    """The jq that turns GitHub's comments into Remark rows: number, when, who,
+    text. Who is decided here, in this order: deploy.sh's announcement, then
+    Claude's account, then any bot, then the owner. A function so the rule can
+    be tested with the real jq rather than only read."""
+    return (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
+            '(if (.body | test("^Released in prod-")) then "deploy" '
+            'elif (.user.login == "SteveStyle-typed-by-Claude") then "claude" '
+            'elif (.user.type == "Bot") then "bot" '
+            'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150])] | @tsv')
 
 
 def comments_since(since_iso: str) -> tuple[Remark, ...]:
@@ -331,6 +343,9 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
     comment Claude had written qualified as the owner's. Written footer-first
     here anyway, it mislabelled 46 of Claude's comments, and the whole value of
     this report is that `>` marks what the owner typed.
+    **A bot is not the owner.** Everything not Claude's account was the owner's
+    until 2026-09-27, so a comment from Dependabot or a workflow read as
+    something he typed, and counted towards what he had said.
     **`deploy.sh` is tested first, and that is a fix.** It announces its own
     releases through the same account, so an account-first test labelled them
     Claude's and `inbox.sh`'s dimmed `[deploy.sh]` branch could never fire --
@@ -345,10 +360,7 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
         ("issues/comments", "issue_url", False),
         ("pulls/comments", "pull_request_url", True),
     ):
-        jq = (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
-              '(if (.body | test("^Released in prod-")) then "deploy" '
-              'elif (.user.login == "SteveStyle-typed-by-Claude") then "claude" '
-              'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150])] | @tsv')
+        jq = comment_jq(url_key)
         try:
             run = subprocess.run(
                 ["gh", "api",
@@ -372,6 +384,46 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
             except ValueError:
                 continue
     return tuple(sorted(out, key=lambda r: (r.number, r.when)))
+
+
+@dataclass(frozen=True)
+class Report:
+    """An issue a scheduled workflow wrote or updated: its report."""
+
+    number: int
+    title: str
+    state: str
+    when: str
+
+
+def reports_since(since_iso: str) -> tuple[Report, ...]:
+    """Issues the github-actions bot opened, updated or closed since `since_iso`.
+
+    **The workflows report by writing an issue**, `advisories.yml` and
+    `programme-activities.yml` both: they open one, edit its body on later runs
+    and close it when clean. An edit leaves no comment, so the comment listing
+    never shows a report arriving; the issue's own `updated` date does. Owner,
+    2026-09-27: *"can you add a hook so you notice a new report?"*
+
+    Raises `Unavailable` rather than returning nothing, for the reason
+    `comments_since` gives.
+    """
+    query = f"repo:{OWNER}/{REPO} is:issue author:app/github-actions updated:>={since_iso[:10]}"
+    try:
+        run = subprocess.run(
+            ["gh", "api", "-X", "GET", "search/issues", "-f", f"q={query}",
+             "--jq", '.items[] | [.number, .state, .updated_at[0:16], .title] | @tsv'],
+            capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Unavailable(f"could not search for reports: {exc}") from exc
+    if run.returncode != 0:
+        raise Unavailable(f"could not search for reports: {run.stderr.strip()[:200]}")
+    out = []
+    for line in run.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 4 and parts[0].isdigit():
+            out.append(Report(int(parts[0]), parts[3], parts[1], parts[2]))
+    return tuple(sorted(out, key=lambda r: r.when))
 
 
 def issues_by_number(numbers: Sequence[int]) -> dict[int, RawIssue]:
