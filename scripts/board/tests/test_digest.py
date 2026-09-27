@@ -26,7 +26,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from board.digest import (DRAFT, Digest, Window, claude_lessons, draft, in_window, issue_lessons,
+from board.digest import (CONCLUDE, DRAFT, Digest, with_conclusions, Window, claude_lessons, draft, in_window, issue_lessons,
                           notes_for_write, notes_of, register_rows, render, section, MEASURED_AT)
 from board.model import RawIssue
 
@@ -250,6 +250,36 @@ class ReviewAndNotes(Cases):
 
     def test_no_notes_says_so(self):
         self.expect("rather than an empty heading", True, "None were added to this week's draft." in render(digest()))
+
+
+class Conclusions(Cases):
+    """docs/3.8, owner 2026-09-27: every lesson and note ends with a conclusion,
+    decided at the weekly review, so the digest leaves one to decide for each."""
+
+    def test_each_lesson_from_an_issue_has_one(self):
+        text = render(digest(lessons=[(1, "a", "first"), (2, "b", "second")]))
+        self.expect("one per lesson", 2, text.count(CONCLUDE))
+
+    def test_each_of_claudes_own_lessons_has_one(self):
+        text = render(digest(own_lessons=[("x", "one"), ("y", "two"), ("z", "three")]))
+        self.expect("one per lesson", 3, text.count(CONCLUDE))
+
+    def test_each_note_has_one_whatever_its_shape(self):
+        self.expect("a bullet, with its continuation line kept above it", 2,
+                    with_conclusions("- one\n  more of one\n- two").count(CONCLUDE))
+        self.expect("continuation stays with its note", True,
+                    with_conclusions("- one\n  more of one\n- two").startswith("- one\n  more of one\n  - *Conclusion"))
+        self.expect("text with no bullets is one note", 1, with_conclusions("plain note").count(CONCLUDE))
+        self.expect("no notes, nothing to conclude", "", with_conclusions(""))
+        self.expect("and the report carries them", 2, render(digest(), notes="- a\n- b").count(CONCLUDE))
+
+    def test_nothing_to_conclude_asks_for_nothing(self):
+        self.expect("an empty week has no conclusions to decide", 0,
+                    render(digest(own_lessons=[])).count(CONCLUDE))
+
+    def test_the_owners_box_is_ticked_by_claude_when_he_says(self):
+        self.expect("so no review means editing a file", True,
+                    "Claude ticks this when the owner says it is done" in render(digest()))
 
 
 class WhatIsNotDerived(Cases):

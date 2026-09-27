@@ -298,6 +298,29 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
 
 DRAFT = "<!-- draft: notes only, until board-digest.py --write fills it in -->"
 
+# Left by the digest after every lesson and note, and replaced at Claude's
+# weekly review by its conclusion (docs/3.8, owner 2026-09-27). The four named
+# are examples: "that list may not be comprehensive".
+CONCLUDE = ("*Conclusion, at the weekly review: for example an initiative (which `CI-`), "
+            "monitoring (which `P-` or measure), a process change (what, where), or no action "
+            "(why).*")
+
+
+def with_conclusions(notes: str) -> str:
+    """The week's notes, each top-level bullet followed by its conclusion to
+    decide. Text with no bullets is one note."""
+    if not notes:
+        return notes
+    blocks: list[list[str]] = []
+    for line in notes.splitlines():
+        if line.startswith("- ") or not blocks:
+            blocks.append([line])
+        else:
+            blocks[-1].append(line)
+    if not notes.lstrip().startswith("- "):
+        return f"{notes}\n\n{CONCLUDE}"
+    return "\n".join("\n".join(block + [f"  - {CONCLUDE}"]) for block in blocks)
+
 
 def draft(code: str, first_day: str) -> str:
     """Next week's report, before it is written: only a Notes section, for
@@ -425,6 +448,8 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
             out.append("")
             out.append(text)
             out.append("")
+            out.append(CONCLUDE)
+            out.append("")
     else:
         out.append("No issue closed this week recorded a lesson.")
         out.append("")
@@ -435,6 +460,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     elif d.own_lessons:
         for name, description in d.own_lessons:
             out.append(f"- **{name}**: {description}")
+            out.append(f"  - {CONCLUDE}")
     else:
         out.append("None added this week.")
     out.append("")
@@ -455,7 +481,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
 
     out.append("## Notes from the week")
     out.append("")
-    out.append(notes or "None were added to this week's draft.")
+    out.append(with_conclusions(notes) or "None were added to this week's draft.")
     out.append("")
 
     out.append("## What I decided that you might have decided differently")
@@ -476,5 +502,6 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     out.append("")
     out.append("- [ ] **Claude** — weekly review: lessons, notes, problems and initiatives assessed, "
                "the registers updated, and each section and measure checked for use")
-    out.append("- [ ] **owner** — monthly review (`improvement-review`); the report is fixed once ticked")
+    out.append("- [ ] **owner** — monthly review (`improvement-review`): Claude ticks this when the "
+               "owner says it is done; the report is fixed once ticked")
     return "\n".join(out)
