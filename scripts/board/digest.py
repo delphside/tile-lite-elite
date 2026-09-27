@@ -1,4 +1,4 @@
-"""D54's weekly digest: what landed, what was deleted, and the tooling share.
+"""D54's weekly digest: the brake's two measures, what landed, what was deleted.
 
 #382, the job spec: *"a weekly digest, one issue comment — what landed, what
 was deleted, the tooling share, and anything I decided that you might have
@@ -15,6 +15,17 @@ preferences. The tool leaves the section empty and says so, on the same rule as
 `obligations.py` — something nothing can evidence must not read as *nothing to
 report*, because an empty section and an unanswerable question look identical.
 
+**The measure is docs/3.7's, not the one first proposed.** Owner, 2026-09-21:
+*"The test is that we produce fewer issues and that they take less of my
+time"*, narrowed the same day to non-functional issues. So the headline is the
+count of `tooling` and `documentation` issues raised in the window, beside the
+week before, and what the board reports as waiting on the owner. The tooling
+share stays as an observation: its 45% figure is provisional and its horizon is
+#383 finishing, not a date. Until 2026-09-27 this module still reported the
+share against a 45% threshold and a 2026-10-17 date, and asked for a
+confirmation the owner had already given, because the answer landed in docs/3.7
+and not here.
+
 **Deletions are counted first among equals**, because D54 says so: *"removing
 tooling is as much in scope as adding it, and needs no more permission"*, and
 the measure of success is the tooling share falling rather than the tooling
@@ -26,15 +37,18 @@ from __future__ import annotations
 import collections
 import re
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 from . import repo
 from .model import classify
 from .sources import Snapshot
+from .turn import waiting_on_owner
 
-# The threshold and horizon D54 proposes. The owner was asked to confirm or
-# change them and has not, so they stand as proposed — which the digest says
-# each time rather than letting an unconfirmed number harden into a fact.
-THRESHOLD, MEASURED_AT, HORIZON = 45, 55, "2026-10-17"
+# docs/3.7's brake: non-functional means these two types of change.
+NON_FUNCTIONAL = ("tooling", "documentation")
+# The share when D54 was agreed, kept so the observation says where it moved
+# from. Not a target.
+MEASURED_AT = 55
 
 SUBJECT = re.compile(r"^app [\d.]+ api [\d.]+: (.*)$")
 
@@ -52,18 +66,13 @@ class Digest:
     by_type: collections.Counter = field(default_factory=collections.Counter)
     closed: list[tuple[int, str]] = field(default_factory=list)
     raised: list[tuple[int, str]] = field(default_factory=list)
+    non_functional: list[tuple[int, str]] = field(default_factory=list)
+    non_functional_before: int = 0
+    waiting: list[tuple[int, str, str]] = field(default_factory=list)
 
     @property
     def share(self) -> int:
         return (self.tooling * 100 // self.total) if self.total else 0
-
-    @property
-    def direction(self) -> str:
-        if self.share < THRESHOLD:
-            return f"below the {THRESHOLD}% threshold"
-        if self.share < MEASURED_AT:
-            return f"falling, still above the {THRESHOLD}% threshold"
-        return f"not falling — it was {MEASURED_AT}% when D54 was written"
 
 
 def resolve(since: str, main: str = "origin/main") -> str:
@@ -81,9 +90,44 @@ def resolve(since: str, main: str = "origin/main") -> str:
     return since
 
 
+def window_start(since: str) -> str:
+    """The window's first day, as YYYY-MM-DD, whatever `since` was given as."""
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", since):
+        return since
+    return repo._git("log", "-1", "--format=%cs", since).strip() or since
+
+
+def in_window(open_raw, closed_raw, start: str):
+    """(raised, non-functional raised, non-functional raised the week before,
+    closed), each within the window beginning `start`, a YYYY-MM-DD date.
+
+    Raised whatever state it is in now: an issue raised and closed inside the
+    week was still raised. Until 2026-09-27 only the open ones were counted,
+    and closed was read from `updated_at`, so a comment on an old closed issue
+    listed it as closed this week.
+    """
+    before = (date.fromisoformat(start) - timedelta(days=7)).isoformat()
+    raised, non_functional, closed = [], [], []
+    non_functional_before = 0
+    for raw in list(open_raw) + list(closed_raw):
+        created = (raw.created_at or "")[:10]
+        is_nf = (raw.fields or {}).get("Type of change") in NON_FUNCTIONAL
+        if created >= start:
+            raised.append((raw.number, raw.title))
+            if is_nf:
+                non_functional.append((raw.number, raw.title))
+        elif created >= before and is_nf:
+            non_functional_before += 1
+    for raw in closed_raw:
+        if (raw.closed_at or "")[:10] >= start:
+            closed.append((raw.number, raw.title))
+    return sorted(raised), sorted(non_functional), non_functional_before, closed
+
+
 def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
           since: str, until: str = "HEAD") -> Digest:
     d = Digest(since=since, until=until)
+    start = window_start(since)
 
     rev = f"{resolve(since)}..{until}"
     log = repo._git("log", "--no-merges", "--format=%H%x1f%s", rev)
@@ -103,50 +147,64 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
     if rm := re.search(r"(\d+) deletion", stat):
         d.lines_removed = int(rm.group(1))
 
-    issues = [classify(r) for r in open_snapshot.issues
-              if r.issue_type != "PullRequest"]
+    everything = [classify(r) for r in open_snapshot.issues]
+    issues = [i for i in everything if i.raw.issue_type != "PullRequest"]
     d.total = len(issues)
     d.by_type = collections.Counter(i.field("Type of change") or "unset"
                                     for i in issues)
     d.tooling = d.by_type.get("tooling", 0)
 
-    # Anything raised inside the window, whatever state it is in now.
-    for issue in issues:
-        if issue.raw.created_at and issue.raw.created_at[:10] >= since[:10]:
-            d.raised.append((issue.number, issue.title))
-    if closed_snapshot:
-        for raw in closed_snapshot.issues:
-            if raw.updated_at and raw.updated_at[:10] >= since[:10]:
-                d.closed.append((raw.number, raw.title))
+    # Pull requests are in the snapshot for this: a review waiting is his.
+    for issue in everything:
+        w = waiting_on_owner(issue)
+        if w:
+            d.waiting.append((issue.number, issue.title, w.asked))
+
+    closed_raw = list(closed_snapshot.issues) if closed_snapshot else []
+    (d.raised, d.non_functional, d.non_functional_before,
+     d.closed) = in_window([i.raw for i in issues], closed_raw, start)
     return d
 
 
 def render(d: Digest, judgements: list[str] | None = None) -> str:
-    out = [f"## Weekly digest — {d.since[:10]} to {d.until[:10]}", ""]
+    until = date.today().isoformat() if d.until == "HEAD" else d.until[:10]
+    out = [f"# Weekly digest, {window_start(d.since)} to {until}", ""]
 
-    out.append(f"### The tooling share: **{d.share}%**, {d.direction}")
+    # docs/3.7's brake, limit 1: fewer non-functional issues, and less of the
+    # owner's time. Both counted, neither argued.
+    out.append("## The brake: fewer non-functional issues, less of your time")
     out.append("")
-    # Always name the starting point, not only when the number is bad. Saying
-    # "falling" without saying what from lets an improvement of one point read
-    # like an improvement of ten.
-    move = d.share - MEASURED_AT
-    moved = ("unchanged from" if move == 0
-             else f"{abs(move)} points {'below' if move < 0 else 'ABOVE'}")
-    out.append(f"{d.tooling} of {d.total} open issues are type `tooling` — "
-               f"{moved} the {MEASURED_AT}% measured when D54 was written. "
-               f"Limit 1 is below {THRESHOLD}% by {HORIZON}.")
+    nf = len(d.non_functional)
+    out.append(f"**{nf}** non-functional issues raised (`tooling` or `documentation`), "
+               f"against **{d.non_functional_before}** in the seven days before.")
+    if d.non_functional:
+        out.append("")
+    for number, title in d.non_functional:
+        out.append(f"- #{number} {title}")
+    out.append("")
+    if d.waiting:
+        things = "thing" if len(d.waiting) == 1 else "things"
+        out.append(f"**{len(d.waiting)}** {things} the board reports as waiting on you:")
+        out.append("")
+        for number, title, action in d.waiting:
+            out.append(f"- #{number} {title}: {action}")
+    else:
+        out.append("**Nothing** the board reports as waiting on you.")
+    out.append("")
+    # An observation, not the target (docs/3.7). Always name the starting
+    # point, so a one-point move cannot read like a ten-point one.
+    out.append(f"*The tooling share, as an observation:* {d.tooling} of {d.total} open "
+               f"issues are `tooling`, **{d.share}%**, against {MEASURED_AT}% when D54 "
+               "was agreed. Not the target: the 45% figure is provisional until "
+               "#383's model has replaced the tooling it is replacing.")
     out.append("")
     out.append("| type | open | share |")
     out.append("| --- | --- | --- |")
     for kind, count in d.by_type.most_common():
         out.append(f"| `{kind}` | {count} | {count * 100 // max(1, d.total)}% |")
-    out.append("")
-    out.append(f"*The {THRESHOLD}% threshold and the {HORIZON} horizon stand as "
-               "proposed — D54 asked you to confirm or change them, and a "
-               "sentence still does.*")
 
     out.append("")
-    out.append(f"### What landed — {len(d.landed)} commits")
+    out.append(f"## What landed — {len(d.landed)} commits")
     out.append("")
     for sha, subject in d.landed[:40]:
         out.append(f"- `{sha}` {subject}")
@@ -154,7 +212,7 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
         out.append(f"- …and {len(d.landed) - 40} more")
 
     out.append("")
-    out.append("### What was deleted")
+    out.append("## What was deleted")
     out.append("")
     if d.files_deleted:
         for path in d.files_deleted:
@@ -167,19 +225,23 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
 
     if d.raised or d.closed:
         out.append("")
-        out.append("### Issues")
+        out.append("## Issues")
         out.append("")
         if d.raised:
-            out.append(f"**Raised ({len(d.raised)})**")
+            out.append(f"### Raised ({len(d.raised)})")
+            out.append("")
             for number, title in d.raised:
                 out.append(f"- #{number} {title}")
         if d.closed:
-            out.append(f"**Closed ({len(d.closed)})**")
+            if d.raised:
+                out.append("")
+            out.append(f"### Closed ({len(d.closed)})")
+            out.append("")
             for number, title in d.closed:
                 out.append(f"- #{number} {title}")
 
     out.append("")
-    out.append("### What I decided that you might have decided differently")
+    out.append("## What I decided that you might have decided differently")
     out.append("")
     if judgements:
         out += [f"- {j}" for j in judgements]
