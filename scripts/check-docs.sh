@@ -13,7 +13,7 @@ set -uo pipefail
 # before pushing and the one the pull request enforces are the same code — the
 # same reason `ci-status.sh` is shared between `deploy.sh` and the terminal.
 #
-# Three checks, each reported separately and all of them run even when an
+# The first three checks, each reported separately and all of them run even when an
 # earlier one fails, because "fix one, discover the next" wastes a lap:
 #
 #   1. markdownlint  — the house style in .markdownlint.jsonc
@@ -126,6 +126,14 @@ if ! node scripts/mermaid/check.mjs; then FAILED=1; fi
 echo
 bold "7. script log events"
 if ! "$HERE/scripts/check-run-log-events.py"; then FAILED=1; fi
+
+# 8. history signals -- #427 R8. A measure, not a gate: the lines in the
+# numbered documents carrying a phrase that marks history or argument (docs/3.9).
+# It reports and never fails, because a phrase can be used legitimately; a
+# person reads the list. It should fall. Run bare, as 5 to 7 are.
+echo
+bold "8. history signals (a measure; --list in doc-signals.py shows them)"
+"$HERE/scripts/doc-signals.py"
 
 echo
 if (( FAILED )); then
