@@ -42,8 +42,8 @@ In the review's order of leverage.
 
 1. Done: R1 into `3.9` and `CLAUDE.md`; R2, the README; R3, the
    authentication pilot; R4, `3.1`.
-2. `3.6` in passes, one part a commit, then `4.8`, whose process material goes
-   to `3.6`'s new shape rather than to its old one.
+2. Done: `3.6` in passes, then `4.8`, whose process material went to `3.6`
+   §2.15.
 3. `3.3` and the rest.
 4. R8, the signal count.
 
@@ -77,3 +77,24 @@ tooling reads) and the exit-status convention, as reference.
 
 Nothing is lost: what leaves a document is either already in an issue or a
 commit, or goes into the commit that removes it.
+
+## 3.3
+
+`3.3` is 2,063 lines in three parts: what to type, the process and why, and
+notes and incidents. Rollback is described three times (§1.11, §2.11, §3.2),
+the emergency path twice (§1.13, §2.12), and §1's *Which steps apply* re-derives
+routes and shapes that `3.6` owns. Target:
+
+| part | now | target |
+| --- | --- | --- |
+| opening | three parts, and a note that material is repeated between them | the environments table and one line: the commands are here, the rules in `3.6` |
+| *Which steps apply* | routes, the four shapes with their argument, D55's history, the release-branch rule | which steps each shape uses, and the diagrams. The shapes themselves go to `3.6` §1.0, replacing its retired patch, minor and major queues |
+| 1, what to type | the steps, with their reasons in parts 2 and 3 | each step holds its commands, its proof and its rules in a line each: rollback, emergency and diagnostics absorb §2.10 to §2.12 and §3.1 to §3.2 |
+| 2, why | environments, tests, CI, versions, `deploy.sh`, and pointers to moved sections | reference for the mechanisms, renumbered 2.1 to 2.5: environments, tests, CI, version numbers, how `deploy.sh` ships an image. §2.8 and §2.10 to §2.12 leave |
+| 3, notes and incidents | the failures behind each rule | removed. The GitHub Release and what a release settles join §2.5 as rules; the incidents are in #150, #194, #207 and the commits |
+
+`3.6` §1.2 to §1.4 repeat `3.3` §1.8 to §1.10 in the pre-D55 framing (merges
+flowing from the faster queue into the slower ones); they reduce to the rules,
+linking the commands.
+
+Inbound anchors are repointed in the commit that moves them.
