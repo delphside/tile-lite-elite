@@ -108,14 +108,29 @@ is run and read, the machine difference and the raw measurements.
 
 ### Findings
 
-Copilot's review was done on its branch `427-review-round-3` (719a0f9), which
-it could not push: its tools open a pull request only from the branch its task
-began on. The owner relayed its summary, and Claude recorded it here.
-
-- Q1 and Q2, the 2.8 and 3.10 split: no finding.
-- Q3, round 2's fixes to 1.1, 2.4 and 4.2 checked against the code: no finding.
-- Q4: `docs/2.1-rules-engine.md` still states intended design as current
-  truth, beyond #428's list.
+1. Q1 and Q2: no finding. **Verified** against `docs/2.8-engine-performance.md`
+   and `docs/3.10-benchmarking.md`: 2.8 now keeps the engine's search-cost and
+   design consequences, while 3.10 keeps the measurement method and how to read
+   the benchmark; where one needs the other it links rather than restating it.
+   **Inferred:** none.
+2. Q3: no finding. **Verified** against `Cargo.toml`,
+   `crates/server-game/src/app.rs:132-176`,
+   `crates/server-game/src/persistence.rs:447-448`, and
+   `crates/server-game/migrations/*.sql`: 1.1's crate table, 2.4's account of
+   retained games staying in memory, and 4.2's migration table match the code
+   and migration files. **Inferred:** none.
+3. `docs/2.1-rules-engine.md:3-5,23,43,77,92,190,206,305,317,336` still states
+   intended design as current truth: it says the rules engine *should* do
+   things, and still has proposal headings (`Proposed Rust Shape`, `Suggested
+   API Direction`, `Recommendation On Cross-Check Caching`). That breaks
+   `CLAUDE.md`'s documentation rule that numbered documents say what is true
+   now, and `docs/3.9-writing-documents.md:22-30`, which keeps proposal and
+   argument out of numbered documents. Suggested fix: keep this with #428 and
+   rewrite `docs/2.1-rules-engine.md` together with
+   `docs/2.2-rules-engine-implementation.md` from the implemented
+   `rules-shared` code, as current design rather than plan. **Verified:** the
+   quoted headings and wording are in `docs/2.1-rules-engine.md`. **Inferred:**
+   none.
 
 ### Response
 
