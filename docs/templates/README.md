@@ -28,6 +28,7 @@ inlines a form is one nobody can copy.
 | [test-design-specification.md](test-design-specification.md) | [3.3](../3.3-testing-ci-and-release.md), *How a test design specification is built* |
 | [post-deployment-review.md](post-deployment-review.md) | [3.6](../3.6-change-lifecycle.md), the `Post-deployment` phase and lessons learnt |
 | [capacity-plan.md](capacity-plan.md) | [3.6](../3.6-change-lifecycle.md), *Which document goes where* — reports |
+| [triage-comment.md](triage-comment.md) | [3.6](../3.6-change-lifecycle.md), *What triage asks* |
 
 **A new template owes that row.** Until a numbered document links to it, it is a
 form nobody will find at the moment they need it.
