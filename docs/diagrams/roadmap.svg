@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="946" height="1694" viewBox="0 0 946 1694" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
-<rect width="946" height="1694" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="946" height="1768" viewBox="0 0 946 1768" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="946" height="1768" fill="#ffffff"/>
 <text x="278" y="36" text-anchor="middle" font-size="11" font-weight="600" fill="#5a6472">can start now</text>
 <text x="548" y="36" text-anchor="middle" font-size="11" font-weight="600" fill="#5a6472">after 1 round</text>
 <text x="818" y="36" text-anchor="middle" font-size="11" font-weight="600" fill="#5a6472">after 2 rounds</text>
@@ -137,14 +137,18 @@
 <text x="175" y="1552" font-size="11" font-weight="700" fill="#111418">#402</text>
 <text x="175" y="1566" font-size="10.5" fill="#111418">Server error handling</text>
 <text x="175" y="1590" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
-<rect x="16" y="1604" width="914" height="74" fill="#f6f8fa"/>
+<rect x="16" y="1604" width="914" height="148" fill="#f6f8fa"/>
 <line x1="16" y1="1604" x2="930" y2="1604" stroke="#d8dee6" stroke-width="1"/>
-<text x="26" y="1633" font-size="11.5" font-weight="700" fill="#111418">Process Definition</text>
+<text x="26" y="1670" font-size="11.5" font-weight="700" fill="#111418">Process Definition</text>
 <rect x="166" y="1611" width="224" height="60" rx="5" fill="#e4f4e4" stroke="#4c9a4c" stroke-width="1"/>
 <text x="175" y="1626" font-size="11" font-weight="700" fill="#111418">#407</text>
 <text x="175" y="1640" font-size="10.5" fill="#111418">Programme BAU activities</text>
 <text x="175" y="1664" font-size="9.5" font-style="italic" fill="#5a6472">pre-approved · Post-deployment</text>
-<line x1="16" y1="1678" x2="930" y2="1678" stroke="#d8dee6" stroke-width="1"/>
+<rect x="166" y="1685" width="224" height="60" rx="5" fill="#e6efff" stroke="#5b7fbd" stroke-width="1"/>
+<text x="175" y="1700" font-size="11" font-weight="700" fill="#111418">#427</text>
+<text x="175" y="1714" font-size="10.5" fill="#111418">Documentation by type</text>
+<text x="175" y="1738" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Design and Test…</text>
+<line x1="16" y1="1752" x2="930" y2="1752" stroke="#d8dee6" stroke-width="1"/>
 <path d="M 660 87 H 683.0 V 1197 H 699" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
 <polygon points="706,1197 699,1193.4 699,1200.6" fill="#3d6fb4"/>
 <path d="M 660 753 H 683.0 V 1197 H 699" fill="none" stroke="#3d6fb4" stroke-width="1.4" opacity="0.85"/>
