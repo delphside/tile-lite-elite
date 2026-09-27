@@ -60,17 +60,19 @@ class TheBrake(Cases):
         d = digest(window=w)
         d.by_type = collections.Counter({"functional": 10, "bug": 2})
         text = render(d)
-        # raised | closed | raised before | closed before | open now | reads as
-        self.expect("functional", True, "| `functional` | 4 | 0 | 0 | 1 | 10 | the most constructive use of your time |" in text)
-        self.expect("bugs", True, "| `bug` | 1 | 2 | 3 | 0 | 2 | not constructive" in text)
+        # Owner, 2026-09-27: this week raised, closed, open; then last week the same.
+        self.expect("grouped by week", True,
+                    "| type of change | this week: raised | closed | open | last week: raised | closed | open | reads as |" in text)
+        self.expect("functional", True, "| `functional` | 4 | 0 | 10 | 0 | 1 | 0 | the most constructive use of your time |" in text)
+        self.expect("bugs", True, "| `bug` | 1 | 2 | 2 | 3 | 0 | 0 | not constructive" in text)
         # A quiet type still gets its row, so a week with no bugs is visible.
-        self.expect("a type with nothing is still shown", True, "| `documentation` | 0 | 0 | 0 | 0 | 0 |" in text)
-        # Owner, 2026-09-27: cosmetic counts as a functional enhancement.
+        self.expect("a type with nothing is still shown", True, "| `documentation` | 0 | 0 | 0 | 0 | 0 | 0 |" in text)
+        # Owner, 2026-09-27: cosmetic is counted separately and credited as functional.
         self.expect("cosmetic reads as functional", True,
-                    "| `cosmetic` | 0 | 0 | 0 | 0 | 0 | counted separately, credited as functional |" in text)
+                    "| `cosmetic` | 0 | 0 | 0 | 0 | 0 | 0 | counted separately, credited as functional |" in text)
         odd = render(digest(window=Window(raised_by_type=collections.Counter({"spike": 1}))))
         self.expect("a type docs/3.7 does not name is shown, not dropped", True,
-                    "| `spike` | 1 | 0 | 0 | 0 | 0 | not in docs/3.7 |" in odd)
+                    "| `spike` | 1 | 0 | 0 | 0 | 0 | 0 | not in docs/3.7 |" in odd)
 
     def test_what_is_waiting_on_the_owner_is_listed_or_said_to_be_nothing(self):
         self.expect("nothing waiting says nothing", True,
@@ -123,6 +125,18 @@ class TheWindow(Cases):
                        issue(5, "bug", "2026-08-01T00:00:00Z", closed="2026-09-13T00:00:00Z")], self.START)
         self.expect("raised on the 14th and the 20th, not the 13th", {"tooling": 1, "bug": 1}, dict(w.raised_before))
         self.expect("closed on the 15th, not the 13th", {"bug": 1}, dict(w.closed_before))
+
+    def test_open_last_week_reconciles_with_open_now(self):
+        # Open at the end of last week, plus raised, less closed, is open now:
+        # the check that both open counts mean what they say.
+        open_now = [issue(1, "bug", "2026-09-01T00:00:00Z"), issue(2, "bug", "2026-09-22T00:00:00Z")]
+        closed = [issue(3, "bug", "2026-09-02T00:00:00Z", closed="2026-09-23T00:00:00Z"),
+                  issue(4, "bug", "2026-09-02T00:00:00Z", closed="2026-09-10T00:00:00Z"),
+                  issue(5, "bug", "2026-09-22T00:00:00Z", closed="2026-09-24T00:00:00Z")]
+        w = in_window(open_now, closed, self.START)
+        self.expect("open at the end of last week: #1 and #3, not #4 closed before it", 2, w.open_before["bug"])
+        self.expect("reconciles: 2 + 2 raised - 2 closed = 2 open now", len(open_now),
+                    w.open_before["bug"] + w.raised_by_type["bug"] - w.closed_by_type["bug"])
 
     def test_an_old_issue_closed_before_the_window_is_not_closed_in_it(self):
         w = in_window([], [issue(5, "tooling", "2026-08-01T00:00:00Z", closed="2026-09-01T00:00:00Z")], self.START)

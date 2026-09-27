@@ -131,6 +131,10 @@ class Window:
     closed_by_type: collections.Counter = field(default_factory=collections.Counter)
     raised_before: collections.Counter = field(default_factory=collections.Counter)
     closed_before: collections.Counter = field(default_factory=collections.Counter)
+    # Open at the end of the week before: raised before the window and not
+    # closed by its start. Derived from the two dates, since the board only
+    # says what is open now.
+    open_before: collections.Counter = field(default_factory=collections.Counter)
 
 
 def in_window(open_raw, closed_raw, start: str) -> Window:
@@ -156,6 +160,9 @@ def in_window(open_raw, closed_raw, start: str) -> Window:
                 w.overhead.append((raw.number, raw.title))
         elif created >= before:
             w.raised_before[kind_of(raw)] += 1
+    for raw in list(open_raw) + list(closed_raw):
+        if (raw.created_at or "")[:10] < start and not (raw.closed_at and raw.closed_at[:10] < start):
+            w.open_before[kind_of(raw)] += 1
     for raw in closed_raw:
         closed = (raw.closed_at or "")[:10]
         if closed >= start:
@@ -234,14 +241,17 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
     # Raised, closed and open by type: what arrived, what was cleared, and
     # what stands (owner, 2026-09-27). Every type in docs/3.7's order, a quiet
     # one included, so a week with no bugs is visible rather than absent.
-    out.append("| type of change | raised | closed | raised, week before | closed, week before | open now | reads as |")
-    out.append("| --- | --- | --- | --- | --- | --- | --- |")
+    # Grouped by week, owner 2026-09-27: raised, closed and open for this
+    # week, then the same for last week. Markdown has one header row, so the
+    # week names the first column of each group.
+    out.append("| type of change | this week: raised | closed | open | last week: raised | closed | open | reads as |")
+    out.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     known = {kind for kind, _ in READINGS}
     others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)
-                     | set(w.closed_before) | set(d.by_type)) - known)
+                     | set(w.closed_before) | set(w.open_before) | set(d.by_type)) - known)
     for kind, reading in list(READINGS) + [(k, "not in docs/3.7") for k in others]:
-        out.append(f"| `{kind}` | {w.raised_by_type[kind]} | {w.closed_by_type[kind]} | "
-                   f"{w.raised_before[kind]} | {w.closed_before[kind]} | {d.by_type[kind]} | {reading} |")
+        out.append(f"| `{kind}` | {w.raised_by_type[kind]} | {w.closed_by_type[kind]} | {d.by_type[kind]} | "
+                   f"{w.raised_before[kind]} | {w.closed_before[kind]} | {w.open_before[kind]} | {reading} |")
     out.append("")
     if d.waiting:
         things = "thing" if len(d.waiting) == 1 else "things"
