@@ -88,6 +88,7 @@ because it is where the fact came from. `README` has the full rule.
 | `3.4-production-environment` | the live system — the host, monitoring, backups, how to inspect it |
 | `3.6-change-lifecycle` | the process and why: requirements, projects, phases, decisions, branching, milestones |
 | `3.7-workstreams` | the ten workstreams and what each owns |
+| `3.10-benchmarking` | measuring the engine's performance, and reading a run; what the figures say about the design is `2.8` |
 | `4.1-configuration` | environment and application configuration |
 | `4.2` · `4.4` · `4.5` | schema, snapshot JSON, and where each field lives |
 | `4.3-api-schema` | every endpoint and wire type, and its errors |

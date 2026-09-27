@@ -154,4 +154,4 @@ fi
 echo
 echo "A check, not a gate: read the two rows and decide. Nothing here fails a release."
 echo "Compare median and p95. A non-zero slow count is the hypervisor, and the p99"
-echo "is inside it — see docs/2.8."
+echo "is inside it — see docs/3.10."

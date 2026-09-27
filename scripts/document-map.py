@@ -61,7 +61,10 @@ def gloss(path: Path) -> str:
 
 
 def build():
-    files = sorted(DOCS.glob("*.md"), key=lambda p: p.name)
+    # Numeric order, so 3.10 follows 3.9 rather than 3.1.
+    files = sorted(DOCS.glob("*.md"),
+                   key=lambda p: [int(t) if t.isdigit() else t
+                                  for t in re.split(r"(\d+)", p.name)])
     files = [f for f in files if f.name != OUT.name]
     lines = [
         "# 1.6 Document map",

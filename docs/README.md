@@ -49,7 +49,7 @@ history in the issue or the commit.
 - [2.5 Authentication](2.5-authentication.md) — players, sessions, passwords and email
 - [2.6 Authentication Examples](2.6-authentication-examples.md) — worked request/response walkthroughs
 - [2.7 Seats and Invitations](2.7-authentication-and-invitations.md) — how seats are claimed and a waiting game's roster is managed
-- [2.8 Engine Performance](2.8-engine-performance.md) — how fast the engine is, how that is measured, and how to read a run
+- [2.8 Engine Performance](2.8-engine-performance.md) — what the engine's search costs, and where in a game the work falls
 
 ## 3.x Programme
 
@@ -62,6 +62,7 @@ history in the issue or the commit.
 - [3.6 The Change Lifecycle](3.6-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
 - [3.7 Workstreams](3.7-workstreams.md) — the ten workstreams work is filed against, what each owns, and the boundaries between them
 - [3.9 Writing documents](3.9-writing-documents.md) — what each document holds, and how it is written
+- [3.10 Benchmarking](3.10-benchmarking.md) — measuring the engine's performance, and reading a run
 
 ## 4.x Reference
 
