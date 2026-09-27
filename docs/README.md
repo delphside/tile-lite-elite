@@ -1,17 +1,14 @@
 # Tile Lite Elite Docs
 
-The design notes and operating guides for Tile Lite Elite, in four numbered
-groups. Each group holds one kind of content ([3.9](3.9-writing-documents.md)):
+The documentation for Tile Lite Elite, in four numbered groups, each covering
+one scope ([3.9](3.9-writing-documents.md)):
 
-| group | section | type | read it to |
-| --- | --- | --- | --- |
-| 1.x | [Overview](#1x-overview) | explanation | understand what the system is and where it is going |
-| 2.x | [Design and domain](#2x-design-and-domain) | explanation | change a subsystem without rediscovering its model |
-| 3.x | [Lifecycle](#3x-lifecycle) | how-to guide | do the next step of a change correctly |
-| 4.x | [Reference](#4x-reference) | reference | look one fact up |
-
-1.5 and 1.6 are generated maps, numbered for their place but outside this
-model.
+| group | section | covers |
+| --- | --- | --- |
+| 1.x | [Overview](#1x-overview) | overviews: the rules, architecture, design and technologies, programme organisation, the roadmap, current work, and the documentation |
+| 2.x | [Functional design](#2x-functional-design) | the end-to-end design of each functional area |
+| 3.x | [Programme](#3x-programme) | the programme in detail: its organisation, processes and assets |
+| 4.x | [Reference](#4x-reference) | reference: every current value |
 
 ## I need to
 
@@ -41,7 +38,7 @@ history in the issue or the commit.
 - [1.4 Roadmap](1.4-roadmap.md) — CLI prototype → UI direction → MVP → v1 → Later
 - [1.5 Work in progress](1.5-work-in-progress.md) — what is in flight, drawn from the issues and regenerated, never typed
 
-## 2.x Design and domain
+## 2.x Functional design
 
 - [2.1 Rules Engine](2.1-rules-engine.md)
 - [2.2 Rules Engine Implementation](2.2-rules-engine-implementation.md)
@@ -52,7 +49,7 @@ history in the issue or the commit.
 - [2.7 Seats and Invitations](2.7-authentication-and-invitations.md) — how seats are claimed and a waiting game's roster is managed
 - [2.8 Engine Performance](2.8-engine-performance.md) — how fast the engine is, how that is measured, and how to read a run
 
-## 3.x Lifecycle
+## 3.x Programme
 
 - [3.0 Tools](3.0-tools.md) — every script, linking to where it's explained
 - [3.1 Setup](3.1-setup.md) — one-time: the development machine, and troubleshooting its build

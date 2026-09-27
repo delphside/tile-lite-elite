@@ -59,7 +59,7 @@ whole procedure exists to prevent.
 
 **The guidelines are written down already, in
 [`docs/3.9`](../../../docs/3.9-writing-documents.md).** Read them there rather than from a copy here — that is this skill's
-own rule applied to itself. In short: one kind of content per document, by its group's Diátaxis type;
+own rule applied to itself. In short: each group covers one scope (1.x overviews, 2.x functional design, 3.x the programme, 4.x reference);
 what is true now, with the history in the issue or the commit; the command or
 the rule first and the
 reasoning below it; reference says *what is there* and *what to type*, never
