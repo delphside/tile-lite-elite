@@ -57,7 +57,7 @@ history in the issue or the commit.
 - [3.4 Production Environment & Operations](3.4-production-environment.md) — building a host, and the running system: container topology, secrets, admin CLI, inspecting the database, logging, backups, wiping production
 - [3.5 Word Lists & Dictionaries](3.5-word-lists-and-dictionaries.md) — how a published word list becomes the trie the engine searches: sourcing, normalising, generating the denylist and greylist, and the runbooks for changing either
 - [3.6 The Change Lifecycle](3.6-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
-- [3.7 Workstreams](3.7-workstreams.md) — the nine capabilities work is filed against, what each owns, and where the boundary between each pair was argued
+- [3.7 Workstreams](3.7-workstreams.md) — the ten workstreams work is filed against, what each owns, and the boundaries between them
 - [3.9 Writing documents](3.9-writing-documents.md) — what each document holds, and how it is written
 
 ## 4.x Reference

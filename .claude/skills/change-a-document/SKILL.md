@@ -87,7 +87,7 @@ because it is where the fact came from. `README` has the full rule.
 | `3.3-testing-ci-and-release` | verifying a change and shipping it: the steps, the flavours, CI, the environments, deploy, rollback |
 | `3.4-production-environment` | the live system — the host, monitoring, backups, how to inspect it |
 | `3.6-change-lifecycle` | the process and why: requirements, projects, phases, decisions, branching, milestones |
-| `3.7-workstreams` | the nine workstreams and what each owns |
+| `3.7-workstreams` | the ten workstreams and what each owns |
 | `4.1-configuration` | environment and application configuration |
 | `4.2` · `4.4` · `4.5` | schema, snapshot JSON, and where each field lives |
 | `4.3-api-schema` | every endpoint and wire type, and its errors |
@@ -113,8 +113,9 @@ re-render — `docs/diagrams/README.md` has the command and the Puppeteer failur
 to expect. Editing the SVG is editing a build output.
 
 **A semicolon ends a mermaid statement.** `(Bearer token; wasm only)` broke a
-sequence diagram for 39 days and rendered as an error box, invisible to every
-check. Inline mermaid is checked by nothing today (#340).
+sequence diagram and rendered as an error box. `check-docs.sh` step 6 parses
+every diagram where `scripts/mermaid` has its packages installed; without them it
+says so and passes.
 
 **`docs/3.3` numbers three levels and only two are headings.** `1.2` is a
 section; `1.2.3` is an arrow in a diagram and has no heading, deliberately.
@@ -125,7 +126,7 @@ meet; before that, check what is in flight.
 ## Afterwards
 
 ```bash
-./scripts/check-docs.sh                 # lint, links, placement
+./scripts/check-docs.sh                 # lint, links, placement, map, diagrams; and the history count
 ./scripts/document-map.py --write       # regenerate, and report duplicates
 ```
 
