@@ -327,7 +327,8 @@ one of them has a defect: fix it, don't work around it.
   one file per period, named `TLE_<CODE>_<period>.md`.** Owner, 2026-09-22 —
   the name has to mean something once it has left the folder. It is neither a numbered document
   nor a change document: it records what was true at a moment, is never edited
-  afterwards, and is not superseded by the next one — the series is what carries
+  once the owner has reviewed it (until then it may be regenerated, owner
+  2026-09-27), and is not superseded by the next one — the series is what carries
   the meaning. `docs/reports/capacity_plan/` is the first.
 - **Templates live together in `docs/templates/`, and the numbered document that
   owns the rule links to them.** Owner, 2026-09-22: *"Templates fit into

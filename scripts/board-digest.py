@@ -62,8 +62,9 @@ def main(argv=None) -> int:
         code = f"TLE_WD_{year}_W{week:02d}"
         path = REPORTS / f"{code}.md"
         if path.exists():
-            # A report records what was true at a moment and is never edited
-            # afterwards (CLAUDE.md), so a second run in the same week refuses.
+            # A reviewed report is never edited (CLAUDE.md), so a second run in
+            # the same week refuses. One still in review may be regenerated:
+            # delete it and run again, which is a deliberate act, not a flag.
             print(f"board-digest: {path.relative_to(REPORTS.parents[2])} exists, "
                   "and a report is not rewritten", file=sys.stderr)
             return 1
