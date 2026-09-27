@@ -45,11 +45,12 @@ history in the issue or the commit.
 
 - [2.1 Rules Engine](2.1-rules-engine.md)
 - [2.2 Rules Engine Implementation](2.2-rules-engine-implementation.md)
-- [2.3 Engine Interface](2.3-engine-interface.md)
+- [2.3 Engine Interface](2.3-engine-interface.md) — the trait an engine implements, and how the server runs one
 - [2.4 Persistence](2.4-persistence.md) — original persistence design principles (see [4.2](4.2-database-schema.md) for the as-built schema)
 - [2.5 Authentication](2.5-authentication.md) — players, sessions, passwords and email
 - [2.6 Authentication Examples](2.6-authentication-examples.md) — worked request/response walkthroughs
 - [2.7 Seats and Invitations](2.7-authentication-and-invitations.md) — how seats are claimed and a waiting game's roster is managed
+- [2.8 Engine Performance](2.8-engine-performance.md) — how fast the engine is, how that is measured, and how to read a run
 
 ## 3.x Lifecycle
 
