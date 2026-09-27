@@ -1,6 +1,6 @@
 """What reaches the image — decided once.
 
-**`docs/4.8` is the authority**, under *The route an artefact takes*: anything
+**`docs/3.6` is the authority**, under *Route* in §2.15: anything
 built into the image is Production Release — `crates/**`, the word lists,
 `Caddyfile`, `docker-compose.yml`, `Dockerfile` — and everything else in the
 repository is Repository Change. This is that rule in the form code can apply,

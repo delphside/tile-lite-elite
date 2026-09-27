@@ -354,7 +354,8 @@ one of them has a defect: fix it, don't work around it.
 | what to type: release, rollback, emergency | docs/3.3 |
 | the lifecycle in full, and why | docs/3.6 |
 | workstreams and what each owns | docs/3.7 |
-| artefacts, their routes, and the strings tooling matches | docs/4.8 |
+| every field a change is classified by, and each artefact's route | docs/3.6 §2.15 |
+| artefacts outside git, and the strings tooling matches | docs/4.8 |
 | daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
 | how a document is written, and what it may hold | docs/3.9 |

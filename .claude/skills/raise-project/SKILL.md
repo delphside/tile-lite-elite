@@ -54,8 +54,8 @@ both:
 ## Impacted artefacts
 
 *One table per delivery, three rows, one per route. `Route` is a property of the
-artefact (`docs/4.8`), so a delivery is the mixture of routes it touches — and
-that mixture is what decides the process it follows. Say `no` and a dash rather
+artefact (`docs/3.6` §2.15) and a delivery has one route, so a table with two
+routes marked yes is a delivery that needs splitting. Say `no` and a dash rather
 than dropping a row: an absent row and an empty one read the same, and only one
 of them means "nothing here".*
 
