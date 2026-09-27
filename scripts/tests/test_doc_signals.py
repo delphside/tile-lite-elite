@@ -30,6 +30,8 @@ class DocSignals(Cases):
                     count('Owner: *"accounts and people"*'))
         self.expect("a dated change", 1, count("Corrected 2026-09-07. This said"))
         self.expect("until a date", 1, count("It answered 400 until 2026-09-21."))
+        self.expect("a dated change in lower case", 1,
+                    count("Issues #188 to #213 were deleted on 2026-09-10."))
         self.expect("a design note's heading", 1, count("## Next Steps"))
         self.expect("a line counts once, whatever it carries", 1,
                     count("Owner, 2026-09-21: until 2026-09-22, next steps"))

@@ -31,8 +31,10 @@ SIGNALS = [
     ("attributed quotation", re.compile(
         rf"\b[Oo]wner(, {DATE}|, same day|:\s*\*?\")")),
     ("dated change", re.compile(
-        rf"\b(until|since|Added|Corrected|Changed|Renamed|Created|Decided|"
-        rf"Narrowed|Moved|Retired|Deleted) (on )?{DATE}")),
+        # Case-insensitive except "Created": a register row's "created
+        # 2026-08-21" is data, a sentence opening "Created 2026-08-24" is not.
+        rf"\b((?i:until|since|added|corrected|changed|renamed|decided|narrowed|"
+        rf"moved|retired|deleted|removed)|Created) (on )?{DATE}")),
 ]
 
 # Records whose dates are their content: the delivery log, and the generated map.

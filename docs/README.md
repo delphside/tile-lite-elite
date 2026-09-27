@@ -10,6 +10,9 @@ groups. Each group holds one kind of content ([3.9](3.9-writing-documents.md)):
 | 3.x | how-to guide | do the next step of a change correctly |
 | 4.x | reference | look one fact up |
 
+1.5 and 1.6 are generated maps, numbered for their place but outside this
+model.
+
 ## I need to
 
 | task | read |
@@ -74,6 +77,6 @@ history in the issue or the commit.
 
 ## Outside the numbered set
 
-- [changes/](changes/) — a working document per change in flight, deleted once it ships
+- [changes/](changes/) — the design and test documents for each change, kept after it ships
 - [reports/](reports/) — reports the programme produces on a cadence
 - [templates/](templates/) — the forms the numbered documents link to

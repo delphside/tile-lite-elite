@@ -17,7 +17,8 @@ must know to avoid breaking something on its first change.
   every heading) and link to it rather than repeating it. Do not describe what
   the project does not do, or add justification the reader does not need.
 - **A numbered document holds one kind of content**: 1.x and 2.x explain, 3.x
-  say how to do a task, 4.x are reference. It states what is true now, with at
+  say how to do a task, 4.x are reference (1.5 and 1.6 are generated maps
+  and excluded). It states what is true now, with at
   most a line of reason; history, argument and quotations go in the commit
   message or the issue ([`docs/3.9`](docs/3.9-writing-documents.md)).
   `scripts/doc-signals.py --list` shows lines that look like history.

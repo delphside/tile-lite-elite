@@ -164,6 +164,22 @@ is the one property that makes a project a project.
 
 ## Workstreams: the capabilities we maintain
 
+Issues #188 to #213 were workstream containers, deleted on 2026-09-10. Older
+issues and commits cite them:
+
+| was | is |
+| --- | --- |
+| #188 | Process Definition |
+| #189 | Operations & Infrastructure |
+| #203 | the programme index |
+| #204 | Delivery Tooling |
+| #208 | Application & Game Architecture |
+| #209 | Client UI |
+| #210 | Authentication & Authorisation |
+| #211 | Client Management |
+| #212 | Capacity Planning |
+| #213 | Engine Player |
+
 **Candidate**, with the list agreed 2026-08-19 and the adoption not started. A
 workstream is a **capability area**, worked on indefinitely — not a bag of
 issues that arrived in the same week. The difference is that a capability

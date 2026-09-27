@@ -10,8 +10,8 @@ description: Find the section that owns a fact before adding it to anything in d
 ## Why it exists
 
 `one fact, one home` is a rule about where a fact belongs, and it is unusable
-without knowing all the homes. There are **~530 sections across 31 documents**
-and no one person's head holds them, so the practical question *"where does this
+without knowing all the homes. There are hundreds of sections (`docs/1.6`
+states the count) and no one person's head holds them, so the practical question *"where does this
 go?"* was being answered with *"where I already am"*.
 
 Four facts went into the wrong place on 2026-09-07, three of them caught by the
