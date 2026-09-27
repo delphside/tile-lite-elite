@@ -26,8 +26,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from board.digest import (Digest, Window, claude_lessons, in_window, issue_lessons,
-                          register_rows, render, section, MEASURED_AT)
+from board.digest import (DRAFT, Digest, Window, claude_lessons, draft, in_window, issue_lessons,
+                          notes_for_write, notes_of, register_rows, render, section, MEASURED_AT)
 from board.model import RawIssue
 
 from .cases import Cases
@@ -220,6 +220,36 @@ class TheReview(Cases):
     def test_unavailable_reads_differently_from_none(self):
         self.expect("not available", True, "*Not available: the memory repository" in render(digest(own_lessons=None)))
         self.expect("none", True, "None added this week." in render(digest(own_lessons=[])))
+
+
+class ReviewAndNotes(Cases):
+    """docs/3.8: Claude reviews weekly, the owner monthly; notes between digests
+    go in next week's draft."""
+
+    def test_a_report_ends_with_a_box_for_each_review(self):
+        text = render(digest())
+        self.expect("Claude's weekly review", True, "- [ ] **Claude** — weekly review" in text)
+        self.expect("the owner's monthly review", True, "- [ ] **owner** — monthly review" in text)
+        self.expect("and they are last", True, text.rstrip().endswith("the report is fixed once ticked"))
+
+    def test_a_drafts_notes_reach_the_report(self):
+        d = draft("TLE_WD_2026_W40", "2026-09-28")
+        self.expect("a new draft is marked as one", True, DRAFT in d)
+        self.expect("and its placeholder is not a note", "", notes_of(d))
+        written = d.replace("Anything noticed during the week, for the review.", "- the watcher lied twice")
+        self.expect("a note is read back", "- the watcher lied twice", notes_of(written))
+        self.expect("and carried into the report", True,
+                    "- the watcher lied twice" in render(digest(), notes=notes_of(written)))
+
+    def test_writing_keeps_a_drafts_notes_and_refuses_a_written_report(self):
+        d = draft("TLE_WD_2026_W40", "2026-09-28").replace(
+            "Anything noticed during the week, for the review.", "- a note")
+        self.expect("no file: nothing to keep", "", notes_for_write(None))
+        self.expect("a draft: its notes are kept", "- a note", notes_for_write(d))
+        self.expect("a written report: refused", None, notes_for_write(render(digest())))
+
+    def test_no_notes_says_so(self):
+        self.expect("rather than an empty heading", True, "None were added to this week's draft." in render(digest()))
 
 
 class WhatIsNotDerived(Cases):

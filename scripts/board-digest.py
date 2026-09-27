@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board.digest import build, render           # noqa: E402
+from board.digest import build, draft, notes_for_write, render  # noqa: E402
 from board.sources import Unavailable, fetch     # noqa: E402
 
 REPORTS = Path(__file__).resolve().parent.parent / "docs" / "reports" / "weekly_digest"
@@ -56,25 +56,33 @@ def main(argv=None) -> int:
         return 2
 
     registers = (REPORTS.parents[1] / "3.8-programme-activities.md").read_text()
-    text = render(build(open_snapshot, closed, since=args.since, registers=registers,
-                        memory_repo=Path.home() / "claude-memory"), args.decided)
+    digest = build(open_snapshot, closed, since=args.since, registers=registers,
+                   memory_repo=Path.home() / "claude-memory")
+    text = render(digest, args.decided)
 
     if args.write:
         # Named for the ISO week it closes, like TLE_CP_2026_09 names its month.
-        year, week, _ = date.today().isocalendar()
+        today = date.today()
+        year, week, _ = today.isocalendar()
         code = f"TLE_WD_{year}_W{week:02d}"
         path = REPORTS / f"{code}.md"
-        if path.exists():
-            # A reviewed report is never edited (CLAUDE.md), so a second run in
-            # the same week refuses. One still in review may be regenerated:
-            # delete it and run again, which is a deliberate act, not a flag.
-            print(f"board-digest: {path.relative_to(REPORTS.parents[2])} exists, "
-                  "and a report is not rewritten", file=sys.stderr)
+        notes = notes_for_write(path.read_text() if path.exists() else None)
+        if notes is None:
+            print(f"board-digest: {path.relative_to(REPORTS.parents[2])} is written; "
+                  "delete it to regenerate one still in review", file=sys.stderr)
             return 1
+        text = render(digest, args.decided, notes)
         path.parent.mkdir(parents=True, exist_ok=True)
         heading, rest = text.split("\n", 1)
         path.write_text(f"{heading}\n\n`{code}`\n{rest}\n")
+        # And next week's draft, for the notes (docs/3.8).
+        nyear, nweek, _ = (today + timedelta(days=7)).isocalendar()
+        ncode = f"TLE_WD_{nyear}_W{nweek:02d}"
+        npath = REPORTS / f"{ncode}.md"
+        if not npath.exists():
+            npath.write_text(draft(ncode, (today + timedelta(days=1)).isoformat()))
         print(path.relative_to(REPORTS.parents[2]))
+        print(npath.relative_to(REPORTS.parents[2]))
         return 0
 
     print(text)
