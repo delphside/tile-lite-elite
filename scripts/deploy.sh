@@ -60,7 +60,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # identical defect because it carried an identical copy of the line.
 #
 # `BASH_SOURCE` rather than `$0`: when this file is *sourced* — which
-# `deploy-release.test.sh` does, to reach its functions — `$0` is still the
+# `deploy-release.bats` does, to reach its functions — `$0` is still the
 # outer script, and the path would resolve into `scripts/tests/`.
 source "$(dirname "${BASH_SOURCE[0]}")/issue-mentions.sh"
 
@@ -659,7 +659,7 @@ post_deploy() {
   fi
 }
 
-# Sourced by scripts/tests/deploy-release.test.sh, which exercises the two
+# Sourced by scripts/tests/deploy-release.bats, which exercises the two
 # functions above directly. Everything below this line is the deploy itself and
 # must not run when sourced.
 if [[ "${DEPLOY_SH_FUNCTIONS_ONLY:-}" == "1" ]]; then
@@ -1435,7 +1435,7 @@ fi
 # Every gate has now had its say, and nothing has been changed yet. That makes
 # this the one point where the checks can be exercised without deploying —
 # which is what `DEPLOY_GATES_ONLY=1` is for, and what makes
-# `scripts/tests/deploy.test.sh` possible at all.
+# `scripts/tests/deploy.bats` possible at all.
 #
 # Until it existed, these gates were only ever run by deploying, so the branch
 # where each says **no** almost never ran: nobody rehearses a deploy against a
@@ -1489,7 +1489,7 @@ fi
 # with a message that does not mention keys.
 #
 # Deliberately *after* the gates rather than first. The gates are seconds of
-# network checks and are what `scripts/tests/deploy.test.sh` exercises, with
+# network checks and are what `scripts/tests/deploy.bats` exercises, with
 # fake keys against no reachable host; a preflight above them aborts the very
 # logic under test. Below the gates-only exit it also stays out of the way of
 # "would this deploy be allowed?", which is a question about policy rather

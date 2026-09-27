@@ -20,8 +20,8 @@ set -uo pipefail
 # ## Two orders, on purpose
 #
 # Checks **run** fastest-first, so a failure shows up in seconds rather than
-# after the slow ones. Measured 2026-08-15: `deploy.test.sh` is 47s and the
-# deploy gates 16s; everything else together is under two seconds.
+# after the slow ones. Measured 2026-08-15: the deploy gate tests were 47s and
+# the deploy gates 16s; everything else together is under two seconds.
 #
 # They are **summarised** in the order a release actually follows, which is the
 # order that answers "how far would this get?".
@@ -268,27 +268,38 @@ check_rehearsal() {
 }
 
 LABEL[tests]="Tooling tests pass"
+# **The runners, not a file pattern** (docs/3.3 §2.4). This looped over
+# `scripts/tests/*.test.sh` and skipped any it could not find, so as the suites
+# moved to bats on 2026-09-27 each batch dropped out of this check unnoticed,
+# and with the last one gone it would have passed having run nothing. bats
+# missing is a failure, not a skip, for the same reason.
 check_tests() {
   if (( QUICK )); then skip tests "tooling tests skipped (--quick)"; return; fi
-  local bad="" lines="" out name
-  for t in scripts/tests/*.test.sh; do
-    [[ -e "$t" ]] || continue
-    name="$(basename "$t" .test.sh)"
-    # Named before it runs: deploy.test.sh takes 47 seconds, and an
-    # unattributed silence reads as a hang. Only on a terminal — `\r` does not
-    # overwrite in a pipe, it just leaves both halves in the file.
-    [[ -t 1 ]] && printf '       %s ... ' "$name"
-    if out="$("$t" 2>&1)"; then
-      [[ -t 1 ]] && printf '\r'
-      printf '       %s %s\n' "$(green ok)" "$name        "
-    else
-      [[ -t 1 ]] && printf '\r'
-      printf '       %s %s\n' "$(red FAIL)" "$name        "
-      bad="$bad $name"; lines+="$name: $(printf '%s' "$out" | tail -2)"$'\n'
-    fi
-  done
-  if [[ -n "$bad" ]]; then fail tests "failing suites:$bad" "$lines"
-  else pass tests "all tooling test suites pass"; fi
+  if ! command -v bats >/dev/null 2>&1; then
+    fail tests "bats is not installed, so the shell tooling's tests cannot run" \
+      "sudo apt-get install -y bats bats-support bats-assert (setup-dev-environment.sh does this)"
+    return
+  fi
+  local bad="" lines="" out
+  # Named before it runs: the shell suites take about a minute, and an
+  # unattributed silence reads as a hang. Only on a terminal.
+  [[ -t 1 ]] && printf '       bats scripts/tests ... '
+  if out="$(bats scripts/tests 2>&1)"; then
+    [[ -t 1 ]] && printf '\r'
+    printf '       %s %s\n' "$(green ok)" "bats: $(grep -c '^ok ' <<< "$out") tests          "
+  else
+    [[ -t 1 ]] && printf '\r'
+    printf '       %s %s\n' "$(red FAIL)" "bats                     "
+    bad="$bad bats"; lines+="$(grep '^not ok' <<< "$out" | head -5)"$'\n'
+  fi
+  if out="$(python3 -m unittest discover -s scripts -t scripts 2>&1)"; then
+    printf '       %s %s\n' "$(green ok)" "unittest: $(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' <<< "$out") tests"
+  else
+    printf '       %s %s\n' "$(red FAIL)" "unittest"
+    bad="$bad unittest"; lines+="$(grep -E '^(FAIL|ERROR):' <<< "$out" | head -5)"$'\n'
+  fi
+  if [[ -n "$bad" ]]; then fail tests "failing:$bad" "$lines"
+  else pass tests "the shell and Python tooling tests pass"; fi
 }
 
 LABEL[gates]="A production deploy would be allowed"

@@ -43,7 +43,7 @@ jobs:
     name: fmt · clippy · test · wasm · docs
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 — deploy.test.sh runs deploy.sh's gates against real
+      # fetch-depth: 0 — deploy.bats runs deploy.sh's gates against real
       # commits in this repository's history, with only `gh` and `curl`
       # stubbed. A shallow checkout does not have them, and the suite fails
       # with "not a valid local git ref" — locally green, red on the runner,
@@ -100,47 +100,33 @@ jobs:
           -p server-game -p admin-cli -p tile-lite-elite-ui
           --check
 
+      # The Python tooling's tests, on the standard library's runner (docs/3.3
+      # §2.4): the board model's in scripts/board/tests/, and checks of the
+      # repository's own files in scripts/tests/test_*.py.
+      - name: Python tooling tests
+        run: python3 -m unittest discover -s scripts -t scripts -v
+
       # The release scripts have one piece of parsing that both deploy.sh and
       # check-commit-stamp.sh depend on, and it has failed twice — once loudly,
       # taking a production deploy down between two commands, and once quietly,
       # by returning nothing so the stamp check skipped itself.
       #
-      # deploy.test.sh runs deploy.sh's own gates under DEPLOY_GATES_ONLY.
+      # deploy.bats runs deploy.sh's own gates under DEPLOY_GATES_ONLY.
       # Those gates decide what reaches users, and were previously exercised
       # only by deploying — so the branch where each says *no* almost never
       # ran, which is how two of them came to fail open and a third to refuse
       # every rehearsal for a day.
-      # The Python model's tests, on the standard library's runner (docs/3.3
-      # §2.4). Suites move here from scripts/tests/*.test.sh as #421 migrates
-      # them; the loop below runs whatever has not moved yet.
-      - name: Python model tests
-        run: python3 -m unittest discover -s scripts -t scripts -v
-
+      #
       # bats-core runs the shell tooling's tests (docs/3.3 §2.4), with the
       # standard bats-support and bats-assert helpers. None is on the image.
+      # Every *.bats in the directory, not a list: the list CI once kept by
+      # hand had lost three suites, including one a project's post-deployment
+      # check claimed was "run in CI".
       - name: Shell tooling tests (bats)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bats bats-support bats-assert
           bats scripts/tests
-
-      # The suites not yet moved to bats (#421).
-      - name: Shell script tests
-        run: |
-          # Every suite in the directory, not a list. The list was hand-maintained
-          # and three had fallen off it — pre-commit-hook, turn-check and
-          # bench-rehearsal — including the one a project's own post-deployment
-          # check claimed was "run in CI". A glob cannot be forgotten.
-          failed=""
-          for t in scripts/tests/*.test.sh; do
-            echo "::group::$t"
-            if ./"$t"; then echo ok; else failed="$failed $t"; fi
-            echo "::endgroup::"
-          done
-          if [ -n "$failed" ]; then
-            echo "these suites failed:$failed" >&2
-            exit 1
-          fi
 
       # -D warnings makes any clippy or rustc warning fail the build. Scoped to
       # this repo's crates (old-crates carry many pre-existing warnings we don't
