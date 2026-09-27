@@ -148,10 +148,11 @@ one of them has a defect: fix it, don't work around it.
   reads both from `reviewDecision`, so skipping the re-request leaves it in the
   wrong column and waiting on nobody.
 - Commits say `Refs #N`, or `Closes #N` only when the change never leaves the
-  repository. Running a programme BAU activity, and updating its own
-  documents, needs no issue, so those commits say `Activity: <id>` from
-  docs/3.8's register instead. A change it makes to anything else, tooling
-  included, spawns an issue, or a project where the size calls for one. Every subject starts `app X.Y.Z api M.N:` and a space.
+  repository. Programme BAU work needs no issue: its commits say
+  `Activity: <id>` from docs/3.8's register, and the improvement initiative's
+  id where there is one. BAU is its own triage, so a change above its budget
+  or to an asset it does not own becomes a project, never a requirement
+  (docs/3.8). Every subject starts `app X.Y.Z api M.N:` and a space.
 - Push immediately after committing. Until pushed, a change does not exist.
   Run an unpushed script to test it, never to use it.
 
