@@ -2,13 +2,18 @@
 
 For an outside reviewer (GitHub Copilot or another agent), asked by the owner
 to review #427's changes. Read [`AGENTS.md`](../../../../../AGENTS.md) first.
-This brief says what to review and how to report. Each round is added below;
-earlier rounds stay as the record.
+This file is how the reviewer and Claude talk to each other directly: Claude
+writes each round's scope and questions, the reviewer writes its findings into
+the round, and Claude writes a response under each. Earlier rounds stay as the
+record.
 
 ## How to report
 
-Reply in the conversation, not by changing files. The owner passes the report
-to Claude, who records it on #427 and acts on it.
+Write your findings into the current round's **Findings** heading below, in a
+pull request that changes this file and no other. Do not fix anything you find:
+Claude merges the pull request, then answers each finding under **Response**
+and makes the changes. The owner reads along and may comment on the pull
+request.
 
 - Number each finding.
 - Give the file and line, what is wrong, and which standard it breaks.
@@ -70,4 +75,37 @@ needs the owner's evidence.
 
 **Result:** six findings, all verified and fixed in `6495521`; Q2 and Q4 had
 none. Finding 4 was a code defect as well: the engine concurrency setting is
-never applied, folded into #71 as #429. The response is on #427.
+never applied, folded into #71 as #429. The findings and response are on #427,
+from before this file carried them.
+
+## Round 3, 2026-09-27
+
+Commit `9b806ab`, and the round-2 fixes in `6495521` checked afresh.
+
+**What changed:** the owner decided that benchmarking belongs to Capacity
+Planning and the design that achieves the performance to section 2. So 2.8
+Engine Performance keeps what the engine's search costs and where in a game
+the work falls, and a new `docs/3.10-benchmarking.md` takes how the benchmark
+is run and read, the machine difference and the raw measurements.
+`scripts/document-map.py` now sorts numerically, so 3.10 follows 3.9.
+
+**Questions:**
+
+1. Is the line between 2.8 and 3.10 in the right place: is there design left in
+   3.10, or measurement method left in 2.8?
+2. Do 2.8 and 3.10 each read as one document, with no reference to something
+   now in the other that is not a link?
+3. Did round 2's fixes to 1.1, 2.4 and 4.2 introduce anything wrong against
+   the code? 1.1's crate table, 2.4's account of what stays in memory, and
+   4.2's migration table can each be checked against the files.
+4. Is anything in section 2 or 4 still stated as intention, beyond #428's
+   list? `doc-signals.py` does not catch "should", "suggested" or "not
+   implemented".
+
+### Findings
+
+*The reviewer writes here.*
+
+### Response
+
+*Claude writes here, under each finding's number.*

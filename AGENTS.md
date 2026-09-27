@@ -40,7 +40,8 @@ cargo test --workspace                                 # the application
 ## A review rather than a change
 
 If you were asked to review, look first for a review brief in the issue's
-folder under `docs/changes/` (`<issue>-review-brief.md`). It says what to review
-and how to report, and each round is added to it. Without one, report findings
-in the conversation, each with the file and the rule it breaks from
-`CLAUDE.md`. Do not change files: the owner and Claude decide what to apply.
+folder under `docs/changes/` (`<issue>-review-brief.md`). It says what to
+review, and you write your findings into it, in a pull request that changes
+that file and no other. Without a brief, report findings in the conversation,
+each with the file and the rule it breaks from `CLAUDE.md`. Either way, change
+nothing else: the owner and Claude decide what to apply.
