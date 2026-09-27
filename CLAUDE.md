@@ -148,7 +148,9 @@ one of them has a defect: fix it, don't work around it.
   reads both from `reviewDecision`, so skipping the re-request leaves it in the
   wrong column and waiting on nobody.
 - Commits say `Refs #N`, or `Closes #N` only when the change never leaves the
-  repository. Every subject starts `app X.Y.Z api M.N:` and a space.
+  repository. Running a programme BAU activity needs no issue, so those
+  commits say `Activity: <id>` from docs/3.8's register instead; a change the
+  activity decides to make spawns an issue as usual. Every subject starts `app X.Y.Z api M.N:` and a space.
 - Push immediately after committing. Until pushed, a change does not exist.
   Run an unpushed script to test it, never to use it.
 
