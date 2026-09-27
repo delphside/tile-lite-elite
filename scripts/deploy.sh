@@ -87,7 +87,7 @@ previous_release_tag() {
 # GitHub writes the notes from the pull requests merged since the previous
 # release, so nobody types a changelog — one that has to be remembered is one
 # that stops being written. `docs/4.9` is not replaced by this: a delivery that
-# ships no code has no tag for a release to hang on. See docs/3.3 §3.3.1.
+# ships no code has no tag for a release to hang on. See docs/3.3 §2.5.4.
 #
 # Never fatal. Production is already serving the new version by the time this
 # runs, so a changelog that fails to post prints the command to run by hand and

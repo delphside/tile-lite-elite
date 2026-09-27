@@ -268,7 +268,7 @@ check_rehearsal() {
 }
 
 LABEL[tests]="Tooling tests pass"
-# **The runners, not a file pattern** (docs/3.3 §2.4). This looped over
+# **The runners, not a file pattern** (docs/3.3 §2.2). This looped over
 # `scripts/tests/*.test.sh` and skipped any it could not find, so as the suites
 # moved to bats on 2026-09-27 each batch dropped out of this check unnoticed,
 # and with the last one gone it would have passed having run nothing. bats

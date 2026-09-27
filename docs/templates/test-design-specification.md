@@ -20,7 +20,7 @@ Worked examples:
 These are at the level of Project, if there is one, otherwise issue.
 
 This is NOT a test plan in the standards' sense — that is a management document
-of scope, schedule and resources, which we do not write.  See docs/3.3 §2.4.2.
+of scope, schedule and resources, which we do not write.  See docs/3.3 §2.2.3.
 -->
 
 Issue: #N · type: `label` · release: `patch alone` / `minor` / `major`

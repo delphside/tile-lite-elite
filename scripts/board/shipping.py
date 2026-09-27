@@ -65,7 +65,7 @@ def version_bump_only(files: Sequence[str], changed_lines: Sequence[str]) -> boo
     The files are `Cargo.toml`, optionally with `Cargo.lock`, and every changed
     line in them is a `version = "X.Y.Z"` line. It is the one image change that
     belongs on `main` — the version bump after a production deploy, and the
-    minor raised for a functional release (docs/3.3 §2.7) — and it ships no
+    minor raised for a functional release (docs/3.3 §2.4) — and it ships no
     behaviour. No changed lines is *not* a bump: "nothing changed" must not read
     as "nothing disallowed changed".
 

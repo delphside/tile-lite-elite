@@ -1,7 +1,7 @@
 # Rate limiting — test design specification
 
 For issue #25, **shipped in 0.5.0**. It stays here for the reason
-[3.3](../3.3-testing-ci-and-release.md#243-how-a-test-design-specification-is-built) now gives for
+[3.3](../3.3-testing-ci-and-release.md#223-how-a-test-design-specification-is-built) now gives for
 every plan: it is the documentation for the regression tests it produced. It is
 also one of that section's two worked examples — the non-functional one, judged
 by a script because there was nothing for a person to look at.

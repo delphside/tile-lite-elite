@@ -117,7 +117,7 @@ jobs:
       # ran, which is how two of them came to fail open and a third to refuse
       # every rehearsal for a day.
       #
-      # bats-core runs the shell tooling's tests (docs/3.3 §2.4), with the
+      # bats-core runs the shell tooling's tests (docs/3.3 §2.2), with the
       # standard bats-support and bats-assert helpers. None is on the image.
       # Every *.bats in the directory, not a list: the list CI once kept by
       # hand had lost three suites, including one a project's post-deployment
