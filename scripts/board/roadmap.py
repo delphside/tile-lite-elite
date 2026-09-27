@@ -56,6 +56,11 @@ BANDS = (
     ("landed", ("Post-deployment", "Project Closedown")),
 )
 
+# The key's wording for each band's phases, shorter than listing them all.
+_KEY_PHASES = {"planned": "Scope, Q3 to Q1", "designing": "Design and Test Approach",
+               "building": "Development to Deployment",
+               "landed": "Post-deployment, Project Closedown"}
+
 DELIVERING = (WorkPackage, StandaloneProject)
 
 TRIAGE_LANE = "no workstream set"
@@ -72,6 +77,8 @@ class Roadmap:
     lifted: list[tuple[int, int, int]] = field(default_factory=list)
     dropped: list[tuple[int, int]] = field(default_factory=list)
     cycles: list[tuple[int, int]] = field(default_factory=list)
+    # A work package's parent, by number, as "#291 Capacity planning".
+    parents: dict[int, str] = field(default_factory=dict)
 
     @property
     def deliveries(self) -> int:
@@ -114,6 +121,11 @@ def build(snapshot: Snapshot, parent: int | None = None,
     drawn_numbers = {i.number for i in drawn}
 
     road = Roadmap()
+    for i in drawn:
+        owner = by_number.get(i.parent) if isinstance(i, WorkPackage) else None
+        if owner is not None:
+            name = re.sub(r"^#\d+\s+(MAIN PROJECT:\s*)?", "", owner.title)
+            road.parents[i.number] = f"#{owner.number} {name}"
 
     def expand(number: int) -> list[int]:
         """The bars a dependency on `number` really lands on.
@@ -231,7 +243,8 @@ def _esc(text: str) -> str:
 # Geometry. A bar is fixed width because a Gantt bar's width means duration,
 # and this chart has no durations -- letting them vary would imply one.
 PAD, GUTTER, HEADER = 16, 150, 34
-BAR_W, BAR_H, COL_GAP, ROW_H = 224, 60, 46, 74
+BAR_W, BAR_H, COL_GAP, ROW_H = 224, 72, 46, 86
+KEY_H = 30
 
 BAND = ("#ffffff", "#f6f8fa")
 FILL = {"planned": ("#eef2f7", "#8895a7"), "designing": ("#e6efff", "#5b7fbd"),
@@ -261,6 +274,18 @@ def _rows(road: Roadmap) -> tuple[dict[int, tuple[int, int]], dict[str, int]]:
     return place, heights
 
 
+def _key_layout(width: int) -> list[tuple[int, int, str]]:
+    """(row, x, band) for each entry of the key, wrapping to fit the chart."""
+    out, row, x = [], 0, PAD + 10
+    for name, _ in BANDS:
+        span = 20 + int(len(f"{name}: {_KEY_PHASES[name]}") * 5.6) + 24
+        if x > PAD + 10 and x + span > width - PAD:
+            row, x = row + 1, PAD + 10
+        out.append((row, x, name))
+        x += span
+    return out
+
+
 def draw(road: Roadmap) -> str:
     """The chart as SVG.
 
@@ -282,7 +307,9 @@ def draw(road: Roadmap) -> str:
     place, heights = _rows(road)
     ncols = max((c for _, c in place.values()), default=0) + 1
     width = PAD * 2 + GUTTER + ncols * BAR_W + max(0, ncols - 1) * COL_GAP
-    height = PAD * 2 + HEADER + sum(heights.values()) * ROW_H
+    key = _key_layout(width)
+    key_rows = max(r for r, _, _ in key) + 1
+    height = PAD * 2 + HEADER + sum(heights.values()) * ROW_H + KEY_H * key_rows
 
     def col_x(col: int) -> int:
         return PAD + GUTTER + col * (BAR_W + COL_GAP)
@@ -325,6 +352,10 @@ def draw(road: Roadmap) -> str:
             for n, line in enumerate(_wrap(rest, BAR_W - 18, 5.55, 2)):
                 out.append(f'<text x="{bx + 9}" y="{by + 29 + n * 12}" '
                            f'font-size="10.5" fill="{INK}">{_esc(line)}</text>')
+            if issue.number in road.parents:
+                part = f"part of {road.parents[issue.number]}"
+                out.append(f'<text x="{bx + 9}" y="{by + BAR_H - 20}" font-size="9.5" '
+                           f'fill="{MUTED}">{_esc(_wrap(part, BAR_W - 18, 5.0, 1)[0])}</text>')
             meta = f"{issue.raw.milestone or 'milestone not set'} \u00b7 {issue.step or 'phase not set'}"
             out.append(f'<text x="{bx + 9}" y="{by + BAR_H - 7}" font-size="9.5" '
                        f'font-style="italic" fill="{MUTED}">'
@@ -334,6 +365,17 @@ def draw(road: Roadmap) -> str:
 
     out.append(f'<line x1="{PAD}" y1="{y}" x2="{width - PAD}" y2="{y}" '
                f'stroke="#d8dee6" stroke-width="1"/>')
+
+    # The key: what each shade means, and the phases it covers.
+    for (row, key_x, name) in key:
+        key_y = y + 20 + row * KEY_H
+        fill, stroke = FILL[name]
+        label = f"{name}: {_KEY_PHASES[name]}"
+        out.append(f'<rect x="{key_x}" y="{key_y - 10}" width="14" height="12" rx="2" '
+                   f'fill="{fill}" stroke="{stroke}" stroke-width="1"/>')
+        out.append(f'<text x="{key_x + 20}" y="{key_y}" font-size="10.5" '
+                   f'fill="{INK}"><tspan font-weight="700">{name}</tspan>'
+                   f'{_esc(label[len(name):])}</text>')
 
     # Arrows last, so they sit above the bands.
     for source, target in road.edges:
@@ -367,8 +409,8 @@ def caption(road: Roadmap) -> str:
         "",
         "*No dates: a column is a position in the sequence, not a month. "
         "Bars are all one width because a Gantt bar's width means duration, "
-        "and this chart has none. Shading is Phase: planned, designing, "
-        "building, landed.*",
+        "and this chart has none. Shading is Phase, in four bands; the key "
+        "is under the chart.*",
     ]
     if road.lifted:
         lines += ["", "*A dependency on a parent project is drawn against each "

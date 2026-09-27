@@ -14,7 +14,7 @@ import unittest
 from .cases import Cases
 
 from board.model import RawIssue, RawSubIssue
-from board.roadmap import build, draw
+from board.roadmap import BAR_H, build, draw
 from board.sources import Snapshot
 
 
@@ -115,8 +115,30 @@ class TheRoadmap(Cases):
     def test_a_bar_is_one_width_because_width_would_imply_duration(self):
         """a bar is one width, because width would imply duration"""
         r = road(issue(1), issue(2, blocked_by=[1]))
-        widths = _re.findall(r'<rect [^>]*width="(\d+)" height="60"', draw(r))
+        widths = _re.findall(rf'<rect [^>]*width="(\d+)" height="{BAR_H}"', draw(r))
         self.expect("both bars the same width", 1, len(set(widths)))
+
+
+    def test_a_work_package_names_its_parent_project(self):
+        """a work package names its parent project; a standalone has none"""
+        parent = RawIssue(291, "#291 MAIN PROJECT: Capacity planning", "OPEN", "",
+                          "Project", {"Workstream": "W", "Phase": "Q1"},
+                          (RawSubIssue(408, "Project"),), None, None,
+                          frozenset(), frozenset(), frozenset())
+        text = draw(road(parent, issue(408, parent=291), issue(9)))
+        self.expect("the package's bar carries the parent's number and name",
+                    True, "part of #291 Capacity planning" in text)
+        self.expect("the parent's title prefix is not repeated", False,
+                    "MAIN PROJECT" in text)
+        self.expect("only the one package says so", 1, text.count("part of #"))
+
+    def test_the_colours_have_a_key(self):
+        """the colours have a key: each band, and the phases it covers"""
+        text = draw(road(issue(1)))
+        for band, phase in (("planned", "Scope"), ("designing", "Design and Test Approach"),
+                            ("building", "Development"), ("landed", "Post-deployment")):
+            self.expect(f"the key names {band}", True, f">{band}" in text)
+            self.expect(f"and a phase it covers, {phase}", True, phase in text)
 
 
 if __name__ == "__main__":

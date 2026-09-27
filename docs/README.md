@@ -3,12 +3,12 @@
 The design notes and operating guides for Tile Lite Elite, in four numbered
 groups. Each group holds one kind of content ([3.9](3.9-writing-documents.md)):
 
-| group | type | read it to |
-| --- | --- | --- |
-| 1.x | explanation | understand what the system is and where it is going |
-| 2.x | explanation | change a subsystem without rediscovering its model |
-| 3.x | how-to guide | do the next step of a change correctly |
-| 4.x | reference | look one fact up |
+| group | section | type | read it to |
+| --- | --- | --- | --- |
+| 1.x | [Overview](#1x-overview) | explanation | understand what the system is and where it is going |
+| 2.x | [Design and domain](#2x-design-and-domain) | explanation | change a subsystem without rediscovering its model |
+| 3.x | [Lifecycle](#3x-lifecycle) | how-to guide | do the next step of a change correctly |
+| 4.x | [Reference](#4x-reference) | reference | look one fact up |
 
 1.5 and 1.6 are generated maps, numbered for their place but outside this
 model.
