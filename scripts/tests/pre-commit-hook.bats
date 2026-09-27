@@ -317,3 +317,38 @@ fmt_case() {   # <cargo-fmt-exit> <file>
   commit_on 399-x docs/1.6-document-map.md
   assert_success
 }
+
+# --- the documentation checks (4) ---------------------------------------------------
+# The one conditional rule: it runs the repository's own scripts/check-docs.sh,
+# and only when markdown is staged, because it reads every document and takes
+# seconds. Untested until 2026-09-27: every other fixture keeps markdown out so
+# the slow check is skipped, which also meant nothing showed it could refuse.
+# check-docs.sh is a stub here, so the rule is tested, not the documents.
+
+docs_check() {   # <check-docs exit> <file to stage>
+  mkdir -p "$R/scripts"
+  printf '#!/usr/bin/env bash\necho "docs: a check failed" >&2\nexit %s\n' "$1" > "$R/scripts/check-docs.sh"
+  chmod +x "$R/scripts/check-docs.sh"
+  base
+  printf '#!/usr/bin/env bash\necho ran >> "%s/docs-ran"\nexit %s\n' "$BATS_TEST_TMPDIR" "$1" > "$R/scripts/check-docs.sh"
+  stage "$2"
+  hook
+}
+
+@test "docs: failing documentation checks refuse a commit that stages markdown" {
+  docs_check 1 docs/notes.md
+  assert_equal "$status" 1
+  assert_output --partial "the documentation checks failed"
+}
+
+@test "docs: passing documentation checks let it through" {
+  docs_check 0 docs/notes.md
+  assert_success
+  assert [ -e "$BATS_TEST_TMPDIR/docs-ran" ]
+}
+
+@test "docs: a commit staging no markdown does not run them" {
+  docs_check 1 e2e/login.spec.ts
+  assert_success
+  assert [ ! -e "$BATS_TEST_TMPDIR/docs-ran" ]
+}
