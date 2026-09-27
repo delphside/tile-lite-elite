@@ -134,11 +134,11 @@ is run and read, the machine difference and the raw measurements.
 
 ### Response
 
-Q4, verified: 2.1 is written as a proposal ("Proposed Rust Shape", "Suggested
-API Direction", a "Recommendation" section, "should" throughout), framed as
-turning `first-try`'s model into a design. It is 2.2's pair, and both describe
-`rules-shared`, so they are best rewritten together from the code. Added
-to #428 (Functional design documents) rather than patched here.
+1 and 2: agreed.
 
-**For the next round:** start it as a new Copilot task, so its branch is the
-one its pull-request tool can publish.
+3: agreed, and as suggested. 2.1 and 2.2 are both added to #428 (Functional
+design documents), to be rewritten together from `rules-shared` as built.
+
+The round was published by Copilot itself in #430, started as a new task so
+its pull-request tool could use its branch. That is the pattern for later
+rounds.
