@@ -37,8 +37,10 @@ from __future__ import annotations
 
 import collections
 import re
+import subprocess
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
 
 from . import repo
 from .model import classify
@@ -82,6 +84,12 @@ class Digest:
     closed: list[tuple[int, str]] = field(default_factory=list)
     raised: list[tuple[int, str]] = field(default_factory=list)
     window: "Window" = field(default_factory=lambda: Window())
+    # The review half (docs/3.8, owner 2026-09-27): lessons collated, and the
+    # two registers tracked. None means not available, which is not "none".
+    lessons: list[tuple[int, str, str]] = field(default_factory=list)
+    own_lessons: list[tuple[str, str]] | None = None
+    problems: list[dict] = field(default_factory=list)
+    initiatives: list[dict] = field(default_factory=list)
 
     @property
     def overhead(self) -> list[tuple[int, str]]:
@@ -174,8 +182,76 @@ def in_window(open_raw, closed_raw, start: str) -> Window:
     return w
 
 
+def section(body: str, heading: str) -> str:
+    """The text under a markdown heading of any level, up to the next heading
+    of the same or a higher level; empty if there is none."""
+    lines = (body or "").splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r"^(#{1,6})\s+(.*?)\s*$", line)
+        if m and m.group(2).lower() == heading.lower():
+            level, out = len(m.group(1)), []
+            for rest in lines[i + 1:]:
+                n = re.match(r"^(#{1,6})\s", rest)
+                if n and len(n.group(1)) <= level:
+                    break
+                out.append(rest)
+            return "\n".join(out).strip()
+    return ""
+
+
+def issue_lessons(closed_raw, start: str) -> list[tuple[int, str, str]]:
+    """The *Lessons learnt* section of every issue closed in the window."""
+    out = []
+    for raw in closed_raw:
+        if (raw.closed_at or "")[:10] >= start:
+            text = section(raw.body, "Lessons learnt")
+            if text:
+                out.append((raw.number, raw.title, text))
+    return sorted(out)
+
+
+def register_rows(markdown: str, heading: str) -> list[dict]:
+    """The rows of the first table under `heading`, as dicts keyed by its header
+    cells. docs/3.8's registers are read this way, like its activity table."""
+    rows, header = [], None
+    for line in section(markdown, heading).splitlines():
+        if not line.startswith("|"):
+            if header:
+                break
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if header is None:
+            header = cells
+        elif not set(line.replace("|", "").strip()) <= set("-: "):
+            rows.append(dict(zip(header, cells)))
+    return rows
+
+
+def claude_lessons(memory_repo: Path, start: str) -> list[tuple[str, str]] | None:
+    """The feedback notes Claude added to its memory in the window: its own
+    lessons, which live outside this repository (owner, 2026-09-27). None when
+    the memory repository is not on this machine."""
+    if not (memory_repo / ".git").exists():
+        return None
+    run = subprocess.run(["git", "-C", str(memory_repo), "log", "--diff-filter=A", f"--since={start}",
+                          "--name-only", "--format=", "--", "projects/*/memory/feedback_*.md"],
+                         capture_output=True, text=True)
+    if run.returncode:
+        return None
+    out = []
+    for name in sorted(set(run.stdout.split())):
+        path = memory_repo / name
+        if not path.exists():
+            continue
+        m = re.search(r"^description:\s*(.+)$", path.read_text(), re.M)
+        out.append((path.stem.removeprefix("feedback_").replace("_", " "),
+                    m.group(1).strip().strip('"') if m else ""))
+    return out
+
+
 def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
-          since: str, until: str = "HEAD") -> Digest:
+          since: str, until: str = "HEAD", registers: str = "",
+          memory_repo: Path | None = None) -> Digest:
     d = Digest(since=since, until=until)
     start = window_start(since)
 
@@ -213,6 +289,10 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
     closed_raw = list(closed_snapshot.issues) if closed_snapshot else []
     d.window = in_window([i.raw for i in issues], closed_raw, start)
     d.raised, d.closed = d.window.raised, d.window.closed
+    d.lessons = issue_lessons(closed_raw, start)
+    d.own_lessons = claude_lessons(memory_repo, start) if memory_repo else None
+    d.problems = register_rows(registers, "The problem register")
+    d.initiatives = register_rows(registers, "The continual improvement register")
     return d
 
 
@@ -306,6 +386,47 @@ def render(d: Digest, judgements: list[str] | None = None) -> str:
                 out.append(f"- #{number} {title}")
 
     out.append("")
+    start = window_start(d.since)
+    out.append("## Lessons learnt")
+    out.append("")
+    out.append("### From the issues closed this week")
+    out.append("")
+    if d.lessons:
+        for number, title, text in d.lessons:
+            # A title may already carry its number: "#214 MAIN PROJECT: ...".
+            name = title if title.startswith(f"#{number} ") else f"#{number} {title}"
+            out.append(f"#### {name}")
+            out.append("")
+            out.append(text)
+            out.append("")
+    else:
+        out.append("No issue closed this week recorded a lesson.")
+        out.append("")
+    out.append("### Claude's own, added to its memory this week")
+    out.append("")
+    if d.own_lessons is None:
+        out.append("*Not available: the memory repository is not on this machine.*")
+    elif d.own_lessons:
+        for name, description in d.own_lessons:
+            out.append(f"- **{name}**: {description}")
+    else:
+        out.append("None added this week.")
+    out.append("")
+
+    # The registers are docs/3.8's; the digest reports them, new ones marked.
+    for title, rows, what in (("Recurring problems", d.problems, "problem"),
+                              ("Improvement initiatives", d.initiatives, "initiative")):
+        out.append(f"## {title}")
+        out.append("")
+        live = [r for r in rows if not r.get("state", "").startswith("done")]
+        if not live:
+            out.append(f"No open {what} in docs/3.8's register.")
+        for r in live:
+            new = " **new this week**" if r.get("raised", "") >= start else ""
+            detail = r.get("initiative") if what == "problem" else r.get("state")
+            out.append(f"- {r.get('id', '')} {r.get(what, '')}: {detail}{new}")
+        out.append("")
+
     out.append("## What I decided that you might have decided differently")
     out.append("")
     if judgements:

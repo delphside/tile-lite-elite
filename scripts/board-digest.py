@@ -49,12 +49,15 @@ def main(argv=None) -> int:
         # Pull requests are excluded: the share is about issues on the board.
         # Bodies and pull requests: what is waiting on the owner reads both.
         open_snapshot = fetch("OPEN", with_bodies=True, with_pull_requests=True)
-        closed = fetch("CLOSED", with_bodies=False, with_pull_requests=False)
+        # Bodies, for each closed issue's lessons learnt.
+        closed = fetch("CLOSED", with_bodies=True, with_pull_requests=False)
     except Unavailable as exc:
         print(f"cannot say: {exc}", file=sys.stderr)
         return 2
 
-    text = render(build(open_snapshot, closed, since=args.since), args.decided)
+    registers = (REPORTS.parents[1] / "3.8-programme-activities.md").read_text()
+    text = render(build(open_snapshot, closed, since=args.since, registers=registers,
+                        memory_repo=Path.home() / "claude-memory"), args.decided)
 
     if args.write:
         # Named for the ISO week it closes, like TLE_CP_2026_09 names its month.

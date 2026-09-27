@@ -22,7 +22,12 @@ No network and no git: canned counts and issues only."""
 import collections
 import unittest
 
-from board.digest import Digest, Window, in_window, render, MEASURED_AT
+import subprocess
+import tempfile
+from pathlib import Path
+
+from board.digest import (Digest, Window, claude_lessons, in_window, issue_lessons,
+                          register_rows, render, section, MEASURED_AT)
 from board.model import RawIssue
 
 from .cases import Cases
@@ -34,8 +39,8 @@ def digest(tooling=48, total=100, **kw):
     return d
 
 
-def issue(n, kind_of_change, created, closed=None):
-    return RawIssue(n, f"issue {n}", "CLOSED" if closed else "OPEN", "", "Requirement",
+def issue(n, kind_of_change, created, closed=None, body=""):
+    return RawIssue(n, f"issue {n}", "CLOSED" if closed else "OPEN", body, "Requirement",
                     {"Type of change": kind_of_change} if kind_of_change else {}, (), None, None,
                     frozenset(), created_at=created, closed_at=closed)
 
@@ -142,6 +147,79 @@ class TheWindow(Cases):
         w = in_window([], [issue(5, "tooling", "2026-08-01T00:00:00Z", closed="2026-09-01T00:00:00Z")], self.START)
         self.expect("not listed", [], w.closed)
         self.expect("nor counted", 0, sum(w.closed_by_type.values()))
+
+
+REGISTERS = """## Continual improvement
+
+### The problem register
+
+| id | problem | occurrences | initiative | raised |
+| --- | --- | --- | --- | --- |
+| `P-1` | old trouble | twice | `CI-1` | 2026-09-01 |
+| `P-2` | new trouble | twice | none yet | 2026-09-22 |
+
+### The continual improvement register
+
+| id | initiative | measure it moves | state | raised |
+| --- | --- | --- | --- | --- |
+| `CI-1` | finished work | a | done 2026-09-10 | 2026-09-01 |
+| `CI-2` | ongoing work | b | in progress | 2026-09-02 |
+"""
+
+
+class TheReview(Cases):
+    """docs/3.8, owner 2026-09-27: the digest collates lessons learnt and tracks
+    recurring problems and improvement initiatives."""
+
+    def test_a_section_is_read_to_the_next_heading_of_its_level(self):
+        body = "## Design\nx\n## Lessons learnt\n\nfirst\n### detail\nsecond\n## Deliveries\ny"
+        self.expect("the section and its subsections, nothing after", "first\n### detail\nsecond",
+                    section(body, "Lessons learnt"))
+        self.expect("no such heading is empty", "", section(body, "Nothing"))
+
+    def test_lessons_come_from_issues_closed_in_the_window(self):
+        lesson = "## Lessons learnt\n\nrun it once before merging"
+        found = issue_lessons([issue(1, "tooling", "2026-09-01", closed="2026-09-22T00:00:00Z", body=lesson),
+                               issue(2, "tooling", "2026-09-01", closed="2026-09-10T00:00:00Z", body=lesson),
+                               issue(3, "tooling", "2026-09-01", closed="2026-09-23T00:00:00Z", body="no lessons")],
+                              "2026-09-21")
+        self.expect("only the one closed this week that recorded one", [(1, "issue 1", "run it once before merging")], found)
+
+    def test_the_registers_are_read_from_docs_3_8(self):
+        problems = register_rows(REGISTERS, "The problem register")
+        self.expect("every row", ["`P-1`", "`P-2`"], [r["id"] for r in problems])
+        self.expect("keyed by the header", "none yet", problems[1]["initiative"])
+        self.expect("and the other table separately", 2,
+                    len(register_rows(REGISTERS, "The continual improvement register")))
+
+    def test_open_ones_are_reported_and_new_ones_marked(self):
+        d = digest(problems=register_rows(REGISTERS, "The problem register"),
+                   initiatives=register_rows(REGISTERS, "The continual improvement register"))
+        text = render(d)
+        self.expect("a new problem is marked", True, "`P-2` new trouble: none yet **new this week**" in text)
+        self.expect("an older one is not", True, "`P-1` old trouble: `CI-1`\n" in text)
+        self.expect("an open initiative is shown", True, "`CI-2` ongoing work: in progress" in text)
+        self.expect("a finished one is not", False, "finished work" in text)
+
+    def test_claudes_own_lessons_come_from_the_memory_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git = lambda *a: subprocess.run(["git", "-C", tmp, "-c", "user.email=t@t", "-c", "user.name=t", *a],
+                                            check=True, capture_output=True)
+            git("init", "-q")
+            mem = repo / "projects" / "p" / "memory"
+            mem.mkdir(parents=True)
+            (mem / "feedback_stub_the_outward.md").write_text("---\nname: x\ndescription: stub what the script reaches\n---\n")
+            (mem / "project_status.md").write_text("---\ndescription: not a lesson\n---\n")
+            git("add", "-A"); git("commit", "-q", "-m", "x")
+            found = claude_lessons(repo, "2000-01-01")
+            self.expect("a feedback note is a lesson, a project note is not",
+                        [("stub the outward", "stub what the script reaches")], found)
+        self.expect("no repository is not available, not none", None, claude_lessons(Path("/nonexistent"), "2000-01-01"))
+
+    def test_unavailable_reads_differently_from_none(self):
+        self.expect("not available", True, "*Not available: the memory repository" in render(digest(own_lessons=None)))
+        self.expect("none", True, "None added this week." in render(digest(own_lessons=[])))
 
 
 class WhatIsNotDerived(Cases):
