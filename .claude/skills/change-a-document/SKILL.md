@@ -58,15 +58,16 @@ whole procedure exists to prevent.
 ## What belongs in it, once you have the right section
 
 **The guidelines are written down already, in
-[`docs/README.md`](../../../docs/README.md) under *How these documents are
-written*.** Read them there rather than from a copy here — that is this skill's
-own rule applied to itself. In short: the command or the rule first and the
+[`docs/3.9`](../../../docs/3.9-writing-documents.md).** Read them there rather than from a copy here — that is this skill's
+own rule applied to itself. In short: one kind of content per document, by its group's Diátaxis type;
+what is true now, with the history in the issue or the commit; the command or
+the rule first and the
 reasoning below it; reference says *what is there* and *what to type*, never
 *why*; imply the rationale rather than narrating it; say what we do rather than
 what we rejected; say what is rather than what should be.
 
 **Every section has an audience and a use case**, and they decide what belongs.
-`docs/README.md` states them per group. The test for a sentence is not *is this
+`docs/3.9` states them per group. The test for a sentence is not *is this
 true* but *would this reader do the wrong thing without it* — history earns its
 place only when a rule would otherwise look arbitrary and get tidied away by
 somebody who has never been bitten.

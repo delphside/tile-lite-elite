@@ -308,6 +308,10 @@ one of them has a defect: fix it, don't work around it.
   reason to keep one.
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
+- **A numbered document holds one kind of content**, set by its group's
+  Diátaxis type (1.x and 2.x explanation, 3.x how-to, 4.x reference), and says
+  what is true now with at most a line of reason. History, argument and
+  quotations go in the issue or the commit. docs/3.9 has the detail.
 - **The documents live; the issues expire.** Owner, 2026-09-21: *"The project
   documents are living documents, the issues are only relevant while they are
   open."* A `docs/N.N` file answers what is true now and is edited whenever that
@@ -353,5 +357,6 @@ one of them has a defect: fix it, don't work around it.
 | artefacts, their routes, and the strings tooling matches | docs/4.8 |
 | daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
+| how a document is written, and what it may hold | docs/3.9 |
 | raising or retitling any issue | the triage skill |
 | raising a project or work package: load it before creating the issue | the raise-project skill |

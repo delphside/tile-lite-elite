@@ -1,8 +1,34 @@
 # Tile Lite Elite Docs
 
-This folder collects the design notes and operating guides for Tile Lite Elite, organized into four numbered groups. Within a group, the number order is the reading order; across groups, roughly: understand the system (1.x) → understand a specific domain (2.x) → run it through its lifecycle (3.x) → look something up (4.x).
+The design notes and operating guides for Tile Lite Elite, in four numbered
+groups. Each group holds one kind of content ([3.9](3.9-writing-documents.md)):
 
-## 1.x — Meta: overview, functionality, architecture
+| group | type | read it to |
+| --- | --- | --- |
+| 1.x | explanation | understand what the system is and where it is going |
+| 2.x | explanation | change a subsystem without rediscovering its model |
+| 3.x | how-to guide | do the next step of a change correctly |
+| 4.x | reference | look one fact up |
+
+## I need to
+
+| task | read |
+| --- | --- |
+| set up a machine | [3.1 Setup](3.1-setup.md) |
+| run it locally | [3.2 Development](3.2-development.md) |
+| test, release or roll back | [3.3 Testing, CI & Release](3.3-testing-ci-and-release.md) |
+| operate production | [3.4 Production Environment](3.4-production-environment.md) |
+| raise, plan or ship a change | [3.6 The Change Lifecycle](3.6-change-lifecycle.md), and the one-page rules in [`CLAUDE.md`](../CLAUDE.md) |
+| find a script | [3.0 Tools](3.0-tools.md) |
+| find where a fact lives, before writing it | [1.6 Document map](1.6-document-map.md) |
+| write or change a document | [3.9 Writing documents](3.9-writing-documents.md) |
+| see what is in flight | [1.5 Work in progress](1.5-work-in-progress.md) |
+
+**Two rules for every document**: one fact has one home, and every other
+mention links to it; and a numbered document says what is true now, with the
+history in the issue or the commit.
+
+## 1.x Overview
 
 - [1.0 Rules](1.0-rules.md) — the decisions about how the service behaves, cited by id from tests and commits
 - [1.1 Architecture](1.1-architecture.md) — system overview, deployment topology, guiding principles and roles
@@ -11,7 +37,7 @@ This folder collects the design notes and operating guides for Tile Lite Elite, 
 - [1.4 Roadmap](1.4-roadmap.md) — CLI prototype → UI direction → MVP → v1 → Later
 - [1.5 Work in progress](1.5-work-in-progress.md) — what is in flight, drawn from the issues and regenerated, never typed
 
-## 2.x — Design & Domain
+## 2.x Design and domain
 
 - [2.1 Rules Engine](2.1-rules-engine.md)
 - [2.2 Rules Engine Implementation](2.2-rules-engine-implementation.md)
@@ -21,17 +47,7 @@ This folder collects the design notes and operating guides for Tile Lite Elite, 
 - [2.6 Authentication Examples](2.6-authentication-examples.md) — worked request/response walkthroughs
 - [2.7 Authentication and Invitations](2.7-authentication-and-invitations.md)
 
-## Change notes
-
-[changes/](changes/) holds a working document per change in flight — the shape
-agreed before the code, describing a transition rather than an end state,
-which is the one thing the numbered documents never do. They are deleted once
-the change ships, with anything worth keeping moved into the numbered
-documents above. Not part of the reading order.
-
-## 3.x — Lifecycle
-
-Run in this order for a typical change: Setup once, then Development → Testing, CI & Release → Deployment → Production Support & Maintenance repeatedly.
+## 3.x Lifecycle
 
 - [3.0 Tools](3.0-tools.md) — every script, linking to where it's explained
 - [3.1 Setup](3.1-setup.md) — one-time: dev machine, Oracle VM, HTTPS, troubleshooting
@@ -41,22 +57,9 @@ Run in this order for a typical change: Setup once, then Development → Testing
 - [3.5 Word Lists & Dictionaries](3.5-word-lists-and-dictionaries.md) — how a published word list becomes the trie the engine searches: sourcing, normalising, generating the denylist and greylist, and the runbooks for changing either
 - [3.6 The Change Lifecycle](3.6-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
 - [3.7 Workstreams](3.7-workstreams.md) — the nine capabilities work is filed against, what each owns, and where the boundary between each pair was argued
+- [3.9 Writing documents](3.9-writing-documents.md) — what each document holds, and how it is written
 
-## 4.x — Reference
-
-Facts you look up rather than read start to end.
-
-Each of these carries a **freshness stamp** under its title — the commit its
-contents were last checked against the code. Only the 4.x documents have one:
-they're the ones making falsifiable claims ("these are the columns", "this is
-every endpoint"), so they're the ones that can silently go wrong when the code
-moves. A stamp turns "is this still true?" into an answerable question —
-`git log <stamp>..HEAD -- crates/` — rather than a feeling. Update it when you
-re-verify a document, not merely when you edit one.
-
-There is no per-document changelog, deliberately: `git log --follow --
-docs/<file>` already gives one, with the diffs and the reasoning attached, and
-can't drift the way a hand-maintained list would.
+## 4.x Reference
 
 - [4.1 Configuration](4.1-configuration.md) — environments, environment variables, versioning scheme
 - [4.2 Database Schema](4.2-database-schema.md)
@@ -68,133 +71,8 @@ can't drift the way a hand-maintained list would.
 - [4.8 Artefacts](4.8-artefacts.md) — the register of things under change control that leave no trace in git: host files, cloud resources, GitHub objects. Also the answer to *what else was on that box?*
 - [4.9 Delivery log](4.9-delivery-log.md) — one row per delivery: what changed in production and when. Starts at #174; earlier deliveries are recoverable from the `prod-*` tags.
 
-## Who each group is for
+## Outside the numbered set
 
-**Every section has an audience and a use case, and they decide what belongs in
-it.** The test for a sentence is not *is this true* — it is *would this reader
-do the wrong thing without it*.
-
-| group | who is reading | what they are doing | so it carries | and leaves out |
-| --- | --- | --- | --- | --- |
-| **1.x** | somebody new to the system, or deciding scope | working out what the thing is and where it is going | the current shape, and the direction | how it came to be this way |
-| **2.x** | whoever is about to change a subsystem | making a change without rediscovering the model | the model, its constraints, and what the constraints cost | step-by-step instructions, which belong in 3.x |
-| **3.x** | whoever is at a process step **now** — and a future project reusing the process | doing the next step correctly, under time pressure | the command or the rule first, the reasoning below it | anything that delays the reader in a hurry. The portable rule stays separable from this project's answer to it |
-| **4.x** | somebody who already knows what they want | looking one fact up and leaving | every value, complete and current, with a freshness stamp | reasoning of any kind |
-
-**The one that is easiest to get wrong is 3.x**, because the same document
-serves somebody shipping in ten minutes and somebody deciding whether the
-process is right. `docs/3.3` splits them by part — *what to type*, then *the
-process and why it is shaped this way*, then *notes and incidents* — rather
-than by mixing them paragraph to paragraph.
-
-**Brevity is not a style preference here, it is the use case.** A reader in the
-middle of a release pays for every sentence between them and the command. That
-is why reasoning is gathered below rather than threaded through, and why an
-adjective is usually cheaper than the sentence explaining it.
-
-## How these documents are written
-
-**Write first for somebody who needs to do something quickly and wants
-pointing at what they need.** Every other reader is served afterwards. That
-reader is not studying the system — they have a job in progress, they know
-roughly what they want, and every paragraph between them and it is a cost. So:
-the command or the rule first, an index by *intent* rather than by structure,
-and the reasoning below where it can be found by anyone who wants it and
-skipped by anyone who does not.
-
-The second reader — trying to understand *why* — is real and well served by
-the same arrangement, because reasoning gathered in one place reads better than
-reasoning scattered through instructions. Nobody is worse off. The habit that
-fails both is mixing them, which makes the reader in a hurry read the
-reasoning and the reader who wants reasoning hunt for it between commands.
-
-`docs/3.3` is the worked example: each section is *what to do* followed by
-*notes*, with numbered markers linking one to the other, and an overview at the
-top indexed by what you are about to do.
-
-Then five habits, learned by breaking them.
-
-**Give a commit's app version alongside its id.** `25e9e09` alone dates a
-change only for somebody willing to go and look it up; `25e9e09` (app 0.4.12)
-places it in the release history a reader already carries. The id stays,
-because it is the thing you can `git show`.
-
-**Reference answers "what is there" and "what do I type".** Not "why is it
-like that". The why belongs in an overview section or a 2.x design note. A
-reader looking up a command should not have to read the reasoning that
-produced it.
-
-**Imply the rationale rather than narrating it.** Often an adjective carries
-what a sentence would restate — "the safe default", "one throwaway worktree",
-"a single source of truth". Explaining the history to explain the thinking is
-tempting and usually unnecessary.
-
-Where history does earn its place is a rule that would otherwise look
-arbitrary and get tidied away by someone who has never been bitten. Keep it
-then, and keep it short. The test: would a reader do the wrong thing without
-this? If it only makes the decision feel justified, cut it.
-
-**Reasoning ages; evidence does not.** The usual argument for keeping the
-original logic is so the decision can be reviewed later — and that argument
-mostly fails, because by then the world has moved and the old reasoning rests
-on facts that may no longer hold. **A decision is better reviewed from the
-current state than from the case once made for it.**
-
-So keep the **evidence**, not the argument: a fact somebody would otherwise
-have to go and re-acquire. Usually one of four kinds —
-
-- **a measurement** that was expensive to take, or is not repeatable now
-- **a negative result** — what was tried and did not work. The current state
-  shows what is there, never what was ruled out
-- **an outside constraint** the artefact does not reveal: what a service will
-  not do, what a tool does when you get it wrong
-- **the failure a guard exists to prevent**, without which the guard looks
-  like caution and gets removed
-
-Everything else is the case for a decision that has already been made, and it
-rots quietly: the fact stays true, the reasoning around it stops being. That
-is how a note comes to describe the world before a fix it asks for.
-
-**Issue numbers, rarely and for a reason.** These documents describe **what is
-there, not how it got there**, so a number is usually noise — it dates a fact
-for somebody willing to go and look it up, and provenance already lives in
-commit messages, which are permanent and carry their own context.
-
-Two exceptions, and both are about **guiding a future change** rather than
-recording a past one. A design note explaining *why* something is as it is may
-cite the issue that argued it, when a later change would otherwise undo the
-reasoning without knowing it existed. And a link to the project that introduced
-a thing can orient somebody who needs the fuller story.
-
-**The test is not *is this where it came from*. It is *would a reader change
-this wrongly without it*.** Project documents are different: they are about a
-change, so they name it.
-
-**Say what we do, not what we rejected.** Options considered and dropped
-belong to the discussion, not the document. "We change the dates in the
-database" — not "not the system clock, and not the CLI either". The reader
-never proposed those.
-
-This is the hardest one to hold, because the alternatives are vivid to
-whoever just chose between them and invisible to everyone else. It is also
-where documents rot: a decision changes, the new choice is written in, and
-the old one survives as an aside that now describes something nobody does.
-
-Where a rejected option was carrying a real constraint, keep the constraint
-and drop the comparison. "It must be in-module: backdating needs `state.db`"
-says everything "rather than an external test" did, and stays true when the
-alternative is forgotten.
-
-**Say what is, not what should be.** `should`, `may` and `typically` describe
-an intention. "Each environment has one SQLite database" beats "the project
-should use one primary database file per environment".
-
-## Current Direction
-
-The project is moving toward a client-server design where the server owns game state and rule enforcement, and clients are thin presentation layers for web, desktop, CLI, or mobile.
-
-The engine system is designed so multiple computer engines can plug into the server and play against human or computer opponents.
-
-The project is a hobby project, so the architecture should favor local-first development and hosting options that are free or nearly free to run.
-
-Axum is the backend web server layer for the project; no separate web server is required unless deployment needs change later.
+- [changes/](changes/) — a working document per change in flight, deleted once it ships
+- [reports/](reports/) — reports the programme produces on a cadence
+- [templates/](templates/) — the forms the numbered documents link to
