@@ -16,6 +16,11 @@ must know to avoid breaking something on its first change.
   it already lives ([`docs/1.6-document-map.md`](docs/1.6-document-map.md) lists
   every heading) and link to it rather than repeating it. Do not describe what
   the project does not do, or add justification the reader does not need.
+- **A numbered document holds one kind of content**: 1.x and 2.x explain, 3.x
+  say how to do a task, 4.x are reference. It states what is true now, with at
+  most a line of reason; history, argument and quotations go in the commit
+  message or the issue ([`docs/3.9`](docs/3.9-writing-documents.md)).
+  `scripts/doc-signals.py --list` shows lines that look like history.
 - **`docs/1.6-document-map.md` is generated**: run
   `scripts/document-map.py --write` after changing any heading; do not edit it.
 - **Process documents change only on `main`**, never on a project branch:
