@@ -9,6 +9,10 @@ record.
 
 ## How to report
 
+**Start from the latest `origin/main`.** Each round names the commits it
+covers; if you do not have them, fetch first. A review of an older checkout
+reports things already fixed.
+
 Write your findings into the current round's **Findings** heading below, in a
 pull request that changes this file and no other. Do not fix anything you find:
 Claude merges the pull request, then answers each finding under **Response**
