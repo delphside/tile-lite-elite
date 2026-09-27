@@ -235,7 +235,7 @@ one of them has a defect: fix it, don't work around it.
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
   carries more than one package. The counts go stale and are kept anyway: a
   title saying `Del 1 of 2` is wrong loudly where `Del 1` is silently
-  incomplete, and board-check.py derives all of them from the milestones.
+  incomplete. They are derivable from the milestones; nothing checks them yet.
 - The parent owns the requirements, the design and the documents; a work
   package links to them and carries its own artefacts, test approach and
   post-deployment checks, because a check is answered per delivery. The parent
