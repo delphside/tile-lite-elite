@@ -40,6 +40,10 @@ ceiling is a finding, not an omission.
 | — server container | | | |
 | — web container | | | |
 | **disk** | | | |
+| — the database volume | | | |
+| — pre-deploy snapshots | | `SNAPSHOT_KEEP` (5) | |
+| — Docker images | | | |
+| — `/var/log/syslog*`, the journal's plain-file copy ([3.4](../3.4-production-environment.md#journald-not-the-container), #438) | | logrotate: 4 weekly, gzipped | |
 | **journal** | | | |
 | **CPU** | | | |
 | **games in the database** | | | |
@@ -166,3 +170,13 @@ disagreement is read here rather than discovered by an incident.
 
 The commands, so the next one is comparable. Name who ran what, where a figure
 needed production access.
+
+The disk rows, on the VM (a production read):
+
+```bash
+df -h /
+docker system df
+sudo du -sh /var/lib/docker/volumes/tile-lite-elite-data ~/tile-lite-elite/snapshots
+du -ch /var/log/syslog* | tail -1
+journalctl --disk-usage
+```
