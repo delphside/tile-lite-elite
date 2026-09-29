@@ -407,6 +407,20 @@ class Requirement(Issue):
     def step_field(self) -> str:
         return "Stage"
 
+    @property
+    def stage_to_record(self) -> str | None:
+        """The Stage to write onto the issue, or None when there is nothing to write.
+
+        The default `step` reads, made a fact on the board, so a view filtered
+        by Stage shows a new requirement instead of hiding it. Typed
+        requirements only. Owner, 2026-09-29: *"yes for a Requirement Issue.
+        Other issue types use different lifecycle fields"*, and an untyped
+        issue may yet become one of those.
+        """
+        if self.stage_was_defaulted and not self.type_was_defaulted:
+            return self.step
+        return None
+
 
 @dataclass(frozen=True)
 class Project(Issue):

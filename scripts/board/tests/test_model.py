@@ -98,6 +98,21 @@ class TheBoardModel(Cases):
         self.expect("a set Stage is not defaulted", False, typed.stage_was_defaulted)
         self.expect("and is read as itself", "On Hold", typed.step)
 
+    def test_which_stage_is_written_onto_the_board(self):
+        """a new requirement's Stage is recorded; nothing else is given one"""
+        new = classify(issue(1, kind="Requirement"))
+        self.expect("a typed requirement with no Stage is given Triage",
+                    "Triage", new.stage_to_record)
+        staged = classify(issue(1, kind="Requirement", fields={"Stage": "On Hold"}))
+        self.expect("a set Stage is never overwritten", None, staged.stage_to_record)
+        untyped = classify(issue(1, kind=None))
+        self.expect("an untyped issue is not, since it may become a project",
+                    None, untyped.stage_to_record)
+        for kind in ("Project", "Decision"):
+            other = classify(issue(1, kind=kind))
+            self.expect(f"a {kind} has no Stage to record, owning a different field",
+                        None, getattr(other, "stage_to_record", None))
+
     def test_box_counting_is_scoped_to_the_section_that_owns_it(self):
         """box counting is scoped to the section that owns it"""
         # #252's shape: post-deployment answered, Test approach boxes unticked.

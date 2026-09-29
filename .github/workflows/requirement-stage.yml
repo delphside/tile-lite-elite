@@ -1,0 +1,38 @@
+# Gives a new requirement its Stage, Triage, when it is opened or typed.
+#
+# The model reads an unset Stage as Triage, but the board shows it blank, so a
+# view filtered by Stage hides a requirement until somebody sets it. Owner,
+# 2026-09-29: "yes for a Requirement Issue. Other issue types use different
+# lifecycle fields." Which issues and which value is the model's
+# (`Requirement.stage_to_record`); this only says when.
+#
+# `typed` as well as `opened`, because an issue can be typed after it is
+# created. A set Stage is never overwritten.
+name: Requirement stage
+
+on:
+  issues:
+    types: [opened, typed]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: issue number
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  stage:
+    name: record a new requirement's Stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Record
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: python3 scripts/board-stage.py "$ISSUE"
