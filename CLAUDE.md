@@ -287,6 +287,9 @@ one of them has a defect: fix it, don't work around it.
   box is waiting on nobody, and `board-check.py` reports it.
 - A decision is applied in the same commit that marks it answered, or an
   issue is raised and named in the decision.
+- **A project's decisions are logged by link**: closed once applied, cited in a
+  footnote where the design states the conclusion, and listed in a Decisions
+  table in the project's body (owner, 2026-09-29). docs/3.6 has the detail.
 - A decision is not a change vehicle. It routes work: raise a requirement, add
   one to a project, update a project or the documents, or close something. It
   may make a pre-approved change only where no suitable requirement or project
