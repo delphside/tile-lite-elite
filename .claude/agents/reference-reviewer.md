@@ -14,6 +14,10 @@ corrections.
 
 ## Before anything
 
+Your prompt is a handover in the shape of `docs/templates/agent-handover.md`.
+Its *Agreed but not yet written down* heading carries decisions the documents
+do not show yet: treat those as true.
+
 Read these, in this order:
 
 1. `docs/3.9-writing-documents.md`, section *The 4.x freshness stamp*: the
