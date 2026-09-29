@@ -89,7 +89,58 @@ tests were never turned on.
 will need rebasing onto a `main` that has moved a long way before any work
 continues on it.
 
-## 7. Questions for the owner
+## 7. Found by the design-reviewer agent's trial (#441)
+
+A second review, by the design-reviewer agent on 2026-09-29 without sight of
+the sections above, found everything above except the rate-limiting and
+documents-list points, and the following besides. Claude spot-checked three
+and they hold.
+
+**More requirements with no design**:
+
+- #87, tell a player a message arrived
+- #68, RET-3's countdown
+- #142, reconnect catch-up, left open in the data model
+- #106, inviting yourself accepts automatically
+- #105, withdrawing hides the game at once
+- #251, #146, #84 and #313
+- #239, which appears only as "not part of the change"
+
+**The design documents contradict each other**:
+
+- the engine seat: 71-design.md removes `SeatKind::Engine` and `engine_id`
+  from the seat (bots are accounts); 71-data-model.md keeps `kind` and
+  `engine` on `Seat` and `SeatDto`
+- the composition key: the design takes a turn number; the data model rules
+  the turn out, makes `board_version` the key, then removes `board_version`
+  while still using it in five places. Each document says the design wins,
+  which picks the key the owner's note of 2026-08-29 rules out
+- the client handler: the test approach says a pure `(state, event) → state`
+  function; the design and data model say not a reducer
+- the test client: compiles against `crates/api` (test approach) or against a
+  new `game-wire` crate (data model)
+- an aborted game's seats "all end `Departed`", which carries a player, but
+  `Unsent` and `Invited` seats have none
+
+**The work packages disagree with the body**: #268 says #253 must not overlap
+it, though the body places #253 there; #269 lists #84, #146 and #239, which
+the body gives #271; #290 calls itself standalone while titled WP F; #268 says
+"first of the five". The body still lists #166 under #270, and #166 is closed.
+The body also lacks four of the eight headings CLAUDE.md requires, and carries
+the test approach in full as well as linking it.
+
+**Other projects that touch #71**: #402 says "#71 adds a correlation id to
+`ApiError`", which #71 does not mention; #408 rewrites `AppState` and the
+games map, as per-game locking does, and asks which of memory and database is
+the source of truth; #300 expects #71 to build the schema-version dispatch
+boundary.
+
+**Code facts, further**: `add_seat_to_game` now refuses an unknown name
+(since 2026-08-11), so the design's "the two disagree today" is stale;
+`move_number` is already an event sequence; line numbers across the impact
+note have drifted.
+
+## 8. Questions for the owner
 
 1. **#157**: is the staged-tile fix still owed? If so it wants reopening, or a
    row in #71.
@@ -99,6 +150,11 @@ continues on it.
    that an emailed invitation binds only on acceptance, and which project
    settles it?
 4. **`71-delivery.md`**: trim it to what the body does not say, or delete it?
+5. **Scope**: the body's Scope section, `71-delivery.md` and the test approach
+   say two packages and one delivery; the body's requirements section says six
+   packages that may deliver separately. Which stands?
+6. **#402's correlation id on `ApiError`**: a row in #71, or should #402 stop
+   claiming it?
 
 The rest, sections 2 and 5 and the missing requirements in section 1, Claude
 can apply to the documents once you have read them, on `main`, since the
