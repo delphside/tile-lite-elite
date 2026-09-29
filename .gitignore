@@ -48,6 +48,9 @@ node_modules/
 # they are versioned — docs/3.6's test is that what survives a rebuild
 # elsewhere is what has been delivered.
 !.claude/skills/
+# Agents are versioned for the same reason: a subagent's instructions are part
+# of how an activity is run (docs/3.9's reference-review).
+!.claude/agents/
 # The two hooks are tooling by the same test, and tooling is an artefact
 # whether it runs in production or not (owner, 2026-09-03). They were invisible
 # to the repo until then, which is how turn-check.sh came to be filtering on a
