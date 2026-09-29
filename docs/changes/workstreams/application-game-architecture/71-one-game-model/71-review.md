@@ -142,6 +142,10 @@ note have drifted.
 
 ## 8. Questions for the owner
 
+Raised as Decisions on 2026-09-29, each with its evidence and options: #442
+(scope, which also settles `71-delivery.md`), #443 (#157), #444 (the rating
+key), #445 (email invitations and #439), #446 (#402's correlation id).
+
 1. **#157**: is the staged-tile fix still owed? If so it wants reopening, or a
    row in #71.
 2. **Ratings by edition and bots as accounts**: design the two changes to the
