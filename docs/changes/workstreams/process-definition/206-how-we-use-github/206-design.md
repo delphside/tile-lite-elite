@@ -40,7 +40,7 @@ Every requirement here is a case of that:
 | --- | --- |
 | R1, R2 | a review verdict kept in a label we maintain, when GitHub knows it natively |
 | R4 | a size kept in prose, where nothing can read it — stored *nowhere*, which is the same failure inverted |
-| R5 | release notes in `docs/4.9`, and in GitHub too if Releases were adopted |
+| R5 | release notes in `docs/5.6`, and in GitHub too if Releases were adopted |
 | R3 | not duplication, but the reason R1 exists at all |
 
 ### Why the review machinery exists, which is the root
@@ -268,9 +268,9 @@ that gap on 2026-08-23: *"in the absence of provisional approval, I can use
 
 | option | | |
 | --- | --- | --- |
-| **A. `docs/4.9` only** | today; versioned, reviewed, read from `origin/main` | no notes on the tag itself; nothing on GitHub's Releases page |
+| **A. `docs/5.6` only** | today; versioned, reviewed, read from `origin/main` | no notes on the tag itself; nothing on GitHub's Releases page |
 | **B. GitHub Releases only** | notes on the tag; generated from merged PRs; a free-text field | a second surface to keep current, and it is not in git — so it needs a row in `docs/4.8` |
-| **C. `docs/4.9` is the store, a Release is generated from it** | one store, two renderings — exactly the storing/reporting split | something has to generate it, most likely `deploy.sh` |
+| **C. `docs/5.6` is the store, a Release is generated from it** | one store, two renderings — exactly the storing/reporting split | something has to generate it, most likely `deploy.sh` |
 
 ### 2.6 What applies an answer once it is decided
 
@@ -333,7 +333,7 @@ Choosing the account structure does not choose the rest:
 | | |
 | --- | --- |
 | **2.4** | whether native review fully replaces the parser, and what happens to `/prov` |
-| **2.5** | ~~where release notes live~~ — decided 2026-08-27: **both**, and they answer different questions. `deploy.sh` publishes a GitHub Release per `prod-` tag with generated notes; `docs/4.9` stays the delivery log, because a delivery that ships no code has no tag |
+| **2.5** | ~~where release notes live~~ — decided 2026-08-27: **both**, and they answer different questions. `deploy.sh` publishes a GitHub Release per `prod-` tag with generated notes; `docs/5.6` stays the delivery log, because a delivery that ships no code has no tag |
 | **2.6** | **what applies an answer once decided** — still the choice with no good option, and an organisation does not solve it |
 | — | ~~what happens to `pipeline.py`~~ — decided 2026-08-27: deleted, Delivery 4 Part 2 |
 
@@ -644,13 +644,13 @@ as the present.
 
 **One delivery in three parts.** All three were designed, built and merged on
 the same day, in the same pull request (#227), and the repository route has
-**one delivery moment** — the push to `origin/main` ([3.6](../../../../3.6-change-lifecycle.md)
+**one delivery moment** — the push to `origin/main` ([5.1](../../../../5.1-change-lifecycle.md)
 §2.15). Owner, 2026-08-27: *"then the three changes went in one delivery."* They
 were drafted as Deliveries 4, 5 and 6, which is why the parts below still read
 as three separate arguments; what makes them one delivery is that nothing
 reached anybody until the merge, and then all of it did at once.
 
-It carries the identifier `0.7.0f` in [4.9](../../../../4.9-delivery-log.md), as
+It carries the identifier `0.7.0f` in [5.6](../../../../5.6-delivery-log.md), as
 one row.
 
 #### Part 1 — the forms, and the field set
@@ -664,7 +664,7 @@ backlog. The earlier scorecard, kept because it says what landed where:
 | --- | --- | --- |
 | 2.1 — where attributes are stored | **done** | Delivery 3 |
 | 2.4 — native review replaces the parser | **done** | Delivery 2, and the parser deleted in #220 |
-| 2.6 — what applies an answer once decided | **answered** as D36, applied in `docs/3.6` §2.18 | no delivery needed |
+| 2.6 — what applies an answer once decided | **answered** as D36, applied in `docs/5.1` §2.18 | no delivery needed |
 | deleting the ten labels | **done** | 2026-08-26, once #221 and #222 landed |
 
 **The forms now set the issue type**, and the requirement form's `type` and
@@ -726,7 +726,7 @@ can triage from it, and a row clicks through to the issue it describes.
 continue to tweak the project views as pre-approved work which doesn't need any
 record."* A view is a saved filter over data that lives elsewhere; getting one
 wrong loses nothing and is visible immediately. This is the clearest case yet of
-[3.6](../../../../3.6-change-lifecycle.md) §2.2's *blast radius, not size*.
+[5.1](../../../../5.1-change-lifecycle.md) §2.2's *blast radius, not size*.
 
 **The licence stops at the view.** Owner, same day: *"anything recorded against
 issues which is used by the tooling needs to be documented and can't be changed
@@ -758,7 +758,7 @@ pushes, with `--generate-notes`, so GitHub writes the changelog from the pull
 requests merged since the previous release and nobody types it — a changelog
 somebody has to remember to write is one that stops being written.
 
-**`docs/4.9` stays the delivery log**, and is not replaceable by it: five of the
+**`docs/5.6` stays the delivery log**, and is not replaceable by it: five of the
 last six deliveries — `0.7.0a` to `0.7.0e` — shipped no code, so they have no tag
 a release could hang on. The log answers *what did we put in front of anyone, and
 when*.
@@ -785,9 +785,9 @@ The full account is in [3.3](../../../../3.3-testing-ci-and-release.md) §3.3.1.
 | `.github/workflows/docs.yml` — the `commands` job | modified, or **deleted** | repository |
 | `scripts/actions.py` — reads the `approved` label | modified | repository |
 | `scripts/pipeline.py` | **deleted** — Delivery 4, Part 2 | repository |
-| `docs/3.6` §2.18 and §3.8 | modified | repository |
+| `docs/5.1` §2.18 and §3.8 | modified | repository |
 | `docs/4.8-artefacts.md` | modified — a configured Project, an organisation and a second account are all artefacts under change control | repository |
-| `docs/4.9-delivery-log.md` | modified, if 2.5C | repository |
+| `docs/5.6-delivery-log.md` | modified, if 2.5C | repository |
 | the GitHub Project, its fields and workflows | new or modified | **service** |
 | an organisation, if 2.2B | **new** | **service** |
 | a second GitHub account and its token, if 2.3B | **new** | **service** |

@@ -124,7 +124,7 @@ move them onto.
 **Which makes R7 a due date too, for now.** The same mechanism R2 uses: a line in
 the issue body saying when the next run falls due, surfaced by the board. That is
 a workaround for an absent scheduler and it should say so, so nobody later
-mistakes it for the design — `docs/3.7` puts the mechanism in Application & Game
+mistakes it for the design — `docs/5.2` puts the mechanism in Application & Game
 Architecture and the individual jobs with the workstream whose rule they apply,
 and that does not change because the first few runs are manual.
 
@@ -191,7 +191,7 @@ starting with registrations. **That is monitoring and event management**, and
 after 2026-09-21 it has an owner: #402, which holds the classification, the
 counters, the alarms and what the server does about a failure.
 
-**The split is the same one `docs/3.7` already makes for sweeps.** #402 owns the
+**The split is the same one `docs/5.2` already makes for sweeps.** #402 owns the
 mechanism — how a symptom becomes a number, how a number leaves the VM under
 D49, how an alarm is built. Capacity Planning owns *this* signal: what counts as
 unusual growth in registrations, and at what rate.
@@ -408,7 +408,7 @@ and (from *4a* above) enough peak/average and peak/total pairs to fit `λ` and
 `W` rather than guess them. #405 is where the model is worked out properly and
 turned into limits. **And it does not stop there**: refining it as real data
 accumulates is the ongoing job, which is why *capacity-plan* is a row in
-[docs/3.8](../../../../3.8-programme-activities.md) rather than a one-time
+[docs/5.3](../../../../5.3-programme-activities.md) rather than a one-time
 derivation — the sketch above is this month's starting point, not the answer the
 practice on #407 exists to keep re-checking.
 

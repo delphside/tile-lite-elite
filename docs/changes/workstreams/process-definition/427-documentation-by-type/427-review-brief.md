@@ -27,7 +27,7 @@ request.
   inferred.
 
 The standards, in order of authority: [`CLAUDE.md`](../../../../../CLAUDE.md),
-[`docs/3.9`](../../../../3.9-writing-documents.md) (what a document may hold),
+[`docs/5.4`](../../../../5.4-writing-documents.md) (what a document may hold),
 [`docs/README.md`](../../../../README.md), and the `change-a-document` skill in
 `.claude/skills/`.
 
@@ -124,7 +124,7 @@ is run and read, the machine difference and the raw measurements.
    things, and still has proposal headings (`Proposed Rust Shape`, `Suggested
    API Direction`, `Recommendation On Cross-Check Caching`). That breaks
    `CLAUDE.md`'s documentation rule that numbered documents say what is true
-   now, and `docs/3.9-writing-documents.md:22-30`, which keeps proposal and
+   now, and `docs/5.4-writing-documents.md:22-30`, which keeps proposal and
    argument out of numbered documents. Suggested fix: keep this with #428 and
    rewrite `docs/2.1-rules-engine.md` together with
    `docs/2.2-rules-engine-implementation.md` from the implemented

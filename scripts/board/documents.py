@@ -20,8 +20,8 @@ from typing import Iterable
 
 PROCESS_DOCUMENTS = (
     "CLAUDE.md",
-    "docs/3.6-change-lifecycle.md",
-    "docs/3.7-workstreams.md",
+    "docs/5.1-change-lifecycle.md",
+    "docs/5.2-workstreams.md",
 )
 
 

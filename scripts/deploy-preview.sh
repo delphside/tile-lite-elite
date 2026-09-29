@@ -336,7 +336,7 @@ fi
 # document errors whenever we do a deployment to Preview etc then that is
 # okay."*
 #
-# So this **reports and does not refuse** — a check, not a gate (docs/3.6
+# So this **reports and does not refuse** — a check, not a gate (docs/5.1
 # §2.16). Preview exists to look at anything at any time, and a broken anchor
 # is no reason to stop somebody looking at their change on a phone.
 #

@@ -6,7 +6,7 @@ description: Raise a project issue with the seven headings, set its fields, and 
 # Raising a project
 
 The mechanics only. **What goes in the project is a judgement and is not here** —
-the rules are in `CLAUDE.md` and `docs/3.6`, and the groupings are agreed with the
+the rules are in `CLAUDE.md` and `docs/5.1`, and the groupings are agreed with the
 owner, never assumed.
 
 ## Before anything
@@ -54,7 +54,7 @@ both:
 ## Impacted artefacts
 
 *One table per delivery, a row per route. `Route` is a property of the
-artefact (`docs/3.6` §2.15) and a delivery has one route, so a table with two
+artefact (`docs/5.1` §2.15) and a delivery has one route, so a table with two
 routes marked yes is a delivery that needs splitting. Say `no` and a dash rather
 than dropping a row: an absent row and an empty one read the same, and only one
 of them means "nothing here".*
@@ -152,7 +152,7 @@ the design and the documents, carries no milestone, and lists its deliveries:
 each row names the work packages it carries, or says `pre-approved`.
 
 **Four cases decide whether a sub-project is needed at all** — the owner's, and
-`docs/3.6` carries them:
+`docs/5.1` carries them:
 
 | | work packages | sub-projects |
 | --- | --- | --- |

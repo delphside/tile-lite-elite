@@ -350,7 +350,7 @@ call the model, print.
 | which issue a branch is for | `board/refs.py` | `.githooks/commit-msg`, `board/branches.py`, `board/merge.py` |
 | what reaches the image | `board/shipping.py` | `shipping-paths.sh`'s `NON_SHIPPING`, used by the pre-commit hook directly and by `deploy.sh`, `verify.sh` and CI through its functions, which now ask the model |
 | a version bump only, and what ships | `board/shipping.py` | `.githooks/pre-commit`'s own `version_bump_only`; `verify.sh` counted every image-touching commit as unreleased, so the bump after a release failed it every time |
-| which documents are process documents | `board/documents.py` | `.githooks/pre-commit`, and in prose `CLAUDE.md`, `docs/3.6` and `docs/3.0`, which now point to it |
+| which documents are process documents | `board/documents.py` | `.githooks/pre-commit`, and in prose `CLAUDE.md`, `docs/5.1` and `docs/3.0`, which now point to it |
 
 **The grammar for "names an issue" is the measured one, not GitHub's.** GitHub
 closes an issue on nine keywords in any case. The question the model answers is

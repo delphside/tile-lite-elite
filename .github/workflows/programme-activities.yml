@@ -55,7 +55,7 @@ jobs:
             printf 'A scheduled check found programme activities overdue or never logged.\n\n'
             printf 'Raised by `.github/workflows/programme-activities.yml` ([run](%s/%s/actions/runs/%s)).\n' \
               "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
-            printf 'The register is docs/3.8-programme-activities.md; the record of what has\n'
+            printf 'The register is docs/5.3-programme-activities.md; the record of what has\n'
             printf 'been done is docs/programme-activity-log.csv. A row appended there closes\n'
             printf 'this.\n\n'
             printf '```\n'

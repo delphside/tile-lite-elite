@@ -29,7 +29,7 @@ set -euo pipefail
 # not to add a dependency to shipping.
 
 # The value of the **Type of change** issue field that means a user could
-# notice. It was a label until 2026-08-26; see docs/3.6 2.6.
+# notice. It was a label until 2026-08-26; see docs/5.1 2.6.
 FUNCTIONAL='IN("functional")' 
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then

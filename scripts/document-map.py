@@ -73,7 +73,7 @@ def build():
         "",
         "Every heading in `docs/`, so a fact can be looked up rather than",
         "grepped for. It serves *one fact, one home*",
-        "([3.9](3.9-writing-documents.md)).",
+        "([5.4](5.4-writing-documents.md)).",
         "",
         "**Before adding text to a document, find its subject here and go",
         "there.** Adding it where the editing happens to be is what this exists",

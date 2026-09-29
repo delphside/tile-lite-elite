@@ -319,7 +319,7 @@ replaces, because a partial taxonomy still has to be searched.
 
 ---
 
-#### D30 · Is triage written down, and where? — **answered: yes, in `docs/3.6` §2.18**
+#### D30 · Is triage written down, and where? — **answered: yes, in `docs/5.1` §2.18**
 
 Owner, 2026-08-21: *"Do we need something on how issues are impact assessed,
 categorised, assigned to workstream, assigned to projects, and potentially folded
@@ -529,7 +529,7 @@ release, and what would show it works. `.github/ISSUE_TEMPLATE/change.yml`.
 most of the backlog and a list whose first option is a commitment invites one.
 
 **It does not ask for impacted artefacts.** That is triage's third question, not
-the raiser's — `docs/3.6` §2.18 keeps raising an issue a five-second act
+the raiser's — `docs/5.1` §2.18 keeps raising an issue a five-second act
 precisely so that nothing downstream depends on it being well formed.
 
 ##### D32 · Does a workflow map the form's answers to labels? — **answered: parked**
@@ -611,7 +611,7 @@ puzzled reader rather than an irreversible act.
 It also removed `needs-triage`, which the form applied to every issue — until
 2026-08-28, when the queue became *a requirement with no workstream* and the
 label retired. The workstream is the one triage act that cannot happen at
-raising, so its absence needs no label to say so. See `docs/3.6` §2.18.
+raising, so its absence needs no label to say so. See `docs/5.1` §2.18.
 
 **The known fragility, stated rather than discovered**: a form's body carries the
 *heading text*, not the field `id`. Parsing is therefore by heading, and renaming
@@ -1403,7 +1403,7 @@ milestone **can never be matched by a deploy** and can never auto-close. Nobody
 has to remember not to let it.
 
 **This supersedes D6's** *"a dated row in the delivery log with no version"*. The
-row now carries an identifier. `docs/4.9-delivery-log.md` was created for the
+row now carries an identifier. `docs/5.6-delivery-log.md` was created for the
 first one — `0.7.0a`, #174's second delivery, which was the first delivery in the
 programme with no `prod-*` tag to be found under.
 
@@ -1970,7 +1970,7 @@ as being in the build when the build was made. The owner's note on the second:
 *what is in the build* is answered today by the planning tools rather than
 derived from the build, which is the open half.
 
-Applied in the same commit that records it (D36): `docs/3.6` gains the rule and
+Applied in the same commit that records it (D36): `docs/5.1` gains the rule and
 `.github/ISSUE_TEMPLATE/project.yml` asks for it.
 
 ## Delivery: releases, applications and merges

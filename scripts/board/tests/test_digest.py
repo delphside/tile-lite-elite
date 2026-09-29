@@ -1,6 +1,6 @@
 """The weekly digest, the `weekly-digest` activity in docs/3.8.
 
-From docs/3.7's brake, not from the code. The cases that matter are the ones
+From docs/5.2's brake, not from the code. The cases that matter are the ones
 where a bug would flatter the report or repeat a settled question:
 
   the measure     programme overhead raised per week (types `tooling` and
@@ -76,8 +76,8 @@ class TheBrake(Cases):
         self.expect("cosmetic reads as functional", True,
                     "| `cosmetic` | 0 | 0 | 0 | 0 | 0 | 0 | constructive |" in text)
         odd = render(digest(window=Window(raised_by_type=collections.Counter({"spike": 1}))))
-        self.expect("a type docs/3.7 does not name is shown, not dropped", True,
-                    "| `spike` | 1 | 0 | 0 | 0 | 0 | 0 | not in docs/3.7 |" in odd)
+        self.expect("a type docs/5.2 does not name is shown, not dropped", True,
+                    "| `spike` | 1 | 0 | 0 | 0 | 0 | 0 | not in docs/5.2 |" in odd)
 
     def test_what_is_waiting_on_the_owner_is_listed_or_said_to_be_nothing(self):
         self.expect("nothing waiting says nothing", True,
@@ -117,7 +117,7 @@ class TheWindow(Cases):
                                                 issue(2, "non-functional", "2026-09-22T10:00:00Z"),
                                                 issue(3, None, "2026-09-22T10:00:00Z"),
                                                 issue(4, "documentation", "2026-09-22T10:00:00Z")], [], self.START)
-        # docs/3.7, owner 2026-09-27: the overhead is tooling and documentation.
+        # docs/5.2, owner 2026-09-27: the overhead is tooling and documentation.
         self.expect("only those two types", [4], [n for n, _ in w.overhead])
         self.expect("every type is still counted", {"functional": 1, "non-functional": 1, "unset": 1, "documentation": 1},
                     dict(w.raised_by_type))
@@ -168,7 +168,7 @@ REGISTERS = """## Continual improvement
 
 
 class TheReview(Cases):
-    """docs/3.8, owner 2026-09-27: the digest collates lessons learnt and tracks
+    """docs/5.3, owner 2026-09-27: the digest collates lessons learnt and tracks
     recurring problems and improvement initiatives."""
 
     def test_a_section_is_read_to_the_next_heading_of_its_level(self):
@@ -223,7 +223,7 @@ class TheReview(Cases):
 
 
 class ReviewAndNotes(Cases):
-    """docs/3.8: Claude reviews weekly, the owner monthly; notes between digests
+    """docs/5.3: Claude reviews weekly, the owner monthly; notes between digests
     go in next week's draft."""
 
     def test_a_report_ends_with_a_box_for_each_review(self):
@@ -253,7 +253,7 @@ class ReviewAndNotes(Cases):
 
 
 class Conclusions(Cases):
-    """docs/3.8, owner 2026-09-27: every lesson and note ends with a conclusion,
+    """docs/5.3, owner 2026-09-27: every lesson and note ends with a conclusion,
     decided at the weekly review, so the digest leaves one to decide for each."""
 
     def test_each_lesson_from_an_issue_has_one(self):

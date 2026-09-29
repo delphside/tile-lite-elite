@@ -16,7 +16,7 @@ no column that can show them.
 **Derived, never maintained.** Generated from the issues each time it is asked
 for. A hand-drawn diagram is stale the first time something moves and stale in
 a way nobody can see; this one cannot disagree with the data because it has no
-independent existence — the same reasoning as docs/4.9's "change history is
+independent existence — the same reasoning as docs/5.6's "change history is
 derived from git".
 
 Reads the board model, so "is this a delivery" is answered in one place

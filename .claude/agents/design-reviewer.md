@@ -40,7 +40,7 @@ do not show yet: treat those as true.
 - **Other projects that overlap**: search open issues for the same tables,
   files and behaviour (`gh issue list --search`).
 - **Terms and process**: anything the documents call by a name `CLAUDE.md` or
-  `docs/3.6` has retired.
+  `docs/5.1` has retired.
 - **Branches**: any branch named for the project or its packages, and how far
   behind `main` it is.
 

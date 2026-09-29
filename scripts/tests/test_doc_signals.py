@@ -1,6 +1,6 @@
 """doc-signals.py: the phrases that mark history in a numbered document. #427 R8.
 
-The cases are docs/3.9's rule, not the patterns: a dated quotation, a dated
+The cases are docs/5.4's rule, not the patterns: a dated quotation, a dated
 change and a design note's headings are history; a date qualifying a
 measurement, or the same words inside a code block, are not.
 """
@@ -52,9 +52,9 @@ class DocSignals(Cases):
 
     def test_the_log_and_the_map_are_exempt(self):
         names = {p.name for p in signals.documents()}
-        self.expect("the delivery log", False, "4.9-delivery-log.md" in names)
+        self.expect("the delivery log", False, "5.6-delivery-log.md" in names)
         self.expect("the generated map", False, "1.6-document-map.md" in names)
-        self.expect("a numbered document", True, "3.6-change-lifecycle.md" in names)
+        self.expect("a numbered document", True, "5.1-change-lifecycle.md" in names)
 
 
 if __name__ == "__main__":

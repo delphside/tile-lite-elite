@@ -15,16 +15,16 @@ preferences. The tool leaves the section empty and says so, on the same rule as
 `obligations.py` — something nothing can evidence must not read as *nothing to
 report*, because an empty section and an unanswerable question look identical.
 
-**The measure is docs/3.7's, not the one first proposed.** Owner, 2026-09-21:
+**The measure is docs/5.2's, not the one first proposed.** Owner, 2026-09-21:
 *"The test is that we produce fewer issues and that they take less of my
 time"*, and 2026-09-27, that the issues he meant are programme overhead,
 `tooling` and `documentation`. So the headline is that count beside the week
-before, every other type is counted with docs/3.7's reading of it, and what
+before, every other type is counted with docs/5.2's reading of it, and what
 the board reports as waiting on the owner. The tooling
 share stays as an observation: its 45% figure is provisional and its horizon is
 #383 finishing, not a date. Until 2026-09-27 this module still reported the
 share against a 45% threshold and a 2026-10-17 date, and asked for a
-confirmation the owner had already given, because the answer landed in docs/3.7
+confirmation the owner had already given, because the answer landed in docs/5.2
 and not here.
 
 **Deletions are counted first among equals**, because D54 says so: *"removing
@@ -47,12 +47,12 @@ from .model import classify
 from .sources import Snapshot
 from .turn import waiting_on_owner
 
-# docs/3.7's brake: programme overhead is these two types of change. Not the
+# docs/5.2's brake: programme overhead is these two types of change. Not the
 # type called `non-functional`, which is work on the application (owner,
 # 2026-09-27).
 OVERHEAD = ("tooling", "documentation")
 
-# Every type, in docs/3.7's order and with its reading in the owner's words
+# Every type, in docs/5.2's order and with its reading in the owner's words
 # (2026-09-27), so the digest counts them all rather than only the overhead.
 READINGS = (
     ("functional", "constructive"),
@@ -84,7 +84,7 @@ class Digest:
     closed: list[tuple[int, str]] = field(default_factory=list)
     raised: list[tuple[int, str]] = field(default_factory=list)
     window: "Window" = field(default_factory=lambda: Window())
-    # The review half (docs/3.8, owner 2026-09-27): lessons collated, and the
+    # The review half (docs/5.3, owner 2026-09-27): lessons collated, and the
     # two registers tracked. None means not available, which is not "none".
     lessons: list[tuple[int, str, str]] = field(default_factory=list)
     own_lessons: list[tuple[str, str]] | None = None
@@ -212,7 +212,7 @@ def issue_lessons(closed_raw, start: str) -> list[tuple[int, str, str]]:
 
 def register_rows(markdown: str, heading: str) -> list[dict]:
     """The rows of the first table under `heading`, as dicts keyed by its header
-    cells. docs/3.8's registers are read this way, like its activity table."""
+    cells. docs/5.3's registers are read this way, like its activity table."""
     rows, header = [], None
     for line in section(markdown, heading).splitlines():
         if not line.startswith("|"):
@@ -299,7 +299,7 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
 DRAFT = "<!-- draft: notes only, until board-digest.py --write fills it in -->"
 
 # Left by the digest after every lesson and note, and replaced at Claude's
-# weekly review by its conclusion (docs/3.8, owner 2026-09-27). The four named
+# weekly review by its conclusion (docs/5.3, owner 2026-09-27). The four named
 # are examples: "that list may not be comprehensive".
 CONCLUDE = ("*Conclusion, at the weekly review: for example an initiative (which `CI-`), "
             "monitoring (which `P-` or measure), a process change (what, where), or no action "
@@ -324,7 +324,7 @@ def with_conclusions(notes: str) -> str:
 
 def draft(code: str, first_day: str) -> str:
     """Next week's report, before it is written: only a Notes section, for
-    whatever occurs to either of us during the week (docs/3.8)."""
+    whatever occurs to either of us during the week (docs/5.3)."""
     return (f"# Weekly digest, from {first_day}\n\n`{code}`\n\n{DRAFT}\n\n"
             "## Notes\n\nAnything noticed during the week, for the review.\n")
 
@@ -349,7 +349,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     until = date.today().isoformat() if d.until == "HEAD" else d.until[:10]
     out = [f"# Weekly digest, {window_start(d.since)} to {until}", ""]
 
-    # docs/3.7's brake, limit 1: fewer non-functional issues, and less of the
+    # docs/5.2's brake, limit 1: fewer non-functional issues, and less of the
     # owner's time. Both counted, neither argued.
     out.append("## The brake: less programme overhead, less of your time")
     out.append("")
@@ -365,10 +365,10 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
         out.append(f"- #{number} {title}")
     out.append("")
     # Every type, because each says something different about the owner's
-    # time (docs/3.7). A type with nothing either week still gets its row, so
+    # time (docs/5.2). A type with nothing either week still gets its row, so
     # a quiet week for bugs is visible rather than absent.
     # Raised, closed and open by type: what arrived, what was cleared, and
-    # what stands (owner, 2026-09-27). Every type in docs/3.7's order, a quiet
+    # what stands (owner, 2026-09-27). Every type in docs/5.2's order, a quiet
     # one included, so a week with no bugs is visible rather than absent.
     # Grouped by week, owner 2026-09-27: raised, closed and open for this
     # week, then the same for last week. Markdown has one header row, so the
@@ -378,7 +378,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     known = {kind for kind, _ in READINGS}
     others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)
                      | set(w.closed_before) | set(w.open_before) | set(d.by_type)) - known)
-    for kind, reading in list(READINGS) + [(k, "not in docs/3.7") for k in others]:
+    for kind, reading in list(READINGS) + [(k, "not in docs/5.2") for k in others]:
         out.append(f"| `{kind}` | {w.raised_by_type[kind]} | {w.closed_by_type[kind]} | {d.by_type[kind]} | "
                    f"{w.raised_before[kind]} | {w.closed_before[kind]} | {w.open_before[kind]} | {reading} |")
     out.append("")
@@ -391,7 +391,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     else:
         out.append("**Nothing** the board reports as waiting on you.")
     out.append("")
-    # An observation, not the target (docs/3.7). Always name the starting
+    # An observation, not the target (docs/5.2). Always name the starting
     # point, so a one-point move cannot read like a ten-point one.
     out.append(f"*The tooling share, as an observation:* {d.tooling} of {d.total} open "
                f"issues are `tooling`, **{d.share}%**, against {MEASURED_AT}% when D54 "
@@ -465,14 +465,14 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
         out.append("None added this week.")
     out.append("")
 
-    # The registers are docs/3.8's; the digest reports them, new ones marked.
+    # The registers are docs/5.3's; the digest reports them, new ones marked.
     for title, rows, what in (("Recurring problems", d.problems, "problem"),
                               ("Improvement initiatives", d.initiatives, "initiative")):
         out.append(f"## {title}")
         out.append("")
         live = [r for r in rows if not r.get("state", "").startswith("done")]
         if not live:
-            out.append(f"No open {what} in docs/3.8's register.")
+            out.append(f"No open {what} in docs/5.3's register.")
         for r in live:
             new = " **new this week**" if r.get("raised", "") >= start else ""
             detail = r.get("initiative") if what == "problem" else r.get("state")
@@ -495,7 +495,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
                    "answer — an empty one here means it was not written, not "
                    "that there was nothing.*")
 
-    # docs/3.8: Claude reviews weekly, the owner monthly; the report is fixed
+    # docs/5.3: Claude reviews weekly, the owner monthly; the report is fixed
     # once the owner's review has covered it.
     out.append("")
     out.append("## Review")

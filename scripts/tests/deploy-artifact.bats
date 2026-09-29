@@ -228,7 +228,7 @@ report() { run report_plan_disagreement "$HEAD_SHA" 0.1.0; }
   refute_output --partial 901
 }
 
-# docs/3.6 §1.1: a requirement cannot carry a milestone at all.
+# docs/5.1 §1.1: a requirement cannot carry a milestone at all.
 @test "report: a requirement is never asked for a milestone" {
   repo; gh_stub "901:Requirement:"
   report

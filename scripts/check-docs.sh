@@ -128,7 +128,7 @@ bold "7. script log events"
 if ! "$HERE/scripts/check-run-log-events.py"; then FAILED=1; fi
 
 # 8. history signals -- #427 R8. A measure, not a gate: the lines in the
-# numbered documents carrying a phrase that marks history or argument (docs/3.9).
+# numbered documents carrying a phrase that marks history or argument (docs/5.4).
 # It reports and never fails, because a phrase can be used legitimately; a
 # person reads the list. It should fall. Run bare, as 5 to 7 are.
 echo

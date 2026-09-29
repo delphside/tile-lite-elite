@@ -19,7 +19,7 @@ workstream. Everything else in those areas is Claude's to classify, scope,
 group, fold and close.
 
 The rules live in [`CLAUDE.md`](../../../CLAUDE.md) and
-[`docs/3.6`](../../../docs/3.6-change-lifecycle.md). This is the order to ask
+[`docs/5.1`](../../../docs/5.1-change-lifecycle.md). This is the order to ask
 in, and the things that are got wrong.
 
 ## The three passes
@@ -80,7 +80,7 @@ Four things generalise from the set:
   disambiguation here — the body still carries the exact term.
 
 The `#N MAIN PROJECT:`/`#N WP A:` prefix is structural — its own convention,
-in [`docs/3.6`](../../../docs/3.6-change-lifecycle.md) — and is never cut;
+in [`docs/5.1`](../../../docs/5.1-change-lifecycle.md) — and is never cut;
 these rules apply to what follows it.
 
 **2 · Scope.** Options, dependencies, `Effort`. `Stage` moves to *Scope,
@@ -124,7 +124,7 @@ several has one sub-project each.
 
 **Which of the two, for a delivery:** did it have a **branch**? Then a letter —
 it delivered, and the delivery needs a name and a row in
-[`4.9`](../../../docs/4.9-delivery-log.md). No branch means it went straight to
+[`5.6`](../../../docs/5.6-delivery-log.md). No branch means it went straight to
 `main`, which is `pre-approved` and makes no delivery.
 
 **A Production Release always takes a branch, a pull request, a semver and a
@@ -139,7 +139,7 @@ carries none. The `folded` label is the signal.
 
 **Leaving `no-release` on.** Sixty closed issues carried it on 2026-09-08 —
 fifty-six requirements that should have had none, and four projects whose
-letters were already written in `4.9` and never set on the issue.
+letters were already written in `5.6` and never set on the issue.
 
 **Triaging alone outside D54's scope.** Folding closes issues and un-folding
 is manual, so the cost of getting this wrong is asymmetric. Inside Delivery

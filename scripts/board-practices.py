@@ -5,7 +5,7 @@
     scripts/board-practices.py --json   # the same, machine-readable
     scripts/board-practices.py --exit-code  # non-zero when anything is overdue
 
-Reads the register (`docs/3.8-programme-activities.md`) for what exists and
+Reads the register (`docs/5.3-programme-activities.md`) for what exists and
 how often it is owed, and the log (`docs/programme-activity-log.csv`) for when
 each was last done. Neither is inferred from an artefact's age — the owner,
 2026-09-22: *"Deriving actions from the presence or absence of a document
@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Overridable for the test, which reads a real table and a real CSV rather
 # than stubbing the parser — the same reasoning `CI_STATUS` and `SYNC_PR_STATE`
 # already use in merge-to-release.sh.
-REGISTER = Path(os.environ.get("REGISTER_OVERRIDE") or ROOT / "docs" / "3.8-programme-activities.md")
+REGISTER = Path(os.environ.get("REGISTER_OVERRIDE") or ROOT / "docs" / "5.3-programme-activities.md")
 LOG = Path(os.environ.get("LOG_OVERRIDE") or ROOT / "docs" / "programme-activity-log.csv")
 
 _ROW = re.compile(
@@ -137,7 +137,7 @@ def main() -> int:
             for a in items
         ], indent=2))
     else:
-        print("==> Programme activities, against docs/3.8")
+        print("==> Programme activities, against docs/5.3")
         print(render(items))
         if overdue:
             print(f"\n  {len(overdue)} overdue or never logged.")

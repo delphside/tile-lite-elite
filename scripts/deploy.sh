@@ -86,7 +86,7 @@ previous_release_tag() {
 #
 # GitHub writes the notes from the pull requests merged since the previous
 # release, so nobody types a changelog — one that has to be remembered is one
-# that stops being written. `docs/4.9` is not replaced by this: a delivery that
+# that stops being written. `docs/5.6` is not replaced by this: a delivery that
 # ships no code has no tag for a release to hang on. See docs/3.3 §2.5.4.
 #
 # Never fatal. Production is already serving the new version by the time this
@@ -148,7 +148,7 @@ publish_release() {
 # hand against the real API. The test below now asserts the shape, because a
 # stub that accepts anything is a test of nothing.
 #
-# **A non-project is still closed.** Milestones belong to projects (docs/3.6), so
+# **A non-project is still closed.** Milestones belong to projects (docs/5.1), so
 # anything else here is an anomaly the gate above has already called out — and
 # closing it is what used to happen, so nothing new is invented for a case that
 # should not arise.
@@ -378,7 +378,7 @@ issue_touches_image() {
 # no commit in the range*. The second is already the milestone gate's
 # `UNBUILT` check, which prints "Nothing in this release mentions:" and asks
 # before deploying — so writing it again here would be a second statement of one
-# rule, which is what `docs/3.6` calls a defect whichever copy is right.
+# rule, which is what `docs/5.1` calls a defect whichever copy is right.
 #
 # The first is new: **nothing today notices a change that reaches players and is
 # in no milestone.** The gate looks outward from the plan and finds issues that
@@ -402,7 +402,7 @@ report_plan_disagreement() {
   while IFS= read -r num; do
     [[ -n "$num" ]] || continue
     issue_touches_image "$num" "$range" || continue
-    # One call for both facts. A **Requirement** is skipped: `docs/3.6` 1.1 —
+    # One call for both facts. A **Requirement** is skipped: `docs/5.1` 1.1 —
     # *"Milestones go with project deliveries, and not with requirements"* — so
     # asking one to carry a milestone asks for something the process forbids.
     # #277 was reported until this was added, because a commit claiming it
@@ -642,7 +642,7 @@ announce_release_checks() {  # $1 = IS_RELEASE, $2 = DEPLOY_ENV
 #
 # **Each step carries its own remedy**, because *"needs doing by hand"* is not a
 # thing anybody can act on at the end of a deploy. Reviewing what a failure
-# reports is part of the design (docs/3.6): the moment it is read is the moment
+# reports is part of the design (docs/5.1): the moment it is read is the moment
 # nobody can go back and add detail to it. The exit code is reported for the
 # same reason — `git commit` returning 1 and returning 128 are different
 # problems, and only one of them is the pre-commit hook.
@@ -1284,7 +1284,7 @@ else
         UNBUILT="$UNBUILT #$NUM"
       fi
       # A milestone is a release, and a release is made of project deliveries —
-      # so a milestone should contain projects and nothing else (docs/3.6 §1.1).
+      # so a milestone should contain projects and nothing else (docs/5.1 §1.1).
       # A warning rather than a refusal: the operator's intent stays
       # authoritative, and the convention stops being one nobody checks.
       [[ "$KIND" == "Project" ]] || NOT_PROJECT="$NOT_PROJECT #$NUM($KIND)"
@@ -1294,7 +1294,7 @@ else
       echo
       echo "    Not a project, and a milestone is made of project deliveries:$NOT_PROJECT" >&2
       echo "    A requirement is closed when it folds into a project, so it" >&2
-      echo "    should not be carrying a milestone at all — docs/3.6 §1.1." >&2
+      echo "    should not be carrying a milestone at all — docs/5.1 §1.1." >&2
     fi
 
     # The mirror image of the check above: that one finds an issue in the

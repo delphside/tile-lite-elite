@@ -6,7 +6,7 @@ description: Take a change through preview, rehearsal and a production release, 
 # Shipping a change
 
 The mechanics and the traps. **Whether a change should ship is a judgement and is
-not here** — `docs/3.3` §1 is the authority for the steps and `docs/3.6` for the
+not here** — `docs/3.3` §1 is the authority for the steps and `docs/5.1` for the
 rules. This is what those documents cost somebody who has to remember them.
 
 ## First, the route — it decides everything below
@@ -16,7 +16,7 @@ rules. This is what those documents cost somebody who has to remember them.
 | **Production Release** | anything in the image, **and anything on the production host** (D52). Semver, branch, pull request, the full lap |
 | **Application Tooling and Docs** | scripts that build, test, deploy, operate or measure the application, and their documents. Branch, pull request, a try on preview or rehearsal; live at merge, **there is no deploy** |
 | **Programme Tooling and Docs** | anything else in the repository. Straight to `origin/main`; **there is no deploy** |
-| **Other** | a console, a cloud resource, preview or rehearsal. Whatever applying it takes, plus a row in `docs/4.9` |
+| **Other** | a console, a cloud resource, preview or rehearsal. Whatever applying it takes, plus a row in `docs/5.6` |
 
 **A delivery has one route.** Work spanning several splits into a delivery each,
 and each is its own work package. Documentation is the exception: it rides on the
@@ -75,7 +75,7 @@ Redirect to a file if you need the output.
 
 | | |
 | --- | --- |
-| the delivery-log row | **written by hand** into `docs/4.9`. The release does not write it |
+| the delivery-log row | **written by hand** into `docs/5.6`. The release does not write it |
 | a lettered milestone | closed by hand — the letter form is not valid semver, so nothing matches it |
 | post-deployment checks | answered on the work package, each row, with `passed`, `cannot be tested` or `failed` |
 
@@ -83,7 +83,7 @@ Redirect to a file if you need the output.
 
 **Application Tooling and Docs** is tried from its branch on preview or
 rehearsal, then merged, and is live at merge. It takes a lettered milestone
-and a row in `docs/4.9`. Its first use against production is a
+and a row in `docs/5.6`. Its first use against production is a
 post-deployment check, not a delivery.
 
 **Programme Tooling and Docs** is pushed and done. No deploy, no milestone,
@@ -91,7 +91,7 @@ no row — its record is the commit.
 
 **Other** is applied however it applies, then takes a work package, a lettered
 milestone off **production's** current version (not the development one), and a
-row in `docs/4.9`. A package upgrade and a reboot are two deliveries, because
+row in `docs/5.6`. A package upgrade and a reboot are two deliveries, because
 either can fail alone and the record must say which did.
 
 ## An emergency

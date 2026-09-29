@@ -8,7 +8,7 @@
 The brake's two measures, what landed, what was deleted, and anything decided
 that the owner might have decided differently. #382 asked for an issue comment
 a week; since 2026-09-27 it is a report file, the `weekly-digest` activity in
-docs/3.8, under CLAUDE.md's rule for reports the programme produces on a
+docs/5.3, under CLAUDE.md's rule for reports the programme produces on a
 cadence. Owner: the file, not the comment, so the series outlives #382.
 
 Three of the four parts are derived from git and the board. The fourth is a
@@ -55,7 +55,7 @@ def main(argv=None) -> int:
         print(f"cannot say: {exc}", file=sys.stderr)
         return 2
 
-    registers = (REPORTS.parents[1] / "3.8-programme-activities.md").read_text()
+    registers = (REPORTS.parents[1] / "5.3-programme-activities.md").read_text()
     digest = build(open_snapshot, closed, since=args.since, registers=registers,
                    memory_repo=Path.home() / "claude-memory")
     text = render(digest, args.decided)
@@ -75,7 +75,7 @@ def main(argv=None) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         heading, rest = text.split("\n", 1)
         path.write_text(f"{heading}\n\n`{code}`\n{rest}\n")
-        # And next week's draft, for the notes (docs/3.8).
+        # And next week's draft, for the notes (docs/5.3).
         nyear, nweek, _ = (today + timedelta(days=7)).isocalendar()
         ncode = f"TLE_WD_{nyear}_W{nweek:02d}"
         npath = REPORTS / f"{ncode}.md"

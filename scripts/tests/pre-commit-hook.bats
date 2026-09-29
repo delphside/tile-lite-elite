@@ -289,12 +289,12 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: so is the lifecycle document" {
-  commit_on 399-x docs/3.6-change-lifecycle.md
+  commit_on 399-x docs/5.1-change-lifecycle.md
   assert_equal "$status" 1
 }
 
 @test "branch: so is the workstreams document" {
-  commit_on 399-x docs/3.7-workstreams.md
+  commit_on 399-x docs/5.2-workstreams.md
   assert_equal "$status" 1
 }
 

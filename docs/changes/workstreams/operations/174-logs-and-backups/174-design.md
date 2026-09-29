@@ -929,7 +929,7 @@ Owner, 2026-08-21: *"are these new scripts temporary or will we keep them after
 the project?"*
 
 **All three are kept, and none of them is in the first category.** Against the
-three categories in `docs/3.6`:
+three categories in `docs/5.1`:
 
 | script | category | when it runs | **what fires it** |
 | --- | --- | --- | --- |
@@ -1026,7 +1026,7 @@ at and say what it contained.
 The lettered identifiers are D34: a delivery that ships no application code
 takes the production version plus a letter, and is closed by hand — `deploy.sh`
 reads its milestone from `Cargo.toml`, so a lettered milestone can never be
-matched by a deploy. Recorded in `docs/4.9-delivery-log.md`.
+matched by a deploy. Recorded in `docs/5.6-delivery-log.md`.
 
 ### Delivery 1 — logging and health
 
@@ -1326,7 +1326,7 @@ application, and gets a dated row in the delivery log — with an identifier
 rather than no version, since D34 superseded D6 on 2026-08-23. That is what
 makes the log worth keeping: most of these steps leave no other trace, and
 `0.7.0a` was the first delivery in the programme with no `prod-*` tag to be
-found under. `docs/4.9-delivery-log.md` was created for it.
+found under. `docs/5.6-delivery-log.md` was created for it.
 
 ### Sequencing against #71
 

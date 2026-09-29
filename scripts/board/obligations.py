@@ -158,7 +158,7 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "change-type-set", (ParentProject, WorkPackage, StandaloneProject),
         ANY_STEP,
         "a `Type of change`",
-        "triage owes it — CLAUDE.md's minimum, and docs/3.6: every issue "
+        "triage owes it — CLAUDE.md's minimum, and docs/5.1: every issue "
         "carries one and it is a field",
         lambda i: bool(i.field("Type of change")),
     ),
@@ -364,7 +364,7 @@ OBLIGATIONS: tuple[Obligation, ...] = (
     # `Project Closedown` owing lessons learnt and read as complete. The
     # delegation is the reason it looked hard: a package may point at its
     # parent rather than answer, so an absent heading is not by itself a
-    # finding -- docs/3.6: *"`Delegated to #<parent>` -- so `board-check.py`
+    # finding -- docs/5.1: *"`Delegated to #<parent>` -- so `board-check.py`
     # reads an answer rather than an omission"*. Both forms are read here, and
     # the unticked-box half matches `parent-closedown`, because a package that
     # closes with a box outstanding leaves work owned by nobody.

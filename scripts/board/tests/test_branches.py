@@ -44,7 +44,7 @@ class BranchesAndTheIssuesTheyName(Cases):
 
         f = check(["342-branch-check"], board)
         self.expect("a requirement rather than a project", 1, len(f))
-        self.expect("cites the rule", True, "docs/3.6" in f[0].says)
+        self.expect("cites the rule", True, "docs/5.1" in f[0].says)
 
     def test_what_is_deliberately_not_a_finding(self):
         """what is deliberately not a finding"""

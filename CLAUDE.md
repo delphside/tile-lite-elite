@@ -64,7 +64,7 @@ one of them has a defect: fix it, don't work around it.
   its own, treating every use case as a customer feeding requirements for the
   generic thing; each workstream then builds its own functionality on top. The
   test is whether it would exist for only one caller. If it would, it belongs
-  to that caller's project. docs/3.7 says which workstream owns which
+  to that caller's project. docs/5.2 says which workstream owns which
   mechanism.
 - **A mechanism ships in the same release as its first customers**, so it is
   tested against a real requirement rather than only against its own tests —
@@ -104,7 +104,7 @@ one of them has a defect: fix it, don't work around it.
   retested.** One found after the merge either reopens the package (a new
   branch, back to Development, tested again) or goes in a later package. A
   merge moves a Production Release package to Deployment and a Repository
-  Change one to Post-deployment; docs/3.6 §2.1 has why. Owner, 2026-09-26.
+  Change one to Post-deployment; docs/5.1 §2.1 has why. Owner, 2026-09-26.
 - **A work package is at most one delivery, and so one route.** A delivery may
   carry several packages; a package never spans two deliveries. Building a tool
   and running it are two deliveries with different routes, so two packages
@@ -152,10 +152,10 @@ one of them has a defect: fix it, don't work around it.
   wrong column and waiting on nobody.
 - Commits say `Refs #N`, or `Closes #N` only when the change never leaves the
   repository. Programme BAU work needs no issue: its commits say
-  `Activity: <id>` from docs/3.8's register, and `Initiative: <id>` where there
+  `Activity: <id>` from docs/5.3's register, and `Initiative: <id>` where there
   is one. BAU is its own triage, so a change above its budget
   or to an asset it does not own becomes a project, never a requirement
-  (docs/3.8). Every subject starts `app X.Y.Z api M.N:` and a space.
+  (docs/5.3). Every subject starts `app X.Y.Z api M.N:` and a space.
 - Push immediately after committing. Until pushed, a change does not exist.
   Run an unpushed script to test it, never to use it.
 
@@ -210,7 +210,7 @@ one of them has a defect: fix it, don't work around it.
   regression testing; it never justifies a release of its own. An `Other` one —
   a host package, a kernel, a reboot — has no release to ride, so it supplies
   its own vehicle: work package, letter milestone, delivery-log row.
-  `docs/3.6` §2.2.1 is the table.
+  `docs/5.1` §2.2.1 is the table.
 - **Who drove the change decides the ceremony, not how big the diff is.** A
   routine dependency bump raised by tooling takes none: a Dependabot pull
   request has no project, no milestone and no delivery-log row, and its commit
@@ -289,7 +289,7 @@ one of them has a defect: fix it, don't work around it.
   issue is raised and named in the decision.
 - **A project's decisions are logged by link**: closed once applied, cited in a
   footnote where the design states the conclusion, and listed in a Decisions
-  table in the project's body (owner, 2026-09-29). docs/3.6 has the detail.
+  table in the project's body (owner, 2026-09-29). docs/5.1 has the detail.
 - A decision is not a change vehicle. It routes work: raise a requirement, add
   one to a project, update a project or the documents, or close something. It
   may make a pre-approved change only where no suitable requirement or project
@@ -304,7 +304,7 @@ one of them has a defect: fix it, don't work around it.
   and process."* And 2026-09-22: *"we are too quick to invent our own thing
   rather than adopt industry standards."* Take the term and the shape of the
   practice, leave the ceremony that needs more people than this has, and say
-  which practice an answer came from. docs/3.6 has the mapping tables.
+  which practice an answer came from. docs/5.1 has the mapping tables.
 - **The first rule did not stop it, so here is the test.** On 2026-09-22, in the
   commit adopting C4, I invented a view called *Runtime* that C4 already has as
   *Dynamic*, and labelled a Deployment diagram as a Container one. Before naming
@@ -315,10 +315,10 @@ one of them has a defect: fix it, don't work around it.
 - One fact, one home. The rule lives in its owning document, the argument in
   the issue, and every other mention is a link.
 - **Each numbered group covers one scope**: 1.x overviews, 2.x the design of
-  each functional area, 3.x the programme's organisation, processes and
-  assets, 4.x reference. A document says what is true now with at most a
+  each functional area, 3.x the application's development and operation,
+  4.x reference, 5.x the programme's definition, processes and tooling. A document says what is true now with at most a
   line of reason. History, argument and quotations go in the issue or the
-  commit. docs/3.9 has the detail.
+  commit. docs/5.4 has the detail.
 - **The documents live; the issues expire.** Owner, 2026-09-21: *"The project
   documents are living documents, the issues are only relevant while they are
   open."* A `docs/N.N` file answers what is true now and is edited whenever that
@@ -335,7 +335,8 @@ one of them has a defect: fix it, don't work around it.
   issue and goes straight to that document and this page. The
   process-definition glossary holds D1 to D38 and is history: it predates the
   issue type and is not added to.
-- docs/N.N numbering: 1.x product, 2.x design, 3.x lifecycle, 4.x reference.
+- docs/N.N numbering: 1.x overviews, 2.x design, 3.x development and
+  operations, 4.x reference, 5.x the programme.
   A change document lives in its issue's folder under docs/changes/, named
   for the parent project — a work package has no folder of its own.
 - **A report the programme produces on a cadence goes in `docs/reports/<name>/`,
@@ -360,13 +361,13 @@ one of them has a defect: fix it, don't work around it.
 | for | read |
 | --- | --- |
 | what to type: release, rollback, emergency | docs/3.3 |
-| the lifecycle in full, and why | docs/3.6 |
-| workstreams and what each owns | docs/3.7 |
-| every field a change is classified by, and each artefact's route | docs/3.6 §2.15 |
+| the lifecycle in full, and why | docs/5.1 |
+| workstreams and what each owns | docs/5.2 |
+| every field a change is classified by, and each artefact's route | docs/5.1 §2.15 |
 | artefacts outside git | docs/4.8, and docs/5.5 for GitHub's |
 | the fields each issue carries, and the strings tooling matches | docs/5.5 |
 | daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
-| how a document is written, and what it may hold | docs/3.9 |
+| how a document is written, and what it may hold | docs/5.4 |
 | raising or retitling any issue | the triage skill |
 | raising a project or work package: load it before creating the issue | the raise-project skill |

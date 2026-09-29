@@ -1,6 +1,6 @@
 """What reaches the image — decided once.
 
-**`docs/3.6` is the authority**, under *Route* in §2.15: anything
+**`docs/5.1` is the authority**, under *Route* in §2.15: anything
 built into the image is Production Release — `crates/**`, the word lists,
 `Caddyfile`, `docker-compose.yml`, `Dockerfile` — and everything else in the
 repository is one of the two repository routes. This is that rule in the form code can apply,

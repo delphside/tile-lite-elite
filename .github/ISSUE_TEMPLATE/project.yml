@@ -18,7 +18,7 @@ body:
         **Short is right.** A small project holds all seven headings as text; a
         larger one links to documents in `docs/changes/…` and keeps the body
         brief so the two do not drift. See
-        [docs/3.6 §2.11](https://github.com/delphside/tile-lite-elite/blob/main/docs/3.6-change-lifecycle.md).
+        [docs/5.1 §2.11](https://github.com/delphside/tile-lite-elite/blob/main/docs/5.1-change-lifecycle.md).
 
   - type: textarea
     id: requirements

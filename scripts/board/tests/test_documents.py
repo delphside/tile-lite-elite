@@ -17,8 +17,8 @@ def process(*paths: str) -> list[str]:
 class ProcessDocuments(unittest.TestCase):
     def test_the_three_process_documents_and_nothing_else(self):
         self.assertEqual(
-            ["CLAUDE.md", "docs/3.6-change-lifecycle.md", "docs/3.7-workstreams.md"],
-            process("CLAUDE.md", "docs/3.6-change-lifecycle.md", "docs/3.7-workstreams.md",
+            ["CLAUDE.md", "docs/5.1-change-lifecycle.md", "docs/5.2-workstreams.md"],
+            process("CLAUDE.md", "docs/5.1-change-lifecycle.md", "docs/5.2-workstreams.md",
                     "docs/1.6-document-map.md", "docs/4.3-api-schema.md", "scripts/deploy.sh"),
         )
 

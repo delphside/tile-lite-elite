@@ -94,7 +94,7 @@ EXTRA=""
 [[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/board-inbox.py):"$'\n'"$REPORTS"
 [[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
-[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/3.8):"$'\n'"$PRACTICES"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 

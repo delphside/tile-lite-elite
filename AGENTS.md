@@ -17,10 +17,10 @@ must know to avoid breaking something on its first change.
   every heading) and link to it rather than repeating it. Do not describe what
   the project does not do, or add justification the reader does not need.
 - **Each numbered group covers one scope**: 1.x overviews, 2.x the design of
-  each functional area, 3.x the programme's organisation, processes and assets,
-  4.x reference. A document states what is true now, with at most a line of
+  each functional area, 3.x the application's development and operation, 4.x
+  reference, 5.x the programme's definition, processes and tooling. A document states what is true now, with at most a line of
   reason; history, argument and quotations go in the commit
-  message or the issue ([`docs/3.9`](docs/3.9-writing-documents.md)).
+  message or the issue ([`docs/5.4`](docs/5.4-writing-documents.md)).
   `scripts/doc-signals.py --list` shows lines that look like history.
 - **`docs/1.6-document-map.md` is generated**: run
   `scripts/document-map.py --write` after changing any heading; do not edit it.

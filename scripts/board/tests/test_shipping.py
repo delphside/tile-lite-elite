@@ -1,6 +1,6 @@
 """What reaches the image, decided once (#421).
 
-The cases are docs/3.6's rule, not the pattern's: built into the image is a
+The cases are docs/5.1's rule, not the pattern's: built into the image is a
 Production Release, and everything else is not. `shipping-paths.bats` keeps
 testing the functions the bash callers source, against real commits.
 """

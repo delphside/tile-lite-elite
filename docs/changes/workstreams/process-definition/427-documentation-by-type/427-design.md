@@ -17,7 +17,7 @@ Diátaxis types:
 
 In every group: what is true now, with at most a line of reason. History,
 argument and quotations go in the issue or the commit. The four kinds of
-evidence docs/3.9 names are the exception: kept when a reader would otherwise
+evidence docs/5.4 names are the exception: kept when a reader would otherwise
 do the wrong thing.
 
 Documents outside the numbered set keep their own types: change notes (this

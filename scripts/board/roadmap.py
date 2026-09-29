@@ -10,7 +10,7 @@ Four things follow from that, and each is a decision worth naming.
 
 **No dates.** A Gantt needs a start and a target per bar and this programme has
 neither by choice: `Q1`-`Q3` on Phase order what is next without inventing
-dates (docs/3.6 §2.15). So the x-axis is ordinal, not temporal — column *k* means
+dates (docs/5.1 §2.15). So the x-axis is ordinal, not temporal — column *k* means
 "nothing recorded stops this starting once *k* rounds of blockers are done",
 not "month k".
 
@@ -41,7 +41,7 @@ from .model import Issue, ParentProject, StandaloneProject, WorkPackage, classif
 from .sources import Snapshot
 
 # Progress along a delivery, worst to best. Q1 is nearer than Q3, which is why
-# they run backwards: the Phase field orders what is next (docs/3.6 §2.15).
+# they run backwards: the Phase field orders what is next (docs/5.1 §2.15).
 PHASE_ORDER = (
     "Scope", "Q3", "Q2", "Q1", "Design and Test Approach",
     "Development", "User testing", "Deployment",

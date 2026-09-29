@@ -58,7 +58,7 @@ whole procedure exists to prevent.
 ## What belongs in it, once you have the right section
 
 **The guidelines are written down already, in
-[`docs/3.9`](../../../docs/3.9-writing-documents.md).** Read them there rather than from a copy here — that is this skill's
+[`docs/5.4`](../../../docs/5.4-writing-documents.md).** Read them there rather than from a copy here — that is this skill's
 own rule applied to itself. In short: each group covers one scope (1.x overviews, 2.x functional design, 3.x the programme, 4.x reference);
 what is true now, with the history in the issue or the commit; the command or
 the rule first and the
@@ -67,7 +67,7 @@ reasoning below it; reference says *what is there* and *what to type*, never
 what we rejected; say what is rather than what should be.
 
 **Every section has an audience and a use case**, and they decide what belongs.
-`docs/3.9` states them per group. The test for a sentence is not *is this
+`docs/5.4` states them per group. The test for a sentence is not *is this
 true* but *would this reader do the wrong thing without it* — history earns its
 place only when a rule would otherwise look arbitrary and get tidied away by
 somebody who has never been bitten.
@@ -86,15 +86,15 @@ because it is where the fact came from. `README` has the full rule.
 | `3.0-tools` | what the owner runs by task, and every script and binary acting on the application, one row each. **A new application script is registered here** |
 | `3.3-testing-ci-and-release` | verifying a change and shipping it: the steps, the flavours, CI, the environments, deploy, rollback |
 | `3.4-production-environment` | the live system — the host, monitoring, backups, how to inspect it |
-| `3.6-change-lifecycle` | the process and why: requirements, projects, phases, decisions, branching, milestones |
-| `3.7-workstreams` | the ten workstreams and what each owns |
+| `5.1-change-lifecycle` | the process and why: requirements, projects, phases, decisions, branching, milestones |
+| `5.2-workstreams` | the ten workstreams and what each owns |
 | `3.10-benchmarking` | measuring the engine's performance, and reading a run; what the figures say about the design is `2.8` |
 | `4.1-configuration` | environment and application configuration |
 | `4.2` · `4.4` · `4.5` | schema, snapshot JSON, and where each field lives |
 | `4.3-api-schema` | every endpoint and wire type, and its errors |
 | `4.7-log-events` | every event the server writes |
 | `4.8-artefacts` | host files and cloud resources under change control that leave no trace in git |
-| `4.9-delivery-log` | one row per delivery |
+| `5.6-delivery-log` | one row per delivery |
 | `5.0-programme-tooling` | the two kinds of tooling, and every script and tool acting on the programme's records. **A new programme script is registered here** |
 | `5.5-github-project-board` | the GitHub objects the programme runs on, which fields each issue carries, **and every string the tooling matches literally** |
 

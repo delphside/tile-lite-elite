@@ -111,7 +111,7 @@ malformed mutation passed its test; it was caught by running the same call by
 hand against the real API. The test below now asserts the shape, because a
 stub that accepts anything is a test of nothing.
 
-**A non-project is still closed.** Milestones belong to projects (docs/3.6), so
+**A non-project is still closed.** Milestones belong to projects (docs/5.1), so
 anything else here is an anomaly the gate above has already called out — and
 closing it is what used to happen, so nothing new is invented for a case that
 should not arise.
@@ -218,7 +218,7 @@ both *an image-touching issue with no milestone* and *a milestone issue with
 no commit in the range*. The second is already the milestone gate's
 `UNBUILT` check, which prints "Nothing in this release mentions:" and asks
 before deploying — so writing it again here would be a second statement of one
-rule, which is what `docs/3.6` calls a defect whichever copy is right.
+rule, which is what `docs/5.1` calls a defect whichever copy is right.
 
 The first is new: **nothing today notices a change that reaches players and is
 in no milestone.** The gate looks outward from the plan and finds issues that
@@ -244,7 +244,7 @@ milestone; what it may not do is reach players under none.
 **deploy.sh:397–401** · #277
 
 ```text
-One call for both facts. A **Requirement** is skipped: `docs/3.6` 1.1 —
+One call for both facts. A **Requirement** is skipped: `docs/5.1` 1.1 —
 *"Milestones go with project deliveries, and not with requirements"* — so
 asking one to carry a milestone asks for something the process forbids.
 #277 was reported until this was added, because a commit claiming it
@@ -359,7 +359,7 @@ re-enabled `set -e`.
 
 **Each step carries its own remedy**, because *"needs doing by hand"* is not a
 thing anybody can act on at the end of a deploy. Reviewing what a failure
-reports is part of the design (docs/3.6): the moment it is read is the moment
+reports is part of the design (docs/5.1): the moment it is read is the moment
 nobody can go back and add detail to it. The exit code is reported for the
 same reason — `git commit` returning 1 and returning 128 are different
 problems, and only one of them is the pre-commit hook.
@@ -765,7 +765,7 @@ collection outgrew one page.
 `no-release` is provisional: it says *not a release* before anybody knows how
 the change will actually reach `main`. It must become `pre-approved` or a
 letter milestone before the issue closes, or the record of how that change
-was delivered is lost — owner, 2026-09-08, and `docs/3.6`.
+was delivered is lost — owner, 2026-09-08, and `docs/5.1`.
 
 **Only from 2026-09-04.** `pre-approved` became a milestone that day
 (`66b10c3`); before it, `no-release` had nothing to resolve *to*, so the
@@ -957,7 +957,7 @@ the push has succeeded as a warning rather than a blocker… if we notice
 document errors whenever we do a deployment to Preview etc then that is
 okay."*
 
-So this **reports and does not refuse** — a check, not a gate (docs/3.6
+So this **reports and does not refuse** — a check, not a gate (docs/5.1
 §2.16). Preview exists to look at anything at any time, and a broken anchor
 is no reason to stop somebody looking at their change on a phone.
 

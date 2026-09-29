@@ -39,4 +39,4 @@ body:
         that reports what is waiting.
       placeholder: |
         - [ ] **owner** — decide whether X applies to Y
-        - [ ] **Claude** — record it in docs/3.6 and update the register
+        - [ ] **Claude** — record it in docs/5.1 and update the register

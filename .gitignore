@@ -45,11 +45,11 @@ node_modules/
 # excluded directory, so excluding the contents is what lets skills back in.
 .claude/*
 # Skills encode this project's process rather than one machine's settings, so
-# they are versioned — docs/3.6's test is that what survives a rebuild
+# they are versioned — docs/5.1's test is that what survives a rebuild
 # elsewhere is what has been delivered.
 !.claude/skills/
 # Agents are versioned for the same reason: a subagent's instructions are part
-# of how an activity is run (docs/3.9's reference-review).
+# of how an activity is run (docs/5.4's reference-review).
 !.claude/agents/
 # The two hooks are tooling by the same test, and tooling is an artefact
 # whether it runs in production or not (owner, 2026-09-03). They were invisible

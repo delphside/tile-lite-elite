@@ -25,7 +25,7 @@ from pathlib import Path
 from . import refs
 
 # **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
-# 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/3.6 §1132) is that
+# 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/5.1 §1132) is that
 # commits say `Refs #N` and **the deploy** is what closes them -- `Closes #N`
 # is correct only where the change never leaves the repository, because
 # nothing else will ever close it.
@@ -156,7 +156,7 @@ def last_release_at() -> float | None:
 
 
 # **A change document is not a delivery.** `docs/changes/` holds a project's
-# own design, impact and test notes -- docs/3.6: *"a workstream's note lives on
+# own design, impact and test notes -- docs/5.1: *"a workstream's note lives on
 # `main` for the life of the workstream"*, which is why writing one lands on
 # `main` while the project is still in design. A commit touching nothing else
 # has therefore delivered nothing to anybody, and counting it as delivery

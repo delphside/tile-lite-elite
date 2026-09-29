@@ -9,7 +9,7 @@ Doing this moves that date on a month.
 **A report, not a document.** It records what was true on the day it was
 measured and is never edited afterwards. Last month's is not superseded by this
 month's: the series is what says whether a number is moving, which is the one
-question a single measurement cannot answer. docs/3.6, "Which document goes
+question a single measurement cannot answer. docs/5.1, "Which document goes
 where".
 
 **Named `TLE_CP_<yyyy>_<mm>.md`**, because a report gets mailed, pasted and
