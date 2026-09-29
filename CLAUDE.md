@@ -363,7 +363,8 @@ one of them has a defect: fix it, don't work around it.
 | the lifecycle in full, and why | docs/3.6 |
 | workstreams and what each owns | docs/3.7 |
 | every field a change is classified by, and each artefact's route | docs/3.6 §2.15 |
-| artefacts outside git, and the strings tooling matches | docs/4.8 |
+| artefacts outside git | docs/4.8, and docs/5.5 for GitHub's |
+| the fields each issue carries, and the strings tooling matches | docs/5.5 |
 | daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
 | how a document is written, and what it may hold | docs/3.9 |

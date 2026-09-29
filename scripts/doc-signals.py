@@ -42,7 +42,7 @@ EXEMPT = {"4.9-delivery-log.md", "1.6-document-map.md"}
 
 
 def documents(root: Path = ROOT) -> list[Path]:
-    return sorted(p for p in (root / "docs").glob("[1-4].*.md")
+    return sorted(p for p in (root / "docs").glob("[1-5].*.md")
                   if p.name not in EXEMPT)
 
 

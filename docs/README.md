@@ -1,6 +1,6 @@
 # Tile Lite Elite Docs
 
-The documentation for Tile Lite Elite, in four numbered groups, each covering
+The documentation for Tile Lite Elite, in five numbered groups, each covering
 one scope ([3.9](3.9-writing-documents.md)):
 
 | group | section | covers |
@@ -9,6 +9,7 @@ one scope ([3.9](3.9-writing-documents.md)):
 | 2.x | [Functional design](#2x-functional-design) | the end-to-end design of each functional area |
 | 3.x | [Programme](#3x-programme) | the programme in detail: its organisation, processes and assets |
 | 4.x | [Reference](#4x-reference) | reference: every current value |
+| 5.x | [Programme definition and processes](#5x-programme-definition-and-processes) | how the programme is run: its processes, its tooling and the board |
 
 ## I need to
 
@@ -20,7 +21,7 @@ one scope ([3.9](3.9-writing-documents.md)):
 | test, release or roll back | [3.3 Testing, CI & Release](3.3-testing-ci-and-release.md) |
 | operate production | [3.4 Production Environment](3.4-production-environment.md) |
 | raise, plan or ship a change | [3.6 The Change Lifecycle](3.6-change-lifecycle.md), and the one-page rules in [`CLAUDE.md`](../CLAUDE.md) |
-| find a script | [3.0 Tools](3.0-tools.md) |
+| find a script | [3.0 Tools](3.0-tools.md) for the application's, [5.0 Programme tooling](5.0-programme-tooling.md) for the programme's |
 | find where a fact lives, before writing it | [1.6 Document map](1.6-document-map.md) |
 | write or change a document | [3.9 Writing documents](3.9-writing-documents.md) |
 | see what is in flight | [1.5 Work in progress](1.5-work-in-progress.md) |
@@ -53,7 +54,7 @@ history in the issue or the commit.
 
 ## 3.x Programme
 
-- [3.0 Tools](3.0-tools.md) — every script, linking to where it's explained
+- [3.0 Tools](3.0-tools.md) — what the owner runs by task, and every script that acts on the application
 - [3.1 Setup](3.1-setup.md) — one-time: the development machine, and troubleshooting its build
 - [3.2 Development](3.2-development.md) — running services locally, building, resetting local state
 - [3.3 Testing, CI & Release](3.3-testing-ci-and-release.md) — `cargo test`, GitHub Actions CI, the local preview environment, the end-to-end release runbook, and how `deploy.sh` ships an image
@@ -61,6 +62,7 @@ history in the issue or the commit.
 - [3.5 Word Lists & Dictionaries](3.5-word-lists-and-dictionaries.md) — how a published word list becomes the trie the engine searches: sourcing, normalising, generating the denylist and greylist, and the runbooks for changing either
 - [3.6 The Change Lifecycle](3.6-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
 - [3.7 Workstreams](3.7-workstreams.md) — the ten workstreams work is filed against, what each owns, and the boundaries between them
+- [3.8 Programme activities](3.8-programme-activities.md) — the recurring activities, their cadence and who does them
 - [3.9 Writing documents](3.9-writing-documents.md) — what each document holds, and how it is written
 - [3.10 Benchmarking](3.10-benchmarking.md) — measuring the engine's performance, and reading a run
 
@@ -73,8 +75,13 @@ history in the issue or the commit.
 - [4.5 Data Dictionary](4.5-data-dictionary.md) — where each game field lives across snapshot/DB/DTO, and its kind
 - [4.6 Client-Local Storage](4.6-client-local-storage.md) — StoredAuth / chat watermarks kept on the device
 - [4.7 Log Events](4.7-log-events.md) — every event the server writes, the twenty-five field names the whole log uses, and the schema a test compares the code against
-- [4.8 Artefacts](4.8-artefacts.md) — the register of things under change control that leave no trace in git: host files, cloud resources, GitHub objects. Also the answer to *what else was on that box?*
+- [4.8 Artefacts](4.8-artefacts.md) — the register of things under change control that leave no trace in git: host files and cloud resources. Also the answer to *what else was on that box?*
 - [4.9 Delivery log](4.9-delivery-log.md) — one row per delivery: what changed in production and when. Starts at #174; earlier deliveries are recoverable from the `prod-*` tags.
+
+## 5.x Programme definition and processes
+
+- [5.0 Programme tooling](5.0-programme-tooling.md) — the two kinds of tooling, and every script that acts on the programme's records
+- [5.5 GitHub Project Board](5.5-github-project-board.md) — the issue types, fields, board and accounts in GitHub, and the strings the tooling reads from them
 
 ## Outside the numbered set
 

@@ -83,7 +83,7 @@ because it is where the fact came from. `README` has the full rule.
 | document | owns |
 | --- | --- |
 | `1.0-rules` | how the game behaves — the rules themselves |
-| `3.0-tools` | every script and binary, one row each. **A new script is registered here** |
+| `3.0-tools` | what the owner runs by task, and every script and binary acting on the application, one row each. **A new application script is registered here** |
 | `3.3-testing-ci-and-release` | verifying a change and shipping it: the steps, the flavours, CI, the environments, deploy, rollback |
 | `3.4-production-environment` | the live system — the host, monitoring, backups, how to inspect it |
 | `3.6-change-lifecycle` | the process and why: requirements, projects, phases, decisions, branching, milestones |
@@ -93,8 +93,10 @@ because it is where the fact came from. `README` has the full rule.
 | `4.2` · `4.4` · `4.5` | schema, snapshot JSON, and where each field lives |
 | `4.3-api-schema` | every endpoint and wire type, and its errors |
 | `4.7-log-events` | every event the server writes |
-| `4.8-artefacts` | things under change control that leave no trace in git, **and every string the tooling matches literally** |
+| `4.8-artefacts` | host files and cloud resources under change control that leave no trace in git |
 | `4.9-delivery-log` | one row per delivery |
+| `5.0-programme-tooling` | the two kinds of tooling, and every script and tool acting on the programme's records. **A new programme script is registered here** |
+| `5.5-github-project-board` | the GitHub objects the programme runs on, which fields each issue carries, **and every string the tooling matches literally** |
 
 **The argument goes in the issue; the conclusion goes in the document.** A
 document says what is true now, not how it was decided.
