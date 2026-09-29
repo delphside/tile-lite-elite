@@ -7,7 +7,7 @@ case here is one that has been wrong in a real report.
   precedence    asking "is it released" before "is work happening" made an
                 issue with old shipped commits and a live branch read as
                 released — the one state that stops anybody looking again
-  the route     a Repository Change is live at merge, so "awaiting release"
+  the route     a repository route is live at merge, so "awaiting release"
                 is wrong for it. Nine closed changes once piled up there
   the parent    a package built before it existed carries its parent's
                 number (#373, #375). Do NOT count those as the package's
@@ -126,7 +126,7 @@ class TheProgramme(Cases):
 
     def test_the_commits_and_the_board_can_disagree_and_that_is_reported(self):
         """the commits and the board can disagree, and that is reported"""
-        snap = Snapshot((issue(10, fields={"Route": "Repository Change", "Phase": "Scope"}),),
+        snap = Snapshot((issue(10, fields={"Route": "Programme Tooling and Docs", "Phase": "Scope"}),),
                         0.0, 0.0, 1, False)
         got = changes(snap, commits(released=scope(closes=[10])))[0]
         self.expect("shipped, but the board says Scope", True, got.disagrees)
@@ -135,7 +135,7 @@ class TheProgramme(Cases):
         # derivation was what was wrong.
         self.expect("an old mention is not a contradiction", False,
               changes(snap, commits(released=scope(refs=[10])))[0].disagrees)
-        snap = Snapshot((issue(11, fields={"Route": "Repository Change",
+        snap = Snapshot((issue(11, fields={"Route": "Programme Tooling and Docs",
                                            "Phase": "Post-deployment"}),), 0.0, 0.0, 1, False)
         self.expect("shipped and the board agrees", False,
               changes(snap, commits(released=scope(closes=[11])))[0].disagrees)

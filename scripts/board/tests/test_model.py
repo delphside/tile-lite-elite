@@ -72,7 +72,7 @@ class TheBoardModel(Cases):
     def test_a_parent_owes_no_route_a_delivery_owes_one(self):
         """a parent owes no route, a delivery owes one"""
         parent = classify(issue(1, subs=[RawSubIssue(2, "Project")],
-                                fields={"Route": "Repository Change"}))
+                                fields={"Route": "Programme Tooling and Docs"}))
         ids = {f.obligation.id: f.answer for f in assess(parent)}
         self.expect("a parent with a Route set reports it missing",
               Answer.MISSING, ids.get("parent-no-route"))
@@ -114,7 +114,7 @@ class TheBoardModel(Cases):
 | R1 | read it | **passed** |
 """
         i = classify(issue(252, parent=9, fields={"Phase": "Post-deployment",
-                                                  "Route": "Repository Change"},
+                                                  "Route": "Programme Tooling and Docs"},
                            body=body, milestone="pre-approved"))
         self.expect("unticked boxes across the whole body", 1, i.unticked_boxes)
         self.expect("unticked inside the post-deployment section", 0,
@@ -138,7 +138,7 @@ class TheBoardModel(Cases):
 | R2 | look at it | |
 """
         i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
-                                                  "Route": "Repository Change"},
+                                                  "Route": "Programme Tooling and Docs"},
                            body=blank, milestone="pre-approved"))
         self.expect("a blank answer cell is one unanswered row", 1,
               i.unanswered_rows_in("Post-deployment checks against requirements"))
@@ -152,7 +152,7 @@ class TheBoardModel(Cases):
         prose = blank.replace("| R2 | look at it | |",
                               "| R2 | look at it | measured on the 9th: it does not |")
         i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
-                                                  "Route": "Repository Change"},
+                                                  "Route": "Programme Tooling and Docs"},
                            body=prose, milestone="pre-approved"))
         ids = {f.obligation.id: f.answer for f in assess(i)}
         self.expect("an answer in other words is still an answer", Answer.MET,

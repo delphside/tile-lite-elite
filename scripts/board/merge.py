@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Iterable, Mapping
 
 from . import refs
-from .model import Issue, StandaloneProject, WorkPackage
+from .model import RELEASE, Issue, StandaloneProject, WorkPackage, delivered_by_merge
 
 # Phases a merge moves on from. Anything later is left alone: a merge never
 # moves a Phase backwards, and one already past it has been moved by hand.
@@ -48,9 +48,9 @@ def next_phase(issue: Issue) -> str | None:
     if issue.state != "OPEN" or issue.field("Phase") not in BEFORE_MERGE:
         return None
     route = issue.field("Route")
-    if route == "Production Release":
+    if route == RELEASE:
         return "Deployment"
-    if route == "Repository Change":
+    if delivered_by_merge(route):
         return "Post-deployment"
     return None
 

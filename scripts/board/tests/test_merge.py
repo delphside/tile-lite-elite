@@ -33,8 +33,13 @@ class WhatAMergeMoves(Cases):
     def test_where_its_phase_goes(self):
         self.expect("an image change in user testing goes to Deployment", "Deployment", next_phase(wp("User testing")))
         self.expect("so does one merged straight from Development", "Deployment", next_phase(wp("Development")))
-        self.expect("a repository change's merge is its delivery", "Post-deployment",
-                    next_phase(wp("User testing", "Repository Change")))
+        # The Repository Change route split in two (owner, 2026-09-29, #421
+        # R4); a merge delivers both, and the deprecated option, under
+        # whatever name it now carries, is history that behaves as it did.
+        for route in ("Application Tooling and Docs", "Programme Tooling and Docs",
+                      "Repository Change", "Repository Change DEPRECATED"):
+            self.expect(f"a merge delivers {route}", "Post-deployment",
+                        next_phase(wp("User testing", route)))
 
     def test_what_is_left_alone(self):
         self.expect("a Phase already past the merge is left alone", None, next_phase(wp("Deployment")))

@@ -8,7 +8,7 @@ Run by the post-merge hook when a project branch fast-forwards into `main`.
 Finds the work package the branch delivered, from its pull request as well as
 the branch's own number, and moves its Phase from Development or User testing
 to Deployment (a Production Release, which waits for its release) or
-Post-deployment (a Repository Change, which the merge delivered).
+Post-deployment (a repository route, which the merge delivered).
 
 Never fails the merge: anything it cannot do is printed, with what to set by
 hand, and it exits 0. The merge has already happened by the time it runs.

@@ -3,7 +3,7 @@
 Answers, without opening GitHub: what is in flight, what would a release ship,
 and what is behind. Four blocks, in the order the questions get asked.
 
-**The separation in block 2 is the whole value.** A Repository Change is live
+**The separation in block 2 is the whole value.** A repository route is live
 at merge and must not appear under *would ship*; a parent carries no route and
 must not appear under *cannot say*. Both were wrong before this design, and
 both were wrong the same way — a consumer reading the answer off the type when
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import repo
-from .model import ParentProject, Requirement, StandaloneProject, WorkPackage, classify
+from .model import RELEASE, ParentProject, Requirement, StandaloneProject, WorkPackage, classify
 from .sources import Snapshot
 
 DELIVERING = (WorkPackage, StandaloneProject)
@@ -137,7 +137,7 @@ def changes(snapshot: Snapshot, got: repo.Commits) -> list[Change]:
             continue
         route = issue.field("Route")
         state = got.state_of(issue.number,
-                             live_at_merge=route != "Production Release",
+                             live_at_merge=route != RELEASE,
                              milestone=issue.raw.milestone, shipped=shipped)
         if state == "not started" and issue.number in branches:
             state = "branch only"

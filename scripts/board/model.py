@@ -125,6 +125,31 @@ class RawIssue:
 
 
 # --------------------------------------------------------------------------
+# Routes: the values of the Route field, decided here once
+# --------------------------------------------------------------------------
+
+RELEASE = "Production Release"
+APPLICATION_TOOLING = "Application Tooling and Docs"
+PROGRAMME_TOOLING = "Programme Tooling and Docs"
+OTHER = "Other"
+
+# The Repository Change route split in two on 2026-09-29 (#421 R4). The old
+# option stays on the field, marked deprecated, because closed issues carry
+# it; it is matched by its prefix so renaming it to say so changes nothing.
+DEPRECATED_REPOSITORY = "Repository Change"
+
+
+def delivered_by_merge(route: str | None) -> bool:
+    """Is a change on this route delivered when it merges into main?
+
+    Both repository routes are: nothing deploys them. A Production Release
+    waits for its deploy, and Other is applied by hand.
+    """
+    return route in (APPLICATION_TOOLING, PROGRAMME_TOOLING) or (
+        route or "").startswith(DEPRECATED_REPOSITORY)
+
+
+# --------------------------------------------------------------------------
 # the issues
 # --------------------------------------------------------------------------
 
