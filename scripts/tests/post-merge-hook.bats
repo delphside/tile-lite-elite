@@ -14,7 +14,15 @@ setup() {
   CALLS="$BATS_TEST_TMPDIR/calls"
   printf '#!/usr/bin/env bash\necho "$1" >> "%s"\n' "$CALLS" > "$STUB"
   chmod +x "$STUB"
+  # The PR State sync, stubbed the same way: it records that it ran.
+  SYNC="$BATS_TEST_TMPDIR/sync.sh"
+  SYNCED="$BATS_TEST_TMPDIR/synced"
+  printf '#!/usr/bin/env bash\necho ran >> "%s"\n' "$SYNCED" > "$SYNC"
+  chmod +x "$SYNC"
+  export POST_MERGE_SYNC_CMD="$SYNC"
 }
+
+synced() { cat "$SYNCED" 2>/dev/null || true; }
 
 repo() {  # <name> <branch>: main, the branch one commit ahead, and the hook
   local dir="$BATS_TEST_TMPDIR/$1"
@@ -73,4 +81,32 @@ called() { cat "$CALLS" 2>/dev/null || true; }
   repo f 415-x
   POST_MERGE_CMD=/bin/false run git -C "$D" merge -q --ff-only 415-x
   assert_success
+}
+
+# PR State (2026-09-29, #421's table): a pull request merged by a local
+# fast-forward, of any branch, left its board field unset, because nothing ran
+# sync-pr-state.sh. Every merge into main now does.
+
+@test "any merge into main syncs PR state, numbered branch or not" {
+  repo g copilot/review-findings
+  POST_MERGE_CMD="$STUB" git -C "$D" merge -q --ff-only copilot/review-findings
+  assert_equal "$(synced)" ran
+  assert_equal "$(called)" ""
+}
+
+@test "a pull into main does not sync" {
+  repo h 415-x
+  git clone -q "$D" "$BATS_TEST_TMPDIR/clone2"
+  POST_MERGE_CMD="$STUB" git -C "$D" merge -q --ff-only 415-x
+  rm -f "$SYNCED"
+  cp "$HOOK" "$BATS_TEST_TMPDIR/clone2/.git/hooks/post-merge"
+  POST_MERGE_CMD="$STUB" git -C "$BATS_TEST_TMPDIR/clone2" pull -q --ff-only
+  assert_equal "$(synced)" ""
+}
+
+@test "a failing sync does not fail the merge" {
+  repo i 415-x
+  POST_MERGE_SYNC_CMD=/bin/false POST_MERGE_CMD="$STUB" run git -C "$D" merge -q --ff-only 415-x
+  assert_success
+  assert_equal "$(called)" 415-x
 }

@@ -15,7 +15,7 @@
 # exit would only print git's own warning. `board-merged.py` prints anything
 # it could not do, with what to set by hand.
 #
-# POST_MERGE_CMD replaces the command it runs, for the test suite.
+# POST_MERGE_CMD replaces the board command it runs, for the test suite.
 set -uo pipefail
 
 [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = main ] || exit 0
@@ -25,6 +25,12 @@ case "$entry" in
   "merge "*) ;;
   *) exit 0 ;;
 esac
+# Every merge into main also corrects the board's PR State: a pull request
+# merged by a local fast-forward, of any branch, is otherwise left at whatever
+# it last said (#430 sat unset after its merge, 2026-09-29).
+# POST_MERGE_SYNC_CMD replaces it for the test suite.
+"${POST_MERGE_SYNC_CMD:-$(git rev-parse --show-toplevel)/scripts/sync-pr-state.sh}" >/dev/null 2>&1 || true
+
 branch="${entry#merge }"
 branch="${branch%%:*}"
 branch="${branch#origin/}"
