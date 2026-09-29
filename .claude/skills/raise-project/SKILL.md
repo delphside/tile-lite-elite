@@ -53,7 +53,7 @@ both:
 
 ## Impacted artefacts
 
-*One table per delivery, three rows, one per route. `Route` is a property of the
+*One table per delivery, a row per route. `Route` is a property of the
 artefact (`docs/3.6` §2.15) and a delivery has one route, so a table with two
 routes marked yes is a delivery that needs splitting. Say `no` and a dash rather
 than dropping a row: an absent row and an empty one read the same, and only one
@@ -64,8 +64,9 @@ of them means "nothing here".*
 | route | in this delivery | artefacts | branch | PR |
 | --- | --- | --- | --- | --- |
 | **Production Release** | yes/no | | **always yes** | **always yes** |
+| **Application Tooling and Docs** | yes/no | | yes | yes |
+| **Programme Tooling and Docs** | yes/no | | | |
 | **Other** | yes/no | | | |
-| **Repository Change** | yes/no | | | |
 
 *A **Production Release** row set to yes forces a branch and a pull request for
 the whole delivery — `main` is what gets deployed, so a release commit there
@@ -299,7 +300,9 @@ A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. A
 | … functional | `IFSSO_kgDOBM-zmQ` |
 | `Route` | `IFSS_kgDOAsQ80g` |
 | … Production Release | `IFSSO_kgDOBNeykw` |
-| … Repository Change | `IFSSO_kgDOBNeylA` |
+| … Application Tooling and Docs | `IFSSO_kgDOBPfgTQ` |
+| … Programme Tooling and Docs | `IFSSO_kgDOBPfgTg` |
+| … Repository Change DEPRECATED, never set | `IFSSO_kgDOBNeylA` |
 | … Other | `IFSSO_kgDOBNeylg` |
 | `Priority` | `IFSS_kgDOAr9K2w` |
 | … Urgent | `IFSSO_kgDOBM8AMw` |

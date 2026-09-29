@@ -149,7 +149,7 @@ mistake. Check the workstream and the type before deciding which case you are
 in.
 
 **Answering "does it reach users" from `Type of change`.** It is `Route`.
-`documentation` and `tooling` are not the same question as *Repository Change*,
+`documentation` and `tooling` are not the same question as the two tooling routes,
 and reading one for the other made ten issues claim to reach users.
 
 ## Afterwards

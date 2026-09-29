@@ -1,6 +1,6 @@
 ---
 name: ship-a-change
-description: Take a change through preview, rehearsal and a production release, or apply a Repository Change or Other delivery. Use when a change is ready to go out, when a release is being cut, or when a lap is being run against preview or rehearsal.
+description: Take a change through preview, rehearsal and a production release, or deliver a tooling or Other change. Use when a change is ready to go out, when a release is being cut, or when a lap is being run against preview or rehearsal.
 ---
 
 # Shipping a change
@@ -14,7 +14,8 @@ rules. This is what those documents cost somebody who has to remember them.
 | route | what shipping means |
 | --- | --- |
 | **Production Release** | anything in the image, **and anything on the production host** (D52). Semver, branch, pull request, the full lap |
-| **Repository Change** | anything else in the repository. Live on `origin/main`; **there is no deploy** |
+| **Application Tooling and Docs** | scripts that build, test, deploy, operate or measure the application, and their documents. Branch, pull request, a try on preview or rehearsal; live at merge, **there is no deploy** |
+| **Programme Tooling and Docs** | anything else in the repository. Straight to `origin/main`; **there is no deploy** |
 | **Other** | a console, a cloud resource, preview or rehearsal. Whatever applying it takes, plus a row in `docs/4.9` |
 
 **A delivery has one route.** Work spanning several splits into a delivery each,
@@ -78,10 +79,15 @@ Redirect to a file if you need the output.
 | a lettered milestone | closed by hand — the letter form is not valid semver, so nothing matches it |
 | post-deployment checks | answered on the work package, each row, with `passed`, `cannot be tested` or `failed` |
 
-## The other two routes
+## The other routes
 
-**Repository Change** is merged and done. No deploy, no milestone, no row —
-its record is the commit.
+**Application Tooling and Docs** is tried from its branch on preview or
+rehearsal, then merged, and is live at merge. It takes a lettered milestone
+and a row in `docs/4.9`. Its first use against production is a
+post-deployment check, not a delivery.
+
+**Programme Tooling and Docs** is pushed and done. No deploy, no milestone,
+no row — its record is the commit.
 
 **Other** is applied however it applies, then takes a work package, a lettered
 milestone off **production's** current version (not the development one), and a
