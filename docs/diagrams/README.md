@@ -39,6 +39,11 @@ the data it carries, a DTO, a row or an event, which is C4's own guidance for a
 relationship, so the Container and Component diagrams show the flows without a
 diagram of their own. Added 2026-09-30.
 
+**A separate data flow diagram is the fallback, not the default.** The
+standards offer one (Yourdon and DeMarco, or Gane and Sarson) as the
+alternative to labelled arrows. Draw one when a diagram's arrows carry too many
+flows to read, and for that part of the system only.
+
 **State machines are UML's**, a third view C4 lacks: the lifecycles of
 games, seats and invitations. A transition is labelled with the method or event
 that causes it where that is useful, so the diagram also says where each state
