@@ -269,14 +269,14 @@ One.
         self.expect("a pull request with no Refs is reported", Answer.MISSING, ids.get("pr-linked"))
         self.expect("and one with neither heading is too", Answer.MISSING, ids.get("pr-scope-stated"))
 
-    def test_pr_state_is_read_with_sync_pr_state_sh_s_ladder_in_its_order(self):
-        """PR State is read with sync-pr-state.sh's ladder, in its order"""
+    def test_pr_state_is_read_with_the_one_ladder_in_its_order(self):
+        """PR State is read with the ladder board-pr-state.py writes with, in its order"""
         # Two answers to one question is the disagreement this model exists to remove.
         self.expect("draft beats everything, approval included",
               "Drafting", pr_state(True, "APPROVED", 1))
         self.expect("approved", "Approved", pr_state(False, "APPROVED", 0))
-        # **Merged and closed are tested before anything else**, as sync-pr-state.sh
-        # tests them. Without this rung a closed pull request read as "Drafting" --
+        # **Merged and closed are tested before anything else.** Without this
+        # rung a closed pull request read as "Drafting" --
         # #393 did, in R2's first run, hours after the board itself said "Closed".
         self.expect("merged beats every other rung", "Merged",
               pr_state(True, "CHANGES_REQUESTED", 3, "MERGED"))

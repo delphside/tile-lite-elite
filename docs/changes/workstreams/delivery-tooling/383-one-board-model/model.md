@@ -418,7 +418,7 @@ A migration note, not a specification. The nine scripts are one implementation o
 | ~~`status.sh`~~ | R3 | **retired 2026-09-19.** `board-status.py` replaces it. Three sources meet there — GitHub for what a change is, git for where it got to, `/health` for what is running |
 | ~~`actions.py`~~ | R1 | **retired 2026-09-19.** `board-actions.py` answers both sides — `--claude` is the mirror — and took its three facts the model lacked: the timeline age, the token countdown, and the `Release Check` label that stops a delivery nagging for a review it cannot yet have (#310) |
 | `inbox.sh` | R2 | asks, including comments |
-| `sync-pr-state.sh` | a write | `board` command |
+| ~~`sync-pr-state.sh`~~ | a write | **retired 2026-09-30.** `board-pr-state.py` writes it, the ladder being `sources.pr_state` and the decision `pr_sync.py` (#421 R3) |
 | `turn-check.sh` | the sweep | asks, `CACHED` |
 | `roadmap-diagram.py` | **R8** | asks the model. Reformatted: it drew structure, and R8 wants sequence |
 | — | **R4** | **new** |

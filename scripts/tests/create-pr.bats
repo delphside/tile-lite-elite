@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # create-pr.sh. #410's lesson: creation had no choke point, so the board sat
-# unset until something else happened to run sync-pr-state.sh.
+# unset until something else happened to run the PR State sync.
 
 setup() {
   bats_load_library bats-support
@@ -19,15 +19,15 @@ if [[ "$1 $2" == "pr create" ]]; then
 fi
 echo "unexpected gh: $*" >&2; exit 9
 STUB
-  cat > "$STUB_DIR/sync-pr-state.sh" <<'STUB'
+  cat > "$STUB_DIR/board-pr-state.py" <<'STUB'
 #!/usr/bin/env bash
 echo "ran" > "$STUB_DIR/SYNCED"
 [[ -n "${SYNC_FAIL:-}" ]] && exit 1
 exit 0
 STUB
-  chmod +x "$STUB_DIR/gh" "$STUB_DIR/sync-pr-state.sh"
+  chmod +x "$STUB_DIR/gh" "$STUB_DIR/board-pr-state.py"
   export PATH="$STUB_DIR:$PATH"
-  export SYNC_PR_STATE="$STUB_DIR/sync-pr-state.sh"
+  export SYNC_PR_STATE="$STUB_DIR/board-pr-state.py"
 }
 
 created() { cat "$STUB_DIR/CREATED" 2>/dev/null || true; }
@@ -63,5 +63,5 @@ created() { cat "$STUB_DIR/CREATED" 2>/dev/null || true; }
   run "$SCRIPT" --base main --head x --title t --body-file /dev/null
   refute_output --partial 'FAILED'
   refute_output --partial 'error'
-  assert_output --partial 'run scripts/sync-pr-state.sh'
+  assert_output --partial 'run scripts/board-pr-state.py'
 }

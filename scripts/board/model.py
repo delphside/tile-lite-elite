@@ -124,6 +124,32 @@ class RawIssue:
     head_ref: str | None = None
 
 
+@dataclass(frozen=True)
+class RawPullRequest:
+    """A pull request as the `PR State` writer reads it, in any state.
+
+    Separate from `RawIssue` because the writer needs what the snapshot does
+    not carry: the node id an add takes, and how many reviews were given.
+    """
+
+    number: int
+    node_id: str
+    state: str              # OPEN, MERGED or CLOSED
+    draft: bool
+    review: str | None      # `reviewDecision`; None when nobody has decided
+    reviewers: int          # reviews requested and not yet given
+    reviews: int            # reviews given
+
+
+@dataclass(frozen=True)
+class RawBoardItem:
+    """A pull request's item on the project board, and its `PR State`."""
+
+    number: int
+    item_id: str
+    pr_state: str | None    # None when the field is unset
+
+
 # --------------------------------------------------------------------------
 # Routes: the values of the Route field, decided here once
 # --------------------------------------------------------------------------
@@ -136,6 +162,7 @@ class RawIssue:
 
 REQUIREMENT_STATE = "Requirement State"
 PROJECT_STATE = "Project State"
+PR_STATE = "PR State"
 
 
 RELEASE = "Production Release"
@@ -517,11 +544,11 @@ class PullRequest(Issue):
 
     @property
     def step(self) -> str | None:
-        return self.field("PR State")
+        return self.field(PR_STATE)
 
     @property
     def step_field(self) -> str:
-        return "PR State"
+        return PR_STATE
 
 
 # --------------------------------------------------------------------------

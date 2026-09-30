@@ -85,7 +85,7 @@ called() { cat "$CALLS" 2>/dev/null || true; }
 
 # PR State (2026-09-29, #421's table): a pull request merged by a local
 # fast-forward, of any branch, left its board field unset, because nothing ran
-# sync-pr-state.sh. Every merge into main now does.
+# the PR State sync. Every merge into main now runs board-pr-state.py.
 
 @test "any merge into main syncs PR state, numbered branch or not" {
   repo g copilot/review-findings

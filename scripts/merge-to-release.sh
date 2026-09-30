@@ -43,7 +43,7 @@ REPO_NWO="${REPO_NWO:-delphside/tile-lite-elite}"
 CI_STATUS="${CI_STATUS:-$HERE/ci-status.sh}"
 # Overridable for the same reason `CI_STATUS` is: the test needs to know it
 # was called without it reaching GitHub.
-SYNC_PR_STATE="${SYNC_PR_STATE:-$HERE/sync-pr-state.sh}"
+SYNC_PR_STATE="${SYNC_PR_STATE:-$HERE/board-pr-state.py}"
 
 PR=""
 CHECK_ONLY=0
@@ -213,7 +213,7 @@ gh pr merge "$PR" -R "$REPO_NWO" --merge --delete-branch
 echo "==> Merged. $BASE_REF now has a new tip — its run is what the next merge is judged against."
 
 # **The board's `PR State` is derived, and a merge is when it goes stale.**
-# Nothing sets it by hand -- `sync-pr-state.sh` reads it from GitHub, because
+# Nothing sets it by hand -- `board-pr-state.py` reads it from GitHub, because
 # the `approved` and `awaiting-review` labels were deleted in #219 for being a
 # second store for what GitHub already knew, and #338 and #341 then sat in
 # *Approved* after both had merged.
@@ -230,6 +230,6 @@ echo "==> Merged. $BASE_REF now has a new tip — its run is what the next merge
 if [ -x "$SYNC_PR_STATE" ]; then
   echo "==> Correcting the board's PR State"
   if ! "$SYNC_PR_STATE"; then
-    echo "note: the board was not corrected — run scripts/sync-pr-state.sh" >&2
+    echo "note: the board was not corrected — run scripts/board-pr-state.py" >&2
   fi
 fi

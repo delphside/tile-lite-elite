@@ -421,7 +421,7 @@ check_prstate() {
   if ! command -v gh >/dev/null 2>&1; then
     fail prstate "not checked — no 'gh' on PATH"; return
   fi
-  if ! out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/sync-pr-state.sh" 2>&1)"; then
+  if ! out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/board-pr-state.py" 2>&1)"; then
     fail prstate "could not reach the board to correct it" "$out"
     return
   fi

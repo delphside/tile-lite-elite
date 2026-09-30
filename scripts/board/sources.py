@@ -18,10 +18,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from .model import RawIssue, RawSubIssue
+from .model import (PR_STATE, RawBoardItem, RawIssue, RawPullRequest,
+                    RawSubIssue)
 
 OWNER = "delphside"
 REPO = "tile-lite-elite"
+# The project board, `Tile Lite Elite Programme`. Its fields and options are
+# looked up by name per call; only the board itself is named by id.
+PROJECT_ID = "PVT_kwDOEyOvmc4BhpOl"
 
 _QUERY = """
 query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
@@ -70,18 +74,12 @@ query($owner:String!, $repo:String!, $cursor:String) {
 
 def pr_state(draft: bool, review: str | None, reviewers: int,
              state: str | None = None) -> str:
-    """GitHub's own state, read as the board's `PR State`.
+    """GitHub's own state, read as the board's `PR State`: the one ladder.
 
-    The same ladder, in the same order, as `scripts/sync-pr-state.sh`, which is
-    what writes the field. Two answers to one question is the disagreement this
-    model exists to remove, so this reproduces that script rather than deciding
-    for itself.
-
-    **It reproduced only part of it until 2026-09-21.** The script tests MERGED
-    and CLOSED before anything else; this began at `draft`, so a closed pull
-    request read as `Drafting` -- #393 did, in R2's first run, hours after the
-    board itself had been corrected to `Closed`. The comment claimed the
-    parallel run would catch a divergence, and nothing was comparing them.
+    The model reads pull requests with it and `scripts/board-pr-state.py`
+    writes the field with it, so the board and the action list cannot disagree
+    about whose turn it is. Merged and closed come before anything else, then
+    draft, the review decision, and whether a review is requested.
     """
     if state == "MERGED":
         return "Merged"
@@ -201,11 +199,20 @@ def _to_raw(node: dict) -> RawIssue:
     )
 
 
+def _ladder_inputs(node: dict) -> tuple[bool, str | None, int]:
+    """(draft, review decision, reviews requested) from a pull request node:
+    how GitHub's answer is read as `pr_state`'s inputs, in one place.
+
+    No decision comes back as null from GraphQL and as "" through
+    `gh pr list`; both mean nobody has decided.
+    """
+    return (bool(node.get("isDraft")),
+            node.get("reviewDecision") or None,
+            (node.get("reviewRequests") or {}).get("totalCount", 0))
+
+
 def _pr_to_raw(node: dict) -> RawIssue:
-    state = pr_state(bool(node.get("isDraft")),
-                     node.get("reviewDecision") or None,
-                     (node.get("reviewRequests") or {}).get("totalCount", 0),
-                     node.get("state"))
+    state = pr_state(*_ladder_inputs(node), node.get("state"))
     return RawIssue(
         number=node["number"],
         title=node.get("title") or "",
@@ -215,7 +222,7 @@ def _pr_to_raw(node: dict) -> RawIssue:
         # so the model supplies it. Without this the fourth type is a class
         # nothing ever instantiates.
         issue_type="PullRequest",
-        fields={"PR State": state},
+        fields={PR_STATE: state},
         sub_issues=(),
         parent=None,
         milestone=(node.get("milestone") or {}).get("title"),
@@ -529,6 +536,127 @@ def set_field(number: int, field: str, value: str) -> None:
     _gh_graphql(f"""mutation {{ setIssueFieldValue(input:{{issueId:"{issue_id}",
       issueFields:[{{fieldId:"{chosen['id']}", singleSelectOptionId:"{option['id']}"}}]}})
       {{ clientMutationId }} }}""")
+
+
+def project_field_options(field: str) -> dict[str, str]:
+    """{option name: option id} of the project board's single-select `field`.
+
+    Raises when the field is absent. An unreadable field and an absent one look
+    the same from here, so a token that cannot see the project raises too.
+    """
+    return _project_field(field)[1]
+
+
+def _project_field(field: str) -> tuple[str, dict[str, str]]:
+    """(field id, {option name: option id}) of a board single-select field."""
+    payload = _gh_graphql("""query($project:ID!) { node(id:$project) {
+      ... on ProjectV2 { fields(first:50) { nodes {
+        ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }""",
+                          project=PROJECT_ID)
+    nodes = ((((payload.get("data") or {}).get("node") or {})
+              .get("fields") or {}).get("nodes") or [])
+    chosen = next((f for f in nodes if f and f.get("name") == field), None)
+    if chosen is None or not chosen.get("options"):
+        raise Unavailable(f"no {field!r} field on the project")
+    return chosen["id"], {o["name"]: o["id"] for o in chosen["options"]}
+
+
+def pull_requests() -> tuple[RawPullRequest, ...]:
+    """Every pull request, in every state, with what the `PR State` writer reads."""
+    query = """query($owner:String!, $repo:String!, $cursor:String) {
+      repository(owner:$owner, name:$repo) {
+        pullRequests(first:100, after:$cursor, states:[OPEN, MERGED, CLOSED]) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id number state isDraft reviewDecision
+                  reviewRequests { totalCount } reviews { totalCount } } } } }"""
+    out: list[RawPullRequest] = []
+    cursor = None
+    while True:
+        payload = _gh_graphql(query, owner=OWNER, repo=REPO, cursor=cursor)
+        if "errors" in payload:
+            raise Unavailable(str(payload["errors"])[:300])
+        block = payload["data"]["repository"]["pullRequests"]
+        for n in block["nodes"]:
+            if not n:
+                continue
+            draft, review, reviewers = _ladder_inputs(n)
+            out.append(RawPullRequest(
+                number=n["number"], node_id=n["id"], state=n.get("state") or "",
+                draft=draft, review=review, reviewers=reviewers,
+                reviews=(n.get("reviews") or {}).get("totalCount", 0)))
+        if not block["pageInfo"]["hasNextPage"]:
+            return tuple(out)
+        cursor = block["pageInfo"]["endCursor"]
+
+
+def board_pull_requests(field: str = PR_STATE) -> tuple[RawBoardItem, ...]:
+    """Every pull request on the project board, with its value of `field`.
+
+    Every page, because a partial read looks exactly like an absent item --
+    which is how "no pull requests are on the board" was once reported when
+    three were.
+    """
+    query = """query($project:ID!, $cursor:String) { node(id:$project) {
+      ... on ProjectV2 { items(first:100, after:$cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id content { ... on PullRequest { number } }
+          fieldValues(first:25) { nodes { ... on ProjectV2ItemFieldSingleSelectValue {
+            name field { ... on ProjectV2FieldCommon { name } } } } } } } } } }"""
+    out: list[RawBoardItem] = []
+    cursor = None
+    while True:
+        payload = _gh_graphql(query, project=PROJECT_ID, cursor=cursor)
+        if "errors" in payload:
+            raise Unavailable(str(payload["errors"])[:300])
+        block = (((payload.get("data") or {}).get("node") or {}).get("items")
+                 or None)
+        if block is None:
+            raise Unavailable("the project board could not be read")
+        for n in block["nodes"]:
+            number = ((n or {}).get("content") or {}).get("number")
+            if number is None:
+                continue
+            value = next((v.get("name") for v in n["fieldValues"]["nodes"]
+                          if v and (v.get("field") or {}).get("name") == field), None)
+            out.append(RawBoardItem(number, n["id"], value or None))
+        if not block["pageInfo"]["hasNextPage"]:
+            return tuple(out)
+        cursor = block["pageInfo"]["endCursor"]
+
+
+def add_to_project(content_id: str) -> str:
+    """Put a pull request or issue on the project board; its item id.
+
+    Idempotent: an item already there comes back with its own id rather than a
+    duplicate. Raises unless the answer is an item id, because a failed
+    mutation yields nothing useful and counting it as added is how "2 added"
+    was once reported for two adds that did not happen.
+    """
+    payload = _gh_graphql("""mutation($project:ID!, $content:ID!) {
+      addProjectV2ItemById(input:{projectId:$project, contentId:$content}) {
+        item { id } } }""", project=PROJECT_ID, content=content_id)
+    item = ((((payload.get("data") or {}).get("addProjectV2ItemById") or {})
+             .get("item") or {}).get("id") or "")
+    if not item.startswith("PVTI_"):
+        raise Unavailable(f"no item came back for {content_id}")
+    return item
+
+
+def set_project_field(item_id: str, field: str, value: str) -> None:
+    """Set a project board item's single-select `field` by NAME and option NAME.
+
+    The ids are looked up here, per call, as `set_field` does for an issue
+    field. A renamed option raises rather than writing nothing and saying it
+    worked.
+    """
+    field_id, options = _project_field(field)
+    if value not in options:
+        raise Unavailable(f"field {field!r} has no option {value!r}")
+    _gh_graphql("""mutation($project:ID!, $item:ID!, $field:ID!, $option:String!) {
+      updateProjectV2ItemFieldValue(input:{projectId:$project, itemId:$item,
+        fieldId:$field, value:{singleSelectOptionId:$option}}) {
+        projectV2Item { id } } }""",
+                project=PROJECT_ID, item=item_id, field=field_id, option=options[value])
 
 
 def remote_branches(remote: str = "origin") -> tuple[str, ...]:

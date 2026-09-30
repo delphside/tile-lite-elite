@@ -38,14 +38,14 @@ exit 0
 STUB
   # The board correction: asserted to be triggered, not what it does. SYNC_FAIL
   # makes it fail, which is the case that must not fail the merge.
-  cat > "$BIN/sync-pr-state.sh" <<'STUB'
+  cat > "$BIN/board-pr-state.py" <<'STUB'
 #!/usr/bin/env bash
 echo "ran" > "$STUB_DIR/SYNCED"
 [ -n "${SYNC_FAIL:-}" ] && exit 1
 exit 0
 STUB
   chmod +x "$BIN"/*
-  export PATH="$BIN:$PATH" CI_STATUS="$BIN/ci-status.sh" SYNC_PR_STATE="$BIN/sync-pr-state.sh"
+  export PATH="$BIN:$PATH" CI_STATUS="$BIN/ci-status.sh" SYNC_PR_STATE="$BIN/board-pr-state.py"
   : > "$STUB_DIR/ASKED"
   pr '"baseRefName":"release/0.7.3","state":"OPEN","isDraft":false'
   printf 'bbbbbbbbbbbb\n' > "$STUB_DIR/baseref"
@@ -175,5 +175,5 @@ merged() { [ -f "$STUB_DIR/MERGED" ]; }
   export SYNC_FAIL=1
   merge 9
   assert_success
-  assert_output --partial 'run scripts/sync-pr-state.sh'
+  assert_output --partial 'run scripts/board-pr-state.py'
 }
