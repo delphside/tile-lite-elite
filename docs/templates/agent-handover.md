@@ -11,7 +11,14 @@ is never read as a forgotten one. Delete these comments.
 
 ## Task
 
-One sentence: the single thing to do.
+One sentence: the single thing to do. For a change, its kind: design, code,
+documentation or tests.
+
+## Done when
+
+What finishes it, as checks the agent can run or read: the requirements it
+meets, the tests that pass, the documents that say so. For a review, the
+questions answered.
 
 ## Subject
 
