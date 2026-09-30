@@ -12,19 +12,19 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   F="$BATS_TEST_TMPDIR/repo"
-  mkdir -p "$F/.claude" "$F/scripts" "$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$F/.claude" "$F/scripts/programme/board" "$BATS_TEST_TMPDIR/bin"
   cp "$BATS_TEST_DIRNAME/../../.claude/inbox-hook.sh" "$F/.claude/"
   for s in board-actions.py board-check.py board-practices.py; do
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$F/scripts/$s"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$F/scripts/programme/board/$s"
   done
   # The hook only asks that gh exists.
   printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_TEST_TMPDIR/bin/gh"
-  chmod +x "$F/scripts/"* "$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$F/scripts/programme/board/"* "$BATS_TEST_TMPDIR/bin/gh"
 }
 
 inbox() {   # what the stub board-inbox.py prints
-  printf '#!/usr/bin/env bash\ncat <<'"'"'OUT'"'"'\n%s\nOUT\n' "$1" > "$F/scripts/board-inbox.py"
-  chmod +x "$F/scripts/board-inbox.py"
+  printf '#!/usr/bin/env bash\ncat <<'"'"'OUT'"'"'\n%s\nOUT\n' "$1" > "$F/scripts/programme/board/board-inbox.py"
+  chmod +x "$F/scripts/programme/board/board-inbox.py"
 }
 
 context() {

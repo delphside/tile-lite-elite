@@ -13,7 +13,7 @@ from board.tests.cases import Cases
 from board.tests.cli import run
 
 SPEC = importlib.util.spec_from_file_location(
-    "doc_signals", Path(__file__).resolve().parents[1] / "doc-signals.py")
+    "doc_signals", Path(__file__).resolve().parents[1] / "programme" / "docs" / "doc-signals.py")
 signals = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(signals)
 
@@ -46,7 +46,7 @@ class DocSignals(Cases):
         self.expect("plain prose", 0, count("A release always takes a semver."))
 
     def test_the_command_reports_and_never_fails(self):
-        result = run("doc-signals.py", "--total")
+        result = run("programme/docs/doc-signals.py", "--total")
         self.expect("exit status", 0, result.returncode)
         self.expect("a number", True, result.stdout.strip().isdigit())
 

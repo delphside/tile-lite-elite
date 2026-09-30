@@ -29,7 +29,7 @@ esac
 # merged by a local fast-forward, of any branch, is otherwise left at whatever
 # it last said (#430 sat unset after its merge, 2026-09-29).
 # POST_MERGE_SYNC_CMD replaces it for the test suite.
-"${POST_MERGE_SYNC_CMD:-$(git rev-parse --show-toplevel)/scripts/board-pr-state.py}" >/dev/null 2>&1 || true
+"${POST_MERGE_SYNC_CMD:-$(git rev-parse --show-toplevel)/scripts/programme/board/board-pr-state.py}" >/dev/null 2>&1 || true
 
 branch="${entry#merge }"
 branch="${branch%%:*}"
@@ -39,6 +39,6 @@ branch="${branch#origin/}"
 if [ -n "${POST_MERGE_CMD:-}" ]; then
   "$POST_MERGE_CMD" "$branch" || true
 else
-  python3 "$(git rev-parse --show-toplevel)/scripts/board-merged.py" "$branch" || true
+  python3 "$(git rev-parse --show-toplevel)/scripts/programme/board/board-merged.py" "$branch" || true
 fi
 exit 0

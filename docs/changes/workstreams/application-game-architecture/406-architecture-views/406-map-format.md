@@ -33,7 +33,8 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/w -w /w structurizr/structuriz
 - **One model, several views, generated.** A model with people, containers
   and components, and a Container and a Component view declared as
   `include *`, exported to Mermaid in about 3 seconds. Verified.
-- **The export passes our own check.** `scripts/mermaid/check.mjs` parsed both
+- **The export passes our own check.**
+  `scripts/programme/docs/mermaid/check.mjs` parsed both
   generated diagrams. Verified.
 - **A project's change as an extension of the map.** A file starting
   `workspace extends model.dsl` added a new component, marked an existing one

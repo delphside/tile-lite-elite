@@ -39,7 +39,7 @@ class BoardPractices(Cases):
 
     def practices(self, *args, register=None):
         env = {**os.environ, "REGISTER_OVERRIDE": str(register or self.register), "LOG_OVERRIDE": str(self.log)}
-        return run("board-practices.py", *args, env=env)
+        return run("programme/board/board-practices.py", *args, env=env)
 
     def test_the_overdue_case(self):
         out = self.practices().stdout.splitlines()

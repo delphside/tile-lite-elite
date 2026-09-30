@@ -167,9 +167,9 @@ if (( ! RESEED && ! PRINT_FILTER )); then
   [[ -f "$SWEEP" ]] && LAST_SWEEP="$(stat -c %Y "$SWEEP" 2>/dev/null || echo 0)"
   if (( NOW - LAST_SWEEP >= SWEEP_EVERY )); then
     SDIR="$(mktemp -d)"
-    ( timeout 20 ./scripts/board-actions.py --claude --no-colour 2>/dev/null \
+    ( timeout 20 ./scripts/programme/board/board-actions.py --claude --no-colour 2>/dev/null \
         | grep -cE '^  #[0-9]+' > "$SDIR/a" ) 2>/dev/null &
-    ( timeout 20 ./scripts/board-check.py --no-colour 2>/dev/null \
+    ( timeout 20 ./scripts/programme/board/board-check.py --no-colour 2>/dev/null \
         | grep -cE '^#[0-9]+' > "$SDIR/t" ) 2>/dev/null &
     wait
     A="$(cat "$SDIR/a" 2>/dev/null || echo 0)"; T="$(cat "$SDIR/t" 2>/dev/null || echo 0)"
@@ -178,7 +178,7 @@ if (( ! RESEED && ! PRINT_FILTER )); then
     # hours is noise with a schedule.
     if [[ "$A" =~ ^[0-9]+$ && "$T" =~ ^[0-9]+$ ]] && (( A + T > 0 )); then
       SWEPT="  $A action(s) waiting on you, $T issue(s) further along than their content supports"$'\n'
-      SWEPT="$SWEPT  ./scripts/board-actions.py --claude   ./scripts/board-check.py"$'\n'
+      SWEPT="$SWEPT  ./scripts/programme/board/board-actions.py --claude   ./scripts/programme/board/board-check.py"$'\n'
     fi
     touch "$SWEEP"
   fi

@@ -2,7 +2,7 @@
 # keyboard to run it. #407.
 #
 # **One of two readers, and this is the one that fires without anybody
-# asking.** `scripts/board-practices.py` is read every session by the
+# asking.** `scripts/programme/board/board-practices.py` is read every session by the
 # session-start hook too, but that only reaches Claude and only when a
 # session starts. This is what covers an absence.
 #
@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python3 scripts/board-practices.py --exit-code 2>&1 | tee /tmp/practices.txt
+          python3 scripts/programme/board/board-practices.py --exit-code 2>&1 | tee /tmp/practices.txt
 
       - name: Open or update the report
         if: always() && steps.check.outcome == 'failure'

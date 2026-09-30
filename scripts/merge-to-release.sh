@@ -43,7 +43,7 @@ REPO_NWO="${REPO_NWO:-delphside/tile-lite-elite}"
 CI_STATUS="${CI_STATUS:-$HERE/ci-status.sh}"
 # Overridable for the same reason `CI_STATUS` is: the test needs to know it
 # was called without it reaching GitHub.
-SYNC_PR_STATE="${SYNC_PR_STATE:-$HERE/board-pr-state.py}"
+SYNC_PR_STATE="${SYNC_PR_STATE:-$HERE/programme/board/board-pr-state.py}"
 
 PR=""
 CHECK_ONLY=0
@@ -230,6 +230,6 @@ echo "==> Merged. $BASE_REF now has a new tip — its run is what the next merge
 if [ -x "$SYNC_PR_STATE" ]; then
   echo "==> Correcting the board's PR State"
   if ! "$SYNC_PR_STATE"; then
-    echo "note: the board was not corrected — run scripts/board-pr-state.py" >&2
+    echo "note: the board was not corrected — run scripts/programme/board/board-pr-state.py" >&2
   fi
 fi

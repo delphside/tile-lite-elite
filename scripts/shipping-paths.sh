@@ -8,10 +8,10 @@
 # comes to exist in two places, and this one decides both whether a commit is
 # refused and whether a release is described correctly.
 #
-# **The rule is the model's**, `scripts/board/shipping.py`, since 2026-09-26
+# **The rule is the model's**, `scripts/programme/board/shipping.py`, since 2026-09-26
 # (#421): it was `NON_SHIPPING` here, and the reasoning moved with it. This file
 # keeps the two functions its callers source, and each asks
-# `scripts/board-shipping.py` rather than holding a pattern of its own.
+# `scripts/programme/board/board-shipping.py` rather than holding a pattern of its own.
 #
 # `-C "${REPO_DIR:-.}"` because deploy.sh addresses its repository explicitly
 # everywhere else and this must agree with it; bare `git` reads the current
@@ -20,7 +20,7 @@
 # deploy.sh, where a command inheriting the loop's stdin consumes lines it has
 # not read yet.
 
-_SHIPPING_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/board-shipping.py"
+_SHIPPING_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/programme/board/board-shipping.py"
 
 # touches_image <commit-ish> -> 0 if any path it changed reaches the image.
 touches_image() {

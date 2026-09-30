@@ -417,9 +417,9 @@ enough."*
 ## Afterwards
 
 ```bash
-./scripts/board-context.py --write N    # the context header, for N's whole family
-./scripts/board-check.py                # has it done what its phase claims?
-./scripts/roadmap-diagram.py --write    # regenerate docs/1.5
+./scripts/programme/board/board-context.py --write N    # the context header, for N's whole family
+./scripts/programme/board/board-check.py                # has it done what its phase claims?
+./scripts/programme/board/roadmap-diagram.py --write    # regenerate docs/1.5
 ```
 
 **Never write the context header by hand.** It is generated from the family's

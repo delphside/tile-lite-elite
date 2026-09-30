@@ -45,7 +45,7 @@ concurrency:
 
 jobs:
   # Lint, links and placement are **not** here. CI already runs
-  #    `scripts/check-docs.sh` on every push, so a copy on pull requests would
+  #    `scripts/programme/docs/check-docs.sh` on every push, so a copy on pull requests would
   #    be the same check twice and two places to change it. This file carries
   #    only what CI cannot: the parts of a review that are a person's.
   #

@@ -93,9 +93,9 @@ glance.
 Add the period's row to `measurements.csv`, then:
 
 ```bash
-scripts/capacity-chart.py --table      # the history table below
-scripts/capacity-chart.py --summary    # the forecast table below
-scripts/capacity-chart.py --write      # the charts
+scripts/programme/reports/capacity-chart.py --table      # the history table below
+scripts/programme/reports/capacity-chart.py --summary    # the forecast table below
+scripts/programme/reports/capacity-chart.py --write      # the charts
 ```
 
 Paste the history table here.

@@ -208,7 +208,7 @@ check_unreleased() {
   # nothing. The rule is `board/shipping.py`'s `ships`.
   while read -r sha; do
     [[ -n "$sha" ]] || continue
-    if python3 "$(dirname "${BASH_SOURCE[0]}")/board-shipping.py" ships "$sha" </dev/null 2>/dev/null; then
+    if python3 "$(dirname "${BASH_SOURCE[0]}")/programme/board/board-shipping.py" ships "$sha" </dev/null 2>/dev/null; then
       n=$((n + 1))
       line+="$(git log -1 --format='%h %s' "$sha" | cut -c1-96)"$'\n'
     fi
@@ -292,12 +292,17 @@ check_tests() {
     printf '       %s %s\n' "$(red FAIL)" "bats                     "
     bad="$bad bats"; lines+="$(grep '^not ok' <<< "$out" | head -5)"$'\n'
   fi
-  if out="$(python3 -m unittest discover -s scripts -t scripts 2>&1)"; then
-    printf '       %s %s\n' "$(green ok)" "unittest: $(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' <<< "$out") tests"
-  else
-    printf '       %s %s\n' "$(red FAIL)" "unittest"
-    bad="$bad unittest"; lines+="$(grep -E '^(FAIL|ERROR):' <<< "$out" | head -5)"$'\n'
-  fi
+  # Two runs, because the model's tests import it as `board` from
+  # scripts/programme/ (#421), while the rest are found from scripts/.
+  local top
+  for top in scripts scripts/programme; do
+    if out="$(python3 -m unittest discover -s "$top" -t "$top" 2>&1)"; then
+      printf '       %s %s\n' "$(green ok)" "unittest $top: $(sed -n 's/^Ran \([0-9]*\) tests.*/\1/p' <<< "$out") tests"
+    else
+      printf '       %s %s\n' "$(red FAIL)" "unittest $top"
+      bad="$bad unittest:$top"; lines+="$(grep -E '^(FAIL|ERROR):' <<< "$out" | head -5)"$'\n'
+    fi
+  done
   if [[ -n "$bad" ]]; then fail tests "failing:$bad" "$lines"
   else pass tests "the shell and Python tooling tests pass"; fi
 }
@@ -421,7 +426,7 @@ check_prstate() {
   if ! command -v gh >/dev/null 2>&1; then
     fail prstate "not checked — no 'gh' on PATH"; return
   fi
-  if ! out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/board-pr-state.py" 2>&1)"; then
+  if ! out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/programme/board/board-pr-state.py" 2>&1)"; then
     fail prstate "could not reach the board to correct it" "$out"
     return
   fi
@@ -455,7 +460,7 @@ LABEL[transitions]="Issues have done the work their fields claim"
 # pull-request run" out loud.
 check_transitions() {
   local out status=0
-  out="$(timeout 120 ./scripts/board-check.py --exit-code --no-colour 2>&1)" || status=$?
+  out="$(timeout 120 ./scripts/programme/board/board-check.py --exit-code --no-colour 2>&1)" || status=$?
   if (( status == 124 )); then
     note transitions "the transition check timed out after 60s"
   elif (( status == 0 )); then

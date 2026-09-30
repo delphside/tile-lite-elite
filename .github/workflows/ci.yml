@@ -56,7 +56,7 @@ jobs:
       # the config (.markdownlint.jsonc) existed for weeks and was only ever run
       # by hand, so an error reached `main` on 2026-08-16 and would have stayed.
       #
-      # It runs `scripts/check-docs.sh` rather than a copy of the command, so
+      # It runs `scripts/programme/docs/check-docs.sh` rather than a copy of the command, so
       # the check made before pushing and the one CI enforces are the same code
       # — the same reason `ci-status.sh` is shared between `deploy.sh` and the
       # terminal. The script adds two checks to the lint: every `](#anchor)`
@@ -65,7 +65,7 @@ jobs:
       # First in the job because it takes seconds and the Rust steps take
       # minutes.
       - name: Check documents
-        run: ./scripts/check-docs.sh
+        run: ./scripts/programme/docs/check-docs.sh
 
       # **No toolchain action: `rust-toolchain.toml` is the whole of it.**
       #
@@ -101,10 +101,13 @@ jobs:
           --check
 
       # The Python tooling's tests, on the standard library's runner (docs/3.3
-      # §2.4): the board model's in scripts/board/tests/, and checks of the
-      # repository's own files in scripts/tests/test_*.py.
+      # §2.4): the board model's in scripts/programme/board/tests/, and checks of the
+      # repository's own files in scripts/tests/test_*.py. Two runs, because the
+      # model imports as `board` from scripts/programme/.
       - name: Python tooling tests
-        run: python3 -m unittest discover -s scripts -t scripts -v
+        run: |
+          python3 -m unittest discover -s scripts -t scripts -v
+          python3 -m unittest discover -s scripts/programme -t scripts/programme -v
 
       # The release scripts have one piece of parsing that both deploy.sh and
       # check-commit-stamp.sh depend on, and it has failed twice — once loudly,

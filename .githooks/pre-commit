@@ -86,15 +86,15 @@ MERGING=0
 # writer takes SIGPIPE, and under `pipefail` the pipeline reports 141 — so the
 # test would silently invert. That defect has already cost this project a
 # production deploy; see scripts/issue-mentions.sh.
-# **The rule is the model's**, `scripts/board/shipping.py`'s `version_bump_only`
+# **The rule is the model's**, `scripts/programme/board/shipping.py`'s `version_bump_only`
 # (#421), asked through `board-shipping.py` rather than held here.
 version_bump_only() {
-  python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" version-bump --staged \
+  python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/programme/board/board-shipping.py" version-bump --staged \
     </dev/null 2>/dev/null
 }
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
-  IMAGE="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" paths 2>/dev/null || true)"
+  IMAGE="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/programme/board/board-shipping.py" paths 2>/dev/null || true)"
   if [ -n "$IMAGE" ] && version_bump_only; then
     IMAGE=""
   fi
@@ -112,7 +112,7 @@ if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
       echo "  the reason in the message."
       echo
       echo "  If one of those genuinely does not ship, add it to the exceptions in"
-      echo "  scripts/board/shipping.py and say why."
+      echo "  scripts/programme/board/shipping.py and say why."
     } >&2
     exit 1
   fi
@@ -150,11 +150,11 @@ fi
 # `--no-verify`, in the same shape as the check above it -- it is asking *did
 # you mean this*, not forbidding it.
 #
-# **The list is the model's**, `scripts/board/documents.py` (#421), asked
+# **The list is the model's**, `scripts/programme/board/documents.py` (#421), asked
 # through `board-documents.py` rather than held here.
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" != "main" ]; then
-  ONMAIN="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-documents.py" programme 2>/dev/null || true)"
+  ONMAIN="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/programme/board/board-documents.py" programme 2>/dev/null || true)"
   if [ -n "$ONMAIN" ]; then
     {
       echo "commit refused: the programme's own documents belong on main, not $BRANCH."
@@ -184,7 +184,7 @@ fi
 # it, and that is the rule working.
 
 if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
-  APPDOCS="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-documents.py" application 2>/dev/null || true)"
+  APPDOCS="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/programme/board/board-documents.py" application 2>/dev/null || true)"
   if [ -n "$APPDOCS" ]; then
     {
       echo "note: application documents committed to main:"
@@ -210,6 +210,12 @@ fi
 # repository and outside this rule until then, which is how turn-check.sh came
 # to be filtering comments on a marker that nothing had written for weeks.
 NEW="$(printf '%s\n' "$STAGED" | grep -E '^(scripts/[^/]+\.(sh|py)$|\.githooks/[^/]+$|\.claude/([^/]+\.sh$|skills/[^/]+/))' || true)"
+# Below the top of scripts/, where the model's library modules sit beside the
+# commands since the folders (#421), a script is a file the index marks
+# executable. Whether library modules should register too is not decided here.
+EXECUTABLE="$(git ls-files -s -- scripts | awk -F'\t' '$1 ~ /^100755 / && $2 ~ /^scripts\/.+\// { print $2 }')"
+BELOW="$(printf '%s\n' "$STAGED" | grep -E '^scripts/.+/' | grep -Fx -f <(printf '%s\n' "$EXECUTABLE") || true)"
+NEW="$(printf '%s\n%s\n' "$NEW" "$BELOW" | grep -v '^$' || true)"
 if [ -n "$NEW" ]; then
   UNREGISTERED=""
   while read -r f; do
@@ -275,8 +281,8 @@ fi
 # The only conditional one: it reads every markdown file and takes a few
 # seconds, so a commit touching no documents does not pay for it. A check that
 # makes every commit slower is one people bypass.
-if printf '%s\n' "$STAGED" | grep -qE '\.md$' && [ -x "$REPO/scripts/check-docs.sh" ]; then
-  if ! output="$("$REPO/scripts/check-docs.sh" 2>&1)"; then
+if printf '%s\n' "$STAGED" | grep -qE '\.md$' && [ -x "$REPO/scripts/programme/docs/check-docs.sh" ]; then
+  if ! output="$("$REPO/scripts/programme/docs/check-docs.sh" 2>&1)"; then
     printf '%s\n' "$output" >&2
     cat >&2 <<'MSG'
 

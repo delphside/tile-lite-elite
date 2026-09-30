@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # inbox-hook.sh — SessionStart summary of GitHub activity, for Claude's context.
 #
-# Wraps scripts/board-inbox.py. Lives in .claude/ (gitignored) rather than scripts/,
+# Wraps scripts/programme/board/board-inbox.py. Lives in .claude/ (gitignored) rather than scripts/,
 # because it is about how Claude is driven, not about the project.
 #
 # **A summary, not a replay.** The full seven-day output is ~25KB, most of it
 # Claude's own comments being read back to itself. This emits which issues have
-# comments from Steve and what opened or closed; `./scripts/board-inbox.py` gives the
+# comments from Steve and what opened or closed; `./scripts/programme/board/board-inbox.py` gives the
 # detail on demand.
 #
 # Note the counts are only reliable from 2026-08-16, when Claude started
@@ -20,7 +20,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 0
 command -v gh > /dev/null 2>&1 || exit 0
 
-RAW="$(./scripts/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
+RAW="$(./scripts/programme/board/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
 [[ -z "$RAW" ]] && exit 0
 
 SUMMARY="$(printf '%s\n' "$RAW" | awk '
@@ -66,9 +66,9 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 # one failing leaves the others, and all of them failing leaves the inbox
 # summary, which is what this hook did before.
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-( timeout 25 ./scripts/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
-( timeout 25 ./scripts/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
-( timeout 10 ./scripts/board-practices.py 2>/dev/null > "$TMP/practices" ) &
+( timeout 25 ./scripts/programme/board/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
+( timeout 25 ./scripts/programme/board/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
+( timeout 10 ./scripts/programme/board/board-practices.py 2>/dev/null > "$TMP/practices" ) &
 wait
 
 # Only the findings. A clean run says nothing is missing, which is worth
@@ -91,10 +91,10 @@ REPORTS="$(printf '%s\n' "$RAW" | sed -n '/^REPORTS FROM THE SCHEDULED WORKFLOWS
   | grep -E '^  #[0-9]+' || true)"
 
 EXTRA=""
-[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/board-inbox.py):"$'\n'"$REPORTS"
-[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
-[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
-[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
+[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/programme/board/board-inbox.py):"$'\n'"$REPORTS"
+[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/programme/board/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
+[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/programme/board/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 
@@ -105,6 +105,6 @@ if t:
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "SessionStart",
         "additionalContext":
-            "GitHub activity in the last 7 days. Run ./scripts/board-inbox.py for the detail.\n\n" + t,
+            "GitHub activity in the last 7 days. Run ./scripts/programme/board/board-inbox.py for the detail.\n\n" + t,
     }}))
 ' 2>/dev/null || exit 0

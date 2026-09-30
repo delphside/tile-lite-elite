@@ -175,5 +175,5 @@ merged() { [ -f "$STUB_DIR/MERGED" ]; }
   export SYNC_FAIL=1
   merge 9
   assert_success
-  assert_output --partial 'run scripts/board-pr-state.py'
+  assert_output --partial 'run scripts/programme/board/board-pr-state.py'
 }

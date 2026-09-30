@@ -213,6 +213,47 @@ bump() { sed -i 's/^version = "0.7.2"/version = "0.7.3"/' "$R/$1"; git -C "$R" a
   assert_success
 }
 
+# Below the top of scripts/, a script is a file the index marks executable;
+# the model's library modules sit beside the commands and are not asked (#421).
+commit_exec_on_main() {   # <file>: a base on main, then <file> staged as executable
+  base
+  mkdir -p "$R/$(dirname "$1")"; printf 'x\n' > "$R/$1"; chmod +x "$R/$1"
+  git -C "$R" add "$1"
+  hook
+}
+
+@test "a new executable script in a folder under scripts/, unregistered, is refused on main" {
+  commit_exec_on_main scripts/programme/board/board-brand-new.py
+  assert_equal "$status" 1
+  assert_output --partial "not in the register"
+}
+
+@test "a new executable script in a folder, registered in 5.0, is allowed" {
+  printf '| `board-brand-new.py` | x |\n' > "$R/docs/5.0-programme-tooling.md"
+  commit_exec_on_main scripts/programme/board/board-brand-new.py
+  assert_success
+}
+
+@test "a new non-executable module in a folder under scripts/ is not asked to be registered" {
+  commit_on main scripts/programme/board/brand_new.py
+  assert_success
+}
+
+@test "an executable script moved into a folder, unregistered, is refused" {
+  mkdir -p "$R/scripts"; printf 'x\n' > "$R/scripts/old-name.sh"; chmod +x "$R/scripts/old-name.sh"
+  base
+  mkdir -p "$R/scripts/programme/board"
+  git -C "$R" mv scripts/old-name.sh scripts/programme/board/old-name.sh
+  hook
+  assert_equal "$status" 1
+  assert_output --partial "not in the register"
+}
+
+@test "a new executable test in a folder under scripts/ is not asked to be registered" {
+  commit_exec_on_main scripts/programme/board/tests/test_brand_new.py
+  assert_success
+}
+
 @test "a script is allowed on main" {
   commit_on main scripts/thing.sh.tmp
   assert_success
@@ -362,18 +403,18 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 # --- the documentation checks (4) ---------------------------------------------------
-# The one conditional rule: it runs the repository's own scripts/check-docs.sh,
+# The one conditional rule: it runs the repository's own scripts/programme/docs/check-docs.sh,
 # and only when markdown is staged, because it reads every document and takes
 # seconds. Untested until 2026-09-27: every other fixture keeps markdown out so
 # the slow check is skipped, which also meant nothing showed it could refuse.
 # check-docs.sh is a stub here, so the rule is tested, not the documents.
 
 docs_check() {   # <check-docs exit> <file to stage>
-  mkdir -p "$R/scripts"
-  printf '#!/usr/bin/env bash\necho "docs: a check failed" >&2\nexit %s\n' "$1" > "$R/scripts/check-docs.sh"
-  chmod +x "$R/scripts/check-docs.sh"
+  mkdir -p "$R/scripts/programme/docs"
+  printf '#!/usr/bin/env bash\necho "docs: a check failed" >&2\nexit %s\n' "$1" > "$R/scripts/programme/docs/check-docs.sh"
+  chmod +x "$R/scripts/programme/docs/check-docs.sh"
   base
-  printf '#!/usr/bin/env bash\necho ran >> "%s/docs-ran"\nexit %s\n' "$BATS_TEST_TMPDIR" "$1" > "$R/scripts/check-docs.sh"
+  printf '#!/usr/bin/env bash\necho ran >> "%s/docs-ran"\nexit %s\n' "$BATS_TEST_TMPDIR" "$1" > "$R/scripts/programme/docs/check-docs.sh"
   stage "$2"
   hook
 }

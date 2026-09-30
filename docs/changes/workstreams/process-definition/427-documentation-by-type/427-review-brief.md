@@ -54,7 +54,7 @@ owner read the result.
    material moved unchanged to a new `docs/2.8-engine-performance.md`.
 4. Capacity Planning now owns performance and benchmarking (3.7).
 5. 1.5's roadmap chart has a colour key and names each work package's parent
-   (`scripts/board/roadmap.py`).
+   (`scripts/programme/board/roadmap.py`).
 6. A reviewed report may have its references updated when their target moves
    (CLAUDE.md, 3.8).
 7. The gaps in section 2 are raised as #428 (Functional design documents),
@@ -91,7 +91,8 @@ Planning and the design that achieves the performance to section 2. So 2.8
 Engine Performance keeps what the engine's search costs and where in a game
 the work falls, and a new `docs/3.10-benchmarking.md` takes how the benchmark
 is run and read, the machine difference and the raw measurements.
-`scripts/document-map.py` now sorts numerically, so 3.10 follows 3.9.
+`scripts/programme/docs/document-map.py` now sorts numerically, so 3.10 follows
+3.9.
 
 **Questions:**
 

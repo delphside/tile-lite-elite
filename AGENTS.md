@@ -21,21 +21,24 @@ must know to avoid breaking something on its first change.
   reference, 5.x the programme's definition, processes and tooling. A document states what is true now, with at most a line of
   reason; history, argument and quotations go in the commit
   message or the issue ([`docs/5.4`](docs/5.4-writing-documents.md)).
-  `scripts/doc-signals.py --list` shows lines that look like history.
+  `scripts/programme/docs/doc-signals.py --list` shows lines that look like
+  history.
 - **`docs/1.6-document-map.md` is generated**: run
-  `scripts/document-map.py --write` after changing any heading; do not edit it.
+  `scripts/programme/docs/document-map.py --write` after changing any heading;
+  do not edit it.
 - **Programme documents change only on `main`**, never on a project branch:
-  those `scripts/board/documents.py` classes as the programme's, including
-  `CLAUDE.md`, this file and every change note.
+  those `scripts/programme/board/documents.py` classes as the programme's,
+  including `CLAUDE.md`, this file and every change note.
 - **Never touch production**, and never run `scripts/deploy.sh`.
 
 ## Checking your change
 
 ```bash
-scripts/check-docs.sh                                  # documentation: lint, links, placement, the map
-bats scripts/tests                                     # the shell tooling
-python3 -m unittest discover -s scripts -t scripts     # the Python tooling
-cargo test --workspace                                 # the application
+scripts/programme/docs/check-docs.sh                  # documentation: lint, links, placement, the map
+bats scripts/tests                                    # the shell tooling
+python3 -m unittest discover -s scripts -t scripts    # the Python tooling's checks
+python3 -m unittest discover -s scripts/programme -t scripts/programme  # the board model's
+cargo test --workspace                                # the application
 ```
 
 ## A review rather than a change

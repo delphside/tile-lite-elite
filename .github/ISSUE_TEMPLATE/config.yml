@@ -7,7 +7,7 @@
 # So every issue arrives through a form that sets its type. Anything that still
 # reaches the board untyped — the API sets no type, and `gh issue create` does
 # not use these forms — is read as a Requirement and reported as defaulted, in
-# `scripts/board/model.py`.
+# `scripts/programme/board/model.py`.
 #
 # Raise a Requirement when unsure: it is the cheapest to raise and the only one
 # that can be folded into a project later.

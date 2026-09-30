@@ -345,11 +345,11 @@ fi
 # whose push-to-main run did not pass. The gate that matters was already there.
 #
 # Three seconds, at the end, where it is read rather than scrolled past.
-if ! "$(dirname "$0")/check-docs.sh" > /tmp/check-docs.$$ 2>&1; then
+if ! "$(dirname "$0")/programme/docs/check-docs.sh" > /tmp/check-docs.$$ 2>&1; then
   echo
   echo "==> NOTE: the document checks fail on this working tree."
   echo "    Nothing here is blocked by it, and a production deploy would be."
   sed -n 's/^/    /p' /tmp/check-docs.$$ | grep -E "BROKEN|STRAY|error " | head -8
-  echo "    Full output: ./scripts/check-docs.sh"
+  echo "    Full output: ./scripts/programme/docs/check-docs.sh"
 fi
 rm -f /tmp/check-docs.$$

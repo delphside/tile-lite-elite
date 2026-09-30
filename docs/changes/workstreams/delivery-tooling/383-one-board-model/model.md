@@ -341,8 +341,8 @@ day: *"We are focussing on a single python model for the tooling. We want to
 always refactor correctly, not just build patch on top of patch."*
 
 So a bash caller does not re-express a rule; it runs a model command and uses the
-answer. `scripts/board-refs.py` and its successors are thin: parse arguments,
-call the model, print.
+answer. `scripts/programme/board/board-refs.py` and its successors are thin:
+parse arguments, call the model, print.
 
 | rule | owner in the model | callers that held a copy |
 | --- | --- | --- |

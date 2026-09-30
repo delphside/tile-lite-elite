@@ -155,8 +155,8 @@ and reading one for the other made ten issues claim to reach users.
 ## Afterwards
 
 ```bash
-./scripts/board-check.py    # has it done the work its stage claims?
-./scripts/board-actions.py  # is it now on somebody's list?
+./scripts/programme/board/board-check.py    # has it done the work its stage claims?
+./scripts/programme/board/board-actions.py  # is it now on somebody's list?
 ```
 
 **An issue that is triaged and on nobody's list is the failure to look for.**

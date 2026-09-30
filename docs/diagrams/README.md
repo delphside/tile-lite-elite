@@ -156,7 +156,8 @@ Each `.mmd` here is the source for the `.svg` beside it. Edit the `.mmd`,
 re-render, and commit both.
 
 **`roadmap.svg` is the exception: it has no `.mmd`.** Its source is the board,
-and `scripts/roadmap-diagram.py --write` regenerates both it and the block in
+and `scripts/programme/board/roadmap-diagram.py --write` regenerates both it and
+the block in
 [1.5](../1.5-work-in-progress.md) that embeds it. Do not edit it by hand — the
 next run overwrites it. Why it is not Mermaid is below.
 
@@ -247,7 +248,8 @@ The second is not a corner case: it is the board's shape, where
 [#10](https://github.com/delphside/tile-lite-elite/issues/10) waits on packages
 in two other workstreams. Flowcharts have no swimlane primitive, and `gantt`
 has sections but no dependency arrows and insists on dates. So `roadmap.svg` is
-drawn directly by `scripts/board/roadmap.py`, which is also why it uses
+drawn directly by `scripts/programme/board/roadmap.py`, which is also why it
+uses
 presentation attributes and polygon arrowheads and no `<style>`, `<defs>` or
 `<marker>` — the same sanitiser that blanks `foreignObject` above.
 

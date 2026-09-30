@@ -14,9 +14,10 @@ setup() {
   bats_load_library bats-assert
   VERIFY="$BATS_TEST_DIRNAME/../verify.sh"
   F="$BATS_TEST_TMPDIR/repo"
-  mkdir -p "$F/scripts/tests"
+  mkdir -p "$F/scripts/tests" "$F/scripts/programme/board/tests"
   suite_bats pass
   suite_python pass
+  suite_model pass
 }
 
 suite_bats() {   # pass|fail
@@ -28,6 +29,14 @@ suite_python() { # pass|fail
   : > "$F/scripts/tests/__init__.py"
   printf 'import unittest\nclass T(unittest.TestCase):\n    def test_one(self):\n        self.assertEqual(1, %s)\n' "$want" \
     > "$F/scripts/tests/test_one.py"
+}
+
+suite_model() {  # pass|fail: the model's own, found from scripts/programme/
+  local want=1; [[ "$1" == fail ]] && want=2
+  : > "$F/scripts/programme/board/__init__.py"
+  : > "$F/scripts/programme/board/tests/__init__.py"
+  printf 'import unittest\nclass T(unittest.TestCase):\n    def test_one(self):\n        self.assertEqual(1, %s)\n' "$want" \
+    > "$F/scripts/programme/board/tests/test_one.py"
 }
 
 # check_tests alone, with verify.sh's pass/fail/skip reduced to one line each.
@@ -57,6 +66,12 @@ check() {   # [PATH to use]
   suite_python fail
   check
   assert_line --regexp '^FAIL .*unittest'
+}
+
+@test "a failing suite of the model's fails the check" {
+  suite_model fail
+  check
+  assert_line --regexp '^FAIL .*unittest:scripts/programme'
 }
 
 # The case that let the check hollow out: nothing to run must not read as a pass.

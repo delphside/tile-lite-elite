@@ -130,7 +130,7 @@ one of them has a defect: fix it, don't work around it.
   branch: they live too long, main moves, and the review does not happen. Approval is
   the `pre-approved` milestone; anything else, including none, means not pre-approved. One branch per project, and everything
   the project touches goes on it, its technical documentation included. Process
-  documents (the list is `scripts/board/documents.py`'s) belong to no project and
+  documents (the list is `scripts/programme/board/documents.py`'s) belong to no project and
   change on main; `docs/1.6` is generated and is regenerated on the branch after its
   rebase.
 - A pull request is what gives a review mechanics: a diff, a place to comment,
@@ -366,7 +366,7 @@ one of them has a defect: fix it, don't work around it.
 | every field a change is classified by, and each artefact's route | docs/5.1 §2.15 |
 | artefacts outside git | docs/4.8, and docs/5.5 for GitHub's |
 | the fields each issue carries, and the strings tooling matches | docs/5.5 |
-| daily state | scripts/board-inbox.py, scripts/board-status.py, scripts/board-actions.py |
+| daily state | scripts/programme/board/board-inbox.py, scripts/programme/board/board-status.py, scripts/programme/board/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
 | how a document is written, and what it may hold | docs/5.4 |
 | raising or retitling any issue | the triage skill |
