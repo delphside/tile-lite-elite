@@ -12,7 +12,7 @@ The fourth cannot, and that is reported rather than passed over:
 
 | source | how it is read |
 | --- | --- |
-| a decision waiting to be answered | `Decision State` is `Asked` |
+| a decision waiting on the owner | `Decision State` is one the owner holds (`model.DECISION_TURNS`, docs/5.1's table) |
 | a pull request waiting to be reviewed | `PR State` is `Awaiting review` |
 | a phase only the owner can advance | `User testing`, with Preview boxes unticked |
 | an unanswered question in a body | an unticked `- [ ]` labelled **owner** |
@@ -172,8 +172,8 @@ class Waiting:
 
 def waiting_on_owner(issue: Issue) -> Waiting | None:
     """The three derivable sources, in the order they cost the owner time."""
-    if isinstance(issue, Decision) and issue.step == "Asked":
-        return Waiting(issue, "answer the question", "decision")
+    if isinstance(issue, Decision) and issue.turn and issue.turn[0] == OWNER:
+        return Waiting(issue, issue.turn[1], "decision")
 
     if isinstance(issue, PullRequest) and issue.step == "Awaiting review":
         return Waiting(issue, "review: approve or request changes", "pull request")
@@ -225,6 +225,9 @@ def waiting_on_claude(issue: Issue) -> Waiting | None:
     came to be the only thing that could say what Claude owed, wired into a
     single hook.
     """
+    if isinstance(issue, Decision) and issue.turn and issue.turn[0] == CLAUDE:
+        return Waiting(issue, issue.turn[1], "decision")
+
     if isinstance(issue, PullRequest):
         if issue.step == "Approved":
             return Waiting(issue, "approved — mine to merge", "pull request")

@@ -316,6 +316,22 @@ One.
         self.expect("a decided one is not", None,
               waiting_on_owner(classify(issue(1, kind="Decision",
                                               fields={"Decision State": "Decided"}))))
+
+    def test_a_decisions_turn_alternates_as_docs_5_1_says(self):
+        """docs/5.1: the owner holds Asked, Documented Ready for Sign-Off and
+        Actioned; Claude holds Feedback Provided and Decided"""
+        def d(state):
+            return classify(issue(1, kind="Decision", fields={"Decision State": state}))
+        for state in ("Asked", "Documented Ready for Sign-Off", "Actioned"):
+            self.expect(f"{state} is the owner's", "decision",
+                        getattr(waiting_on_owner(d(state)), "source", None))
+            self.expect(f"{state} is not Claude's", None, waiting_on_claude(d(state)))
+        for state in ("Feedback Provided", "Decided"):
+            self.expect(f"{state} is Claude's", "decision",
+                        getattr(waiting_on_claude(d(state)), "source", None))
+            self.expect(f"{state} is not the owner's", None, waiting_on_owner(d(state)))
+        self.expect("sign-off asks for a sign-off", "read the decision and sign it off",
+                    waiting_on_owner(d("Documented Ready for Sign-Off")).asked)
         wp = classify(issue(1, parent=2, fields={"Project State": "User testing", "Route": "x"},
                             body="## Functional user tests — Preview\n\n- [ ] click it\n"))
         self.expect("an untested delivery is his", "user testing",

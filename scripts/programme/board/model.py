@@ -517,6 +517,19 @@ class StandaloneProject(Project):
         return self.raw.milestone
 
 
+# Who holds a decision at each `Decision State`, and what they do next:
+# docs/5.1's table, decided here once. The turn alternates at every step, so
+# the owner holds three of the five. Until 2026-09-30 the reports knew only
+# `Asked`, and five decisions documented for sign-off read as nothing waiting.
+DECISION_TURNS: dict[str, tuple[str, str]] = {
+    "Asked": (OWNER, "answer the question"),
+    "Feedback Provided": (CLAUDE, "write the decision down"),
+    "Documented Ready for Sign-Off": (OWNER, "read the decision and sign it off"),
+    "Decided": (CLAUDE, "apply the decision"),
+    "Actioned": (OWNER, "read the outcome, and close it"),
+}
+
+
 @dataclass(frozen=True)
 class Decision(Issue):
     """A question and its answer. Its journey is `Decision State`."""
@@ -528,6 +541,11 @@ class Decision(Issue):
     @property
     def step_field(self) -> str:
         return "Decision State"
+
+    @property
+    def turn(self) -> tuple[str, str] | None:
+        """Who holds the decision now, and what they do: docs/5.1's table."""
+        return DECISION_TURNS.get(self.step or "")
 
     @property
     def agreed(self) -> str:
