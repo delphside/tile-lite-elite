@@ -37,6 +37,15 @@ show yet: treat those as true.
 | documentation | edits to the owning documents | one fact, one home; what is true now, with the history left in the issue |
 | tests | tests from a test design, and a run of them | derive them from `docs/1.0` and the requirements, not the code; show each one red by breaking what it tests, then restore it |
 
+## Strings stored outside the repository
+
+A string the tooling writes into GitHub (a marker in an issue body, a field or
+option name, a label) is an identifier, not text to keep current. Renaming it
+in the code makes the tooling blind to every copy already written. Never
+change one as part of a rename or a move; if one must change, say so as a
+decision in your report. #441's second trial nearly doubled the context
+header on 36 projects this way.
+
 ## Running things
 
 Run what proves the change, and trust exit statuses, not output: the suite for

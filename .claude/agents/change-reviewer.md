@@ -40,6 +40,10 @@ diff, and decide for yourself whether it is done and done in the right place.
   the maker's worktree.
 - **What else it touches**: callers, documents that describe it, paths that
   name it.
+- **Live output, before and after**: where the change touches tooling that
+  reads or writes GitHub, run its read-only form on the live data from the
+  old tree and the new and compare. A difference nobody asked for is a
+  finding.
 - **Scope**: anything done that the handover did not ask for.
 
 ## How to report
