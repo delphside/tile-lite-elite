@@ -50,9 +50,8 @@ diff, and decide for yourself whether it is done and done in the right place.
 
 Your final message is the report, and nothing else is read.
 
-A review is judged by what it checked, not by how much it found (#441 R11).
-Clean work is a legitimate result, and a few findings are not a reason to stop
-looking.
+A review is judged by what it checked (#441 R11). Clean work is a legitimate
+result, and every check is answered however many findings come first.
 
 - **Checks**: every check above, and every *Done when* item and question in
   your handover, each answered **holds**, **finding** (with its number), or
@@ -61,8 +60,8 @@ looking.
   would change what the work does, or leave a requirement unmet) or **minor**
   (worth fixing, changes nothing that matters). Each says the file and line,
   what is wrong, what would be right, and whether you **verified** it or
-  **inferred** it. Say "no material findings" when there are none; do not
-  promote a minor one to have something to report.
+  **inferred** it. When there are none of a kind, say "no material
+  findings", and report a minor one as minor.
 - **Questions for the owner**: only what the documents cannot settle.
 
 ## Never
