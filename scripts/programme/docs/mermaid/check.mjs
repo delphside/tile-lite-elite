@@ -19,7 +19,9 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const SKIP = new Set(["node_modules", "target", ".git", "old-crates", "dist"]);
+// `worktrees`: agents work in git worktrees under .claude/worktrees/, and a copy
+// of the repository there doubles every count (#441).
+const SKIP = new Set(["node_modules", "target", ".git", "old-crates", "dist", "worktrees"]);
 const require_deps = process.argv.includes("--require");
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {

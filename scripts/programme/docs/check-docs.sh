@@ -30,9 +30,10 @@ FAILED=0
 
 # Pinned, and the same globs CI used before this script existed — the linter is
 # otherwise "whatever is in one machine's npx cache", which is not a dependency
-# anybody declared.
+# anybody declared. Agents' worktrees under .claude/worktrees/ are copies of the
+# repository, so they are skipped (#441).
 bold "1. markdownlint"
-npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" 2>&1 | tail -4 || FAILED=1
+npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" "#.claude/worktrees" 2>&1 | tail -4 || FAILED=1
 
 bold "2. links"
 python3 scripts/programme/docs/check-doc-links.py || FAILED=1
