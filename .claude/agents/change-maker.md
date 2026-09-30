@@ -33,7 +33,7 @@ show yet: treat those as true.
 | kind | you produce | the rule that matters most |
 | --- | --- | --- |
 | design | the design documents in the project's folder under `docs/changes/` | start from how it works today, read from the code; name the one place each piece of logic will live |
-| code | the change, and the tests that prove it | fix where the design map says the rule lives, and remove copies rather than patch them; one Python model for the tooling (`scripts/programme/board/`) |
+| code | the change, and the tests that prove it | fix where the design map says the rule lives, and remove copies rather than patch them; one Python model for the tooling (`scripts/programme/board/`); comments as `docs/5.4` *Comments in code* says |
 | documentation | edits to the owning documents | one fact, one home; what is true now, with the history left in the issue |
 | tests | tests from a test design, and a run of them | derive them from `docs/1.0` and the requirements, not the code; show each one red by breaking what it tests, then restore it |
 
