@@ -11,9 +11,11 @@ looking at without inferring it from the contents.
 | **System Context** | C4 | the service and who uses it |
 | **Container** | C4 | the deployable processes and what each is responsible for — *logical* |
 | **Component** | C4 | what is inside one container |
+| **Code** | C4 | inside one component: the modules and functions that own its logic |
 | **Deployment** | C4 | which containers run on which infrastructure, per environment — *physical* |
 | **Dynamic** | C4 | how elements interact over time: a sequence or a collaboration |
 | **Concurrency** | Rozanski & Woods | what can run at the same time and how that is bounded — the semaphores, the sweeps, the scheduler |
+| **State machine** | UML | the lifecycle of one thing: its states, and the transitions between them |
 
 **Nothing here is ours, and an earlier version of this table invented a view
 called *Runtime* that C4 already had.** Corrected 2026-09-22. Owner, the same
@@ -28,6 +30,17 @@ same time and how this is controlled"*, which is `hash_limit` at 4,
 `engine_limit` at 2, and the scheduler #400 will build. Borrowing one named
 viewpoint from a second framework is a smaller cost than a name only this
 repository knows.
+
+**State machines are UML's**, the second view C4 lacks: the lifecycles of
+games, seats and invitations. A transition is labelled with the method or event
+that causes it where that is useful, so the diagram also says where each state
+change is handled. Added 2026-09-30 (#71, #406).
+
+**Code is C4's fourth level, and optional.** It is drawn only for a component
+with real rules in it, such as the game service or the rules engine, and it is
+where the application design map (#71) says which function owns each piece of
+logic. A project draws the Container and Component diagrams, and whichever Code
+diagrams its change touches.
 
 **Why C4 as the base.** It is built for this size, and *Container* means a
 deployable process, which is literally our two containers and the database.
