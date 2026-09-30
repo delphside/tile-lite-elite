@@ -207,6 +207,12 @@ bump() { sed -i 's/^version = "0.7.2"/version = "0.7.3"/' "$R/$1"; git -C "$R" a
   assert_equal "$status" 1
 }
 
+@test "a new script registered in the programme's register, 5.0, is allowed" {
+  printf '| `scripts/brand-new.sh` | x |\n' > "$R/docs/5.0-programme-tooling.md"
+  commit_on main scripts/brand-new.sh
+  assert_success
+}
+
 @test "a script is allowed on main" {
   commit_on main scripts/thing.sh.tmp
   assert_success
@@ -277,7 +283,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
   assert_success
 }
 
-# --- the process's own documents live on main (1b) --------------------------------
+# --- the programme's own documents live on main (1b) ------------------------------
 # 2026-09-21: the ITIL rule, a CLAUDE.md clause and an obligations.py fix were
 # all written onto 399-database-failure-status. commit-msg cannot catch it: a
 # process edit carries no Refs. docs/1.6 is generated from the branch's own
@@ -316,6 +322,43 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 @test "branch: and so is the generated document map" {
   commit_on 399-x docs/1.6-document-map.md
   assert_success
+}
+
+@test "branch: a change note is the programme's, so refused on a branch" {
+  commit_on 399-x docs/changes/workstreams/a/399-x/399-design.md
+  assert_equal "$status" 1
+  assert_output --partial "programme's own documents"
+}
+
+@test "branch: so is a template" {
+  commit_on 399-x docs/templates/agent-handover.md
+  assert_equal "$status" 1
+}
+
+@test "branch: and the generated work-in-progress page is fine" {
+  commit_on 399-x docs/1.5-work-in-progress.md
+  assert_success
+}
+
+# --- the application's documents usually ride their branch (1c) -----------------
+# Owner, 2026-09-30: warn, but not block.
+
+@test "main: an application document is committed, with a note" {
+  commit_on main docs/4.3-api-schema.md
+  assert_success
+  assert_output --partial "application documents committed to main"
+}
+
+@test "main: a programme document gets no note" {
+  commit_on main docs/5.1-change-lifecycle.md
+  assert_success
+  refute_output --partial "application documents"
+}
+
+@test "branch: an application document on its branch gets no note" {
+  commit_on 399-x docs/4.3-api-schema.md
+  assert_success
+  refute_output --partial "application documents"
 }
 
 # --- the documentation checks (4) ---------------------------------------------------

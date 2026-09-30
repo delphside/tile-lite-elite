@@ -24,8 +24,9 @@ must know to avoid breaking something on its first change.
   `scripts/doc-signals.py --list` shows lines that look like history.
 - **`docs/1.6-document-map.md` is generated**: run
   `scripts/document-map.py --write` after changing any heading; do not edit it.
-- **Process documents change only on `main`**, never on a project branch:
-  `CLAUDE.md` and those listed by `scripts/board/documents.py`.
+- **Programme documents change only on `main`**, never on a project branch:
+  those `scripts/board/documents.py` classes as the programme's, including
+  `CLAUDE.md`, this file and every change note.
 - **Never touch production**, and never run `scripts/deploy.sh`.
 
 ## Checking your change
