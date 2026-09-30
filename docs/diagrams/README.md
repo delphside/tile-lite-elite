@@ -17,6 +17,7 @@ looking at without inferring it from the contents.
 | **Concurrency** | Rozanski & Woods | what can run at the same time and how that is bounded — the semaphores, the sweeps, the scheduler |
 | **Information** | Rozanski & Woods | the data: what is stored, its shape and who owns it, and how it flows between elements |
 | **State machine** | UML | the lifecycle of one thing: its states, and the transitions between them |
+| **Use case** | UML | who uses the service, and what each may do |
 | **Activity** | UML | a user's journey through the service, step by step |
 
 **Nothing here is ours, and an earlier version of this table invented a view
@@ -49,6 +50,14 @@ flows to read, and for that part of the system only.
 games, seats and invitations. A transition is labelled with the method or event
 that causes it where that is useful, so the diagram also says where each state
 change is handled. Added 2026-09-30 (#71, #406).
+
+**Use case diagrams are UML's**, one for the service: the actors, including a
+role held in one game such as its creator, bots, and time for what nobody asks
+for, and the use cases each may start. Each line is a permission, and each use
+case has an activity diagram. Mermaid has no use case diagram, so it is drawn
+as a flowchart: actors outside a subgraph for the system boundary, use cases
+inside it as stadium shapes, the closest Mermaid has to an oval. Added
+2026-09-30 (#71).
 
 **Activity diagrams are UML's too**, for the player's journeys: they sit
 between the text requirements and the architecture, to think the requirements
