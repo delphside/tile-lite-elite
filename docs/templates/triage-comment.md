@@ -7,7 +7,7 @@ Copy it into a GitHub saved reply (Settings → Saved replies) to paste it.
 ````markdown
 ## Triage
 
-*`Type of change`, `Effort`, `Priority`, `Workstream` and `Stage` are set in the
+*`Type of change`, `Effort`, `Priority`, `Workstream` and `Requirement State` are set in the
 sidebar, not here.*
 
 ### Impacted artefacts

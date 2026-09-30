@@ -128,6 +128,25 @@ class RawIssue:
 # Routes: the values of the Route field, decided here once
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# the state fields: every issue type's journey is `<type> State`
+# --------------------------------------------------------------------------
+# Owner, 2026-09-30: the four lifecycle fields share one word, and `State`
+# needed the fewest renames. `Stage` and `Phase` were renamed in GitHub.
+
+REQUIREMENT_STATE = "Requirement State"
+PROJECT_STATE = "Project State"
+
+# The fields' old names, read as their new ones while GitHub is renamed.
+# Delete once the organisation's fields carry the new names.
+OLD_FIELD_NAMES = {"Stage": REQUIREMENT_STATE, "Phase": PROJECT_STATE}
+
+
+def field_name(name: str) -> str:
+    """A field's current name, whichever name GitHub reported it under."""
+    return OLD_FIELD_NAMES.get(name, name)
+
+
 RELEASE = "Production Release"
 APPLICATION_TOOLING = "Application Tooling and Docs"
 PROGRAMME_TOOLING = "Programme Tooling and Docs"
@@ -401,11 +420,11 @@ class Requirement(Issue):
         # Owner, 2026-09-18: an unset Stage is Triage. A row every rule skips
         # is a row nothing enforces, which is the untyped defect (#361) in
         # different clothes.
-        return self.field("Stage") or "Triage"
+        return self.field(REQUIREMENT_STATE) or "Triage"
 
     @property
     def step_field(self) -> str:
-        return "Stage"
+        return REQUIREMENT_STATE
 
     @property
     def stage_to_record(self) -> str | None:
@@ -428,11 +447,11 @@ class Project(Issue):
 
     @property
     def step(self) -> str | None:
-        return self.field("Phase")
+        return self.field(PROJECT_STATE)
 
     @property
     def step_field(self) -> str:
-        return "Phase"
+        return PROJECT_STATE
 
 
 @dataclass(frozen=True)
@@ -542,7 +561,7 @@ def classify(raw: RawIssue) -> Issue:
             return StandaloneProject(raw)
         case "Requirement":
             return Requirement(
-                raw, stage_was_defaulted=raw.fields.get("Stage") is None
+                raw, stage_was_defaulted=raw.fields.get(REQUIREMENT_STATE) is None
             )
         case _:
             # Owner, 2026-09-18: untyped becomes a Requirement. There is no
@@ -551,7 +570,7 @@ def classify(raw: RawIssue) -> Issue:
             return Requirement(
                 raw,
                 type_was_defaulted=True,
-                stage_was_defaulted=raw.fields.get("Stage") is None,
+                stage_was_defaulted=raw.fields.get(REQUIREMENT_STATE) is None,
             )
 
 

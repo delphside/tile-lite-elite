@@ -13,7 +13,7 @@ from .cases import Cases
 
 
 def issue(n, phase=None, route=None, parent=None, subs=(), kind="Project", state="OPEN"):
-    fields = {k: v for k, v in (("Phase", phase), ("Route", route)) if v}
+    fields = {k: v for k, v in (("Project State", phase), ("Route", route)) if v}
     return classify(RawIssue(n, f"#{n}", state, "", kind, fields, tuple(subs), parent, None, frozenset()))
 
 

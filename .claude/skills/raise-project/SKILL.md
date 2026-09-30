@@ -187,7 +187,7 @@ branch means renaming the branch to the package it now carries**, before the nex
 commit. Scheduler core (#414) was built on `400-scheduler-mechanism`, so all
 seventeen of its commits named the parent and `board-status.py` reported it *not
 started* after it had merged. The post-merge hook finds the package from the pull
-request and moves its Phase anyway; the commits it cannot fix.
+request and moves its Project State anyway; the commits it cannot fix.
 
 **A delivery's steps live in one place** — in its sub-project, or under the
 parent's list for a pre-approved one. Never both.
@@ -271,15 +271,15 @@ gh api graphql -f query='mutation($i:ID!){setIssueFieldValue(input:{issueId:$i,i
 ]}){issue{number}}}' -f i="$id"
 ```
 
-A new project takes `Workstream`, `Phase` (usually `Scope`), `Effort` and
+A new project takes `Workstream`, `Project State` (usually `Scope`), `Effort` and
 `Priority`. `Route` when it is known.
 
 **Set the stage or the phase in the same call as the rest.** An issue with
 neither is invisible in the same way an untyped one is: the Requirement rules key
-on `Stage` and the Project rules on `Phase`, so an issue with no stage is asked
+on `Requirement State` and the Project rules on `Project State`, so an issue with no stage is asked
 for nothing. Typing the ten untyped issues on 2026-09-10 surfaced no findings at
 all until they were given `Triage` as well — one silence exchanged for another.
-A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. Approval is the `pre-approved` **milestone**, not a field — there is no `Pre-approved` field, it was deleted on 2026-09-04.
+A new requirement takes `Requirement State` `Triage`; a new project takes `Project State` `Scope`. Approval is the `pre-approved` **milestone**, not a field — there is no `Pre-approved` field, it was deleted on 2026-09-04.
 
 | `Workstream` | `IFSS_kgDOAsE6Iw` |
 | … Application & Game Architecture | `IFSSO_kgDOBNJpRg` |
@@ -313,7 +313,7 @@ A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. A
 | … High | `IFSSO_kgDOBM-0yw` |
 | … Medium | `IFSSO_kgDOBM-0zA` |
 | … Low | `IFSSO_kgDOBM-0zw` |
-| `Stage` | `IFSS_kgDOAsC7CA` |
+| `Requirement State` | `IFSS_kgDOAsC7CA` |
 | … Triage | `IFSSO_kgDOBNJ-sg` |
 | … Scope, Options and Dependencies | `IFSSO_kgDOBNJ-sw` |
 | … On Hold | `IFSSO_kgDOBNQ6Fg` |
@@ -321,7 +321,7 @@ A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. A
 | … Candidate Project 1 | `IFSSO_kgDOBNJ9nA` |
 | … Candidate Project 2 | `IFSSO_kgDOBNJ9nQ` |
 | … Candidate Project 3 | `IFSSO_kgDOBNJ9ng` |
-| `Phase` | `IFSS_kgDOAsBg2A` |
+| `Project State` | `IFSS_kgDOAsBg2A` |
 | … Scope | `IFSSO_kgDOBNDpUw` |
 | … Q3 | `IFSSO_kgDOBNUxFg` |
 | … Q2 | `IFSSO_kgDOBNUxFw` |
@@ -335,8 +335,8 @@ A new requirement takes `Stage` `Triage`; a new project takes `Phase` `Scope`. A
 
 **To clear a field rather than set it**, the mutation is `deleteIssueFieldValue`
 — not `clearIssueFieldValue`, which does not exist. Needed when converting a
-requirement to a project: `Stage` is a requirement's journey and `Phase` is a
-project's, so a converted issue carries a `Stage` that no longer means anything.
+requirement to a project: `Requirement State` is a requirement's journey and `Project State` is a
+project's, so a converted issue carries a `Requirement State` that no longer means anything.
 
 ```bash
 gh api graphql -f query='mutation($i:ID!){deleteIssueFieldValue(input:{issueId:$i,fieldId:"IFSS_kgDOAsC7CA"}){clientMutationId}}' -f i="$id"
@@ -432,7 +432,7 @@ stale in the working tree.
 
 ## What goes wrong
 
-**The wrong Phase option id.** `Deployment` and `Development` sit next to each
+**The wrong Project State option id.** `Deployment` and `Development` sit next to each
 other and were confused once. Check the result rather than assuming it took.
 
 **A milestone on a requirement.** Milestones hold project deliveries; a folded

@@ -127,7 +127,7 @@ if [[ -n "$NWO" ]]; then
     --jq '.data.repository.issues.nodes[]
           | . as $i
           | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Decision State")|.name][0] // "-") as $d
-          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Phase")|.name][0] // "-") as $p
+          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Project State" or .field.name=="Phase")|.name][0] // "-") as $p
           | "\($i.number)\t\($d)\t\($p)"' 2>/dev/null)"
 fi
 
@@ -142,7 +142,7 @@ if [[ -f "$FIELDS" && -n "$FIELDS_NOW" ]]; then
     old_d="$(printf '%s' "$old_line" | cut -f2)"
     old_p="$(printf '%s' "$old_line" | cut -f3)"
     [[ "$old_d" != "$d" ]] && MOVED="$MOVED  #$num  Decision State: $old_d -> $d"$'\n'
-    [[ "$old_p" != "$p" ]] && MOVED="$MOVED  #$num  Phase: $old_p -> $p"$'\n'
+    [[ "$old_p" != "$p" ]] && MOVED="$MOVED  #$num  Project State: $old_p -> $p"$'\n'
   done <<< "$FIELDS_NOW"
 fi
 [[ -n "$FIELDS_NOW" ]] && printf '%s\n' "$FIELDS_NOW" > "$FIELDS"

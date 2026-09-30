@@ -83,7 +83,7 @@ The `#N MAIN PROJECT:`/`#N WP A:` prefix is structural — its own convention,
 in [`docs/5.1`](../../../docs/5.1-change-lifecycle.md) — and is never cut;
 these rules apply to what follows it.
 
-**2 · Scope.** Options, dependencies, `Effort`. `Stage` moves to *Scope,
+**2 · Scope.** Options, dependencies, `Effort`. `Requirement State` moves to *Scope,
 Options and Dependencies*.
 
 **3 · Project planning.** The outcome is one of five:
@@ -93,7 +93,7 @@ Options and Dependencies*.
 | **solo project** | raise it — the `raise-project` skill |
 | **grouped project** | fold it into one that exists |
 | **straight to `main`** | a pre-approved change, no project |
-| **on hold** | `Stage` = `On Hold`, and the body says what it waits for |
+| **on hold** | `Requirement State` = `On Hold`, and the body says what it waits for |
 | **cancelled** | closed, with why |
 
 ## What carries a milestone

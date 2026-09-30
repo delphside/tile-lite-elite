@@ -25,7 +25,7 @@ APPROACH = """## Test approach
 
 def wp(n, preview, rehearsal, milestone="0.8.2", subs=()):
     return classify(RawIssue(n, f"wp {n}", "OPEN", APPROACH % (preview, rehearsal),
-                             "Project", {"Phase": "Development", "Route": "x"},
+                             "Project", {"Project State": "Development", "Route": "x"},
                              subs, 9 if not subs else None, milestone, frozenset()))
 
 done = wp(1, "- [x] **Claude** — looked at it", "- [x] **Claude** — ran it")
@@ -47,7 +47,7 @@ class TheRelease(Cases):
     def test_a_project_with_no_headings_at_all(self):
         """a project with no headings at all"""
         bare = classify(RawIssue(3, "bare", "OPEN", "## Design\n", "Project",
-                                 {"Phase": "Development", "Route": "x"}, (), 9,
+                                 {"Project State": "Development", "Route": "x"}, (), 9,
                                  "0.8.2", frozenset()))
         found = outstanding([bare], "0.8.2")
         self.expect("is reported", 1, len(found))
@@ -77,7 +77,7 @@ class TheRelease(Cases):
             APPROACH % ("- [x] **owner** — looked", "- [x] **Claude** — ran")
             + "\n## Post-deployment checks against requirements\n\n"
               "- [ ] **owner** — did the benefit arrive\n",
-            "Project", {"Phase": "Post-deployment", "Route": "x"}, (), 9, "0.8.2",
+            "Project", {"Project State": "Post-deployment", "Route": "x"}, (), 9, "0.8.2",
             frozenset()))
         self.expect("an unticked post-deployment box is not a test", 0,
                len(outstanding([mixed], "0.8.2")))

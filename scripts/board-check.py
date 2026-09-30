@@ -36,7 +36,7 @@ from board.context import missing_members, stale, undeclared_links, wanted_title
 from board.milestone import carried
 from board.milestone import render as render_milestone
 from board.milestone import unbuilt
-from board.model import classify
+from board.model import PROJECT_STATE, classify
 from board.overtaken import candidates
 from board.overtaken import check as check_overtaken
 from board.overtaken import render as render_overtaken
@@ -107,7 +107,7 @@ def main(argv=None) -> int:
         # is the same timeline read `step_ages` does.
         try:
             typed = [classify(raw) for raw in snapshot.issues]
-            wanted = [(i.number, "Phase", "Post-deployment")
+            wanted = [(i.number, PROJECT_STATE, "Post-deployment")
                       for i in candidates(typed)]
             ages = step_ages(wanted) if wanted else {}
             now = time.time()

@@ -21,7 +21,7 @@ from board.sources import Snapshot
 def issue(number, kind="Project", subs=(), parent=None, ws="W",
           milestone=None, blocked_by=()):
     return RawIssue(number, f"issue {number}", "OPEN", "", kind,
-                    {"Workstream": ws, "Phase": "Q1"}, tuple(subs), parent,
+                    {"Workstream": ws, "Project State": "Q1"}, tuple(subs), parent,
                     milestone, frozenset(), frozenset(blocked_by), frozenset())
 
 def road(*raws, **kw):
@@ -122,7 +122,7 @@ class TheRoadmap(Cases):
     def test_a_work_package_names_its_parent_project(self):
         """a work package names its parent project; a standalone has none"""
         parent = RawIssue(291, "#291 MAIN PROJECT: Capacity planning", "OPEN", "",
-                          "Project", {"Workstream": "W", "Phase": "Q1"},
+                          "Project", {"Workstream": "W", "Project State": "Q1"},
                           (RawSubIssue(408, "Project"),), None, None,
                           frozenset(), frozenset(), frozenset())
         text = draw(road(parent, issue(408, parent=291), issue(9)))

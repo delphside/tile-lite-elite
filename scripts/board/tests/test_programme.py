@@ -35,7 +35,7 @@ def commits(**kw):
 
 def issue(number, kind="Project", parent=None, fields=None, milestone=None):
     return RawIssue(number, f"issue {number}", "OPEN", "", kind,
-                    fields or {"Route": "Production Release", "Phase": "Post-deployment"},
+                    fields or {"Route": "Production Release", "Project State": "Post-deployment"},
                     (), parent, milestone, frozenset())
 
 LOG = ("\x1e" "aaaaaaa" "\x1f" "app 0.8.2 api 2.13: the design note\n\nRefs #291\n" "\x1f"
@@ -126,7 +126,7 @@ class TheProgramme(Cases):
 
     def test_the_commits_and_the_board_can_disagree_and_that_is_reported(self):
         """the commits and the board can disagree, and that is reported"""
-        snap = Snapshot((issue(10, fields={"Route": "Programme Tooling and Docs", "Phase": "Scope"}),),
+        snap = Snapshot((issue(10, fields={"Route": "Programme Tooling and Docs", "Project State": "Scope"}),),
                         0.0, 0.0, 1, False)
         got = changes(snap, commits(released=scope(closes=[10])))[0]
         self.expect("shipped, but the board says Scope", True, got.disagrees)
@@ -136,7 +136,7 @@ class TheProgramme(Cases):
         self.expect("an old mention is not a contradiction", False,
               changes(snap, commits(released=scope(refs=[10])))[0].disagrees)
         snap = Snapshot((issue(11, fields={"Route": "Programme Tooling and Docs",
-                                           "Phase": "Post-deployment"}),), 0.0, 0.0, 1, False)
+                                           "Project State": "Post-deployment"}),), 0.0, 0.0, 1, False)
         self.expect("shipped and the board agrees", False,
               changes(snap, commits(released=scope(closes=[11])))[0].disagrees)
 

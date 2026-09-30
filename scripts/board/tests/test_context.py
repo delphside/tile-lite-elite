@@ -34,15 +34,15 @@ TODAY = date(2026, 9, 24)
 # The #400 family as it stood on 2026-09-24, shared by the R10 cases.
 board = board_of(
     raw(400, "#400 MAIN PROJECT: TLE Scheduler",
-        fields={"Phase": "Scope", "Route": "Production Release"},
+        fields={"Project State": "Scope", "Route": "Production Release"},
         milestone="0.8.2",
         subs=[RawSubIssue(414, "Project"), RawSubIssue(415, "Project")],
         blocks=(224,)),
     raw(414, "#400 WP A Del 1 of 1, pt 1 of 2: Scheduler core", parent=400,
-        fields={"Phase": "User testing", "Route": "Production Release"},
+        fields={"Project State": "User testing", "Route": "Production Release"},
         milestone="0.8.2", blocks=(415,)),
     raw(415, "#400 WP B Del 1 of 1, pt 2 of 2: Admin CLI and tests", parent=400,
-        fields={"Phase": "Scope"}, milestone="0.8.2",
+        fields={"Project State": "Scope"}, milestone="0.8.2",
         blocked_by=(414, 256)),
     raw(411, "#414 Scheduler core", kind="PullRequest", body="Refs #414"),
     raw(224, "Monitoring and alarming gaps", blocked_by=(400,)),
@@ -97,7 +97,7 @@ class TheContextHeader(Cases):
         self.expect("a body opening with a heading gets no introduction", False,
                INTRODUCTION in once)
         fresh = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
-                             fields={"Phase": "Scope"},
+                             fields={"Project State": "Scope"},
                              subs=[RawSubIssue(414, "Project"), RawSubIssue(415, "Project")],
                              blocks=(224,)))[400]
         self.expect("the header read back is the one written", h[400], current(fresh))
@@ -109,7 +109,7 @@ class TheContextHeader(Cases):
         self.expect("nor does board-check call it stale", [], [f for f in stale(
             {**board, 400: fresh}, titles) if f[0] == 400])
         moved = board_of(raw(400, "#400 MAIN PROJECT: TLE Scheduler", body=once,
-                             fields={"Phase": "Design and Test Approach"},
+                             fields={"Project State": "Design and Test Approach"},
                              subs=[RawSubIssue(414, "Project"), RawSubIssue(415, "Project")],
                              blocks=(224,)))
         moved = {**board, **moved}
@@ -120,14 +120,14 @@ class TheContextHeader(Cases):
         """R10: a closed package is still part of the family"""
         fam = board_of(
             raw(329, "#329 MAIN PROJECT: document and generalise errors",
-                fields={"Phase": "Design and Test Approach"},
+                fields={"Project State": "Design and Test Approach"},
                 subs=[RawSubIssue(398, "Project"), RawSubIssue(399, "Project")]),
             raw(399, "#329 WP B Del 2 of 2: Generalise API database errors", parent=329,
-                fields={"Phase": "Deployment"}, milestone="0.8.2"),
+                fields={"Project State": "Deployment"}, milestone="0.8.2"),
         )
         self.expect("the open board lacks it, so it is asked for", [398], missing_members(fam))
         fam.update(board_of(raw(398, "#329 WP A Del 1 of 2: the errors documented", parent=329,
-                                fields={"Phase": "Project Closedown"}, milestone="pre-approved",
+                                fields={"Project State": "Project Closedown"}, milestone="pre-approved",
                                 state="CLOSED")))
         ht = headers(fam, {n: i.title for n, i in fam.items()}, TODAY)
         self.expect("it is listed, and says it is closed", True,

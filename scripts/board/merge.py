@@ -15,7 +15,8 @@ from __future__ import annotations
 from typing import Iterable, Mapping
 
 from . import refs
-from .model import RELEASE, Issue, StandaloneProject, WorkPackage, delivered_by_merge
+from .model import (PROJECT_STATE, RELEASE, Issue, StandaloneProject, WorkPackage,
+                    delivered_by_merge)
 
 # Phases a merge moves on from. Anything later is left alone: a merge never
 # moves a Phase backwards, and one already past it has been moved by hand.
@@ -45,7 +46,7 @@ def next_phase(issue: Issue) -> str | None:
     """
     if not isinstance(issue, (WorkPackage, StandaloneProject)):
         return None
-    if issue.state != "OPEN" or issue.field("Phase") not in BEFORE_MERGE:
+    if issue.state != "OPEN" or issue.field(PROJECT_STATE) not in BEFORE_MERGE:
         return None
     route = issue.field("Route")
     if route == RELEASE:
@@ -64,5 +65,5 @@ def moves(candidates: Iterable[int], issues: Mapping[int, Issue]) -> list[tuple[
             continue
         to = next_phase(issue)
         if to:
-            out.append((n, issue.field("Phase") or "", to))
+            out.append((n, issue.field(PROJECT_STATE) or "", to))
     return out

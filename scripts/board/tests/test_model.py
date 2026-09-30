@@ -33,7 +33,7 @@ def issue2(number, kind="Project", parent=None, fields=None, labels=(), body="")
                     (), parent, None, frozenset(labels))
 
 def due(body, **fields):
-    f = {"Phase": "Scope", "Route": "x"}
+    f = {"Project State": "Scope", "Route": "x"}
     f.update(fields)
     return classify(issue(1, parent=2, fields=f, body=body))
 
@@ -94,7 +94,7 @@ class TheBoardModel(Cases):
         self.expect("a defaulted type is reported, not silently accepted",
               Answer.MISSING, ids.get("type-set"))
 
-        typed = classify(issue(1, kind="Requirement", fields={"Stage": "On Hold"}))
+        typed = classify(issue(1, kind="Requirement", fields={"Requirement State": "On Hold"}))
         self.expect("a set Stage is not defaulted", False, typed.stage_was_defaulted)
         self.expect("and is read as itself", "On Hold", typed.step)
 
@@ -103,7 +103,7 @@ class TheBoardModel(Cases):
         new = classify(issue(1, kind="Requirement"))
         self.expect("a typed requirement with no Stage is given Triage",
                     "Triage", new.stage_to_record)
-        staged = classify(issue(1, kind="Requirement", fields={"Stage": "On Hold"}))
+        staged = classify(issue(1, kind="Requirement", fields={"Requirement State": "On Hold"}))
         self.expect("a set Stage is never overwritten", None, staged.stage_to_record)
         untyped = classify(issue(1, kind=None))
         self.expect("an untyped issue is not, since it may become a project",
@@ -128,7 +128,7 @@ class TheBoardModel(Cases):
 | --- | --- | --- |
 | R1 | read it | **passed** |
 """
-        i = classify(issue(252, parent=9, fields={"Phase": "Post-deployment",
+        i = classify(issue(252, parent=9, fields={"Project State": "Post-deployment",
                                                   "Route": "Programme Tooling and Docs"},
                            body=body, milestone="pre-approved"))
         self.expect("unticked boxes across the whole body", 1, i.unticked_boxes)
@@ -152,7 +152,7 @@ class TheBoardModel(Cases):
 | R1 | read it | **passed** |
 | R2 | look at it | |
 """
-        i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
+        i = classify(issue(374, parent=9, fields={"Project State": "Post-deployment",
                                                   "Route": "Programme Tooling and Docs"},
                            body=blank, milestone="pre-approved"))
         self.expect("a blank answer cell is one unanswered row", 1,
@@ -166,7 +166,7 @@ class TheBoardModel(Cases):
         # would have flagged this.
         prose = blank.replace("| R2 | look at it | |",
                               "| R2 | look at it | measured on the 9th: it does not |")
-        i = classify(issue(374, parent=9, fields={"Phase": "Post-deployment",
+        i = classify(issue(374, parent=9, fields={"Project State": "Post-deployment",
                                                   "Route": "Programme Tooling and Docs"},
                            body=prose, milestone="pre-approved"))
         ids = {f.obligation.id: f.answer for f in assess(i)}
@@ -216,7 +216,7 @@ One.
     def test_an_obligation_nothing_can_evidence_is_not_checked_never_met(self):
         """an obligation nothing can evidence is 'not checked', never 'met'"""
         ready = classify(issue(1, kind="Requirement",
-                               fields={"Stage": "Ready for Project", "Workstream": "W"}))
+                               fields={"Requirement State": "Ready for Project", "Workstream": "W"}))
         ids = {f.obligation.id: f.answer for f in assess(ready)}
         self.expect("a gap row answers not checked", Answer.NOT_CHECKED, ids.get("ready-complete"))
 
@@ -228,13 +228,13 @@ One.
         # parent and a work package, both at Q1) missing exactly what #346 found
         # them missing on 2026-09-17, unreported by this model until now.
         at_scope = classify(issue(1, kind="Project",
-                                  fields={"Phase": "Scope", "Workstream": "W"}))
+                                  fields={"Project State": "Scope", "Workstream": "W"}))
         ids = {f.obligation.id: f.answer for f in assess(at_scope)}
         self.expect("Scope is the initial value and is exempt", None, ids.get("project-effort"))
         self.expect("both fields exempt at Scope", None, ids.get("project-priority"))
 
         in_queue = classify(issue(71, kind="Project",
-                                  fields={"Phase": "Q1", "Workstream": "W"}))
+                                  fields={"Project State": "Q1", "Workstream": "W"}))
         ids = {f.obligation.id: f.answer for f in assess(in_queue)}
         self.expect("reaching the queue with no effort is reported",
               Answer.MISSING, ids.get("project-effort"))
@@ -242,7 +242,7 @@ One.
               Answer.MISSING, ids.get("project-priority"))
 
         scoped_wp = classify(issue(268, parent=71, fields={
-            "Phase": "Q1", "Workstream": "W", "Effort": "Low", "Priority": "High"}))
+            "Project State": "Q1", "Workstream": "W", "Effort": "Low", "Priority": "High"}))
         ids = {f.obligation.id: f.answer for f in assess(scoped_wp)}
         self.expect("a work package with both fields set passes",
               Answer.MET, ids.get("project-effort"))
@@ -316,22 +316,22 @@ One.
         self.expect("a decided one is not", None,
               waiting_on_owner(classify(issue(1, kind="Decision",
                                               fields={"Decision State": "Decided"}))))
-        wp = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+        wp = classify(issue(1, parent=2, fields={"Project State": "User testing", "Route": "x"},
                             body="## Functional user tests — Preview\n\n- [ ] click it\n"))
         self.expect("an untested delivery is his", "user testing",
               getattr(waiting_on_owner(wp), "source", None))
-        done = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+        done = classify(issue(1, parent=2, fields={"Project State": "User testing", "Route": "x"},
                               body="## Functional user tests — Preview\n\n- [x] clicked\n"))
         self.expect("a tested one is not", None, waiting_on_owner(done))
 
     def test_the_mirror_what_is_waiting_on_claude(self):
         """the mirror: what is waiting on Claude"""
-        live = classify(issue2(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"}))
+        live = classify(issue2(1, parent=2, fields={"Project State": "Post-deployment", "Route": "x"}))
         self.expect("a delivery at Post-deployment owes a review", "post-deployment",
               getattr(waiting_on_claude(live), "source", None))
         # #310: a Release Check project waits for the next release and owes nobody an
         # action. Without this it nags for a review for ever.
-        held = classify(issue2(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"},
+        held = classify(issue2(1, parent=2, fields={"Project State": "Post-deployment", "Route": "x"},
                                labels=["Release Check"]))
         self.expect("unless it is waiting for a release", None, waiting_on_claude(held))
         self.expect("an approved pull request is Claude's to merge", "pull request",
@@ -350,7 +350,7 @@ One.
         # Dropped only once the age is KNOWN. Without a date there is nothing to
         # compare, and guessing "probably old enough" would claim work is owed when
         # nothing says so.
-        snap = Snapshot((issue2(1, parent=2, fields={"Phase": "Post-deployment",
+        snap = Snapshot((issue2(1, parent=2, fields={"Project State": "Post-deployment",
                                                      "Route": "x"}),), 0.0, 0.0, 1, False)
         got = whats_waiting(snap, dated=False, who="Claude")
         self.expect("an undated review is kept, not guessed away", 1, len(got))
@@ -369,7 +369,7 @@ One.
 - [ ] **Claude** — run the script
 - [ ] nobody owns this one
 """
-        i = classify(issue(1, parent=2, fields={"Phase": "User testing", "Route": "x"},
+        i = classify(issue(1, parent=2, fields={"Project State": "User testing", "Route": "x"},
                            body=body))
         self.expect("four boxes are found", 4, len(i.boxes))
         self.expect("one is the owner's and unticked", 1, len(i.unticked_for("owner")))
@@ -413,7 +413,7 @@ One.
         # because a box written at design describes work a later step will do. A date
         # describes nothing -- it is the statement that this comes round again.
         designing = due("**Next review due:** 2020-01-01 — **Claude**\n",
-                        **{"Phase": "Design and Test Approach"})
+                        **{"Project State": "Design and Test Approach"})
         self.expect("a phase that gates boxes does not gate a date", "recurrence",
               getattr(waiting_on_claude(designing), "source", None))
 
@@ -432,7 +432,7 @@ One.
         # not yet released, and its post-deployment check was already surfacing as
         # waiting on the owner -- he noticed, nothing else would have.
         at_deployment = classify(issue(1, parent=2,
-                                       fields={"Phase": "Deployment", "Route": "x"},
+                                       fields={"Project State": "Deployment", "Route": "x"},
                                        body="## Test approach\n\n- [ ] **owner** — run it\n\n"
                                             "## Post-deployment checks against requirements\n\n"
                                             "- [ ] **owner** — the benefit arrived\n"))
@@ -444,14 +444,14 @@ One.
               getattr(waiting_on_owner(at_deployment), "source", None))
 
         at_post = classify(issue(1, parent=2,
-                                 fields={"Phase": "Post-deployment", "Route": "x"},
+                                 fields={"Project State": "Post-deployment", "Route": "x"},
                                  body="## Post-deployment checks against requirements\n\n"
                                       "- [ ] **owner** — the benefit arrived\n"))
         self.expect("at Post-deployment the same box is due", 1,
               len(due_boxes(at_post, "owner")))
 
         at_closedown = classify(issue(1, parent=2,
-                                      fields={"Phase": "Project Closedown", "Route": "x"},
+                                      fields={"Project State": "Project Closedown", "Route": "x"},
                                       body="## Post-deployment checks against requirements\n\n"
                                            "- [ ] **owner** — the benefit arrived\n"))
         self.expect("and still is at Project Closedown", 1,
@@ -463,22 +463,22 @@ One.
         # reached Project Closedown owing lessons learnt and read as complete. The
         # delegation is why it looked hard -- docs/5.1 lets a package point at its
         # parent, so an absent heading is not by itself a finding.
-        closing = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+        closing = classify(issue(1, parent=2, fields={"Project State": "Project Closedown", "Route": "x"},
                                  body="nothing to say\n"))
         ids = {f.obligation.id: f.answer for f in assess(closing)}
         self.expect("no lesson and no delegation is a finding", Answer.MISSING,
               ids.get("wp-closedown"))
-        learnt = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+        learnt = classify(issue(1, parent=2, fields={"Project State": "Project Closedown", "Route": "x"},
                                 body="## Lessons learnt\n\nthe check reported sed's status\n"))
         self.expect("a lesson answers it", Answer.MET,
               {f.obligation.id: f.answer for f in assess(learnt)}.get("wp-closedown"))
-        delegated = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+        delegated = classify(issue(1, parent=2, fields={"Project State": "Project Closedown", "Route": "x"},
                                    body="Delegated to #71\n"))
         self.expect("so does delegating it to the parent", Answer.MET,
               {f.obligation.id: f.answer for f in assess(delegated)}.get("wp-closedown"))
         # The other half, matching parent-closedown: a package that closes with a box
         # outstanding leaves work owned by nobody.
-        outstanding = classify(issue(1, parent=2, fields={"Phase": "Project Closedown", "Route": "x"},
+        outstanding = classify(issue(1, parent=2, fields={"Project State": "Project Closedown", "Route": "x"},
                                      body="## Lessons learnt\n\n- [ ] **owner** — still to do\n"))
         self.expect("an unticked box still fails it", Answer.MISSING,
               {f.obligation.id: f.answer for f in assess(outstanding)}.get("wp-closedown"))
@@ -488,14 +488,14 @@ One.
         # Labelling made 126 boxes visible at once. Listing every one of the owner's
         # turns R1 into everything that will ever need him, which is the report that
         # gets skimmed.
-        req = classify(issue(1, kind="Requirement", fields={"Stage": "Triage"},
+        req = classify(issue(1, kind="Requirement", fields={"Requirement State": "Triage"},
                              body="- [ ] **owner** — future evidence\n"))
         self.expect("a requirement's evidence box is never due", False, boxes_are_due(req))
         self.expect("so it is not reported as waiting", None, waiting_on_owner(req))
-        scoped = classify(issue(1, parent=2, fields={"Phase": "Scope", "Route": "x"},
+        scoped = classify(issue(1, parent=2, fields={"Project State": "Scope", "Route": "x"},
                                 body="- [ ] **owner** — a test written early\n"))
         self.expect("a delivery still in Scope is not due", False, boxes_are_due(scoped))
-        live = classify(issue(1, parent=2, fields={"Phase": "Post-deployment", "Route": "x"},
+        live = classify(issue(1, parent=2, fields={"Project State": "Post-deployment", "Route": "x"},
                               body="- [ ] **owner** — did the benefit arrive\n"))
         self.expect("one at Post-deployment is", True, boxes_are_due(live))
         self.expect("and it reports as the owner's", "checkbox",
@@ -507,7 +507,7 @@ One.
         # *not yet due* the moment they were written -- the one place a report that
         # answers "what needs you" must not put a question.
         designing = classify(issue(1, parent=2,
-                                   fields={"Phase": "Design and Test Approach", "Route": "x"},
+                                   fields={"Project State": "Design and Test Approach", "Route": "x"},
                                    body="## Design\n\n- [ ] **owner** — which recurrence\n\n"
                                         "## Test approach\n\n- [ ] **owner** — play a game\n"))
         self.expect("the step as a whole is still not due", False, boxes_are_due(designing))
@@ -546,3 +546,18 @@ One.
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class TheStateFieldsRename(Cases):
+    """Stage and Phase became Requirement State and Project State on
+    2026-09-30. Until GitHub carries the new names, either is read as the new
+    one, so the rename can happen at any moment without a gap."""
+
+    def test_either_name_is_read_as_the_new_one(self):
+        from board.sources import _to_raw
+        for old, new in (("Phase", "Project State"), ("Stage", "Requirement State")):
+            for name in (old, new):
+                node = {"number": 1, "title": "t", "state": "OPEN", "body": "",
+                        "issueType": {"name": "Project"},
+                        "issueFieldValues": {"nodes": [{"field": {"name": name}, "value": "Scope"}]}}
+                self.expect(f"{name} is read as {new}", "Scope", _to_raw(node).fields.get(new))

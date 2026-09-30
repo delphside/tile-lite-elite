@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""board-stage.py — give a new requirement its Stage.
+"""board-stage.py — give a new requirement its Requirement State.
 
     scripts/board-stage.py <number>...            # what the issue workflow runs
     scripts/board-stage.py <number>... --dry-run  # say what it would do
 
 Run by `.github/workflows/requirement-stage.yml` when an issue is opened or
-typed. A requirement with no Stage reads as Triage everywhere in the model,
-but the board shows it as blank, so a view filtered by Stage hides it. This
-writes the Stage the model already reads. Which issues get one, and which
+typed. A requirement with no Requirement State reads as Triage everywhere in the model,
+but the board shows it as blank, so a view filtered by Requirement State hides it. This
+writes the Requirement State the model already reads. Which issues get one, and which
 value, is `Requirement.stage_to_record` in `scripts/board/model.py`.
 
-Never overwrites a Stage that is set. Exits 1 when the board cannot be read
+Never overwrites a Requirement State that is set. Exits 1 when the board cannot be read
 or written, so a failed run shows in the workflow's log.
 """
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board.model import classify  # noqa: E402
+from board.model import REQUIREMENT_STATE, classify  # noqa: E402
 from board.sources import Unavailable, issues_in_full, set_field  # noqa: E402
 
 
@@ -45,16 +45,16 @@ def main(argv: list[str]) -> int:
             failed = True
             continue
         if stage is None:
-            print(f"board-stage: #{number} needs no Stage written")
+            print(f"board-stage: #{number} needs no Requirement State written")
             continue
         if dry:
-            print(f"board-stage: would set #{number} {issue.title}: Stage {stage}")
+            print(f"board-stage: would set #{number} {issue.title}: Requirement State {stage}")
             continue
         try:
-            set_field(number, "Stage", stage)
-            print(f"board-stage: #{number} {issue.title}: Stage {stage}")
+            set_field(number, REQUIREMENT_STATE, stage)
+            print(f"board-stage: #{number} {issue.title}: Requirement State {stage}")
         except Unavailable as exc:
-            print(f"board-stage: could not set #{number}'s Stage ({exc})")
+            print(f"board-stage: could not set #{number}'s Requirement State ({exc})")
             failed = True
     return 1 if failed else 0
 

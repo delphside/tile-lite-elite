@@ -14,7 +14,7 @@ from board.overtaken import candidates, check, render
 
 def proj(n, phase, parent=None):
     return classify(RawIssue(n, f"project {n}", "OPEN", "", "Project",
-                             {"Phase": phase, "Route": "Production Release"},
+                             {"Project State": phase, "Route": "Production Release"},
                              (), parent, None, frozenset()))
 
 RELEASE = 1_000_000.0

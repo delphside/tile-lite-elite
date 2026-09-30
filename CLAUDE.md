@@ -85,7 +85,7 @@ one of them has a defect: fix it, don't work around it.
   written second. #400's eight customers were found by going looking, not by
   each having said so. The edge is also a GitHub dependency link, which the
   generated context header shows and `board-check.py` checks.
-- A project moves through the Phase field. The wording is the field's own
+- A project moves through the Project State field. The wording is the field's own
   stage descriptions:
 
   | phase | done when |
@@ -233,7 +233,7 @@ one of them has a defect: fix it, don't work around it.
   project with **one delivery** needs none: the parent is the work package and
   carries the milestone. Two deliveries need two, even where one goes straight
   to main carrying no milestone — a delivery with no milestone still has a
-  phase, and one `Phase` cannot say delivered and not built at once. D53.
+  phase, and one `Project State` cannot say delivered and not built at once. D53.
 - A work package is titled `#N WP A Del 1 of 2: what it delivers`, a parent
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
   carries more than one package. The counts go stale and are kept anyway: a
