@@ -15,6 +15,7 @@ looking at without inferring it from the contents.
 | **Deployment** | C4 | which containers run on which infrastructure, per environment — *physical* |
 | **Dynamic** | C4 | how elements interact over time: a sequence or a collaboration |
 | **Concurrency** | Rozanski & Woods | what can run at the same time and how that is bounded — the semaphores, the sweeps, the scheduler |
+| **Information** | Rozanski & Woods | the data: what is stored, its shape and who owns it, and how it flows between elements |
 | **State machine** | UML | the lifecycle of one thing: its states, and the transitions between them |
 
 **Nothing here is ours, and an earlier version of this table invented a view
@@ -31,7 +32,14 @@ same time and how this is controlled"*, which is `hash_limit` at 4,
 viewpoint from a second framework is a smaller cost than a name only this
 repository knows.
 
-**State machines are UML's**, the second view C4 lacks: the lifecycles of
+**Information is Rozanski and Woods' too**, a second view C4 lacks. The data's
+structure is drawn as an entity-relationship diagram, as [4.2](../4.2-database-schema.md)'s
+is. Its flows go on the arrows of the other views: each arrow is labelled with
+the data it carries, a DTO, a row or an event, which is C4's own guidance for a
+relationship, so the Container and Component diagrams show the flows without a
+diagram of their own. Added 2026-09-30.
+
+**State machines are UML's**, a third view C4 lacks: the lifecycles of
 games, seats and invitations. A transition is labelled with the method or event
 that causes it where that is useful, so the diagram also says where each state
 change is handled. Added 2026-09-30 (#71, #406).
