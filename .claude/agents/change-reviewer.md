@@ -50,10 +50,19 @@ diff, and decide for yourself whether it is done and done in the right place.
 
 Your final message is the report, and nothing else is read.
 
-- **Findings**, numbered, most serious first. Each says the file and line, what
-  is wrong, what would be right, and whether you **verified** it or
-  **inferred** it.
-- **Holds**: one line on what you checked and found right.
+A review is judged by what it checked, not by how much it found (#441 R11).
+Clean work is a legitimate result, and a few findings are not a reason to stop
+looking.
+
+- **Checks**: every check above, and every *Done when* item and question in
+  your handover, each answered **holds**, **finding** (with its number), or
+  **could not check** (and why). None left out.
+- **Findings**, numbered, most serious first, each marked **material** (it
+  would change what the work does, or leave a requirement unmet) or **minor**
+  (worth fixing, changes nothing that matters). Each says the file and line,
+  what is wrong, what would be right, and whether you **verified** it or
+  **inferred** it. Say "no material findings" when there are none; do not
+  promote a minor one to have something to report.
 - **Questions for the owner**: only what the documents cannot settle.
 
 ## Never
