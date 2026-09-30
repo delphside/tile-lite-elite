@@ -17,8 +17,10 @@ documentation or tests.
 ## Done when
 
 What finishes it, as checks the agent can run or read: the requirements it
-meets, the tests that pass, the documents that say so. For a review, the
-questions answered.
+meets, the tests that pass, the documents that say so. Each says how it is
+proved, not only what: "same exit statuses" needs "and tested", or it is
+proved once by hand and nothing holds it (#441's first trial). For a review,
+the questions answered.
 
 ## Subject
 
