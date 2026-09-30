@@ -506,7 +506,7 @@ settle_issue() {
   # that — the same reasoning as the gate above calling out an issue that no
   # commit mentions, because that too is decidable.
   phase="$(gh issue view "$issue" --json issueFieldValues \
-    --jq '[.issueFieldValues[]? | select(.field.name == "Project State" or .field.name == "Phase") | .name] | first // ""' \
+    --jq '[.issueFieldValues[]? | select(.field.name == "Project State") | .name] | first // ""' \
     2>/dev/null || true)"
   if [[ -n "$phase" && "$phase" != "Deployment" ]]; then
     echo "    note: #$issue was at '$phase', not 'Deployment', when it shipped" >&2

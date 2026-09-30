@@ -547,17 +547,3 @@ if __name__ == "__main__":
     unittest.main()
 
 
-
-class TheStateFieldsRename(Cases):
-    """Stage and Phase became Requirement State and Project State on
-    2026-09-30. Until GitHub carries the new names, either is read as the new
-    one, so the rename can happen at any moment without a gap."""
-
-    def test_either_name_is_read_as_the_new_one(self):
-        from board.sources import _to_raw
-        for old, new in (("Phase", "Project State"), ("Stage", "Requirement State")):
-            for name in (old, new):
-                node = {"number": 1, "title": "t", "state": "OPEN", "body": "",
-                        "issueType": {"name": "Project"},
-                        "issueFieldValues": {"nodes": [{"field": {"name": name}, "value": "Scope"}]}}
-                self.expect(f"{name} is read as {new}", "Scope", _to_raw(node).fields.get(new))

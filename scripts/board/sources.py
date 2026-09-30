@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from .model import RawIssue, RawSubIssue, field_name
+from .model import RawIssue, RawSubIssue
 
 OWNER = "delphside"
 REPO = "tile-lite-elite"
@@ -164,7 +164,7 @@ def _gh_graphql(query: str, partial: bool = False, **variables) -> dict:
 
 def _to_raw(node: dict) -> RawIssue:
     fields = {
-        field_name(n["field"]["name"]): n["value"]
+        n["field"]["name"]: n["value"]
         for n in node.get("issueFieldValues", {}).get("nodes", [])
         if n and n.get("field", {}).get("name")
     }
@@ -288,7 +288,7 @@ def step_ages(wanted: Sequence[tuple[int, str, str]]) -> dict[int, float]:
             field, value = by_number.get(node["number"], (None, None))
             when = None
             for event in node.get("timelineItems", {}).get("nodes", []):
-                if not event or field_name((event.get("issueField") or {}).get("name") or "") != field:
+                if not event or (event.get("issueField") or {}).get("name") != field:
                     continue
                 if (event.get("newValue") or event.get("value")) == value:
                     when = event.get("createdAt")
@@ -514,7 +514,7 @@ def set_field(number: int, field: str, value: str) -> None:
       nodes {{ ... on IssueFieldSingleSelect {{ id name options {{ id name }} }} }} }} }} }}""")
     nodes = ((((fields.get("data") or {}).get("organization") or {})
               .get("issueFields") or {}).get("nodes") or [])
-    chosen = next((f for f in nodes if f and field_name(f.get("name") or "") == field_name(field)), None)
+    chosen = next((f for f in nodes if f and f.get("name") == field), None)
     if chosen is None:
         raise Unavailable(f"no issue field named {field!r}")
     option = next((o for o in chosen["options"] if o["name"] == value), None)

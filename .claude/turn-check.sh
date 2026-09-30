@@ -127,7 +127,7 @@ if [[ -n "$NWO" ]]; then
     --jq '.data.repository.issues.nodes[]
           | . as $i
           | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Decision State")|.name][0] // "-") as $d
-          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Project State" or .field.name=="Phase")|.name][0] // "-") as $p
+          | ([$i.issueFieldValues.nodes[]?|select(.field.name=="Project State")|.name][0] // "-") as $p
           | "\($i.number)\t\($d)\t\($p)"' 2>/dev/null)"
 fi
 
