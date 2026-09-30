@@ -17,6 +17,7 @@ looking at without inferring it from the contents.
 | **Concurrency** | Rozanski & Woods | what can run at the same time and how that is bounded — the semaphores, the sweeps, the scheduler |
 | **Information** | Rozanski & Woods | the data: what is stored, its shape and who owns it, and how it flows between elements |
 | **State machine** | UML | the lifecycle of one thing: its states, and the transitions between them |
+| **Activity** | UML | a user's journey through the service, step by step |
 
 **Nothing here is ours, and an earlier version of this table invented a view
 called *Runtime* that C4 already had.** Corrected 2026-09-22. Owner, the same
@@ -48,6 +49,13 @@ flows to read, and for that part of the system only.
 games, seats and invitations. A transition is labelled with the method or event
 that causes it where that is useful, so the diagram also says where each state
 change is handled. Added 2026-09-30 (#71, #406).
+
+**Activity diagrams are UML's too**, for the player's journeys: they sit
+between the text requirements and the architecture, to think the requirements
+through. Each step either causes a state machine transition or only reads
+state, and cites the `docs/1.0` rules it exercises, so the end-to-end tests
+come from them. They are not used to map releases or manage work. Added
+2026-09-30 (#71).
 
 **Code is C4's fourth level, and optional.** It is drawn only for a component
 with real rules in it, such as the game service or the rules engine, and it is
