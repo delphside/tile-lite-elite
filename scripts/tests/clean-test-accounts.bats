@@ -13,7 +13,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  CLEAN="$BATS_TEST_DIRNAME/../clean-test-accounts.sh"
+  CLEAN="$BATS_TEST_DIRNAME/../application/deliver/clean-test-accounts.sh"
   BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   # docker, preview's route: `users list` answers with $LISTING, and
   # `users delete` obeys $DELETE_EXIT.

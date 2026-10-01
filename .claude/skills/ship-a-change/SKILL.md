@@ -31,11 +31,11 @@ the record says a delivery happened with nothing responsible for it.
 Run in order. Each step's proof is its **exit status**, never its output.
 
 ```bash
-./scripts/verify.sh                       # 1. the board and the environments agree
-./scripts/deploy-preview.sh               # 2. preview, at the commit you will ship
+./scripts/application/deliver/verify.sh                       # 1. the board and the environments agree
+./scripts/application/deliver/deploy-preview.sh               # 2. preview, at the commit you will ship
 cd e2e && npx playwright test --workers=1 # 3. against preview
-./scripts/deploy-rehearsal.sh             # 4. the whole release, same script production gets
-./scripts/deploy.sh                       # 5. production — run it bare
+./scripts/application/deliver/deploy-rehearsal.sh             # 4. the whole release, same script production gets
+./scripts/application/deliver/deploy.sh                       # 5. production — run it bare
 ```
 
 ### The traps, each of which has cost a run
@@ -52,8 +52,8 @@ one worker.
 burst of 3 and the suite registers an account per test:
 
 ```bash
-./scripts/rehearsal-limits.sh regression   # before
-./scripts/rehearsal-limits.sh production   # after — always
+./scripts/application/deliver/rehearsal-limits.sh regression   # before
+./scripts/application/deliver/rehearsal-limits.sh production   # after — always
 ```
 
 **Leaving them relaxed is worse than forgetting to relax them**, because
@@ -62,7 +62,7 @@ burst of 3 and the suite registers an account per test:
 **Clean up after a remote run**, or the next one inherits the accounts:
 
 ```bash
-./scripts/clean-test-accounts.sh --prefix T- --target https://rehearsal.tileliteelite.com
+./scripts/application/deliver/clean-test-accounts.sh --prefix T- --target https://rehearsal.tileliteelite.com
 ```
 
 **Read the milestone before deploying.** `deploy.sh` closes **every open issue in

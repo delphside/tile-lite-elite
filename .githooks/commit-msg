@@ -38,7 +38,7 @@ CLAIMED_API="${BASH_REMATCH[2]}"
 HERE="$(git rev-parse --show-toplevel)"
 
 ACTUAL_APP="$(grep -m1 '^version' "$HERE/Cargo.toml" 2>/dev/null | cut -d'"' -f2 || true)"
-ACTUAL_API="$("$HERE/scripts/read-api-version.sh" < "$HERE/crates/api/src/lib.rs" 2>/dev/null || true)"
+ACTUAL_API="$("$HERE/scripts/application/deliver/read-api-version.sh" < "$HERE/crates/api/src/lib.rs" 2>/dev/null || true)"
 
 if [[ -n "$ACTUAL_APP" && "$CLAIMED_APP" != "$ACTUAL_APP" ]]; then
   echo "commit refused: subject says app $CLAIMED_APP, Cargo.toml says $ACTUAL_APP" >&2

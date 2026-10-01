@@ -12,7 +12,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  REAL="$BATS_TEST_DIRNAME/../deploy-rehearsal.sh"
+  REAL="$BATS_TEST_DIRNAME/../application/deliver/deploy-rehearsal.sh"
   D="$BATS_TEST_TMPDIR"
   mkdir -p "$D/bin" "$D/scripts"
   # Nothing outward may be reached in a refusal; if it is, it says so.
@@ -24,13 +24,14 @@ setup() {
   # host can be production: rehearsal-target.sh exports DEPLOY_HOST
   # unconditionally, so a caller cannot set it from outside. The first version
   # of this test tried and the guard never fired.
-  cp "$REAL" "$D/scripts/"
-  printf '#!/usr/bin/env bash\necho "REACHED deploy.sh" >&2\n' > "$D/scripts/deploy.sh"
-  chmod +x "$D/scripts/deploy.sh"
+  mkdir -p "$D/scripts/application/deliver"
+  cp "$REAL" "$D/scripts/application/deliver/"
+  printf '#!/usr/bin/env bash\necho "REACHED deploy.sh" >&2\n' > "$D/scripts/application/deliver/deploy.sh"
+  chmod +x "$D/scripts/application/deliver/deploy.sh"
 }
 
 reset_against() {   # the host the target file wrongly points at
-  cat > "$D/scripts/rehearsal-target.sh" <<TARGET
+  cat > "$D/scripts/application/deliver/rehearsal-target.sh" <<TARGET
 export DEPLOY_ENV=rehearsal
 export DEPLOY_HOST=$1
 export DEPLOY_USER=ubuntu
@@ -38,7 +39,7 @@ export DEPLOY_SSH_KEY=/dev/null
 export DEPLOY_REMOTE_DIR=tile-lite-elite
 export TARGET_URL=https://example.invalid
 TARGET
-  PATH="$D/bin:$PATH" run "$D/scripts/deploy-rehearsal.sh" reset
+  PATH="$D/bin:$PATH" run "$D/scripts/application/deliver/deploy-rehearsal.sh" reset
 }
 
 @test "production by IP is refused, and nothing is run against it" {

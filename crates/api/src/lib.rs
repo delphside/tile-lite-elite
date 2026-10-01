@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 // field is new functionality.
 // 2.7: `HealthDto` gains `schema_version`, the highest migration applied to
 // the server's database. Purely additive — an older client deserializing
-// this ignores the field — and it exists for `scripts/deploy.sh`, which
+// this ignores the field — and it exists for `scripts/application/deliver/deploy.sh`, which
 // compares it against the target commit's migrations and refuses to ship an
 // image the database has already moved past.
 // 2.8: removing an *aborted* game now succeeds where it used to be
@@ -108,12 +108,12 @@ pub struct HealthDto {
     /// `Major.Minor.Patch[+build]` — see `server-game`'s `app_version()`.
     /// Lets anything that can reach `/health` (a human with `curl`, a
     /// deploy script) find out exactly which commit is live without SSHing
-    /// in to grep startup logs — e.g. `scripts/deploy-preview.sh at prod`
+    /// in to grep startup logs — e.g. `scripts/application/deliver/deploy-preview.sh at prod`
     /// reads this to bring preview to the same version as production.
     pub app_version: String,
     /// Highest migration version applied to the server's database.
     ///
-    /// Lets `scripts/deploy.sh` tell, before shipping anything, whether the
+    /// Lets `scripts/application/deliver/deploy.sh` tell, before shipping anything, whether the
     /// image it is about to deploy is *older* than the schema already in
     /// place — an image that doesn't know a migration the database has
     /// applied fails sqlx's `validate_applied_migrations` and never boots.

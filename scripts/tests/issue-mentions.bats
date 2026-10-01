@@ -15,7 +15,7 @@ setup() {
   bats_load_library bats-assert
   export REPO_DIR="$BATS_TEST_DIRNAME/../.."
   # shellcheck source=/dev/null
-  source "$BATS_TEST_DIRNAME/../issue-mentions.sh"
+  source "$BATS_TEST_DIRNAME/../application/deliver/issue-mentions.sh"
 }
 
 # The exact case that fired on a production release: #174 from d2adc63. Fifty

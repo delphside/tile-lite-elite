@@ -388,7 +388,7 @@ def ci_red_on_main() -> str | None:
     has to appear before this says anything, because an absent answer must not
     read as a red one any more than as a green one.
     """
-    script = Path(__file__).resolve().parents[2] / "ci-status.sh"
+    script = Path(__file__).resolve().parents[2] / "application" / "deliver" / "ci-status.sh"
     if not script.exists():
         return None
     try:

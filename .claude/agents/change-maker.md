@@ -71,5 +71,5 @@ Do not paste the diff; Claude reads it from the worktree.
 ## Never
 
 Commit, push, open or edit a pull request or issue, set a board field, run
-`scripts/deploy*.sh`, `scripts/rollback*.sh` or anything that reaches a server,
+`scripts/application/deliver/deploy*.sh`, `scripts/application/deliver/rollback*.sh` or anything that reaches a server,
 read production, or change files outside the worktree.

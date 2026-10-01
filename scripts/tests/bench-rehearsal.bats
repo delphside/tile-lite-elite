@@ -6,7 +6,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../bench-rehearsal.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../application/measure/bench-rehearsal.sh"
   ROOT="$BATS_TEST_DIRNAME/../.."
 }
 

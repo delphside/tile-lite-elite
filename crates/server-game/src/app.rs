@@ -363,7 +363,7 @@ fn build_id_header_for(
 /// three numbers. Distinct from `api::API_VERSION`: this is the build
 /// identity, not the wire-contract version clients check on connect.
 /// Logged at startup (`main.rs`) and served at `/health` — the latter is
-/// what lets `scripts/deploy-preview.sh at prod` find out which commit is
+/// what lets `scripts/application/deliver/deploy-preview.sh at prod` find out which commit is
 /// actually live without SSHing in.
 pub fn app_version() -> String {
     format_app_version(

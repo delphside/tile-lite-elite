@@ -13,7 +13,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 // it fails every test at the door — and a closed gate and a broken application
 // refuse identically. #371.
 //
-// The key comes from `scripts/rehearsal-key.sh`, which is the one place that
+// The key comes from `scripts/application/deliver/rehearsal-key.sh`, which is the one place that
 // knows how to get it; set `REHEARSAL_ACCESS_KEY` to skip the ssh.
 //
 // **The cookie jar, not a header, and that distinction is the whole of #396.**
@@ -37,7 +37,7 @@ function gateState() {
   const fromEnv = process.env.REHEARSAL_ACCESS_KEY;
   const key =
     fromEnv ??
-    execSync(`${__dirname}/../scripts/rehearsal-key.sh`, { encoding: 'utf8' }).trim();
+    execSync(`${__dirname}/../scripts/application/deliver/rehearsal-key.sh`, { encoding: 'utf8' }).trim();
   if (!key) throw new Error('rehearsal is gated and no access key could be obtained');
   return {
     cookies: [{

@@ -18,7 +18,7 @@ setup() {
   git -C "$REPO_DIR" commit -q -m base
   BASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
   # shellcheck source=/dev/null
-  source "$BATS_TEST_DIRNAME/../shipping-paths.sh"
+  source "$BATS_TEST_DIRNAME/../application/deliver/shipping-paths.sh"
 }
 
 commit_file() {   # <path> <message>

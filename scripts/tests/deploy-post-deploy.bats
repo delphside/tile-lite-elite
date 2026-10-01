@@ -16,7 +16,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   # shellcheck source=/dev/null
-  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   DEPLOYED_VERSION="0.7.2"
   POST_DEPLOY_FAILED=()
   ERR="$BATS_TEST_TMPDIR/err"

@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // Safe to run against a database an older server is still using: SQLite
     // wraps each migration in a transaction, so this either completes or
-    // leaves nothing behind. `scripts/deploy.sh` stops the server first
+    // leaves nothing behind. `scripts/application/deliver/deploy.sh` stops the server first
     // anyway, so the old code never sees a half-changed schema.
     if std::env::args().any(|arg| arg == "--migrate-only") {
         let pool = server_game::persistence::connect(&database_url).await?;

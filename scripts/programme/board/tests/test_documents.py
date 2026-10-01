@@ -53,7 +53,7 @@ class NeitherSide(unittest.TestCase):
         self.assertEqual([], of("application", *paths))
 
     def test_a_path_that_is_not_a_document(self):
-        paths = ("scripts/deploy.sh", "crates/api/src/lib.rs", "e2e/README.md")
+        paths = ("scripts/application/deliver/deploy.sh", "crates/api/src/lib.rs", "e2e/README.md")
         self.assertEqual([], of("programme", *paths))
         self.assertEqual([], of("application", *paths))
 

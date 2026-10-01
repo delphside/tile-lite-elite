@@ -43,7 +43,7 @@ def _rehearsal_url() -> str:
     the rehearsal host on both lines. It looked plausible, because the two are
     usually on the same commit.
     """
-    script = Path(__file__).resolve().parents[2] / "rehearsal-target.sh"
+    script = Path(__file__).resolve().parents[2] / "application" / "deliver" / "rehearsal-target.sh"
     if not script.exists():
         return ""
     out = subprocess.run(["bash", "-c", f'. "{script}" >/dev/null 2>&1; printf "%s" "$TARGET_URL"'],

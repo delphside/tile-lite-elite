@@ -25,7 +25,7 @@
 //! blocked on #9's DTO-conversion move; this package does not need that.
 //!
 //! **Rate limits are the regression suite's problem too.** Run this against
-//! rehearsal with `scripts/rehearsal-limits.sh regression` first, or every
+//! rehearsal with `scripts/application/deliver/rehearsal-limits.sh regression` first, or every
 //! category collapses into "the limiter", which answers a different
 //! question from "the service".
 //!

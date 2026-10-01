@@ -8,7 +8,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  READ="$BATS_TEST_DIRNAME/../read-api-version.sh"
+  READ="$BATS_TEST_DIRNAME/../application/deliver/read-api-version.sh"
 }
 
 reads() { run "$READ" <<< "$1"; }

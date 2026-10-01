@@ -26,8 +26,8 @@ DATE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 DEF = re.compile(r"^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{|^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 FILES = [
-    "scripts/deploy.sh",
-    "scripts/verify.sh",
+    "scripts/application/deliver/deploy.sh",
+    "scripts/application/deliver/verify.sh",
 ]
 
 

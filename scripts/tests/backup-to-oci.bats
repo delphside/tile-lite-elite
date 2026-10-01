@@ -11,7 +11,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../backup-to-oci.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../application/operate/backup-to-oci.sh"
   D="$BATS_TEST_TMPDIR"
   mkdir -p "$D/bin"
   # docker: `cp` produces a file, anything else succeeds.

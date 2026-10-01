@@ -12,7 +12,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  RUN_LOG="$BATS_TEST_DIRNAME/../run-log.sh"
+  RUN_LOG="$BATS_TEST_DIRNAME/../application/deliver/run-log.sh"
   export XDG_STATE_HOME="$BATS_TEST_TMPDIR/state"
   LOGS="$XDG_STATE_HOME/tile-lite-elite"
 }

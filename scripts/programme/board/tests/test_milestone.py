@@ -180,7 +180,7 @@ class WhatCountsAsAMention(Cases):
         # pre-flight reports on mentions_on. The failure nobody would see is the
         # pre-flight passing where the gate refuses, so the two are compared on
         # one history rather than read.
-        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "issue-mentions.sh")
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "application", "deliver", "issue-mentions.sh")
         for n in (17, 99, 170, 362, 500, 501):
             gate = subprocess.run(["bash", "-c", f'source "{script}"; commits_mentioning HEAD {n}'],
                                   capture_output=True, text=True).stdout.strip()

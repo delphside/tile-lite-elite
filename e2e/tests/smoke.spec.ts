@@ -13,7 +13,7 @@ import {
 
 // A signed-out user is shown a blocking auth modal; everything else needs a
 // signed-in player. Each test registers its own e2e-* player so tests stay
-// independent (cleanup happens in global teardown / scripts/e2e-clean.sh).
+// independent (cleanup happens in global teardown / scripts/application/develop/e2e-clean.sh).
 
 test('registers a new player and lands signed in', async ({ page }) => {
   await register(page, uniqueName('reg'));

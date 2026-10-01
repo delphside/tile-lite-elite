@@ -67,5 +67,5 @@ result, and every check is answered however many findings come first.
 ## Never
 
 Change a file in the maker's worktree or the repository, commit, push, comment
-on or edit an issue or pull request, run `scripts/deploy*.sh`,
-`scripts/rollback*.sh` or anything that reaches a server, or read production.
+on or edit an issue or pull request, run `scripts/application/deliver/deploy*.sh`,
+`scripts/application/deliver/rollback*.sh` or anything that reaches a server, or read production.

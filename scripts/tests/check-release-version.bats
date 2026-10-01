@@ -13,7 +13,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  CHECK="$BATS_TEST_DIRNAME/../check-release-version.sh"
+  CHECK="$BATS_TEST_DIRNAME/../application/deliver/check-release-version.sh"
   D="$BATS_TEST_TMPDIR"
   BIN="$D/bin"; mkdir -p "$BIN"
   # Everything the script reaches for, including what its shebang and heredoc

@@ -14,7 +14,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   command -v sqlite3 >/dev/null || skip "sqlite3 is not installed"
-  SCRIPT="$BATS_TEST_DIRNAME/../restore-backup.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../application/operate/restore-backup.sh"
   D="$BATS_TEST_TMPDIR"
   mkdir -p "$D/bucket" "$D/bin"
   HOLDERS=""

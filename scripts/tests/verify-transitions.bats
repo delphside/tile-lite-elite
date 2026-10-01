@@ -13,7 +13,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  VERIFY="$BATS_TEST_DIRNAME/../verify.sh"
+  VERIFY="$BATS_TEST_DIRNAME/../application/deliver/verify.sh"
 }
 
 # Runs verify.sh's check_transitions alone against a stubbed

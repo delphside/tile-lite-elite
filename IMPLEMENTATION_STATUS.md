@@ -75,8 +75,8 @@ The project has successfully implemented the core MVP architecture: a server-aut
 
 - **Purpose**: Run the app somewhere other than a developer's own machine
 - **Status**: ✅ Implemented and live
-- **Contents**: `Dockerfile` (multi-stage: one `builder` stage, two final targets — the server binary + `admin-cli`, and Caddy serving the release web build), `docker-compose.yml`, `Caddyfile`, `scripts/deploy.sh`, `scripts/setup-dev-environment.sh`
-- **Notes**: Caddy reverse-proxies API/WebSocket traffic to the server over the compose network and serves the static web build from the same origin (see the `crates/ui` same-origin note above) — same-origin also means no CORS configuration is needed for the deployed app. Caddy also handles automatic HTTPS via Let's Encrypt given a real hostname; the live deployment uses an [sslip.io](https://sslip.io) hostname (`<ip>.sslip.io`) rather than a purchased domain, since it resolves straight back to the host's IP with zero registration. `/admin/*` is deliberately not proxied, preserving its loopback-only guard. Currently running on an Oracle Cloud "Always Free" compute instance (1 OCPU/1GB RAM — not enough to compile the workspace itself, so `scripts/deploy.sh` always builds locally and ships the finished images over via `docker save`/`scp`/`docker load` rather than building on the VM). See `docs/3.4-deployment.md`'s "Container Deployment" section and `docs/3.1-setup.md`'s "Oracle Cloud VM setup" section for the full setup, including the Oracle networking gotchas that cost real time to work through.
+- **Contents**: `Dockerfile` (multi-stage: one `builder` stage, two final targets — the server binary + `admin-cli`, and Caddy serving the release web build), `docker-compose.yml`, `Caddyfile`, `scripts/application/deliver/deploy.sh`, `scripts/application/develop/setup-dev-environment.sh`
+- **Notes**: Caddy reverse-proxies API/WebSocket traffic to the server over the compose network and serves the static web build from the same origin (see the `crates/ui` same-origin note above) — same-origin also means no CORS configuration is needed for the deployed app. Caddy also handles automatic HTTPS via Let's Encrypt given a real hostname; the live deployment uses an [sslip.io](https://sslip.io) hostname (`<ip>.sslip.io`) rather than a purchased domain, since it resolves straight back to the host's IP with zero registration. `/admin/*` is deliberately not proxied, preserving its loopback-only guard. Currently running on an Oracle Cloud "Always Free" compute instance (1 OCPU/1GB RAM — not enough to compile the workspace itself, so `scripts/application/deliver/deploy.sh` always builds locally and ships the finished images over via `docker save`/`scp`/`docker load` rather than building on the VM). See `docs/3.4-deployment.md`'s "Container Deployment" section and `docs/3.1-setup.md`'s "Oracle Cloud VM setup" section for the full setup, including the Oracle networking gotchas that cost real time to work through.
 
 ---
 
@@ -176,7 +176,7 @@ The project has successfully implemented the core MVP architecture: a server-aut
 - [x] Desktop client
   - Dioxus desktop target
   - Native GTK application
-  - Runs with `cargo run -p tile-lite-elite-ui --features desktop` (or `./scripts/desktop.sh`)
+  - Runs with `cargo run -p tile-lite-elite-ui --features desktop` (or `./scripts/application/develop/desktop.sh`)
 
 - [x] Same codebase for both
   - Dual-target via Dioxus features (web/desktop)
@@ -335,7 +335,7 @@ The project has successfully implemented the core MVP architecture: a server-aut
    - Could use shared rules library to show illegal moves before submission
 
 5. **Deployment process**
-   - `scripts/deploy.sh` is a manual, on-demand push from a developer machine — no CI, no container registry. Appropriate for this project's actual deploy frequency today, but worth revisiting if that changes.
+   - `scripts/application/deliver/deploy.sh` is a manual, on-demand push from a developer machine — no CI, no container registry. Appropriate for this project's actual deploy frequency today, but worth revisiting if that changes.
    - `crates/ui/Cargo.lock` is a stray, separately git-tracked lockfile distinct from the workspace-root one — a leftover from before `crates/ui` joined the workspace. Harmless but noted for eventual cleanup.
 
 6. **No real schema migration system** — flagged before, and hit again this round (`game_invitations.invited_email`, added for email invitations, needed both the local dev DB and the production volume wiped, per the reset procedure in `docs/3.2-development.md`). `create table if not exists` only takes effect on a brand-new database; there's no `ALTER TABLE`/versioned-migration path, and the `schema_migrations` table exists but is dead scaffolding. Fine while there's no real user data to lose, but this is the second time it's cost a full data wipe for a column addition — worth solving for real (e.g. `sqlx migrate`) before it ever matters.

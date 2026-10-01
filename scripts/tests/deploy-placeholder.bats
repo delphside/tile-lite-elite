@@ -15,7 +15,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   # shellcheck source=/dev/null
-  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   # `gh issue list --milestone X` answers from a per-milestone variable, so a
   # test can put an issue in one placeholder and not the others.

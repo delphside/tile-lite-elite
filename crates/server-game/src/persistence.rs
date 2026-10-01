@@ -192,7 +192,7 @@ pub async fn migrate(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
 /// The highest migration version applied to this database.
 ///
 /// Reported on `/health` so a deploy script can find out what schema the
-/// live database is actually at, without SSHing in. `scripts/deploy.sh`
+/// live database is actually at, without SSHing in. `scripts/application/deliver/deploy.sh`
 /// compares it against the highest migration the *target commit* carries
 /// and refuses to ship an older image that the database has already moved
 /// past — that image would fail `validate_applied_migrations` on startup

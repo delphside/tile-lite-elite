@@ -50,7 +50,7 @@ MERGING=0
 # changed the Caddyfile and docker-compose.yml directly on main during #240.
 # Squash merges are made by GitHub and never reach this hook; a local merge is
 # skipped.
-# The pattern lives in scripts/shipping-paths.sh, sourced here and by deploy.sh,
+# The pattern lives in scripts/application/deliver/shipping-paths.sh, sourced here and by deploy.sh,
 # which marks the same commits in its build manifest (#288). Two copies is how
 # the same defect comes to exist in two places, and this one decides both
 # whether a commit is refused and whether a release is described correctly.
@@ -59,8 +59,8 @@ MERGING=0
 # The two ship together, and `git rev-parse --show-toplevel` points at whatever
 # repo is being committed in — which is the hook's own repo in normal use and a
 # fixture's temporary one under test.
-# shellcheck source=../scripts/shipping-paths.sh
-. "$(cd "$(dirname "$0")/.." && pwd)/scripts/shipping-paths.sh"
+# shellcheck source=../scripts/application/deliver/shipping-paths.sh
+. "$(cd "$(dirname "$0")/.." && pwd)/scripts/application/deliver/shipping-paths.sh"
 
 # The one image change that belongs on `main`: the post-deploy version bump.
 #
@@ -85,7 +85,7 @@ MERGING=0
 # `<<<` and not a pipe into `grep -q`: grep exits on its first match, the
 # writer takes SIGPIPE, and under `pipefail` the pipeline reports 141 — so the
 # test would silently invert. That defect has already cost this project a
-# production deploy; see scripts/issue-mentions.sh.
+# production deploy; see scripts/application/deliver/issue-mentions.sh.
 # **The rule is the model's**, `scripts/programme/board/shipping.py`'s `version_bump_only`
 # (#421), asked through `board-shipping.py` rather than held here.
 version_bump_only() {

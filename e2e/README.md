@@ -10,7 +10,7 @@ workspace.
 
 The suite runs against an **already-running dev environment** — it does not
 start the app itself. That's [runbook](../docs/3.3-testing-ci-and-release.md#shipping-a-change-the-full-sequence)
-step 2 (`./scripts/services.sh restart-server` or `restart`), which brings up
+step 2 (`./scripts/application/develop/services.sh restart-server` or `restart`), which brings up
 the server (`:3000`) and web client (`:8080`). Then:
 
 ```bash
@@ -43,7 +43,7 @@ any of them: `T-` is every test account anywhere, `T-e2e-` is this suite's, and
 **The teardown deletes only its own run.** Two runs against one environment used
 to share `e2e-`, so whichever finished first deleted the other's accounts
 mid-run — failures that read as flaky tests. Run by hand,
-[`scripts/e2e-clean.sh`](../scripts/e2e-clean.sh) defaults to the suite's
+[`scripts/application/develop/e2e-clean.sh`](../scripts/application/develop/e2e-clean.sh) defaults to the suite's
 prefix, because wanting all of them is the normal case there.
 
 **The run id comes from `globalSetup`, not from a constant.** `fullyParallel`
@@ -59,6 +59,6 @@ logged-in always is.
 
 - `playwright.config.ts` — Chromium, `baseURL` from `PLAYWRIGHT_BASE_URL`, no `webServer` (the app is external).
 - `global-setup.ts` — computes this run's id before any worker starts.
-- `global-teardown.ts` — best-effort call to `scripts/e2e-clean.sh`, for this run's accounts only.
+- `global-teardown.ts` — best-effort call to `scripts/application/develop/e2e-clean.sh`, for this run's accounts only.
 - `tests/helpers.ts` — auth flows (register/login/logout) and the `T-e2e-<run>-` naming.
 - `tests/smoke.spec.ts` — the first suite: register, login/logout, stay-logged-in, and Play-Greedy-Bot-renders-a-board (the flow whose skew bug prompted this suite).

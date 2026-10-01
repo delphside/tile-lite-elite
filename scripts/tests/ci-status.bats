@@ -17,7 +17,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  CHECK="$BATS_TEST_DIRNAME/../ci-status.sh"
+  CHECK="$BATS_TEST_DIRNAME/../application/deliver/ci-status.sh"
   D="$BATS_TEST_TMPDIR"
   git init -q "$D/repo"
   git -C "$D/repo" config user.email t@example.com

@@ -1,7 +1,7 @@
 # Pinned explicitly rather than left to derive from the containing
 # directory's basename — that basename also determines the image tags
 # `docker compose build` produces (`<name>-server`, `<name>-web`), which
-# `scripts/deploy.sh` references by their exact tag, so an unpinned name
+# `scripts/application/deliver/deploy.sh` references by their exact tag, so an unpinned name
 # would silently break `docker save` the moment the directory's renamed.
 name: tile-lite-elite
 
@@ -11,7 +11,7 @@ services:
       context: .
       target: runtime-server
       args:
-        # Git short SHA, set by scripts/deploy.sh — see docs/operations.md's
+        # Git short SHA, set by scripts/application/deliver/deploy.sh — see docs/operations.md's
         # "Versioning" section. Empty when built by hand (`docker compose
         # build` directly), which is fine: it just means no `+build`
         # suffix on the reported app version.
@@ -40,7 +40,7 @@ services:
       # tuned host keeps its numbers across every redeploy.
       #
       # Defaults live in crates/server-game/src/app/throttle.rs and are a
-      # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
+      # first guess for a 2 vCPU box; ./scripts/application/measure/check-rate-limits.sh asserts
       # the shape against a running server.
       TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN: ${TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN:-}
       TILE_LITE_ELITE_LIMIT_REGISTER_BURST: ${TILE_LITE_ELITE_LIMIT_REGISTER_BURST:-}
@@ -103,7 +103,7 @@ services:
 
       # The rehearsal access gate's secret (#240).
       #
-      # **Not `REHEARSAL_KEY`**, which `scripts/seed-rehearsal.sh` uses for the
+      # **Not `REHEARSAL_KEY`**, which `scripts/application/deliver/seed-rehearsal.sh` uses for the
       # ssh *key path*. Two meanings for one name, one of them a private key
       # and the other a shared secret, is a misreading worth spending a word to
       # avoid — so this one carries `ACCESS`. Read only by the gate in

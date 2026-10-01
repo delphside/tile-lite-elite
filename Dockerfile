@@ -34,7 +34,7 @@ RUN rustup target add wasm32-unknown-unknown \
 # with a misleading "failed to read file" error, not an obvious one. It also
 # sets `rustc-wrapper = sccache` for fast local rebuilds, which doesn't
 # exist in this image; RUSTC_WRAPPER="" below overrides that (env vars take
-# precedence over the config file), matching what scripts/services.sh does
+# precedence over the config file), matching what scripts/application/develop/services.sh does
 # for local wasm dev builds.
 COPY .cargo ./.cargo
 ENV RUSTC_WRAPPER=""
@@ -55,7 +55,7 @@ COPY old-crates ./old-crates
 
 # Baked into both binaries via `option_env!` (see each crate's
 # `app_version()`) as SemVer build metadata, e.g. `0.2.0+a1c9f02`. Passed
-# through from docker-compose.yml's `build.args`, which scripts/deploy.sh
+# through from docker-compose.yml's `build.args`, which scripts/application/deliver/deploy.sh
 # sets to the current git short SHA — see docs/operations.md's
 # "Versioning" section. Placed just before the two build steps below
 # rather than at the top of the stage, so a rebuild of the same commit

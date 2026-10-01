@@ -73,6 +73,6 @@ merged_and_gone() {
 
 # The guard that would catch the regression.
 @test "verify.sh fetches with --prune" {
-  run grep -c 'git fetch -q --prune origin' "$ROOT/scripts/verify.sh"
+  run grep -c 'git fetch -q --prune origin' "$ROOT/scripts/application/deliver/verify.sh"
   assert_output 1
 }

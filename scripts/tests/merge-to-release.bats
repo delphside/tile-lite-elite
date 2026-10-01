@@ -8,7 +8,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../merge-to-release.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../application/deliver/merge-to-release.sh"
   export STUB_DIR="$BATS_TEST_TMPDIR"
   BIN="$STUB_DIR/bin"; mkdir -p "$BIN"
   # One stub for every gh call, dispatching on the subcommand. MERGED records the

@@ -43,7 +43,7 @@ LOG = ("\x1e" "aaaaaaa" "\x1f" "app 0.8.2 api 2.13: the design note\n\nRefs #291
        "\x1e" "bbbbbbb" "\x1f" "app 0.8.2 api 2.13: the sweep\n\nRefs #292\n" "\x1f"
        "crates/server-game/src/app/sweeps_capacity.rs\n"
        "\x1e" "ccccccc" "\x1f" "app 0.8.2 api 2.13: both\n\nRefs #293\n" "\x1f"
-       "docs/changes/workstreams/x/293-y/293-design.md\nscripts/deploy.sh\n"
+       "docs/changes/workstreams/x/293-y/293-design.md\nscripts/application/deliver/deploy.sh\n"
        "\x1e" "ddddddd" "\x1f" "a merge\n\nRefs #294\n" "\x1f" "\n")
 
 

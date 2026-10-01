@@ -170,13 +170,13 @@ jobs:
           # hygiene failure reads as one rather than as a test failure.
           TILE_LITE_ELITE_LOG_CAPTURE="$RUNNER_TEMP/log-events.jsonl" \
             cargo test -p server-game --quiet
-          python3 scripts/check-log-hygiene.py "$RUNNER_TEMP/log-events.jsonl"
+          python3 scripts/application/operate/check-log-hygiene.py "$RUNNER_TEMP/log-events.jsonl"
 
       - name: Wasm build (web client)
         run: cargo build -p tile-lite-elite-ui --target wasm32-unknown-unknown
 
   # End-to-end UI tests: build + run the preview Docker stack (the same images
-  # scripts/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
+  # scripts/application/deliver/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
   # inside the Dockerfile, not reproduced on the runner) and drive the real
   # client in a browser with Playwright. Heavier than `check` (a full image
   # build), so it's gated to main pushes / PRs / manual runs, and only after
@@ -199,12 +199,12 @@ jobs:
         run: |
           before="${{ github.event.before }}"
           if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
-            ./scripts/check-commit-stamp.sh
+            ./scripts/application/deliver/check-commit-stamp.sh
           else
-            ./scripts/check-commit-stamp.sh "$before..${{ github.sha }}"
+            ./scripts/application/deliver/check-commit-stamp.sh "$before..${{ github.sha }}"
           fi
 
-  # Whether a pull request's diff reaches the image, per scripts/shipping-paths.sh
+  # Whether a pull request's diff reaches the image, per scripts/application/deliver/shipping-paths.sh
   # (#348) — one definition, shared with the pre-commit hook and deploy.sh's
   # manifest, rather than a second copy of NON_SHIPPING in this file. Only
   # pull requests ask: R2 applies the condition to pushes unconditionally,
@@ -223,7 +223,7 @@ jobs:
           fetch-depth: 0
       - id: check
         run: |
-          source scripts/shipping-paths.sh
+          source scripts/application/deliver/shipping-paths.sh
           if touches_image_range "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"; then
             echo "touches=true" >> "$GITHUB_OUTPUT"
           else

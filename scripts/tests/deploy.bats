@@ -106,7 +106,7 @@ STUB
   run bash -c 'cd "$1" && shift && PATH="$1:$PATH" timeout 60 env \
       DEPLOY_GATES_ONLY=1 XDG_STATE_HOME="$2" \
       TARGET_URL=https://prod.test PREVIEW_URL=http://preview.test REHEARSAL_URL=https://rehearsal.test \
-      "${@:3}"' _ "$ROOT" "$bin" "$BATS_TEST_TMPDIR/state" "$@" "$ROOT/scripts/deploy.sh" "$commit"
+      "${@:3}"' _ "$ROOT" "$bin" "$BATS_TEST_TMPDIR/state" "$@" "$ROOT/scripts/application/deliver/deploy.sh" "$commit"
   [[ ! -e "$BATS_TEST_TMPDIR/outward" ]] || fail "reached past the gates: $(cat "$BATS_TEST_TMPDIR/outward")"
 }
 
@@ -255,7 +255,7 @@ scope_commits() {
   local ref candidate
   ref="$(git -C "$ROOT" rev-parse --verify --quiet origin/main || echo HEAD)"
   # shellcheck source=/dev/null
-  source "$ROOT/scripts/shipping-paths.sh"
+  source "$ROOT/scripts/application/deliver/shipping-paths.sh"
   IMG_NEW=""
   while read -r candidate; do
     if REPO_DIR="$ROOT" ships "$candidate"; then IMG_NEW="$candidate"; break; fi

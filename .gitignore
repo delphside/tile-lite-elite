@@ -65,7 +65,7 @@ node_modules/
 # ignored.
 !.claude/settings.json
 
-# PID files written by scripts/services.sh
+# PID files written by scripts/application/develop/services.sh
 .pid.server
 .pid.web
 

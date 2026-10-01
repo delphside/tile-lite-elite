@@ -119,7 +119,7 @@ http://127.0.0.1:2020 {
 			not header_regexp Cookie "(^|;[ ]*)rehearsal={$REHEARSAL_ACCESS_KEY}([;]|$)"
 		}
 		handle @rehearsal_locked {
-			respond "Rehearsal is locked. Run ./scripts/rehearsal-access.sh grant and scan the code." 403
+			respond "Rehearsal is locked. Run ./scripts/application/deliver/rehearsal-access.sh grant and scan the code." 403
 		}
 		# --- end rehearsal access control ---------------------------------
 

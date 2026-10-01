@@ -23,7 +23,7 @@ class ReachesTheImage(unittest.TestCase):
                 self.assertTrue(reaches_image(path))
 
     def test_not_built_in(self):
-        for path in ("docs/3.3-testing-ci-and-release.md", "scripts/deploy.sh", "e2e/tests/smoke.spec.ts",
+        for path in ("docs/3.3-testing-ci-and-release.md", "scripts/application/deliver/deploy.sh", "e2e/tests/smoke.spec.ts",
                      ".github/workflows/ci.yml", ".githooks/pre-commit", ".claude/settings.json",
                      ".cargo/audit.toml", "crates/server-game/examples/engine_timing_results.csv",
                      "crates/server-game/tests/api.rs", "crates/engine-core/benches/b.rs",

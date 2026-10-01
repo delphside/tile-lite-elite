@@ -9,7 +9,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  DEPLOY="$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY="$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   # shellcheck source=/dev/null
   DEPLOY_SH_FUNCTIONS_ONLY=1 source "$DEPLOY"
   # A scratch repository whose tags are the whole input, and a gh that records

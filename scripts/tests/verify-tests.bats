@@ -12,7 +12,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  VERIFY="$BATS_TEST_DIRNAME/../verify.sh"
+  VERIFY="$BATS_TEST_DIRNAME/../application/deliver/verify.sh"
   F="$BATS_TEST_TMPDIR/repo"
   mkdir -p "$F/scripts/tests" "$F/scripts/programme/board/tests"
   suite_bats pass

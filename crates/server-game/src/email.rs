@@ -35,7 +35,7 @@ const MOVE_REMINDER_TEMPLATE: &str = include_str!("../emails/move-reminder.txt")
 /// What a message is, for the log.
 ///
 /// **The recipient's address is never logged** (#174). `player_id` identifies
-/// the account where there is one, and `scripts/admin.sh` resolves it to a
+/// the account where there is one, and `scripts/application/develop/admin.sh` resolves it to a
 /// person on the rare occasion somebody needs to know — which is the whole
 /// "identifiers only" rule applied to the one place that used to carry an
 /// address in plain text.

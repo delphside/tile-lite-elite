@@ -10,7 +10,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  ACCESS="$BATS_TEST_DIRNAME/../rehearsal-access.sh"
+  ACCESS="$BATS_TEST_DIRNAME/../application/deliver/rehearsal-access.sh"
   BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   export CALLS="$BATS_TEST_TMPDIR/calls"; : > "$CALLS"
   # The stub answers the three remote reads the script makes, and records the

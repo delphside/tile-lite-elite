@@ -8,7 +8,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  CHECK="$BATS_TEST_DIRNAME/../check-commit-stamp.sh"
+  CHECK="$BATS_TEST_DIRNAME/../application/deliver/check-commit-stamp.sh"
   # A scratch repository carrying the two files the stamp is checked against.
   R="$BATS_TEST_TMPDIR/repo"
   git init -q "$R"

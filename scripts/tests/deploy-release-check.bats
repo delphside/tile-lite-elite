@@ -13,7 +13,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   # shellcheck source=/dev/null
-  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   cat > "$BIN/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -63,6 +63,6 @@ STUB
   export GH_FAIL=1
   run bash -c 'set -euo pipefail
     DEPLOY_SH_FUNCTIONS_ONLY=1 source "$1"
-    announce_release_checks 1 production' _ "$BATS_TEST_DIRNAME/../deploy.sh"
+    announce_release_checks 1 production' _ "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   assert_success
 }

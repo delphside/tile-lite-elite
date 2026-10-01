@@ -16,7 +16,7 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   # shellcheck source=/dev/null
-  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
   BIN="$BATS_TEST_TMPDIR/bin"; mkdir -p "$BIN"
   export GH_CALLS="$BATS_TEST_TMPDIR/calls"; : > "$GH_CALLS"
   # Answers the shapes deploy.sh asks for, with what the real gh would print

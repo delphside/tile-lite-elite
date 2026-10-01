@@ -48,7 +48,7 @@ pub(crate) async fn register_player(
     .map_err(ApiProblem::from_sqlx)?;
 
     // `display_name` is deliberately absent (#174): the id identifies the
-    // account, and `scripts/admin.sh` resolves it to a person on the rare
+    // account, and `scripts/application/develop/admin.sh` resolves it to a person on the rare
     // occasion somebody needs to know who it was.
     tracing::info!(player_id, "player registered");
 

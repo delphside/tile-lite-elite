@@ -21,7 +21,7 @@ setup() {
   touch "$W/worktree/docker-compose.yml"
   export PATH="$W/bin:$PATH" REPO_DIR="$W" ARTIFACT_DIR="$W/artifacts"
   # shellcheck source=/dev/null
-  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../deploy.sh"
+  DEPLOY_SH_FUNCTIONS_ONLY=1 source "$BATS_TEST_DIRNAME/../application/deliver/deploy.sh"
 }
 
 docker_stub() {   # <save-exit>: `compose` records a build, `save` prints bytes

@@ -67,6 +67,6 @@ Keep it short. Do not restate the document.
 
 ## Never
 
-Change a file in the repository, run `scripts/deploy*.sh`, `scripts/rollback*.sh`
+Change a file in the repository, run `scripts/application/deliver/deploy*.sh`, `scripts/application/deliver/rollback*.sh`
 or anything that reaches a server, or read production. Production reads are the
 owner's.

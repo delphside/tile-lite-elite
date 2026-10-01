@@ -144,14 +144,14 @@ fn run_tag() -> String {
     format!("{:x}", now_unix_seconds() & 0xff_ffff)
 }
 
-/// The rehearsal access key (#240), the way `scripts/rehearsal-key.sh` gets
+/// The rehearsal access key (#240), the way `scripts/application/deliver/rehearsal-key.sh` gets
 /// one — over ssh, or `REHEARSAL_ACCESS_KEY` to short-circuit it. Before this,
 /// `check-rate-limits.sh` knew how to get in and this example did not, which
 /// is #371: every request came back 403 from the gate, a closed door that
 /// looks exactly like a broken limiter.
 fn rehearsal_gate_cookie() -> Option<String> {
-    let script =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/rehearsal-key.sh");
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/application/deliver/rehearsal-key.sh");
     let output = Command::new(&script).output().ok()?;
     if !output.status.success() {
         return None;
@@ -193,7 +193,9 @@ async fn main() {
         None => {
             eprintln!("warning: no rehearsal access key — every request will be refused by the");
             eprintln!("         gate, and a refusal at the door looks exactly like a broken");
-            eprintln!("         limiter. Run ./scripts/rehearsal-access.sh grant first.");
+            eprintln!(
+                "         limiter. Run ./scripts/application/deliver/rehearsal-access.sh grant first."
+            );
         }
     }
 
@@ -220,25 +222,34 @@ async fn main() {
     // so a re-run is not refused by the bucket the last one filled.
     let address = format!("203.0.113.{}", 1 + (now_unix_seconds() % 250));
 
-    let (seeded, registration_refused_after) =
-        match probe_registration_limit(&client, &target, &tag, &address, &mut report).await {
-            RegistrationProbeOutcome::Reached {
-                seeded,
-                refused_after,
-            } => (seeded, refused_after),
-            // R3: a run that never reached the service records nothing, rather
-            // than the other three checks each failing for the same reason and
-            // the run reading as a broken limiter instead of a closed door.
-            RegistrationProbeOutcome::Unreachable { at_attempt, detail } => {
-                eprintln!("could not reach {target} at all — attempt {at_attempt} got {detail}.");
-                eprintln!(
-                    "A closed rehearsal gate (#240) and a broken rate limiter refuse identically;"
-                );
-                eprintln!("this is the gate. Run ./scripts/rehearsal-access.sh grant, or check");
-                eprintln!("REHEARSAL_ACCESS_KEY / REHEARSAL_SSH_HOST, then try again.");
-                std::process::exit(2);
-            }
-        };
+    let (seeded, registration_refused_after) = match probe_registration_limit(
+        &client,
+        &target,
+        &tag,
+        &address,
+        &mut report,
+    )
+    .await
+    {
+        RegistrationProbeOutcome::Reached {
+            seeded,
+            refused_after,
+        } => (seeded, refused_after),
+        // R3: a run that never reached the service records nothing, rather
+        // than the other three checks each failing for the same reason and
+        // the run reading as a broken limiter instead of a closed door.
+        RegistrationProbeOutcome::Unreachable { at_attempt, detail } => {
+            eprintln!("could not reach {target} at all — attempt {at_attempt} got {detail}.");
+            eprintln!(
+                "A closed rehearsal gate (#240) and a broken rate limiter refuse identically;"
+            );
+            eprintln!(
+                "this is the gate. Run ./scripts/application/deliver/rehearsal-access.sh grant, or check"
+            );
+            eprintln!("REHEARSAL_ACCESS_KEY / REHEARSAL_SSH_HOST, then try again.");
+            std::process::exit(2);
+        }
+    };
     let sessions_separate =
         check_sessions_are_separate(&client, &target, &address, &seeded, &mut report).await;
     let hash_median_ms = check_hash_cost(&client, &target, &address, &seeded, &mut report).await;

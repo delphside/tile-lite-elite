@@ -17,10 +17,10 @@ setup() {
   # A scratch repository carrying the two files the hook reads versions from.
   R="$BATS_TEST_TMPDIR/repo"
   git init -q "$R"
-  mkdir -p "$R/crates/api/src" "$R/scripts"
+  mkdir -p "$R/crates/api/src" "$R/scripts/application/deliver"
   printf '[workspace.package]\nversion = "0.5.2"\n' > "$R/Cargo.toml"
   printf 'pub const API_VERSION: ApiVersion = ApiVersion { major: 2, minor: 10 };\n' > "$R/crates/api/src/lib.rs"
-  cp "$BATS_TEST_DIRNAME/../read-api-version.sh" "$R/scripts/"
+  cp "$BATS_TEST_DIRNAME/../application/deliver/read-api-version.sh" "$R/scripts/application/deliver/"
 }
 
 hook() {   # <message> [CLAUDECODE value]: run the hook on it, in the scratch repository
