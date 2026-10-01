@@ -15,10 +15,101 @@
 #
 # Never fails a session: every error path exits 0 with no output, because a
 # broken inbox must not stop work starting.
+#
+# **Fast, because it reads a cache (#452).** The three board calls take ~48s,
+# and a session whose first message was sent while the hook ran appears to have
+# started with no hook at all (session 60541916, 2026-10-01, no record of any
+# kind). So the slow work is `--build`, run detached and written to
+# .claude/.inbox-cache; the SessionStart hook only reads it and says how old
+# it is. Modes:
+#   (none)               SessionStart: emit the cache, refresh it behind us
+#   --build              compute the summary and write the cache (locked)
+#   --refresh-if-stale   start a detached --build if the cache is old; the
+#                        Stop hook calls this so the cache follows the work
+#   --backstop SID       UserPromptSubmit: print the cache as plain text if
+#                        session SID never had it delivered, then mark it
+# Every run is logged to .claude/.inbox-hook.log (start, end, session id) so
+# a session with no hook can be told from a hook that ran and was ignored.
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 0
+CACHE=.claude/.inbox-cache
+LOCK=.claude/.inbox-build.lock
+LOG=.claude/.inbox-hook.log
+DELIVERED=.claude/.inbox-delivered
+STALE_SECS="${INBOX_STALE_SECS:-600}"
+MODE="${1:-}"
+
+log() { printf '%s %s pid=%s %s\n' "$(date -u +%FT%TZ)" "$MODE" "$$" "$*" >> "$LOG" 2> /dev/null || true; }
+
+cache_age() { echo $(( $(date +%s) - $(stat -c %Y "$CACHE" 2>/dev/null || echo 0) )); }
+
+# Plain text, with the cache's age so a stale one is never mistaken for live.
+cache_text() {
+  printf 'GitHub activity in the last 7 days (from a cache %s min old; ./scripts/programme/board/board-inbox.py for current detail).\n\n' "$(( $(cache_age) / 60 ))"
+  cat "$CACHE"
+}
+
+mark_delivered() {
+  [[ -n "${1:-}" ]] || return 0
+  mkdir -p "$DELIVERED" && : > "$DELIVERED/$1"
+  find "$DELIVERED" -type f -mtime +7 -delete 2> /dev/null || true
+}
+
+start_build() {
+  nohup setsid "$0" --build > /dev/null 2>&1 < /dev/null &
+}
+
+case "$MODE" in
+  --refresh-if-stale)
+    [[ -f "$CACHE" ]] && (( $(cache_age) < STALE_SECS )) && exit 0
+    start_build; exit 0 ;;
+  --backstop)
+    SID="${2:-}"
+    [[ -n "$SID" && ! -e "$DELIVERED/$SID" ]] || exit 0
+    log "sid=$SID backstop: no delivery on record"
+    if [[ -s "$CACHE" ]]; then
+      cache_text; mark_delivered "$SID"; log "sid=$SID backstop delivered"
+    else
+      start_build   # nothing to say yet; the next turn will have it
+    fi
+    exit 0 ;;
+esac
+
+# SessionStart, and --build, below. Only SessionStart has a hook payload on stdin.
+SID=""
+if [[ "$MODE" != "--build" && ! -t 0 ]]; then
+  SID="$(timeout 2 cat 2>/dev/null | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -1)"
+fi
+log "sid=${SID:-?} start"
+
+emit_json() {
+  printf '%s' "$1" | python3 -c '
+import sys, json
+t = sys.stdin.read().strip()
+if t:
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "SessionStart",
+        "additionalContext": t,
+    }}))
+' 2>/dev/null
+}
+
+if [[ "$MODE" != "--build" && -s "$CACHE" ]]; then
+  emit_json "$(cache_text)" && mark_delivered "$SID"
+  (( $(cache_age) >= STALE_SECS )) && start_build
+  log "sid=${SID:-?} end (from cache)"
+  exit 0
+fi
+
+# --build, or SessionStart with no cache at all: do the slow work.
 command -v gh > /dev/null 2>&1 || exit 0
+if [[ "$MODE" == "--build" ]]; then
+  # One build at a time; a lock older than five minutes is a dead build's.
+  find "$LOCK" -maxdepth 0 -mmin +5 -exec rmdir {} \; 2> /dev/null || true
+  mkdir "$LOCK" 2> /dev/null || exit 0
+  trap 'rmdir "$LOCK" 2> /dev/null' EXIT
+fi
 
 RAW="$(./scripts/programme/board/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
 [[ -z "$RAW" ]] && exit 0
@@ -65,7 +156,7 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 # timeout and a slow GitHub would eat the margin. Each is separately guarded:
 # one failing leaves the others, and all of them failing leaves the inbox
 # summary, which is what this hook did before.
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"; [[ "$MODE" == "--build" ]] && rmdir "$LOCK" 2> /dev/null' EXIT
 ( timeout 25 ./scripts/programme/board/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
 ( timeout 25 ./scripts/programme/board/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
 ( timeout 10 ./scripts/programme/board/board-practices.py 2>/dev/null > "$TMP/practices" ) &
@@ -98,13 +189,14 @@ EXTRA=""
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 
-printf '%s' "$SUMMARY$EXTRA" | python3 -c '
-import sys, json
-t = sys.stdin.read().strip()
-if t:
-    print(json.dumps({"hookSpecificOutput": {
-        "hookEventName": "SessionStart",
-        "additionalContext":
-            "GitHub activity in the last 7 days. Run ./scripts/programme/board/board-inbox.py for the detail.\n\n" + t,
-    }}))
-' 2>/dev/null || exit 0
+# Written whole and moved into place, so a reader never sees half a cache.
+printf '%s\n' "$SUMMARY$EXTRA" > "$CACHE.tmp" && mv "$CACHE.tmp" "$CACHE"
+if [[ "$MODE" == "--build" ]]; then
+  log "build end"
+else
+  emit_json "GitHub activity in the last 7 days. Run ./scripts/programme/board/board-inbox.py for the detail.
+
+$SUMMARY$EXTRA" && mark_delivered "$SID"
+  log "sid=${SID:-?} end (built)"
+fi
+exit 0

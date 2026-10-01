@@ -43,6 +43,21 @@ PRINT_FILTER=0
 [[ "${1:-}" == "--reseed-bodies" || "${1:-}" == "--reseed-fields" ]] && { RESEED=1; BODIES_ONLY=1; }
 [[ "${1:-}" == "--print-filter" ]] && PRINT_FILTER=1
 
+# **Backstop for a SessionStart hook that did not deliver (#452).** A session
+# whose first message beat the hook, or whose hook never ran, has no inbox
+# summary. The prompt payload carries the session id; if inbox-hook.sh has no
+# delivery on record for it, it prints the cached summary now. Before the
+# throttle, since the throttle is about GitHub calls and this makes none.
+# The Stop hook keeps the cache fresh behind us.
+if (( ! RESEED && ! PRINT_FILTER )); then
+  if [[ ! -t 0 ]]; then
+    PSID="$(timeout 2 cat 2>/dev/null | sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -1)"
+    [[ -n "$PSID" ]] && .claude/inbox-hook.sh --backstop "$PSID" 2>/dev/null
+  fi
+else
+  (( BODIES_ONLY )) && .claude/inbox-hook.sh --refresh-if-stale 2>/dev/null
+fi
+
 NOW="$(date -u +%s)"
 if [[ -f "$STATE" ]]; then
   LAST_RUN="$(stat -c %Y "$STATE" 2>/dev/null || echo 0)"
