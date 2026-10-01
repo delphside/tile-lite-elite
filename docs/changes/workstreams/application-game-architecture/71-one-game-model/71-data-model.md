@@ -620,7 +620,8 @@ player holding two has one of their own racks hidden from them.
 | --- | --- |
 | `games` | add `version`, `turn`, `board_version` and `last_scoring_turn`, all `integer not null default 0`. `snapshot_json` changes shape |
 | `game_participants` | drop `display_name`. Add `state text not null`, `invitation_id text`, `hidden_by_player integer not null default 0`. Keep `outcome`, `bingo_count`, `score` — stats read them without loading a snapshot |
-| `game_invitations` | unchanged. It stays the record of who was asked and what they said, which DEL-2 reads |
+| `game_invitations` | gains `addressee_id text`, null unless the address invited was a verified account's when it was sent (see *Binding by address* in `71-design.md`).[^d59] It stays the record of who was asked and what they said, which DEL-2 reads |
+| `player_ratings`, `rating_history` | the key becomes `(player_id, edition)` and `subject_kind` goes, in one migration with the rest of Core.[^d58] A bot's rows move to the id of its account, and every existing row becomes English (International)'s; other editions start at 1500 |
 | `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured |
 
 **`version` and `turn` become columns** rather than living only inside
@@ -630,7 +631,9 @@ deserialising every snapshot, and because a column can be indexed.
 **Migration is a deletion.** The note settles this: existing games are deleted,
 users and ratings kept. So the migration is a schema rewrite plus
 `delete from games`, and the risk is entirely in what it must *not* delete —
-`players`, `player_ratings`, `rating_history`, `sessions`.
+`players`, `player_ratings`, `rating_history`, `sessions`. The rating tables are
+rekeyed rather than kept as they are, so the migration checks that every row
+survives the move to `(player_id, edition)`.
 
 ## 6 · Modules
 
@@ -829,3 +832,8 @@ whose maintenance is a rule rather than a consequence. If any of these is going
 to be forgotten it is this one — so it is worth a test that asserts
 `board_version` moves for `Place`, `Pass`, `Exchange` and undo, and does not
 move for chat, an invitation or a rename.
+
+[^d58]: Decision #444 (D58): editions and bots as accounts change the rating key
+    once, in Core.
+[^d59]: Decision #445 (D59): the core design settles how an emailed invitation
+    binds, including by address.

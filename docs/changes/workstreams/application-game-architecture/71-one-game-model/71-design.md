@@ -266,24 +266,36 @@ is known for certain. From then on the seat is about a player and the address
 is finished with.
 
 **The address invited need not be the address the account uses.** Somebody
-invited at a work address may already have an account under a personal one. So
-an email cannot be resolved to an account by looking it up — not at send time,
-and not when they sign in either.
+invited at a work address may already have an account under a personal one, so
+the address alone never decides who may accept. The link does.
 
-**Binding earlier — when they follow the link and sign in — is tempting and I
-would not.** It would put the invitation in their list before they accept,
-which helps somebody who registers and gets distracted. But the window is
-usually seconds, because accepting is one click away on the page they have
-just signed in on, and it trades a recoverable mistake for an unrecoverable
-one: signing in as the wrong account is fixable today by signing in properly
-and clicking again, because the **link is the credential, not the address**.
-Bind at sign-in and the same slip fixes the seat to an account that cannot
-then accept it, and only the creator can undo it.
+**Binding earlier, when they follow the link and sign in, is not done.** It
+would trade a recoverable mistake for an unrecoverable one: signing in as the
+wrong account is fixed today by signing in properly and clicking again, because
+the **link is the credential, not the address**. Bind at sign-in and the same
+slip fixes the seat to an account that cannot then accept it.
 
-A middle option exists — record the account as a hint that does not constrain
-who may accept — which buys the listing without the lock-in, at the cost of a
-field and a rule about when a hint is honoured. The version to reach for if
-the listing turns out to matter.
+**Binding by address.** The invitation records the address it was sent to. When
+that address is a *verified* address of an account at the moment of sending,
+the invitation also records that player as its addressee, which lists it for
+them without restricting who may accept.[^d59] An unverified address never
+matches, so until verification exists (#439) nothing binds by address and an
+emailed invitation binds on acceptance alone.
+
+**An address change rebinds nothing.** The match is made once, at send time, and
+stored on the invitation as `addressee_id`. If the addressee later changes
+their address, the invitation stays theirs; if somebody else later takes the old
+address, the invitation does not move to them. So one address can name
+different players on different invitations, each unambiguous, because which
+player an address named is a fact about the moment it was sent.
+
+**What waits on #439.** The `addressee_id` column is in Core's migration. Unique
+and verified addresses, and login by email, are #439's, and they decide only
+whether a match is ever made. #71 does not wait for them, and #439 builds on
+this rule rather than redefining it.
+
+[^d59]: Decision #445 (D59): the core design settles how an emailed invitation
+    binds, including by address.
 
 **A spent seat is spent.** Declining and withdrawing are both terminal: the
 seat keeps the name of whoever said no or walked away, and nothing re-invites
