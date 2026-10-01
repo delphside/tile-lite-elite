@@ -8,6 +8,8 @@ owner on 2026-08-28.
 we do the server first, and stub the client for testing. Then develop the real
 client."*
 
+**Testing is organised by work package**, the six in #71's body.[^d56]
+
 ## A test client, as its own crate
 
 Owner, 2026-08-28: *"I would think we could have a test client as a separate
@@ -22,7 +24,7 @@ as #71 says, none of its three faults would have been caught.
 
 **It compiles against `crates/api`**, like both real sides, so it asserts on the
 **DTOs it receives** rather than on rendered output. That is the right level for
-work package 1: what the server *sent* is the question, and a browser can only
+Core Game Lifecycle (#268): what the server *sent* is the question, and a browser can only
 show what a client chose to draw.
 
 **A stub is not needed for the contract**, and would be harmful. The DTOs are a
@@ -52,7 +54,7 @@ level.* That is #142 in one sentence, with no browser — and it is expressible
 because the client initiates everything.
 
 **The client handler should be a pure function** — `(state, event) → state` — so
-work package 2 is testable as a list of events and an expected state. No server,
+Core Client UI (#269) is testable as a list of events and an expected state. No server,
 no browser, no timing. *Reconnected and missed three events* becomes an array.
 It costs nothing at runtime; it is only where the mutation lives, and it is
 expensive to retrofit once the rework is underway.
@@ -73,3 +75,11 @@ on purpose. It was mutation-tested — deleting `game.set(None)` from
 passing vacuously.
 
 The three layers do not replace it. They keep it small.
+
+**The two failing cases are #269's acceptance.** They are the `test.fixme` cases
+for a staged tile surviving Remove and Abort, and they turn on when the
+composition key lands in Core Client UI.[^d57]
+
+[^d56]: Decision #442 (D56): six work packages, deliveries decided per package.
+[^d57]: Decision #443 (D57): the staged-tile fault is fixed in #269 by the
+    composition key, not by a separate client release.

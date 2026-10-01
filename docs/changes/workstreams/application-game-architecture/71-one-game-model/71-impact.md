@@ -217,14 +217,11 @@ how the turn is driven.
 **F — the client state model (#157).** `selected_game` as real state, composition
 keyed to the game and turn it belongs to, and one transition per invariant. See
 *The client has the same defect* in the note. Client-only: no server change, no
-API move, no migration, and no dependency in either direction on A–E. It has a
-failing test already (`e2e/tests/ui-state.spec.ts`), which makes it the one
-work package that can start without anything else moving first.
+API move, no migration. It is delivered in Core Client UI (#269), and its
+failing tests (`e2e/tests/ui-state.spec.ts`) are that package's acceptance.
 
-A, B and F are independent of the design's open questions and useful whatever
-the note concludes. They are the natural first work packages — and F is the one to
-take first if the point is to get familiar with the parts of the code that were
-not written by hand.
+A and B are independent of the design's open questions and useful whatever
+the note concludes. They are the natural first cuts.
 
 ---
 

@@ -780,12 +780,17 @@ The Remove case was mutation-tested: deleting `game.set(None)` from
 tiles still on screen, so the passing tests are holding something up rather
 than passing vacuously.
 
-### This is a work package, not a prerequisite
+### This is delivered in Core Client UI
 
 Raised as **#157**, which carries the reproduction and the two handlers it
-lands in. Client-only. No server change, no API version move, no migration. It does not
-depend on any other part of this note, and nothing here depends on it — so it
-can ship in its own release, before or after the rest.
+lands in. Client-only: no server change, no API version move, no migration. The
+staged tile left behind after a game is removed is a symptom of how state
+changes are managed today, so the fix is this section's, the composition key,
+delivered in #269 (Core Client UI) rather than as a separate release.[^d57] The
+fault stays live until #269 ships, and the two `test.fixme` cases in
+`e2e/tests/ui-state.spec.ts` are #269's acceptance tests.
+
+[^d57]: Decision #443 (D57): fixed in #269 by the composition key.
 
 ## What this makes possible
 
