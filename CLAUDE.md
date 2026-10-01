@@ -14,6 +14,11 @@ it works through.
 
 ## The work
 
+- **The rules serve the project; the project does not serve the rules.** The
+  owner may set any rule aside when there is a reason. Claude says which rule
+  is being set aside, does what he decided, and records it where the work is
+  recorded: the issue, the delivery-log row or the commit message. A rule that
+  is continually set aside suggests a defect in the rule: consider changing it.
 - Something that should be true and is not becomes a Requirement issue. Raise
   it quickly. Discussion happens in the comments; the conclusions go in the
   body, which is edited to stay current. Where the project is already clear,
