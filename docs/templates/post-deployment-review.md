@@ -6,6 +6,8 @@ Copy to the project's folder as `post-deployment-review.md` and fill it in.
 the work is worst placed to notice what it cost, and best placed to remember
 what happened.
 
+**Where:** a section of the issue body when the project has no other documents, otherwise this file in its folder, pointed to from the body (docs/5.1).
+
 **When:** once the project's last release is live and has been used — not on
 the day it ships. A week is usually enough for the interesting failures to
 surface, and #67 is why: it was closed by a milestone, listed as deferred in the
