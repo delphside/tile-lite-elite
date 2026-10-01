@@ -41,7 +41,7 @@ REPORTS FROM THE SCHEDULED WORKFLOWS
 OPENED OR CLOSED
   nothing opened or closed'
   context
-  assert_output --partial "Reports from the scheduled workflows"
+  assert_output --partial "reports from the scheduled workflows"
   assert_output --partial "#384   open    2026-09-26T06:15  Dependency advisories need review"
 }
 
@@ -54,6 +54,6 @@ REPORTS FROM THE SCHEDULED WORKFLOWS
 OPENED OR CLOSED
   #9     opened        something'
   context
-  refute_output --partial "Reports from"
+  refute_output --partial "reports from the scheduled workflows"
   assert_output --partial "#9"
 }
