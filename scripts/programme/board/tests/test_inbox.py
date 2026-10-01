@@ -9,7 +9,7 @@ import unittest
 
 from .cases import Cases
 
-from board.inbox import build, render
+from board.inbox import build, render, render_waiting, unanswered, waiting_for_claude
 from board.model import RawIssue
 from board.sources import Remark, Report
 
@@ -70,6 +70,76 @@ class TheInbox(Cases):
               "nothing opened or closed" in render(build([], (), SINCE), colour=False))
 
 
+def say(n, when, who, text="a comment", created=None):
+    return Remark(n, when, who, text, False, created or when + ":00")
+
+
+class WaitingForClaude(Cases):
+    """#454. The rules, as the owner stated them on 2026-10-01: a comment of his
+    is open until a later comment from Claude on the same issue, automatic
+    comments do not count as an answer, and there is no time limit."""
+
+    def test_unanswered_and_answered(self):
+        self.expect("a question alone is open", 1,
+                    len(unanswered((say(7, "2026-10-01T09:00", "owner"),))))
+        self.expect("a later answer closes it", 0, len(unanswered((
+            say(7, "2026-10-01T09:00", "owner"), say(7, "2026-10-01T10:00", "claude")))))
+        self.expect("an answer before the question does not", 1, len(unanswered((
+            say(7, "2026-10-01T08:00", "claude"), say(7, "2026-10-01T09:00", "owner")))))
+        self.expect("an answer on another issue does not", 1, len(unanswered((
+            say(7, "2026-10-01T09:00", "owner"), say(8, "2026-10-01T10:00", "claude")))))
+
+    def test_a_reply_in_the_same_second_counts_as_an_answer(self):
+        self.expect("nothing can order them", 0, len(unanswered((
+            say(7, "2026-10-01T09:00", "owner"), say(7, "2026-10-01T09:00", "claude")))))
+
+    def test_asked_again_after_an_answer(self):
+        got = unanswered((say(7, "2026-10-01T09:00", "owner", "first"),
+                          say(7, "2026-10-01T10:00", "claude"),
+                          say(7, "2026-10-01T11:00", "owner", "second")))
+        self.expect("only the later one is open", ["second"], [r.text for r in got])
+
+    def test_an_automatic_comment_is_not_an_answer(self):
+        for who in ("deploy", "bot"):
+            self.expect(f"{who} after a question", 1, len(unanswered((
+                say(7, "2026-10-01T09:00", "owner"), say(7, "2026-10-01T10:00", who)))))
+
+    def test_there_is_no_time_limit(self):
+        self.expect("a year-old question is still open", 1,
+                    len(unanswered((say(7, "2025-10-01T09:00", "owner"),))))
+
+    def test_an_edit_does_not_reopen_an_answered_comment(self):
+        # `when` is the updated time; the order is by when each was first written.
+        owner = say(7, "2026-10-02T09:00", "owner", created="2026-10-01T09:00:00")
+        claude = say(7, "2026-10-01T10:00", "claude")
+        self.expect("an edited question is still answered", 0, len(unanswered((owner, claude))))
+
+    def test_a_closed_issue_or_merged_pull_request_has_nothing_waiting(self):
+        r = (say(7, "2026-10-01T09:00", "owner"), say(8, "2026-10-01T09:00", "owner"),
+             say(9, "2026-10-01T09:00", "owner"))
+        issues = [issue(7, state="OPEN"), issue(8, state="CLOSED"), issue(9, state="MERGED")]
+        self.expect("only the open one", [7], [t.number for t in waiting_for_claude(issues, r)])
+
+    def test_newest_last_and_capped_with_a_count(self):
+        threads = waiting_for_claude(
+            [issue(n) for n in range(1, 16)],
+            tuple(say(n, f"2026-10-01T{n:02d}:00", "owner", f"q{n}") for n in range(1, 16)))
+        self.expect("oldest first, newest last", [1, 15], [threads[0].number, threads[-1].number])
+        text = render_waiting(threads, colour=False)
+        self.expect("twelve shown", 12, text.count("\n  > ") + (1 if text.startswith("  > ") else 0))
+        self.expect("the count of the rest is said", True, "...3 earlier" in text)
+        self.expect("uncapped on request", False, "earlier" in render_waiting(threads, colour=False, limit=99))
+
+    def test_each_shows_the_first_words(self):
+        text = render_waiting(waiting_for_claude(
+            [issue(7, "seven")], (say(7, "2026-10-01T09:00", "owner", "x" * 400),)), colour=False)
+        self.expect("cut at 120 characters", True, "x" * 120 in text and "x" * 121 not in text)
+
+    def test_nothing_waiting_says_so(self):
+        self.expect("a sentence, not an empty list", "nothing from the owner is waiting for an answer",
+                    render_waiting((), colour=False))
+
+
 class WhoTypedIt(Cases):
     """sources.comment_jq, run through the real jq on canned comments. The rule
     lived untested in a string, which is how a bot's comment read as the
@@ -80,11 +150,22 @@ class WhoTypedIt(Cases):
         if not shutil.which("jq"):
             self.skipTest("jq is not installed")
         from board.sources import comment_jq
-        comment = [{"issue_url": "https://api.github.com/repos/o/r/issues/7", "updated_at": "2026-09-27T10:00:00Z",
+        comment = [{"issue_url": "https://api.github.com/repos/o/r/issues/7", "updated_at": "2026-09-27T10:00:00Z", "created_at": "2026-09-26T08:00:00Z",
                     "user": {"login": login, "type": kind}, "body": body}]
         out = subprocess.run(["jq", "-r", comment_jq("issue_url")], input=json.dumps(comment),
                              capture_output=True, text=True, check=True).stdout
         return out.split("\t")[2]
+
+    def test_the_row_carries_when_it_was_first_written(self):
+        import json, shutil, subprocess
+        if not shutil.which("jq"):
+            self.skipTest("jq is not installed")
+        from board.sources import comment_jq
+        c = [{"issue_url": "https://x/issues/7", "updated_at": "2026-09-27T10:00:00Z",
+              "created_at": "2026-09-26T08:00:05Z", "user": {"login": "u", "type": "User"}, "body": "b"}]
+        row = subprocess.run(["jq", "-r", comment_jq("issue_url")], input=json.dumps(c),
+                             capture_output=True, text=True, check=True).stdout.rstrip("\n").split("\t")
+        self.expect("a fifth column, to the second", "2026-09-26T08:00:05", row[4])
 
     def test_each_account_is_read_as_what_it_is(self):
         self.expect("the owner", "owner", self.who("SteveStyle", "User"))

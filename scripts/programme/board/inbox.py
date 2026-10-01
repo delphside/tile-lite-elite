@@ -104,6 +104,78 @@ def build(issues: Sequence[RawIssue], remarks: Sequence[Remark],
                  reports=tuple(reports))
 
 
+def _at(r: Remark) -> str:
+    return r.created or r.when
+
+
+def unanswered(remarks: Sequence[Remark]) -> tuple[Remark, ...]:
+    """The owner's comments that Claude has not answered, however old.
+
+    **Answered means a later comment from Claude on the same issue.** An
+    automatic comment is not an answer -- `deploy.sh`'s announcement is read as
+    `deploy` and a workflow's as `bot`, neither as `claude`, so a deploy note
+    cannot hide a question. Owner, 2026-10-01 (#454). Ordered by when it was
+    first written, not edited, so correcting a comment does not reopen it. A
+    reply at the same second counts as an answer: nothing can order them.
+    """
+    last_answer: dict[int, str] = {}
+    for r in remarks:
+        if r.who == "claude":
+            last_answer[r.number] = max(last_answer.get(r.number, ""), _at(r))
+    return tuple(r for r in remarks
+                 if r.who == "owner" and _at(r) > last_answer.get(r.number, ""))
+
+
+def waiting_for_claude(issues: Sequence[RawIssue], remarks: Sequence[Remark]) -> tuple[Thread, ...]:
+    """One thread per open issue holding unanswered comments, the one most
+    recently asked on last, so a cap that drops the front drops the oldest."""
+    by_number: dict[int, RawIssue] = {i.number: i for i in issues}
+    grouped: dict[int, list[Remark]] = {}
+    for r in unanswered(remarks):
+        grouped.setdefault(r.number, []).append(r)
+    threads = []
+    for number, rs in grouped.items():
+        raw = by_number.get(number)
+        # A closed issue or a merged pull request has nothing left to do: what was said last
+        # was settled by closing it. Found on the first run, 2026-10-01, when
+        # the unlimited list held 137 issues, most of them closed.
+        if raw is not None and raw.state != "OPEN":
+            continue
+        typed: Issue | None = classify(raw) if raw else None
+        threads.append(Thread(number, raw.title if raw else "",
+                              type(typed).__name__ if typed else None,
+                              typed.step if typed else None, tuple(rs)))
+    return tuple(sorted(threads, key=lambda t: _at(t.remarks[-1])))
+
+
+FIRST_LINE = 120
+
+
+def render_waiting(threads: Sequence[Thread], colour: bool = True, limit: int = 12) -> str:
+    """Each issue with the first words of what the owner asked, newest last.
+
+    Capped, because a to-do list that grows without a time limit must not make
+    the session-start summary the wall of text it replaced. Says how many it
+    left out and where the rest are."""
+    bold = (lambda s: f"\033[1m{s}\033[0m") if colour else (lambda s: s)
+    dim = (lambda s: f"\033[2m{s}\033[0m") if colour else (lambda s: s)
+    if not threads:
+        return dim("nothing from the owner is waiting for an answer")
+    out: list[str] = []
+    shown = threads[-limit:]
+    if len(threads) > len(shown):
+        out.append(dim(f"...{len(threads) - len(shown)} earlier (board-inbox.py --open --all)"))
+    for t in shown:
+        context = " · ".join(x for x in (t.kind, t.step) if x)
+        head = f"{bold(f'#{t.number}')}  {t.title[:60]}"
+        if context:
+            head += f"  [{context}]"
+        out.append(head)
+        for r in t.remarks:
+            out.append(f"  > {r.when}  {r.text[:FIRST_LINE]}")
+    return "\n".join(out)
+
+
 def render(inbox: Inbox, colour: bool = True) -> str:
     bold = (lambda s: f"\033[1m{s}\033[0m") if colour else (lambda s: s)
     dim = (lambda s: f"\033[2m{s}\033[0m") if colour else (lambda s: s)
