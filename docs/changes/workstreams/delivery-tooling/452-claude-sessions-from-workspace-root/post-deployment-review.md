@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-file MD041 -->
 # Post-deployment review: Claude sessions from the workspace root
 
-Project: #452, with #453 as delivery 2 · milestone `0.9.0b` · reviewed: 2026-10-01 (draft for the owner)
+Project: #452, with #453 as delivery 2 · milestone `0.9.0b` · reviewed: 2026-10-01 (closed 2026-10-01 on the owner's instruction)
 
 ## 1. Was the intended scope delivered?
 
@@ -11,7 +11,7 @@ Project: #452, with #453 as delivery 2 · milestone `0.9.0b` · reviewed: 2026-1
 | R2 docs/3.2 says which folder to open | yes | 0e57db0 |
 | R3 the session-start hook finishes inside its timeout | yes | 30s to 90s in `.claude/settings.json`, 0e57db0. It measured 40s |
 
-Deferred: making the hook faster. `board-inbox.py` alone takes 25s. Dropped, because nothing needs it yet and the tooling rule is to change when something first needs it.
+The hook was first left slow, since `board-inbox.py` alone takes 25s. It was then made fast, once a session started with no hook record while another session's 48s run was in progress (session 60541916, cause unproven). The hook now reads a cache that a detached build writes, logs every run, and `turn-check.sh` delivers the summary on the first prompt of a session that never had it (9d1edaf, straight to `main`, part of delivery 1). Three sessions then started from cache on 2026-10-01.
 
 ## 2. What happened that we did not plan for?
 
@@ -41,7 +41,7 @@ Work package #453 turned out to be unnecessary. By the rule as now written, the 
 | route classification is not checked against the artefact list when a project is raised | not raised | a project with one delivery spanning two routes is rare and `board-check.py` found it. Raise it if it happens again |
 | per delivery information: it is unsettled whether a no-milestone delivery with its own post-deployment checks must have a sub-project | not raised | the owner recalls a discussion and could not place it. The rule says optional until he recalls it |
 | docs/5.1 had a link labelled `[3.0]` pointing at `5.0-programme-tooling.md` | none | fixed in the commit that adds this review |
-| hook runs 25s in `board-inbox.py` | not raised | see section 1 |
+| the hook's summary counts every comment of the owner for seven days, whether or not Claude has dealt with it, so it reports activity rather than work waiting | new project, raised after this closes | owner, 2026-10-01: the intent is a to-do list for Claude |
 
 ## 5. Areas to consider
 
