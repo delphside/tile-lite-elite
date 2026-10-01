@@ -244,9 +244,14 @@ it works through.
   cases are in docs/3.6.
 - **The sub-project issue can be saved, and only where nothing needs it.** A
   project with **one delivery** needs none: the parent is the work package and
-  carries the milestone. Two deliveries need two, even where one goes straight
-  to main carrying no milestone — a delivery with no milestone still has a
-  phase, and one `Project State` cannot say delivered and not built at once. D53.
+  carries the milestone. A delivery with no milestone needs one only where it
+  comes after a delivery that has one; otherwise it is optional, and can carry
+  what the parent should not, such as a test approach. Where only the **last**
+  delivery has a milestone, the parent carries it and no sub-project is needed.
+  A milestoned delivery that is not last always needs one, because the parent
+  would close at its release. A delivery with no milestone still has a phase, and
+  one `Project State` cannot say delivered and not built at once. D53, refined by
+  the owner 2026-10-01.
 - A work package is titled `#N WP A Del 1 of 2: what it delivers`, a parent
   `#N MAIN PROJECT: what it is`. `pt P of Q` is added only where a delivery
   carries more than one package. The counts go stale and are kept anyway: a
