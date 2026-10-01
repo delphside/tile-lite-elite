@@ -402,6 +402,27 @@ fmt_case() {   # <cargo-fmt-exit> <file>
   refute_output --partial "application documents"
 }
 
+# --- the application's tooling is tried where it runs, on a branch (1d) -----------
+# Owner, 2026-09-29, 2026-09-30: a warning, with flexibility; the folder decides.
+
+@test "main: application tooling is committed, with a note" {
+  commit_on main scripts/application/deliver/deploy.sh
+  assert_success
+  assert_output --partial "application tooling committed to main"
+}
+
+@test "main: programme tooling gets no note" {
+  commit_on main scripts/programme/board/board-status.py
+  assert_success
+  refute_output --partial "application tooling"
+}
+
+@test "branch: application tooling on its branch gets no note" {
+  commit_on 399-x scripts/application/deliver/deploy.sh
+  assert_success
+  refute_output --partial "application tooling"
+}
+
 # --- the documentation checks (4) ---------------------------------------------------
 # The one conditional rule: it runs the repository's own scripts/programme/docs/check-docs.sh,
 # and only when markdown is staged, because it reads every document and takes

@@ -7,7 +7,8 @@ testing the functions the bash callers source, against real commits.
 
 import unittest
 
-from board.shipping import image_paths, reaches_image, ships, touches_image, version_bump_only
+from board.shipping import (application_tooling, image_paths, reaches_image, ships, touches_image,
+                            version_bump_only)
 
 from .cli import run
 
@@ -74,7 +75,40 @@ class Ships(unittest.TestCase):
         self.assertTrue(ships(["crates/ui/src/app.rs"], []))
 
 
+class ApplicationTooling(unittest.TestCase):
+    """The application's tooling is what scripts/application/ holds (docs/3.0, #421 R2).
+
+    What the folder means is the rule: scripts that act on the application and its
+    environments, which take a branch. The programme's scripts and the tests are not it.
+    """
+
+    def test_a_script_in_any_of_the_four_folders_is(self):
+        for path in ("scripts/application/develop/services.sh", "scripts/application/deliver/deploy.sh",
+                     "scripts/application/operate/backup-to-oci.sh", "scripts/application/measure/bench-compare.py",
+                     "scripts/application/operate/systemd/tile-lite-elite-backup.timer"):
+            with self.subTest(path):
+                self.assertEqual([path], application_tooling([path]))
+
+    def test_the_programmes_scripts_and_the_tests_are_not(self):
+        for path in ("scripts/programme/board/model.py", "scripts/programme/docs/check-docs.sh",
+                     "scripts/tests/deploy.bats", "docs/3.0-tools.md", ".github/workflows/ci.yml",
+                     "crates/server-game/src/app.rs", "scripts/applications/x.sh", "scripts/application"):
+            with self.subTest(path):
+                self.assertEqual([], application_tooling([path]))
+
+    def test_of_a_mixed_change_only_the_application_paths_come_back_in_order(self):
+        self.assertEqual(["scripts/application/deliver/a.sh", "scripts/application/develop/b.sh"],
+                         application_tooling(["docs/a.md", "scripts/application/deliver/a.sh", "",
+                                              "scripts/programme/board/x.py", "scripts/application/develop/b.sh"]))
+
+
 class TheCommand(unittest.TestCase):
+    def test_application_tooling_prints_only_those_paths(self):
+        out = run("programme/board/board-shipping.py", "application-tooling",
+                  stdin="docs/a.md\nscripts/application/deliver/deploy.sh\nscripts/programme/board/model.py\n")
+        self.assertEqual("scripts/application/deliver/deploy.sh", out.stdout.strip())
+        self.assertEqual(0, out.returncode)
+
     def test_paths_prints_only_the_shipping_ones(self):
         self.assertEqual("Dockerfile", run("programme/board/board-shipping.py", "paths", stdin="docs/a.md\nDockerfile\n").stdout.strip())
 

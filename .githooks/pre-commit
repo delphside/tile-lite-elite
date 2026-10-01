@@ -197,6 +197,32 @@ if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
   fi
 fi
 
+# --- 1d. the application's tooling is tried where it runs, on a branch ---------
+#
+# **Warns rather than refuses** (owner, 2026-09-29: "it should give a warning, but
+# there should be some flexibility"). `main` is where every script is run from, so
+# a half-finished change to `deploy.sh` or `rollback.sh` there breaks the next
+# deploy or recovery; a branch holds the old version while it is tried on preview
+# or rehearsal. The folder is the rule, decided in `board/shipping.py` (#421 R2)
+# and asked through `board-shipping.py`, as the image rule is. A one-line
+# correction is fine here, which is why this only says so. Not during a merge: a
+# branch landing on `main` is the rule working.
+
+if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
+  APPTOOLING="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/programme/board/board-shipping.py" application-tooling 2>/dev/null || true)"
+  if [ -n "$APPTOOLING" ]; then
+    {
+      echo "note: application tooling committed to main:"
+      echo
+      printf '  %s\n' $APPTOOLING
+      echo
+      echo "  This usually takes a branch and is tried on preview or rehearsal"
+      echo "  before it merges, since main is where every script is run from."
+      echo "  A small correction is fine here; committing anyway."
+    } >&2
+  fi
+fi
+
 # --- 2. a new artefact is registered ------------------------------------------
 #
 # **Something permanent needs somewhere to be found.** Not an issue — the owner,

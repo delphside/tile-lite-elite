@@ -56,6 +56,20 @@ def touches_image(paths: Iterable[str]) -> bool:
     return bool(image_paths(paths))
 
 
+_APPLICATION_TOOLING = "scripts/application/"
+
+
+def application_tooling(paths: Iterable[str]) -> list[str]:
+    """The paths, of these, that are the application's tooling, in the order given.
+
+    The folder is the rule (docs/3.0, #421): `scripts/application/` holds what acts on
+    the application and its environments, which takes a branch and is tried where it
+    runs. Its sibling `scripts/programme/` and the tests do not, and a change to either
+    goes straight to `main`.
+    """
+    return [p for p in paths if p.startswith(_APPLICATION_TOOLING)]
+
+
 _VERSION_LINE = re.compile(r'^[-+]version = "[0-9]+\.[0-9]+\.[0-9]+"$')
 
 

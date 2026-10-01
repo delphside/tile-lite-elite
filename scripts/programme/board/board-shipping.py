@@ -6,6 +6,7 @@
     board-shipping.py paths < path-list      # print the paths, of those given, that reach it
     board-shipping.py ships <sha>            # exit 0 if it reaches the image and is more than a version bump
     board-shipping.py version-bump --staged  # exit 0 if what is staged is only the app version moving
+    board-shipping.py application-tooling < path-list   # print the paths, of those given, that are the application's tooling
     board-shipping.py -C <dir> ...           # against the repository at <dir>
 
 The rule is `scripts/programme/board/shipping.py`'s. This is the command the bash tooling
@@ -45,6 +46,10 @@ def main(argv: list[str]) -> int:
         return 0 if shipping.version_bump_only(*staged()) else 1
     if cmd == "paths" and not args:
         for path in shipping.image_paths(line.strip() for line in sys.stdin):
+            print(path)
+        return 0
+    if cmd == "application-tooling" and not args:
+        for path in shipping.application_tooling(line.strip() for line in sys.stdin):
             print(path)
         return 0
     print(f"board-shipping.py: unknown or malformed command: {' '.join(argv)}\n{__doc__}",
