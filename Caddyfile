@@ -105,7 +105,7 @@ http://127.0.0.1:2020 {
 		# Ordering is what keeps this safe: `redir` is terminal and sits before
 		# the locked check below, so an unlock request never reaches it — while
 		# `/unlock/<anything-else>` does, and is refused.
-		header @rehearsal_unlock Set-Cookie "rehearsal={$REHEARSAL_ACCESS_KEY}; Path=/; Max-Age=14400; HttpOnly; SameSite=Lax"
+		header @rehearsal_unlock Set-Cookie "rehearsal={$REHEARSAL_ACCESS_KEY}; Path=/; Max-Age=14400; Secure; HttpOnly; SameSite=Lax"
 		redir @rehearsal_unlock / 302
 
 		# /health is the whole exemption list, and it is enough: deploy.sh's

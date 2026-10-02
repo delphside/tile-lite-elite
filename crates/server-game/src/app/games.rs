@@ -40,6 +40,18 @@ pub(crate) async fn list_games(
 
     for game in games.values() {
         let last_activity_at = last_activity.get(&game.id).copied().unwrap_or(0);
+        // The address a seat was invited at is the creator's to see (for the
+        // re-send button) and nobody else's — the same rule
+        // `redact_game_state` applies to the full state.
+        let summary_for_caller = |game: &GameSession| {
+            let mut summary = game.to_summary_dto(last_activity_at);
+            if game.creator_player_id.as_deref() != Some(caller_player_id.as_str()) {
+                for participant in &mut summary.participants {
+                    participant.invited_email = None;
+                }
+            }
+            summary
+        };
 
         let is_participant = game
             .participants
@@ -63,7 +75,7 @@ pub(crate) async fn list_games(
             } else {
                 api::GameRelationship::Participant
             };
-            let mut summary = game.to_summary_dto(last_activity_at);
+            let mut summary = summary_for_caller(game);
             summary.relationship = relationship;
             // The newest message this caller did not send. Their own never
             // counts as unread.
@@ -81,7 +93,7 @@ pub(crate) async fn list_games(
             .iter()
             .find(|inv| inv.game_id == game.id && inv.status == "pending")
         {
-            let mut summary = game.to_summary_dto(last_activity_at);
+            let mut summary = summary_for_caller(game);
             summary.relationship = api::GameRelationship::InvitedByName;
             summary.invitation_id = Some(invitation.id.clone());
             summaries.push(summary);
@@ -89,7 +101,7 @@ pub(crate) async fn list_games(
         }
 
         if let Some(invitation) = open_invitations.iter().find(|inv| inv.game_id == game.id) {
-            let mut summary = game.to_summary_dto(last_activity_at);
+            let mut summary = summary_for_caller(game);
             summary.relationship = api::GameRelationship::InvitedOpen;
             summary.invitation_id = Some(invitation.id.clone());
             summaries.push(summary);
@@ -104,7 +116,7 @@ pub(crate) async fn list_games(
         if game.creator_player_id.as_deref() == Some(caller_player_id.as_str())
             && !game.removed_by_creator
         {
-            let mut summary = game.to_summary_dto(last_activity_at);
+            let mut summary = summary_for_caller(game);
             summary.relationship = api::GameRelationship::Creator;
             summaries.push(summary);
         }
@@ -477,6 +489,42 @@ pub(crate) async fn start_game(
     Ok(Json(redact_game_state(dto, &access)))
 }
 
+/// The one rule for acting as a seat, shared by `submit_action` and
+/// `preview_move`: the caller is signed in, and the seat is a human seat
+/// that this caller holds.
+///
+/// Stated positively on purpose. The earlier form refused a *human* seat held
+/// by somebody else, which left every other seat — an engine's, or a number
+/// no seat has — open to anybody, signed in or not. A seat with no owner is
+/// nobody's to act for, not everybody's: an engine moves through the
+/// scheduler, and an unclaimed human seat means an invitation is still
+/// outstanding.
+///
+/// 401 without a session and 403 with one — #379. The caller with a session
+/// is authenticated and not allowed, which is what 403 means; 401 tells a
+/// client to refresh its session, and a client that does will refresh, retry
+/// and get 401 forever.
+fn require_own_seat(
+    game: &GameSession,
+    seat_number: u8,
+    caller_player_id: Option<&str>,
+) -> Result<(), ApiProblem> {
+    let caller_player_id =
+        caller_player_id.ok_or_else(|| ApiProblem::unauthorized("Sign in to play this game"))?;
+    let holds_seat = game.participants.iter().any(|participant| {
+        participant.seat_number == seat_number
+            && participant.kind == api::SeatKind::Human
+            && participant.player_id.as_deref() == Some(caller_player_id)
+    });
+    if holds_seat {
+        Ok(())
+    } else {
+        Err(ApiProblem::forbidden(
+            "This seat belongs to a different player",
+        ))
+    }
+}
+
 pub(crate) async fn submit_action(
     Path(game_id): Path<String>,
     State(state): State<AppState>,
@@ -493,42 +541,31 @@ pub(crate) async fn submit_action(
             .get_mut(&game_id)
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
-        // A human seat can only be acted on by the player who owns it — an
-        // unclaimed human seat means an invitation is still outstanding, not
-        // "open to anyone" (engine seats have no owner and aren't reachable
-        // through this endpoint in normal play).
-        if let Some(seat) = game
-            .participants
-            .iter()
-            .find(|participant| participant.seat_number == request.seat_number)
-            && seat.kind == api::SeatKind::Human
-            && caller_player_id.as_deref() != seat.player_id.as_deref()
-        {
-            return Err(ApiProblem::forbidden(
-                "This seat belongs to a different player",
-            ));
-        }
+        require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
 
+        // Converted before anything is applied, so a request the wire accepts
+        // but the rules cannot index with is refused here rather than reaching
+        // the engine while the games lock is held.
         let action_alphabet = game.rules.alphabet.clone();
         match request.action {
-            PlayerActionDto::Place { candidate } => game
-                .apply_place_move(
-                    request.seat_number,
-                    move_candidate_from_dto(candidate, &action_alphabet),
-                )
-                .map_err(ApiProblem::bad_request)?,
+            PlayerActionDto::Place { candidate } => {
+                let candidate = move_candidate_from_dto(candidate, &game.rules)
+                    .map_err(ApiProblem::bad_request)?;
+                game.apply_place_move(request.seat_number, candidate)
+                    .map_err(ApiProblem::bad_request)?
+            }
             PlayerActionDto::Pass => game
                 .apply_pass(request.seat_number)
                 .map_err(ApiProblem::bad_request)?,
-            PlayerActionDto::Exchange { tiles } => game
-                .apply_exchange(
-                    request.seat_number,
-                    tiles
-                        .into_iter()
-                        .map(|tile| tile_from_dto(tile, &action_alphabet))
-                        .collect(),
-                )
-                .map_err(ApiProblem::bad_request)?,
+            PlayerActionDto::Exchange { tiles } => {
+                let tiles = tiles
+                    .into_iter()
+                    .map(|tile| tile_from_dto(tile, &action_alphabet))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiProblem::bad_request)?;
+                game.apply_exchange(request.seat_number, tiles)
+                    .map_err(ApiProblem::bad_request)?
+            }
             PlayerActionDto::Resign => game
                 .apply_resign(request.seat_number)
                 .map_err(ApiProblem::bad_request)?,
@@ -675,19 +712,8 @@ pub(crate) async fn preview_move(
 
     // Previewing a seat you don't own would otherwise let a caller probe
     // an opponent's exact rack contents by repeatedly guessing candidate
-    // placements and reading back legality/score. An unclaimed human seat
-    // means an invitation is still outstanding, so it's nobody's to preview.
-    if let Some(seat) = game.participants.get(request.seat_number as usize)
-        && seat.kind == api::SeatKind::Human
-        && caller_player_id.as_deref() != seat.player_id.as_deref()
-    {
-        // 403, not 401 — #379. The caller is authenticated and not allowed,
-        // which is what 403 means; 401 tells a client to refresh its session,
-        // and a client that does will refresh, retry and get 401 forever.
-        return Err(ApiProblem::forbidden(
-            "This seat belongs to a different player",
-        ));
-    }
+    // placements and reading back legality/score.
+    require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
 
     if game.status != api::GameStatus::Active {
         return Ok(Json(api::PreviewMoveResponse {
@@ -704,7 +730,8 @@ pub(crate) async fn preview_move(
         .map(|p| p.rack)
         .unwrap_or_default();
 
-    let candidate = move_candidate_from_dto(request.candidate, &game.rules.alphabet);
+    let candidate =
+        move_candidate_from_dto(request.candidate, &game.rules).map_err(ApiProblem::bad_request)?;
     let engine = rules_shared::RulesEngine {
         rules: &game.rules,
         dictionary: rules_shared::dictionary_by_name(&game.rules.language)

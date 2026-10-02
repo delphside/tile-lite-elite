@@ -25,7 +25,10 @@
 //! decent error instead of a growing queue; bad behaviour is dealt with by
 //! stopping the account behind it.
 
+use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::Duration;
 
 use axum::extract::ConnectInfo;
 use axum::http::Request;
@@ -113,7 +116,57 @@ impl KeyExtractor for ClientAddress {
     }
 }
 
-/// The session token, for callers who have one.
+/// Sessions the server has verified, by token hash.
+///
+/// A key extractor is synchronous, so it cannot ask the database whether a
+/// bearer token is real. Keying on the raw header would let any caller buy a
+/// fresh bucket per request by making a token up, which is no limit at all.
+/// So the authenticated tier keys on a session only once a handler has
+/// resolved that token to a player (`player_id_for_token` records it here),
+/// and on the address until then. The first request of a new session is
+/// counted against the address; every one after it against the session.
+///
+/// Bounded: when it reaches `VERIFIED_SESSIONS_CAP` it starts again from
+/// empty, and every live session is simply re-recorded by its next request.
+/// A hash rather than the token, so the set holds nothing a reader could
+/// present as a credential.
+static VERIFIED_SESSIONS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Far above the sessions a 954 MB box will ever hold at once, and at 64
+/// bytes a hash still under a megabyte.
+const VERIFIED_SESSIONS_CAP: usize = 10_000;
+
+/// Records that `token_hash` resolved to a live session.
+pub(crate) fn mark_session_verified(token_hash: &str) {
+    let mut verified = VERIFIED_SESSIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if verified.contains(token_hash) {
+        return;
+    }
+    if verified.len() >= VERIFIED_SESSIONS_CAP {
+        verified.clear();
+    }
+    verified.insert(token_hash.to_string());
+}
+
+/// Forgets a session on logout, so the token's bucket goes with it.
+pub(crate) fn forget_session(token_hash: &str) {
+    VERIFIED_SESSIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(token_hash);
+}
+
+fn is_session_verified(token_hash: &str) -> bool {
+    VERIFIED_SESSIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains(token_hash)
+}
+
+/// The session token, for callers who have one that the server has seen.
 ///
 /// Per session rather than per account, because resolving a token to an
 /// account needs the database and a key extractor cannot wait. In practice
@@ -126,8 +179,9 @@ impl KeyExtractor for ClientAddress {
 /// again to buy a fresh allowance has to pass the heavy-auth limit first, so
 /// the loop costs more than it yields.
 ///
-/// Falls back to the address, so an unauthenticated caller on these routes is
-/// still keyed to something.
+/// Falls back to the address: for a caller with no token, and for one whose
+/// token the server has not verified (see `VERIFIED_SESSIONS`), so a token
+/// the caller made up buys nothing.
 #[derive(Clone)]
 pub struct SessionOrAddress;
 
@@ -135,18 +189,48 @@ impl KeyExtractor for SessionOrAddress {
     type Key = String;
 
     fn extract<T>(&self, request: &Request<T>) -> Result<Self::Key, GovernorError> {
-        if let Some(token) = request
+        if let Some(token_hash) = request
             .headers()
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.strip_prefix("Bearer "))
             .map(str::trim)
             .filter(|token| !token.is_empty())
+            .map(super::auth::hash_token)
+            .filter(|token_hash| is_session_verified(token_hash))
         {
-            return Ok(format!("session:{token}"));
+            return Ok(format!("session:{token_hash}"));
         }
         Ok(format!("address:{:?}", ClientAddress.extract(request)?))
     }
+}
+
+/// How often each keyed tier drops the buckets that have refilled.
+///
+/// `governor` keeps a bucket per key it has ever seen and never drops one on
+/// its own; `retain_recent` is the housekeeping it offers and somebody has to
+/// call it. Without that, every address and every session that ever asked
+/// stays in memory for the life of the process. Once a minute is often
+/// enough: a bucket is small, and the tiers' bursts refill in well under
+/// that.
+const PRUNE_EVERY: Duration = Duration::from_secs(60);
+
+/// Runs `prune` every `every`, for as long as the process lives. Only on a
+/// runtime: the router is also built outside one, by tests, where there is
+/// nothing to prune and nowhere to spawn.
+fn spawn_pruning(every: Duration, prune: impl Fn() + Send + 'static) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(every);
+        // The first tick completes immediately; nothing has accumulated yet.
+        tick.tick().await;
+        loop {
+            tick.tick().await;
+            prune();
+        }
+    });
 }
 
 /// Every seat at once: no key, so one bucket for the whole service.
@@ -190,19 +274,23 @@ where
         return router;
     }
 
-    let config = GovernorConfigBuilder::default()
-        .period(period_for(per_minute))
-        .burst_size(burst)
-        .key_extractor(key)
-        .finish()
-        .expect("a positive period and burst make a valid governor config");
-    router.layer(
-        GovernorLayer::new(std::sync::Arc::new(config)).error_handler(|error| {
-            refusal(error, |wait| {
-                ApiProblem::too_many_requests("You are asking too often — please slow down.", wait)
-            })
-        }),
-    )
+    let config = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(period_for(per_minute))
+            .burst_size(burst)
+            .key_extractor(key)
+            .finish()
+            .expect("a positive period and burst make a valid governor config"),
+    );
+    spawn_pruning(PRUNE_EVERY, {
+        let config = Arc::clone(&config);
+        move || config.limiter().retain_recent()
+    });
+    router.layer(GovernorLayer::new(config).error_handler(|error| {
+        refusal(error, |wait| {
+            ApiProblem::too_many_requests("You are asking too often — please slow down.", wait)
+        })
+    }))
 }
 
 /// Both families answer in the shape every other error uses: an `ApiError`
@@ -327,19 +415,18 @@ pub fn global(router: Router<AppState>) -> Router<AppState> {
         return router;
     }
 
+    // One key, so one bucket and nothing to prune.
     let config = GovernorConfigBuilder::default()
         .period(period_for(per_minute))
         .burst_size(burst)
         .key_extractor(Everything)
         .finish()
         .expect("a positive period and burst make a valid governor config");
-    router.layer(
-        GovernorLayer::new(std::sync::Arc::new(config)).error_handler(|error| {
-            refusal(error, |wait| {
-                ApiProblem::unavailable("The server is busy — please try again.", wait)
-            })
-        }),
-    )
+    router.layer(GovernorLayer::new(Arc::new(config)).error_handler(|error| {
+        refusal(error, |wait| {
+            ApiProblem::unavailable("The server is busy — please try again.", wait)
+        })
+    }))
 }
 
 #[cfg(test)]
@@ -379,24 +466,28 @@ mod tests {
         assert_eq!(key.to_string(), "203.0.113.7");
     }
 
+    fn with_token(token: &str) -> Request<Body> {
+        Request::builder()
+            .uri("/")
+            .header("x-forwarded-for", "203.0.113.7")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::empty())
+            .expect("request should build")
+    }
+
     /// Two people behind one address share a bucket; two sessions do not.
     /// That is the whole reason the authenticated tier keys on the session —
     /// a bot harness and its owner are one address and two callers.
     #[test]
     fn sessions_are_keyed_apart_even_from_one_address() {
-        let with_token = |token: &str| {
-            Request::builder()
-                .uri("/")
-                .header("x-forwarded-for", "203.0.113.7")
-                .header("authorization", format!("Bearer {token}"))
-                .body(Body::empty())
-                .expect("request should build")
-        };
+        for token in ["keyed-apart-aaa", "keyed-apart-bbb"] {
+            mark_session_verified(&super::super::auth::hash_token(token));
+        }
         let one = SessionOrAddress
-            .extract(&with_token("aaa"))
+            .extract(&with_token("keyed-apart-aaa"))
             .expect("a token should extract");
         let two = SessionOrAddress
-            .extract(&with_token("bbb"))
+            .extract(&with_token("keyed-apart-bbb"))
             .expect("a token should extract");
         assert_ne!(one, two, "two sessions are two callers");
 
@@ -406,6 +497,94 @@ mod tests {
         assert_ne!(
             anonymous, one,
             "and somebody with no session is a third, not folded in with them"
+        );
+    }
+
+    /// A token the server has never resolved is a string the caller typed,
+    /// and a string the caller typed cannot buy a bucket: it keys to the
+    /// address, the same as sending nothing. Once the token has been
+    /// verified it keys to the session; once logged out, to the address
+    /// again.
+    #[test]
+    fn only_a_verified_session_gets_its_own_bucket() {
+        let anonymous = SessionOrAddress
+            .extract(&forwarded("203.0.113.7"))
+            .expect("an address should extract");
+
+        let made_up = SessionOrAddress
+            .extract(&with_token("never-issued-by-this-server"))
+            .expect("a token should extract");
+        assert_eq!(made_up, anonymous, "a made-up token is the address");
+
+        let token_hash = super::super::auth::hash_token("issued-and-then-revoked");
+        mark_session_verified(&token_hash);
+        let verified = SessionOrAddress
+            .extract(&with_token("issued-and-then-revoked"))
+            .expect("a token should extract");
+        assert_ne!(verified, anonymous, "a verified one is its own caller");
+        assert!(
+            !verified.contains("issued-and-then-revoked"),
+            "and the key does not carry the token itself: {verified}"
+        );
+
+        forget_session(&token_hash);
+        let revoked = SessionOrAddress
+            .extract(&with_token("issued-and-then-revoked"))
+            .expect("a token should extract");
+        assert_eq!(revoked, anonymous, "logged out, it is the address again");
+    }
+
+    /// The set of verified sessions has a ceiling, and reaching it starts
+    /// over rather than growing: a session that was dropped keys to the
+    /// address until its next request re-records it.
+    #[test]
+    fn the_verified_sessions_are_bounded() {
+        for n in 0..VERIFIED_SESSIONS_CAP + 1 {
+            mark_session_verified(&format!("bounded-{n}"));
+        }
+        let held = VERIFIED_SESSIONS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .len();
+        assert!(
+            held <= VERIFIED_SESSIONS_CAP,
+            "{held} verified sessions held, above the cap of {VERIFIED_SESSIONS_CAP}"
+        );
+    }
+
+    /// A bucket that has refilled is indistinguishable from one that never
+    /// existed, and `governor` drops it only when asked. This is the asking:
+    /// the pruning task, on its interval, empties a limiter whose callers
+    /// have all gone quiet.
+    #[tokio::test]
+    async fn quiet_buckets_are_pruned_on_the_interval() {
+        let config = Arc::new(
+            GovernorConfigBuilder::default()
+                .period(Duration::from_millis(5))
+                .burst_size(1)
+                .key_extractor(ClientAddress)
+                .finish()
+                .expect("a valid config"),
+        );
+        for n in 0..50u8 {
+            let address: IpAddr = format!("203.0.113.{n}").parse().expect("an address");
+            let _ = config.limiter().check_key(&address);
+        }
+        assert_eq!(config.limiter().len(), 50, "one bucket per caller");
+
+        spawn_pruning(Duration::from_millis(20), {
+            let config = Arc::clone(&config);
+            move || config.limiter().retain_recent()
+        });
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !config.limiter().is_empty() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            config.limiter().len(),
+            0,
+            "every bucket had refilled, and the task dropped them"
         );
     }
 

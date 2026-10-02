@@ -154,7 +154,32 @@ pub fn redact_game_state(mut dto: GameStateDto, access: &ViewerAccess) -> GameSt
     if !matches!(access, ViewerAccess::Participant { .. }) {
         dto.messages.clear();
     }
+    // The address a seat was invited at exists for the creator's re-send
+    // button, so the creator is the one viewer who sees it. A seated opponent
+    // or a WebSocket subscriber at any other tier does not — `to_dto()` carries
+    // it at full fidelity for persistence, and this is where it leaves.
+    if !viewer_is_creator(&dto, access) {
+        for participant in &mut dto.participants {
+            participant.invited_email = None;
+        }
+    }
     dto
+}
+
+/// Whether `access` is the game's creator: either as such, or seated — a
+/// creator with a seat of their own resolves to `Participant`, since
+/// `resolve_viewer_access` checks the seat first.
+fn viewer_is_creator(dto: &GameStateDto, access: &ViewerAccess) -> bool {
+    match access {
+        ViewerAccess::Creator => true,
+        ViewerAccess::Participant { seat_number } => dto
+            .participants
+            .iter()
+            .find(|participant| participant.seat_number == *seat_number)
+            .and_then(|participant| participant.player_id.as_deref())
+            .is_some_and(|player_id| dto.creator_player_id.as_deref() == Some(player_id)),
+        ViewerAccess::Rejected => false,
+    }
 }
 
 /// Fills in each unclaimed Human seat's `invitation_status` from that
@@ -1565,7 +1590,11 @@ pub fn board_from_dto(cells: &[BoardCellDto], alphabet: &Alphabet) -> Result<Boa
         let pos = rules_shared::Position::new(x, y);
         let board_cell = match &cell.letter {
             Some(letter) => BoardCell::Filled(FilledCell {
-                letter: to_rules_letter(letter, alphabet),
+                // Persisted by this server from the game's own rules, so a
+                // letter outside the alphabet here is a broken snapshot, not
+                // a caller's input.
+                letter: to_rules_letter(letter, alphabet)
+                    .expect("a persisted board letter belongs to the game's alphabet"),
                 is_blank: cell.is_blank,
             }),
             None => BoardCell::Empty(rules_shared::EmptyCell {
@@ -1598,22 +1627,66 @@ fn premium_from_dto(premium: PremiumDto) -> rules_shared::Premium {
     }
 }
 
-pub fn move_candidate_from_dto(candidate: MoveCandidateDto, alphabet: &Alphabet) -> MoveCandidate {
-    MoveCandidate {
-        start: PositionDtoToRules::convert(candidate.start),
-        direction: match candidate.direction {
-            DirectionDto::Horizontal => Direction::Horizontal,
-            DirectionDto::Vertical => Direction::Vertical,
-        },
-        tiles: candidate
-            .tiles
-            .into_iter()
-            .map(|placement| TilePlacement {
-                offset: placement.offset,
-                tile: tile_from_dto(placement.tile, alphabet),
-            })
-            .collect(),
+/// Turns a move as it arrives on the wire into the rules engine's own types,
+/// refusing any value the engine could not index with. This is the one place
+/// a move enters, so it is where the contract is held: the rules engine's
+/// own checks stay as a second line, but it should never see input the board
+/// or the alphabet cannot address. The message is what the caller reads, so
+/// each names the value that was out of range.
+pub fn move_candidate_from_dto(
+    candidate: MoveCandidateDto,
+    rules: &VariantRules,
+) -> Result<MoveCandidate, String> {
+    let start = candidate.start;
+    if start.x >= rules.width || start.y >= rules.height {
+        return Err(format!(
+            "Start square ({}, {}) is outside the {}x{} board",
+            start.x, start.y, rules.width, rules.height
+        ));
     }
+    let direction = match candidate.direction {
+        DirectionDto::Horizontal => Direction::Horizontal,
+        DirectionDto::Vertical => Direction::Vertical,
+    };
+    if candidate.tiles.is_empty() {
+        return Err("A move must place at least one tile".to_string());
+    }
+    if candidate.tiles.len() > rules.rack_size as usize {
+        return Err(format!(
+            "A move places at most {} tiles, not {}",
+            rules.rack_size,
+            candidate.tiles.len()
+        ));
+    }
+    let (along, limit) = match direction {
+        Direction::Horizontal => (start.x, rules.width),
+        Direction::Vertical => (start.y, rules.height),
+    };
+    let mut tiles = Vec::with_capacity(candidate.tiles.len());
+    for placement in candidate.tiles {
+        let within_board = along
+            .checked_add(placement.offset)
+            .is_some_and(|end| end < limit);
+        if !within_board {
+            return Err(format!(
+                "Offset {} from ({}, {}) runs off the board",
+                placement.offset, start.x, start.y
+            ));
+        }
+        let tile = tile_from_dto(placement.tile, &rules.alphabet)?;
+        if matches!(tile, Tile::Blank { acting_as: None }) {
+            return Err("A blank must say which letter it stands for".to_string());
+        }
+        tiles.push(TilePlacement {
+            offset: placement.offset,
+            tile,
+        });
+    }
+    Ok(MoveCandidate {
+        start: PositionDtoToRules::convert(start),
+        direction,
+        tiles,
+    })
 }
 
 pub fn move_candidate_to_dto(candidate: &MoveCandidate, alphabet: &Alphabet) -> MoveCandidateDto {
@@ -1642,12 +1715,16 @@ pub fn move_candidate_to_dto(candidate: &MoveCandidate, alphabet: &Alphabet) -> 
 /// wrong for Ä/Ö/Ü (or any letter past index 25), and can't represent a
 /// digraph tile (Spanish's CH/LL/RR) at all, since it's two characters.
 /// Every tile/board letter crossing this boundary belongs to the game's
-/// own `VariantRules.alphabet`, so this is a genuine internal invariant,
-/// not defensive-for-user-input.
-fn to_rules_letter(s: &str, alphabet: &Alphabet) -> Letter {
+/// own `VariantRules.alphabet`.
+///
+/// A letter from the wire is the caller's, and a caller is not bound to send
+/// what our own client would, so one outside the alphabet is refused rather
+/// than assumed away. (Until it was, it was an `expect`, and a panic here
+/// happened under the games lock.)
+fn to_rules_letter(s: &str, alphabet: &Alphabet) -> Result<Letter, String> {
     alphabet
         .to_letter(s)
-        .expect("tile letter should belong to the game's alphabet")
+        .ok_or_else(|| format!("'{s}' is not a letter in this game's alphabet"))
 }
 
 fn to_dto_letter(letter: Letter, alphabet: &Alphabet) -> String {
@@ -1657,13 +1734,15 @@ fn to_dto_letter(letter: Letter, alphabet: &Alphabet) -> String {
         .to_string()
 }
 
-pub fn tile_from_dto(tile: TileDto, alphabet: &Alphabet) -> Tile {
-    match tile {
-        TileDto::Letter { letter } => Tile::Letter(to_rules_letter(&letter, alphabet)),
+pub fn tile_from_dto(tile: TileDto, alphabet: &Alphabet) -> Result<Tile, String> {
+    Ok(match tile {
+        TileDto::Letter { letter } => Tile::Letter(to_rules_letter(&letter, alphabet)?),
         TileDto::Blank { acting_as } => Tile::Blank {
-            acting_as: acting_as.map(|letter| to_rules_letter(&letter, alphabet)),
+            acting_as: acting_as
+                .map(|letter| to_rules_letter(&letter, alphabet))
+                .transpose()?,
         },
-    }
+    })
 }
 
 pub fn tile_to_dto(tile: Tile, alphabet: &Alphabet) -> TileDto {

@@ -3098,7 +3098,7 @@ async fn claimed_seat_rejects_actions_from_a_different_player() {
 /// Registers Alice and Mallory, and has Alice create a game (while
 /// authenticated) with a human seat 0 for herself and the given kind
 /// for seat 1. Returns both sessions and the created game.
-async fn create_claimed_game_and_second_player(
+pub(super) async fn create_claimed_game_and_second_player(
     app: Router,
     seat_one_kind: SeatKind,
 ) -> (PlayerSessionDto, PlayerSessionDto, GameStateDto) {

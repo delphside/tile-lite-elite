@@ -179,7 +179,9 @@ pub(crate) async fn validate_session(
 /// the row was still there.
 pub(crate) async fn logout(State(state): State<AppState>, headers: HeaderMap) -> StatusCode {
     if let Some(token) = bearer_token(&headers) {
-        let _ = persistence::delete_session_by_token_hash(&state.db, &hash_token(token)).await;
+        let token_hash = hash_token(token);
+        let _ = persistence::delete_session_by_token_hash(&state.db, &token_hash).await;
+        super::throttle::forget_session(&token_hash);
     }
     StatusCode::NO_CONTENT
 }

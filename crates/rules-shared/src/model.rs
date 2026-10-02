@@ -426,8 +426,12 @@ impl Rack {
         self.count() == 0
     }
 
+    /// A letter the rack cannot count — one past `MAX_ALPHABET_SIZE` — is a
+    /// letter it does not hold, not an index past the array.
     pub fn contains_letter(self, letter: Letter) -> bool {
-        self.counts[letter.as_usize()] > 0
+        self.counts
+            .get(letter.as_usize())
+            .is_some_and(|count| *count > 0)
     }
 
     pub fn add_letter(&mut self, letter: Letter) {
@@ -435,12 +439,12 @@ impl Rack {
     }
 
     pub fn remove_letter(&mut self, letter: Letter) -> bool {
-        let count = &mut self.counts[letter.as_usize()];
-        if *count > 0 {
-            *count -= 1;
-            true
-        } else {
-            false
+        match self.counts.get_mut(letter.as_usize()) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+                true
+            }
+            _ => false,
         }
     }
 

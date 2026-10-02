@@ -118,6 +118,20 @@ impl<D: Dictionary> RulesEngine<'_, D> {
         state: &RulesPosition<'_>,
         candidate: &MoveCandidate,
     ) -> Result<ValidatedMove, MoveError> {
+        // A letter is an index — into the alphabet, the letter values and
+        // the rack — so one the alphabet does not have is refused before
+        // anything indexes with it.
+        let alphabet_size = self.rules.alphabet.len();
+        let known = |letter: crate::model::Letter| letter.as_usize() < alphabet_size;
+        for placement in &candidate.tiles {
+            let in_alphabet = match placement.tile {
+                Tile::Letter(letter) => known(letter),
+                Tile::Blank { acting_as } => acting_as.is_none_or(known),
+            };
+            if !in_alphabet {
+                return Err(MoveError::InvalidMove);
+            }
+        }
         let offset_placements = normalize_placements(candidate)?;
         if offset_placements.is_empty() {
             return Err(MoveError::InvalidMove);
@@ -418,15 +432,26 @@ fn offset_position(
     offset: u8,
     rules: &VariantRules,
 ) -> Result<Position, MoveError> {
-    match direction {
-        Direction::Horizontal if start.x + offset < rules.width => {
-            Ok(Position::new(start.x + offset, start.y))
-        }
-        Direction::Vertical if start.y + offset < rules.height => {
-            Ok(Position::new(start.x, start.y + offset))
-        }
-        _ => Err(MoveError::InvalidPosition),
+    // Both coordinates, and a checked sum: the square has to exist. The
+    // cross-axis coordinate was once taken on trust, and `start + offset`
+    // was a plain `u8` add, so a caller's numbers could name a square the
+    // board does not have.
+    if start.x >= rules.width || start.y >= rules.height {
+        return Err(MoveError::InvalidPosition);
     }
+    match direction {
+        Direction::Horizontal => start
+            .x
+            .checked_add(offset)
+            .filter(|x| *x < rules.width)
+            .map(|x| Position::new(x, start.y)),
+        Direction::Vertical => start
+            .y
+            .checked_add(offset)
+            .filter(|y| *y < rules.height)
+            .map(|y| Position::new(start.x, y)),
+    }
+    .ok_or(MoveError::InvalidPosition)
 }
 
 fn validate_main_word_span(
@@ -516,6 +541,215 @@ fn build_cross_word(
         }
     }
     word
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    //! The rules engine is the second line behind the server's boundary
+    //! check, and it must hold on its own: an out-of-range value is an
+    //! error, never an index out of bounds or an overflow.
+
+    use super::{GameState, RulesEngine};
+    use crate::dictionary::WordListDictionary;
+    use crate::model::{
+        Direction, Letter, MoveCandidate, MoveError, Position, Rack, Tile, TilePlacement,
+        VariantRules,
+    };
+
+    fn candidate(start: Position, direction: Direction, tiles: &[(u8, Tile)]) -> MoveCandidate {
+        MoveCandidate {
+            start,
+            direction,
+            tiles: tiles
+                .iter()
+                .map(|(offset, tile)| TilePlacement {
+                    offset: *offset,
+                    tile: *tile,
+                })
+                .collect(),
+        }
+    }
+
+    fn validate(candidate: &MoveCandidate, rack: Option<&Rack>) -> Result<(), MoveError> {
+        let rules = VariantRules::official();
+        let dictionary = WordListDictionary::new();
+        let state = GameState::new(&rules, &dictionary);
+        let engine = RulesEngine {
+            rules: &rules,
+            dictionary: &dictionary,
+        };
+        engine
+            .validate_game_move(&state, rack, candidate)
+            .map(|_| ())
+    }
+
+    /// Letters are indexes into the alphabet, the letter values and the
+    /// rack. One past the alphabet's end is a refusal, not a crash.
+    #[test]
+    fn a_letter_outside_the_alphabet_is_refused() {
+        let rules = VariantRules::official();
+        let past_the_end = Letter(rules.alphabet.len() as u8);
+        for tile in [
+            Tile::Letter(past_the_end),
+            Tile::Letter(Letter(u8::MAX)),
+            Tile::Blank {
+                acting_as: Some(past_the_end),
+            },
+        ] {
+            let candidate = candidate(
+                Position::new(7, 7),
+                Direction::Horizontal,
+                &[(0, tile), (1, Tile::Letter(Letter(0)))],
+            );
+            assert_eq!(
+                validate(&candidate, None),
+                Err(MoveError::InvalidMove),
+                "{tile:?} without a rack"
+            );
+            let mut rack = Rack {
+                blanks: 1,
+                ..Rack::default()
+            };
+            rack.counts[0] = 1;
+            assert_eq!(
+                validate(&candidate, Some(&rack)),
+                Err(MoveError::InvalidMove),
+                "{tile:?} against a rack"
+            );
+        }
+    }
+
+    /// The rack is asked about letters the engine has not yet checked, and
+    /// has to answer rather than index past its counts.
+    #[test]
+    fn a_rack_does_not_hold_a_letter_it_cannot_count() {
+        let mut rack = Rack::default();
+        rack.counts[0] = 1;
+        assert!(!rack.contains_letter(Letter(u8::MAX)));
+        assert!(!rack.remove_letter(Letter(u8::MAX)));
+        assert!(!rack.consume_tile(Tile::Letter(Letter(200))));
+        assert_eq!(rack.count(), 1, "and nothing was taken");
+    }
+
+    /// `start + offset` is a `u8` sum. Past 255 it wrapped in release and
+    /// panicked in debug; either way the square was never on the board.
+    #[test]
+    fn an_offset_that_overflows_is_an_invalid_position() {
+        for direction in [Direction::Horizontal, Direction::Vertical] {
+            let candidate = candidate(
+                Position::new(7, 7),
+                direction,
+                &[
+                    (0, Tile::Letter(Letter(0))),
+                    (u8::MAX, Tile::Letter(Letter(1))),
+                ],
+            );
+            assert_eq!(
+                validate(&candidate, None),
+                Err(MoveError::InvalidPosition),
+                "{direction:?}"
+            );
+        }
+    }
+
+    /// The coordinate the move does not run along was never checked: a
+    /// horizontal move checked its x and took any y, and the board was then
+    /// read at a square it does not have.
+    #[test]
+    fn a_start_off_the_board_on_the_cross_axis_is_an_invalid_position() {
+        let rules = VariantRules::official();
+        let cases = [
+            (Position::new(7, rules.height), Direction::Horizontal),
+            (Position::new(7, u8::MAX), Direction::Horizontal),
+            (Position::new(rules.width, 7), Direction::Vertical),
+            (Position::new(u8::MAX, 7), Direction::Vertical),
+            (
+                Position::new(rules.width, rules.height),
+                Direction::Horizontal,
+            ),
+        ];
+        for (start, direction) in cases {
+            let candidate = candidate(
+                start,
+                direction,
+                &[(0, Tile::Letter(Letter(0))), (1, Tile::Letter(Letter(1)))],
+            );
+            assert_eq!(
+                validate(&candidate, None),
+                Err(MoveError::InvalidPosition),
+                "{start:?} {direction:?}"
+            );
+        }
+    }
+
+    /// Every combination of the edges above, and a spread of ordinary
+    /// values, through the whole validator: whatever comes back, it comes
+    /// back. The seed is fixed so a failure names its case.
+    #[test]
+    fn validating_any_move_never_panics() {
+        let rules = VariantRules::official();
+        let dictionary = WordListDictionary::new();
+        let state = GameState::new(&rules, &dictionary);
+        let engine = RulesEngine {
+            rules: &rules,
+            dictionary: &dictionary,
+        };
+        let mut rack = Rack::default();
+        rack.counts[0] = 2;
+        rack.counts[4] = 1;
+        rack.blanks = 1;
+
+        // A small linear congruential generator: enough to spread the values
+        // without a dependency, and reproducible from the seed below.
+        let mut seed: u64 = 0x5eed_0002_1002_2026;
+        let mut next = || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 33) as u32
+        };
+        let edge = |value: u32, limit: u8| -> u8 {
+            match value % 8 {
+                0 => 0,
+                1 => limit.saturating_sub(1),
+                2 => limit,
+                3 => limit.saturating_add(1),
+                4 => u8::MAX,
+                _ => (value % u32::from(limit.max(1))) as u8,
+            }
+        };
+
+        for case in 0..5_000u32 {
+            let start = Position::new(edge(next(), rules.width), edge(next(), rules.height));
+            let direction = if next() % 2 == 0 {
+                Direction::Horizontal
+            } else {
+                Direction::Vertical
+            };
+            let count = (next() % 10) as usize;
+            let tiles: Vec<(u8, Tile)> = (0..count)
+                .map(|_| {
+                    let offset = edge(next(), rules.width);
+                    let letter = Letter(edge(next(), rules.alphabet.len() as u8));
+                    let tile = match next() % 4 {
+                        0 => Tile::Blank {
+                            acting_as: Some(letter),
+                        },
+                        1 => Tile::Blank { acting_as: None },
+                        _ => Tile::Letter(letter),
+                    };
+                    (offset, tile)
+                })
+                .collect();
+            let candidate = candidate(start, direction, &tiles);
+            let with_rack = next() % 2 == 0;
+            // Only that it answers: the result is whatever the rules say.
+            let _ = std::panic::catch_unwind(|| {
+                engine.validate_game_move(&state, with_rack.then_some(&rack), &candidate)
+            })
+            .unwrap_or_else(|_| panic!("case {case} panicked: {candidate:?} rack={with_rack}"));
+        }
+    }
 }
 
 #[cfg(test)]

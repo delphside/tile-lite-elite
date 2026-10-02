@@ -66,8 +66,11 @@ write_key() {
   # Rewrite the line if it is there, append it if it is not. `docker compose
   # up -d web` rather than `restart`: restart reuses the container's existing
   # environment, so it would report success and change nothing.
+  # The file holds the key, so it is the owner's to read and nobody else's —
+  # `touch` alone would create it with the login's umask.
   remote "cd $DEPLOY_REMOTE_DIR \
     && touch .env \
+    && chmod 600 .env \
     && sed -i '/^REHEARSAL_ACCESS_KEY=/d' .env \
     && echo 'REHEARSAL_ACCESS_KEY=$key' >> .env \
     && docker compose up -d web > /dev/null 2>&1 \

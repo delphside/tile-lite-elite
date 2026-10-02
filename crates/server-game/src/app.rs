@@ -55,6 +55,8 @@ mod sweeps_game;
 mod tests;
 #[cfg(test)]
 mod tests_account_lifecycle;
+#[cfg(test)]
+mod tests_hardening;
 mod throttle;
 
 use self::admin::*;

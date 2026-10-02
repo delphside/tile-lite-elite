@@ -193,9 +193,30 @@ pub(crate) async fn invite_player_to_game(
     }))
 }
 
+/// A player's invitations are theirs alone: the caller signs in, and asks for
+/// their own id. The listing itself is `invitations_for_player`, kept apart
+/// so the database-failure test below can reach it past the sign-in — a
+/// closed pool fails the token lookup first, which `player_id_for_token`
+/// reports as no session.
 pub(crate) async fn list_player_invitations(
     Path(player_id): Path<String>,
     State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<GameInvitationDto>>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to see your invitations"))?;
+    if caller_player_id != player_id {
+        return Err(ApiProblem::forbidden(
+            "You can only see your own invitations",
+        ));
+    }
+    invitations_for_player(&state, &player_id).await
+}
+
+async fn invitations_for_player(
+    state: &AppState,
+    player_id: &str,
 ) -> Result<Json<Vec<GameInvitationDto>>, ApiProblem> {
     // **`from_sqlx`, like every other database call.** These two were the last
     // sites still answering `bad_request("Database error")` after #380 swept
@@ -204,7 +225,7 @@ pub(crate) async fn list_player_invitations(
     // caller they had made a bad request and that retrying was pointless.
     // `|_|` also discarded the error, so the failure reached neither the caller
     // nor the log. #399.
-    let invitations = persistence::get_invitations_for_player(&state.db, &player_id)
+    let invitations = persistence::get_invitations_for_player(&state.db, player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?;
 
@@ -402,7 +423,7 @@ mod database_failures {
         let state = create_test_state(&test_database_url()).await;
         state.db.close().await;
 
-        let problem = list_player_invitations(Path("any-player".to_string()), State(state))
+        let problem = invitations_for_player(&state, "any-player")
             .await
             .expect_err("a closed pool cannot answer");
 
