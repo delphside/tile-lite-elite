@@ -114,22 +114,16 @@ fi
 RAW="$(./scripts/programme/board/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
 [[ -z "$RAW" ]] && exit 0
 
+# **The to-do half is `board-inbox.py --open`** (#454), run with the others below:
+# the owner's comments Claude has not answered, of any age. This awk keeps only
+# what opened or closed, which is news rather than work.
 SUMMARY="$(printf '%s\n' "$RAW" | awk '
-  /^#[0-9]+ / { issue = $0; next }
-  /^  > /     { if (!(issue in count)) order[++k] = issue; count[issue]++; next }
   /^OPENED OR CLOSED/ { tail = 1; next }
   tail && /^  #/ { events[++e] = $0 }
   END {
     # Capped. A release week closes thirty issues at once, and an unbounded
     # summary of a busy week is the same wall of text this was meant to avoid.
-    if (k) {
-      print "Issues with comments from Steve (newest last):"
-      start = k > 12 ? k - 11 : 1
-      if (start > 1) printf "  ...%d earlier\n", start - 1
-      for (i = start; i <= k; i++) printf "  %s  [%d]\n", order[i], count[order[i]]
-    }
     if (e) {
-      if (k) print ""
       printf "Opened or closed (%d; newest last):\n", e
       start = e > 10 ? e - 9 : 1
       if (start > 1) printf "  ...%d earlier\n", start - 1
@@ -137,6 +131,7 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
     }
   }
 ')"
+
 
 # **What is waiting on Claude, and what does not add up** — #347 R2. The two
 # tools that answer this were wired to nothing: the actions report was in no
@@ -160,6 +155,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"; [[ "$MODE" == "--build" ]] && rmdir "$L
 ( timeout 25 ./scripts/programme/board/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
 ( timeout 25 ./scripts/programme/board/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
 ( timeout 10 ./scripts/programme/board/board-practices.py 2>/dev/null > "$TMP/practices" ) &
+( timeout 25 ./scripts/programme/board/board-inbox.py --open --no-colour 2>/dev/null > "$TMP/open" ) &
 wait
 
 # Only the findings. A clean run says nothing is missing, which is worth
@@ -181,11 +177,16 @@ PRACTICES="$(grep -E 'OVERDUE|never logged' "$TMP/practices" 2>/dev/null || true
 REPORTS="$(printf '%s\n' "$RAW" | sed -n '/^REPORTS FROM THE SCHEDULED WORKFLOWS/,/^$/p' \
   | grep -E '^  #[0-9]+' || true)"
 
+# The to-do list first. `^#` is an issue; the sentence for an empty list and the
+# `...N earlier` line are not findings, so a quiet board adds nothing.
+OPEN="$(grep -E '^(#[0-9]+|  > |\.\.\.[0-9]+ earlier)' "$TMP/open" 2>/dev/null || true)"
+
 EXTRA=""
-[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/programme/board/board-inbox.py):"$'\n'"$REPORTS"
-[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/programme/board/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
-[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"
-[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/programme/board/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
+[[ -n "$OPEN" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: comments from Steve not yet answered, of any age (./scripts/programme/board/board-inbox.py --open --all):"$'\n'"$OPEN"
+[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to read: reports from the scheduled workflows, opened, updated or closed (./scripts/programme/board/board-inbox.py):"$'\n'"$REPORTS"
+[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: actions on the board (./scripts/programme/board/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
+[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to fix: incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue, whose move is the activity's owner in docs/5.3 (./scripts/programme/board/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 

@@ -315,18 +315,22 @@ class Remark:
     who: str          # "owner" | "claude" | "deploy" | "bot"
     text: str
     on_diff: bool
+    # When it was first written, to the second. `when` is the *updated* time, so
+    # an edit moves it; whether Claude answered must not move with an edit.
+    created: str = ""
 
 
 def comment_jq(url_key: str) -> str:
     """The jq that turns GitHub's comments into Remark rows: number, when, who,
-    text. Who is decided here, in this order: deploy.sh's announcement, then
+    text, created. Who is decided here, in this order: deploy.sh's announcement, then
     Claude's account, then any bot, then the owner. A function so the rule can
     be tested with the real jq rather than only read."""
     return (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
             '(if (.body | test("^Released in prod-")) then "deploy" '
             'elif (.user.login == "SteveStyle-typed-by-Claude") then "claude" '
             'elif (.user.type == "Bot") then "bot" '
-            'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150])] | @tsv')
+            'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150]), '
+            '.created_at[0:19]] | @tsv')
 
 
 def comments_since(since_iso: str) -> tuple[Remark, ...]:
@@ -383,14 +387,45 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
             if not line.strip():
                 continue
             parts = line.split("\t")
-            if len(parts) != 4:
+            if len(parts) != 5:
                 continue
-            number, when, who, text = parts
+            number, when, who, text, created = parts
             try:
-                out.append(Remark(int(number), when, who, text, on_diff))
+                out.append(Remark(int(number), when, who, text, on_diff, created))
             except ValueError:
                 continue
     return tuple(sorted(out, key=lambda r: (r.number, r.when)))
+
+
+def comments_on(number: int) -> tuple[Remark, ...]:
+    """Every comment on one issue or pull request, whenever it was written.
+
+    The single-issue read the comment-time check needs: it runs before Claude
+    posts, so it cannot afford the whole board. The diff comments of a pull
+    request are not read, which is the same trade `comments_since` avoids and
+    is stated here: this answers "has the owner asked something on this issue".
+    """
+    jq = comment_jq("pull_request_url")
+    try:
+        run = subprocess.run(
+            ["gh", "api", f"repos/{OWNER}/{REPO}/issues/{number}/comments?per_page=100",
+             "--paginate", "--jq", jq],
+            capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Unavailable(f"could not read comments on #{number}: {exc}") from exc
+    if run.returncode != 0:
+        raise Unavailable(f"could not read comments on #{number}: {run.stderr.strip()[:200]}")
+    out = []
+    for line in run.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 5:
+            continue
+        n, when, who, text, created = parts
+        try:
+            out.append(Remark(int(n), when, who, text, False, created))
+        except ValueError:
+            continue
+    return tuple(sorted(out, key=lambda r: r.created or r.when))
 
 
 @dataclass(frozen=True)
