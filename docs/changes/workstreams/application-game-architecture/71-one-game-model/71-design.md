@@ -4,6 +4,13 @@ Design note for issues #9, #10, #26, #71 and #75, and the undo work in #73
 that depends on them. **Not yet implemented** — this records the shape agreed
 before code.
 
+**The documents run top-down, one file per stage.**[^d71]
+[`71-functional.md`](71-functional.md) is the functional set: the use case
+diagram, the journeys and the lifecycles. This note is the technical design,
+overall first and then a section scoping each work package. How it is proved is
+[`71-test-approach.md`](71-test-approach.md), with one test file per package
+written to fit it.
+
 **The concrete shapes are in [`71-data-model.md`](71-data-model.md)** — the
 types as they would be written, the DTOs, the schema, which module changes, the
 message flows, the client's state and how the engine is invoked. This note
@@ -18,8 +25,7 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
-| 1 | [#472](https://github.com/delphside/tile-lite-elite/issues/472) D71 | technical, frames the rest | how these documents are structured and sequenced | this folder |
-| 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | *The two lifecycles together* |
+| 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | `71-functional.md`, *The game and its seats* |
 | 2 | [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | functional requirement | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
 | 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
@@ -29,6 +35,10 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
+
+[^d71]: Decision #472 (D71): one file per stage, functional views before the
+    technical design; work packages scoped as sections of this note, and a test
+    file per package fitted to the overall test approach.
 
 The design map this project starts from, in the format #406 is agreeing, is
 not drawn yet; it waits on #406's open questions.
@@ -420,126 +430,11 @@ same shape as a person doing it, per GAME-4, rather than a case of its own.
 Without that, every caller writes `kind == Human && player_id.is_none()` and
 remembers that engines are exempt.
 
-### The two lifecycles together
+### The lifecycles are in the functional views
 
-Seat states are not free of the game's. Each one belongs inside a particular
-game state, which is why they are drawn nested rather than side by side.
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> NotStarted: create
-
-    state "Game: Not Started" as NotStarted {
-        [*] --> Claimed: the creator's seat, or a bot
-        [*] --> Unsent: a seat with an invitation
-        Unsent --> Invited: send
-        Invited --> Invited: send the link again
-        Invited --> Claimed: accept
-        Invited --> Declined: decline
-        Claimed --> Withdrawn: withdraw
-    }
-
-    state "Game: Active" as Active {
-        Playing --> Departed: resign, force-resign, time out
-    }
-
-    state "Game: Finished or Aborted<br/>seats frozen as they stand" as Over
-
-    Claimed --> Playing: start, deal racks
-    NotStarted --> Over: creator aborts
-    Active --> Over: a seat goes out, or creator aborts
-    NotStarted --> [*]: RET-3, 30 days
-    Over --> [*]: RET-1, 7 days
-```
-
-Two simplifications, both deliberate. **Finished and Aborted share a box**
-because they do not differ in seat terms — either way the seats stop where
-they are, and this diagram is about seats. Where they differ is rating, which
-is below. And **seats leaving the roster are not drawn** — removed by the
-creator, or dropped as spent when the game starts. They cease to exist rather
-than reaching a state.
-
-Aborting gives up every seat (GAME-1): every `Playing` seat ends `Departed`,
-and a game also finishes when only one seat is left `Playing`. **Pending:**
-what abort does to a seat that has no player yet, `Unsent` or `Invited`, is
-[Decision #468](https://github.com/delphside/tile-lite-elite/issues/468) (D68);
-the recommendation is that they freeze as they stand, which is what the
-diagram's *seats frozen* already draws. Either way, aborting cancels every
-invitation still pending, so nobody can accept a seat in a game that is over.
-
-Three things are worth reading off it.
-
-**One arrow crosses the boundary.** Starting refuses while any seat is still
-pending and drops the spent ones, so at the moment a game begins every seat
-left is `Claimed` and there is nothing else to carry across. Starting deals
-the racks, which is the same event as `Claimed → Playing`, and that is why the
-two are one arrow rather than two facts that have to agree.
-
-**The invitation states exist only before the start**, and `Playing` and
-`Departed` only after it. A seat cannot be invited into a game in progress:
-adding a player mid-game is not a small extension of this model but a
-different one, and the diagram is where that shows up. So the handler refuses
-any seat message — inviting, accepting, claiming — once the game has left
-`Waiting`, with `ApplyError::GameNotWaiting`, and `Start` refuses a game that
-has already started rather than doing nothing.
-
-**Finished and Aborted freeze the seats** rather than giving them states of
-their own. Which seats are `Playing` and which are `Departed` when the game
-ends is exactly what RATE-2 and RATE-3 turn on — who played to the end, and
-who left early — so the final seat states are the game's result, not
-bookkeeping to be cleared away.
-
-### Do the arrows match the messages?
-
-No, and it is worth being precise about how they fail to, because two of the
-four mismatches are the reason this note exists.
-
-**One command, several arrows.** Creating a game sets up every seat at once,
-and each may land in a different state depending on its invitation. Starting
-moves every `Claimed` seat to `Playing`. Aborting departs every seat. A
-command is not an arrow; it is a set of them.
-
-**Several commands, one arrow.** Resigning through `/actions`, being
-force-resigned through its own route, and timing out through no command at all
-are one arrow, `Playing → Departed`. They differ only in `how`, which is
-exactly why `Departure` is a field rather than three states.
-
-**Commands with no arrow at all.** Placing, passing, exchanging, reordering
-seats, chatting. These change the game — the board, the racks, the scores —
-without moving any seat between states. **This is the class of change that was
-invisible to clients**, because change was tied to writing a seat or
-invitation row. It is the defect the whole note is about, and the diagram is
-where it becomes obvious: most of what happens in a game is not on it.
-
-**Arrows with no command.** Timing out and being swept away are the clock, not
-a caller. Any design built on "state changes because somebody asked" gets
-these wrong — which is why the sweeps and the scheduler's jobs have to bump the
-version and broadcast through the same path a request does, rather than quietly
-writing a row.
-
-So the alignment worth having is not arrow-to-message. It is one level up, and
-it is the only invariant that covers all four cases:
-
-> Everything that changes a game — command, sweep, scheduled job or clock —
-> bumps the one version and publishes the result.
-
-**One arrow does align exactly, and it is the one to watch.** `Invited →
-Claimed` is a single command changing a single seat, and it is the case that
-has been wrong in production twice: the seat changed, the game's version did
-not, and nobody heard.
-
-**State is derived from what is there, never from the history.** The log
-exists for undo and audit; behaviour reads the current state. This is the rule
-that keeps the seat enum honest: a seat's state is a field, not a fold over
-rows.
-
-It also disposes of a habit worth naming, because two documents currently
-encode it. Both this note's predecessor in 2.4 and the user-deletion test plan
-classify an unstarted game into one of four roster situations, ordered so that
-exactly one applies. That was a convenience for arguing about retention and
-for making a test partition clean. It is not a description of the system, and
-nothing should be written against it.
+The state machine for the game and its seats, and how its arrows line up with
+the messages above, are in [`71-functional.md`](71-functional.md),
+*Lifecycles*, where the journeys are checked against them.[^d71]
 
 ## DTOs are invisible
 
@@ -1100,6 +995,62 @@ long that session lives is
 [D66](https://github.com/delphside/tile-lite-elite/issues/466), pending. What a
 connection may see is the union over the seats its account holds; a broadcast
 event never names who acted on a seat beyond the seat itself.
+
+## Work packages
+
+The overall design above is delivered in six packages (D56, #442). Each section
+says what the package takes from the design, and what it waits on. A package's
+requirements are on its issue; its tests are in its own test file.
+
+### WP A, #268 Core Game Lifecycle
+
+**Takes**: *One version, moved in one place*, with every `GameMessage`
+variant except undo and redo; per-game locking; the seat model and its
+lifecycle; *DTOs are invisible*, including the opponent tile count; *The
+engine is a client*; *Migration*, with the schema version, foreign keys and
+the rating key; the user-details lookup rule; and the code-review findings
+routed from #460 to it. It also builds the `game-wire` crate and the test
+client.
+
+**Waits on**: D61, D62, D65, D69 and D70, and D63 for how far the test client
+goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
+
+### WP B, #269 Core Client UI
+
+**Takes**: *The client has the same defect* — one writer of the server cache,
+matching rather than clearing, the composition keyed by game and seat — and
+whatever client change WP A's wire change forces. Ships with WP A.
+
+**Waits on**: WP A's wire shapes. Its tests: [`71-test-wp-b.md`](71-test-wp-b.md).
+
+### WP C, #270 Additional Game Lifecycle
+
+**Takes**: the scheduled jobs that are not yet built — RET-3's countdown and a
+message reaching a player who is not looking — each through the one handler,
+as *Arrows with no command* requires.
+
+**Waits on**: WP A. Its tests: [`71-test-wp-c.md`](71-test-wp-c.md).
+
+### WP D, #271 Additional Client UI
+
+**Takes**: the client work WP C implies, and #84, #146 and #239.
+
+**Waits on**: WP B and WP C. Its tests: [`71-test-wp-d.md`](71-test-wp-d.md).
+
+### WP E, #272 Undo and Redo
+
+**Takes**: *What this makes possible*, undo — a new, higher version whose
+content is an earlier state, with `turn` walking back.
+
+**Waits on**: WP A, and D61 for where the history is kept. Its tests:
+[`71-test-wp-e.md`](71-test-wp-e.md).
+
+### WP F, #290 dioxus 0.7
+
+**Takes**: nothing from this design; it is the framework upgrade WP B and WP D
+are written against.
+
+**Waits on**: nothing in #71. Its tests: [`71-test-wp-f.md`](71-test-wp-f.md).
 
 ## Documents this changes
 

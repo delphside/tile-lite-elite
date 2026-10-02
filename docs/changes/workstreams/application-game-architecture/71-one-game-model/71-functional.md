@@ -1,7 +1,9 @@
 # 71 Functional views
 
-**Draft, under [Decision #472](https://github.com/delphside/tile-lite-elite/issues/472)
-(D71), option 1.** This file is the functional set for #71: who uses the
+**The first stage of #71's design**, as
+[Decision #472](https://github.com/delphside/tile-lite-elite/issues/472) (D71)
+settled it on 2026-10-02: one file per stage, functional views before the
+technical design. This file is the functional set for #71: who uses the
 service, what each may do, and the journeys and lifecycles that follow from
 that. It comes before [`71-design.md`](71-design.md) and
 [`71-data-model.md`](71-data-model.md), and the requirements it surfaces are
@@ -187,8 +189,130 @@ Functional, so answered before the technical decisions:
 
 ## Lifecycles
 
-The state machines for the game, the seat and the invitation are in
-[`71-design.md`](71-design.md), *Seat state belongs to the seat*, and move here
-when D71 is agreed. Each journey step is checked against them: a step that
-changes something with no matching transition is a missing transition, and a
-transition no step reaches is internal, like a sweep, or not needed.
+The state machines for the game and its seats. Each journey step above is
+checked against them: a step that changes something with no matching
+transition is a missing transition, and a transition no step reaches is
+internal, like a sweep, or not needed. The types behind the states are in
+[`71-design.md`](71-design.md), *Seat state belongs to the seat*, and in
+[`71-data-model.md`](71-data-model.md) §1.
+
+### The game and its seats
+
+Seat states are not free of the game's. Each one belongs inside a particular
+game state, which is why they are drawn nested rather than side by side.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> NotStarted: create
+
+    state "Game: Not Started" as NotStarted {
+        [*] --> Claimed: the creator's seat, or a bot
+        [*] --> Unsent: a seat with an invitation
+        Unsent --> Invited: send
+        Invited --> Invited: send the link again
+        Invited --> Claimed: accept
+        Invited --> Declined: decline
+        Claimed --> Withdrawn: withdraw
+    }
+
+    state "Game: Active" as Active {
+        Playing --> Departed: resign, force-resign, time out
+    }
+
+    state "Game: Finished or Aborted<br/>seats frozen as they stand" as Over
+
+    Claimed --> Playing: start, deal racks
+    NotStarted --> Over: creator aborts
+    Active --> Over: a seat goes out, or creator aborts
+    NotStarted --> [*]: RET-3, 30 days
+    Over --> [*]: RET-1, 7 days
+```
+
+Two simplifications, both deliberate. **Finished and Aborted share a box**
+because they do not differ in seat terms — either way the seats stop where
+they are, and this diagram is about seats. Where they differ is rating, which
+`71-design.md` covers. And **seats leaving the roster are not drawn** — removed by the
+creator, or dropped as spent when the game starts. They cease to exist rather
+than reaching a state.
+
+Aborting gives up every seat (GAME-1): every `Playing` seat ends `Departed`,
+and a game also finishes when only one seat is left `Playing`. **Pending:**
+what abort does to a seat that has no player yet, `Unsent` or `Invited`, is
+[Decision #468](https://github.com/delphside/tile-lite-elite/issues/468) (D68);
+the recommendation is that they freeze as they stand, which is what the
+diagram's *seats frozen* already draws. Either way, aborting cancels every
+invitation still pending, so nobody can accept a seat in a game that is over.
+
+Three things are worth reading off it.
+
+**One arrow crosses the boundary.** Starting refuses while any seat is still
+pending and drops the spent ones, so at the moment a game begins every seat
+left is `Claimed` and there is nothing else to carry across. Starting deals
+the racks, which is the same event as `Claimed → Playing`, and that is why the
+two are one arrow rather than two facts that have to agree.
+
+**The invitation states exist only before the start**, and `Playing` and
+`Departed` only after it. A seat cannot be invited into a game in progress:
+adding a player mid-game is not a small extension of this model but a
+different one, and the diagram is where that shows up. So the handler refuses
+any seat message — inviting, accepting, claiming — once the game has left
+`Waiting`, with `ApplyError::GameNotWaiting`, and `Start` refuses a game that
+has already started rather than doing nothing.
+
+**Finished and Aborted freeze the seats** rather than giving them states of
+their own. Which seats are `Playing` and which are `Departed` when the game
+ends is exactly what RATE-2 and RATE-3 turn on — who played to the end, and
+who left early — so the final seat states are the game's result, not
+bookkeeping to be cleared away.
+
+### Do the arrows match the messages?
+
+No, and it is worth being precise about how they fail to, because two of the
+four mismatches are the reason this note exists.
+
+**One command, several arrows.** Creating a game sets up every seat at once,
+and each may land in a different state depending on its invitation. Starting
+moves every `Claimed` seat to `Playing`. Aborting departs every seat. A
+command is not an arrow; it is a set of them.
+
+**Several commands, one arrow.** Resigning through `/actions`, being
+force-resigned through its own route, and timing out through no command at all
+are one arrow, `Playing → Departed`. They differ only in `how`, which is
+exactly why `Departure` is a field rather than three states.
+
+**Commands with no arrow at all.** Placing, passing, exchanging, reordering
+seats, chatting. These change the game — the board, the racks, the scores —
+without moving any seat between states. **This is the class of change that was
+invisible to clients**, because change was tied to writing a seat or
+invitation row. It is the defect the whole note is about, and the diagram is
+where it becomes obvious: most of what happens in a game is not on it.
+
+**Arrows with no command.** Timing out and being swept away are the clock, not
+a caller. Any design built on "state changes because somebody asked" gets
+these wrong — which is why the sweeps and the scheduler's jobs have to bump the
+version and broadcast through the same path a request does, rather than quietly
+writing a row.
+
+So the alignment worth having is not arrow-to-message. It is one level up, and
+it is the only invariant that covers all four cases:
+
+> Everything that changes a game — command, sweep, scheduled job or clock —
+> bumps the one version and publishes the result.
+
+**One arrow does align exactly, and it is the one to watch.** `Invited →
+Claimed` is a single command changing a single seat, and it is the case that
+has been wrong in production twice: the seat changed, the game's version did
+not, and nobody heard.
+
+**State is derived from what is there, never from the history.** The log
+exists for undo and audit; behaviour reads the current state. This is the rule
+that keeps the seat enum honest: a seat's state is a field, not a fold over
+rows.
+
+It also disposes of a habit worth naming, because two documents currently
+encode it. Both this note's predecessor in 2.4 and the user-deletion test plan
+classify an unstarted game into one of four roster situations, ordered so that
+exactly one applies. That was a convenience for arguing about retention and
+for making a test partition clean. It is not a description of the system, and
+nothing should be written against it.

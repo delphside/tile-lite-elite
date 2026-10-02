@@ -39,6 +39,24 @@ subscribes, and records what arrives is the bot harness's skeleton — so buildi
 it here makes #10 *"attach `engine-core` and submit moves"* rather than *"build
 a client"*.
 
+## One test file per work package
+
+This file is the overall approach; each package has a test file written to the
+same headings, so the set reads as one plan.[^d71]
+
+| package | test file |
+| --- | --- |
+| WP A, #268 Core Game Lifecycle | [`71-test-wp-a.md`](71-test-wp-a.md) |
+| WP B, #269 Core Client UI | [`71-test-wp-b.md`](71-test-wp-b.md) |
+| WP C, #270 Additional Game Lifecycle | [`71-test-wp-c.md`](71-test-wp-c.md) |
+| WP D, #271 Additional Client UI | [`71-test-wp-d.md`](71-test-wp-d.md) |
+| WP E, #272 Undo and Redo | [`71-test-wp-e.md`](71-test-wp-e.md) |
+| WP F, #290 dioxus 0.7 | [`71-test-wp-f.md`](71-test-wp-f.md) |
+
+Each has four headings: **what it proves**, **which layers it uses** (from the
+table below), **the journeys and rules it covers** (from
+[`71-functional.md`](71-functional.md)), and **its acceptance**.
+
 ## Three layers, and what only each one can answer
 
 Owner, 2026-08-28: *"testing the server can be done by scripting the test
@@ -102,6 +120,8 @@ there:
 - no seat message is accepted once a game has left `Waiting`, and aborting
   leaves no invitation pending.
 
+[^d71]: Decision #472 (D71): one file per stage, and a test file per package
+    fitted to this one.
 [^d56]: Decision #442 (D56): six work packages, deliveries decided per package.
 [^d57]: Decision #443 (D57): the staged-tile fault is fixed in #269 by the
     composition key, not by a separate client release.
