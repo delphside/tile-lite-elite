@@ -79,7 +79,8 @@ pub(crate) async fn authenticated_player_id(
 /// only if it's staler than `LAST_SEEN_BUMP_THROTTLE_SECS`, so an active
 /// session doesn't write to the DB on every request.
 pub(crate) async fn player_id_for_token(state: &AppState, token: &str) -> Option<String> {
-    let session = persistence::get_session_by_token_hash(&state.db, &hash_token(token))
+    let token_hash = hash_token(token);
+    let session = persistence::get_session_by_token_hash(&state.db, &token_hash)
         .await
         .ok()??;
 
@@ -102,5 +103,8 @@ pub(crate) async fn player_id_for_token(state: &AppState, token: &str) -> Option
         let _ = persistence::update_player_last_seen(&state.db, &session.player_id).await;
     }
 
+    // Verified, so the rate limiter may key on it from here on — see
+    // `throttle::SessionOrAddress`.
+    super::throttle::mark_session_verified(&token_hash);
     Some(session.player_id)
 }
