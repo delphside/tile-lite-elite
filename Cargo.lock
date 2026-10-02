@@ -19,7 +19,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "admin-cli"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "api",
  "axum",
@@ -117,7 +117,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "serde",
 ]
@@ -1649,7 +1649,7 @@ checksum = "a3d8a32ae18130a3c84dd492d4215c3d913c3b07c6b63c2eb3eb7ff1101ab7bf"
 
 [[package]]
 name = "engine-core"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "rules-shared",
 ]
@@ -4496,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "rules-shared"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -4766,7 +4766,7 @@ dependencies = [
 
 [[package]]
 name = "server-game"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "api",
@@ -5514,7 +5514,7 @@ dependencies = [
 
 [[package]]
 name = "tile-lite-elite-ui"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "api",
  "console_error_panic_hook",
@@ -6771,7 +6771,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "wordlist-tools"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "rules-shared",
  "rustrict",
