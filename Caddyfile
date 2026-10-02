@@ -1,0 +1,71 @@
+# Serves the built web client as static files, and reverse-proxies API
+# (including the /games/{id}/events WebSocket) to the server container —
+# same origin for both, which is what lets crates/ui build with an empty
+# TILE_LITE_ELITE_API_BASE_URL (see Dockerfile) instead of a baked-in host.
+#
+# /admin/* is deliberately not listed here: the server only accepts it from
+# loopback callers, and a request proxied in from this container isn't one
+# (see docker-compose.yml). Reach it via
+# `docker compose exec server tile-lite-elite-admin ...` instead.
+#
+# A real hostname (not a bare IP — Let's Encrypt won't certificate one) is
+# all Caddy needs to provision and renew HTTPS automatically: giving it a
+# domain here instead of a bare port is the entire config change. Plain
+# :80 requests get redirected to https:// automatically too.
+#
+# Registered tileliteelite.com on 2026-07-16 (A record -> 129.151.69.246,
+# plus GoDaddy's default www CNAME to the root domain) and kept the
+# sslip.io address alongside it as a fallback that needs no DNS at all —
+# Caddy obtains and renews certs for every hostname listed here.
+#
+# The addresses come from $SITE_ADDRESS, defaulting to production's. Caddy
+# substitutes {$VAR} when it parses this file, so one image serves every
+# host and each supplies its own names via docker-compose's `environment:`.
+# Hard-coding them meant any other host running this image demanded a
+# certificate for tileliteelite.com — which it cannot validate, because DNS
+# points somewhere else. Repeated failures also risk a Let's Encrypt rate
+# limit. A host with no DNS of its own uses <ip>.sslip.io, which resolves
+# back to that IP and certificates immediately (see docs/3.1's HTTPS note).
+
+{$SITE_ADDRESS:tileliteelite.com, www.tileliteelite.com, 129.151.69.246.sslip.io} {
+	encode zstd gzip
+
+	# Caddy's automatic directive ordering runs try_files/file_server before
+	# reverse_proxy by default, regardless of source order — which rewrites
+	# every unmatched-file request (including real API paths, since they're
+	# not files under /srv) to /index.html before the @api matcher below
+	# ever sees the original path. An explicit route{} block runs its
+	# directives in the order written instead, so the API check happens
+	# first and the SPA fallback only applies to what's left.
+	route {
+		@api path /health /engines /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
+		reverse_proxy @api server:3000
+
+		# dx's web build fingerprints every file under /assets with a
+		# content hash (see index.html's script/wasm src attributes) — a
+		# new build always means a new filename, so this exact URL's
+		# bytes can never change. Safe to tell browsers to skip
+		# revalidation entirely instead of a conditional GET on every
+		# load. index.html itself is deliberately left uncached (no
+		# matcher below covers it) since it's what points at the
+		# current hash.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		# The exact opposite of /assets above, for the same reason stated
+		# inversely: this file's whole job is to change when a deploy lands.
+		# An open tab polls it to find out whether the bundle being served
+		# has moved on from the one it's running (see `watch_for_new_bundle`
+		# in crates/ui/src/app.rs). A cached copy would report the old build
+		# indefinitely and the auto-update would never fire. It's outside
+		# /assets/* so nothing above catches it, but the default is a
+		# conditional GET against an ETag rather than no caching at all —
+		# worth being explicit about, given what it's for.
+		@version path /version.txt
+		header @version Cache-Control "no-store"
+
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

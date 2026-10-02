@@ -1,0 +1,5477 @@
+use api::{
+    BoardCellDto, CreateGameRequest, CreateSeatRequest, DirectionDto, GameActionRequest,
+    GameEventDto, GameStateDto, GameStatus, InvitePlayerRequest, MoveCandidateDto, ParticipantDto,
+    PositionDto, RackDto, SeatClaim, SeatKind, StartGameRequest, TileDto, TilePlacementDto,
+};
+use dioxus::prelude::*;
+use futures_util::StreamExt;
+use std::collections::{HashMap, HashSet};
+
+#[cfg(target_arch = "wasm32")]
+use gloo_net::{
+    http::Request,
+    websocket::{Message as WsMessage, futures::WebSocket},
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio_tungstenite::connect_async;
+
+use crate::components::auth_panel::AuthPanel;
+use crate::components::games_panel::GamesPanel;
+use crate::views::{Home, ResetPassword, StatsView};
+
+const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+pub(crate) const BOARD_WIDTH: usize = 15;
+const BOARD_HEIGHT: usize = 15;
+/// How often the background reconnect loop pings `/health` while the
+/// server is unreachable.
+const RECONNECT_POLL_SECS: u64 = 3;
+/// How long "retrying..." stays up after a failed probe, before the
+/// countdown to the next one starts.
+///
+/// A failed probe returns in milliseconds — a refused connection, or a 502
+/// straight from Caddy — so without this it is gone before it can be read.
+/// Nothing is slowed: the attempt has already happened, and a *successful*
+/// probe leaves immediately rather than waiting the label out.
+const PROBE_LABEL_MS: u64 = 800;
+/// Delay between WebSocket reconnect attempts.
+const WEBSOCKET_RETRY_MS: u64 = 3000;
+/// How often the games list (and with it, unread-chat mail icons) is
+/// re-fetched in the background. The live WebSocket only covers the one
+/// game currently open, so activity in any other game — a new chat
+/// message, an opponent's move — wouldn't otherwise show up until the
+/// player manually hits Refresh.
+const GAME_LIST_POLL_MS: u64 = 10_000;
+/// Extra attempts `with_network_retry` makes after an initial failed one —
+/// covers a single dropped mobile-network request without the user having
+/// to notice a "Can't reach the server" message and retry by hand.
+const NETWORK_RETRY_ATTEMPTS: u32 = 2;
+/// Delay before each retry in `with_network_retry`.
+const NETWORK_RETRY_DELAY_MS: u64 = 700;
+
+/// Whether the app can currently reach the backend at all — set by the
+/// HTTP helpers (`get_json`/`post_json`) and the WebSocket subscription the
+/// moment either one fails at the network level (server unreachable, not a
+/// legitimate rejection response), and cleared the moment either succeeds.
+/// Read from anywhere (the topbar indicator, the button-disabling checks,
+/// the background reconnect loop) without threading it through props.
+static IS_ONLINE: GlobalSignal<bool> = Signal::global(|| true);
+
+/// Which half of the retry cycle the reconnect loop is in, so the offline
+/// indicator can say so.
+///
+/// A static "reconnecting..." looks identical to a frozen app. What tells
+/// someone it is alive is the message *changing* — and that used to happen
+/// only as a side effect of `mark_offline` writing `IS_ONLINE` on every
+/// failed request, re-rendering the banner. That worked, but by accident:
+/// anyone tidying that write to match `mark_online`'s guarded one would have
+/// deleted the feedback without noticing. This makes it deliberate, and says
+/// something truer than a flicker — that attempts are being made and are
+/// failing.
+#[derive(Clone, Copy, PartialEq)]
+enum ReconnectPhase {
+    /// An attempt is in flight right now.
+    Probing,
+    /// Counting down to the next attempt, this many seconds to go.
+    ///
+    /// A countdown rather than a static "waiting": it is legible the whole
+    /// time, so nothing has to be caught mid-flash, and its reset to the
+    /// top is what tells you an attempt just happened and failed. That is
+    /// the signal the original accidental flicker was carrying, made
+    /// explicit and readable.
+    WaitingFor(u64),
+}
+
+static RECONNECT_PHASE: GlobalSignal<ReconnectPhase> = Signal::global(|| ReconnectPhase::Probing);
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep_ms(ms: u64) {
+    tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep_ms(ms: u64) {
+    gloo_timers::future::TimeoutFuture::new(ms as u32).await;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RackTileView {
+    pub id: usize,
+    pub display: String,
+    pub tile: TileDto,
+    pub is_used: bool,
+}
+
+impl RackTileView {
+    pub fn _is_blank(&self) -> bool {
+        matches!(self.tile, TileDto::Blank { .. })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagedPlacementView {
+    pub board_index: usize,
+    pub rack_tile_id: usize,
+    pub display: String,
+    pub tile: TileDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovePreviewView {
+    pub is_legal: bool,
+    pub headline: String,
+    pub detail: String,
+    /// `None` for an illegal arrangement — a rejected placement doesn't
+    /// have a meaningful score. Shown as its own badge (see `Home`)
+    /// rather than left buried inside `headline`'s prose.
+    pub score: Option<i16>,
+}
+
+#[component]
+pub fn RootApp() -> Element {
+    // Web: set (even to an empty string) at build time — empty means "same
+    // origin as whatever page this was served from" (see `websocket_url`),
+    // used by the container deployment where a reverse proxy serves both
+    // the static build and the API from one host. Unset (the default for
+    // local dev, where `dx serve`'s web client and the backend run as two
+    // separate origins) falls back to the explicit dev address.
+    #[cfg(target_arch = "wasm32")]
+    let server_url = option_env!("TILE_LITE_ELITE_API_BASE_URL")
+        .map(str::to_string)
+        .unwrap_or_else(|| "http://127.0.0.1:3000".to_string());
+
+    // Desktop has no browser origin to derive from, so it resolves from
+    // `crate::config` instead: a compiled-in default environment, with a
+    // `--server-url`/`--env` CLI override (see `main.rs` and `config.rs`).
+    #[cfg(not(target_arch = "wasm32"))]
+    let server_url = crate::config::server_url();
+    let mut game = use_signal(|| None::<GameStateDto>);
+    let mut game_summaries = use_signal(Vec::<api::GameSummaryDto>::new);
+    // Per-game "last seen chat message" watermark, for the unread-messages
+    // indicator in the games list — purely local to this device/browser,
+    // no server-side read-receipt concept. Loaded once at startup; kept in
+    // sync with local storage by the reactive block below.
+    let mut chat_watermarks: Signal<HashMap<String, i64>> =
+        use_signal(|| crate::local_storage::load_chat_watermarks().last_seen);
+    let mut session = use_signal(|| None::<api::PlayerSessionDto>);
+    let mut show_stats = use_signal(|| false);
+    let mut is_loading = use_signal(|| false);
+    let mut info_message = use_signal(|| Some("Loading games from server...".to_string()));
+    let mut error_message = use_signal(|| None::<String>);
+    let mut bootstrapped = use_signal(|| false);
+    let mut game_list_polling_started = use_signal(|| false);
+    // Loaded lazily, keyed by `VariantRules.language` — not fetched until a
+    // game using that language is actually open, and cached for the rest
+    // of the session once loaded (see the reactive block below, mirroring
+    // `websocket_game_id`'s pattern). On native builds resolution is
+    // instant (every dictionary is compiled in), on wasm it's a real async
+    // fetch (see `load_client_dictionary`), so the preview just shows
+    // nothing for that brief window rather than blocking on it.
+    let mut client_dictionaries: Signal<HashMap<String, &'static rules_shared::TieredDictionary>> =
+        use_signal(HashMap::new);
+    // Which languages a fetch has already been dispatched for — set
+    // synchronously (not inside the spawned future) so a re-render while
+    // the first fetch is still in flight doesn't dispatch a second,
+    // redundant one for the same language.
+    let mut dictionary_fetch_started: Signal<HashSet<String>> = use_signal(HashSet::new);
+    let mut websocket_game_id = use_signal(|| None::<String>);
+    let mut dragging_tile_id = use_signal(|| None::<usize>);
+    // `Some(index)` while dragging a tile that was already staged on the
+    // board (picked up from that index), rather than a fresh one off the
+    // rack — lets the drop handler tell "move" from "place" apart, and
+    // lets on_drag_end return the tile to the rack when it isn't dropped
+    // on another valid board cell (including off the board entirely).
+    let mut dragging_from_board_index = use_signal(|| None::<usize>);
+    let mut staged_placements = use_signal(Vec::<StagedPlacementView>::new);
+    let mut selected_blank_letter = use_signal(|| None::<String>);
+    let mut selected_cell = use_signal(|| None::<usize>);
+    // Only meaningful while exactly one tile is staged (direction is
+    // otherwise ambiguous) — set by the space-bar/button toggle, cleared
+    // whenever the staged tiles are cleared out so it doesn't linger and
+    // silently steer a later, unrelated word.
+    let mut direction_override = use_signal(|| None::<DirectionDto>);
+    let mut exchange_mode = use_signal(|| false);
+    let mut exchange_selected = use_signal(HashSet::<usize>::new);
+    // Purely a display order for the rack — reset to identity whenever the
+    // rack's tile count changes (a new turn's refill), shuffled in place by
+    // the Shuffle button otherwise. `rack_tiles_for_seat` always returns
+    // tiles in the same alphabetical order, so without this the rack would
+    // never actually look shuffled.
+    let mut rack_order = use_signal(Vec::<usize>::new);
+
+    // Set once at startup from `/invite?id=...` (see `invite_id_from_url`),
+    // then cleared once the invitation's been accepted or dismissed —
+    // `invite_preview` is fetched (unauthenticated) as soon as an id shows
+    // up, independent of whether `session` is populated yet, so the banner
+    // in `AuthPanel`'s logged-out modal has an inviter name to show even
+    // before the visitor does anything.
+    let mut pending_invite_id = use_signal(invite_id_from_url);
+    let mut invite_preview = use_signal(|| None::<api::InvitationPreviewDto>);
+    let mut invite_preview_error = use_signal(|| None::<String>);
+    let mut invite_preview_requested = use_signal(|| false);
+
+    if pending_invite_id().is_some() && !invite_preview_requested() {
+        invite_preview_requested.set(true);
+        let server_url = server_url.clone();
+        let invitation_id = pending_invite_id().clone().expect("checked above");
+        spawn(async move {
+            match preview_invitation(&server_url, &invitation_id).await {
+                Ok(preview) => invite_preview.set(Some(preview)),
+                Err(error) => invite_preview_error.set(Some(error)),
+            }
+        });
+    }
+
+    if !bootstrapped() {
+        bootstrapped.set(true);
+        let server_url = server_url.clone();
+        spawn(async move {
+            if !apply_version_check(
+                check_api_version(&server_url).await,
+                info_message,
+                error_message,
+            ) {
+                return;
+            }
+
+            let mut auth_token: Option<String> = None;
+            if let Some(token) = crate::local_storage::load_token() {
+                match validate_session(&server_url, &token).await {
+                    Ok(player) => {
+                        // A new session: whatever 401'd before was the old
+                        // one, and leaving the flag set would have this session
+                        // cleared out from under it.
+                        *SESSION_INVALID.write() = false;
+                        session.set(Some(api::PlayerSessionDto {
+                            player_id: player.id,
+                            session_token: token.clone(),
+                            display_name: player.display_name,
+                            email: player.email,
+                        }));
+                        auth_token = Some(token);
+                    }
+                    Err(_) => {
+                        // Stored token is no longer valid — drop it from
+                        // both stores, but keep any remembered display name.
+                        crate::local_storage::clear_tokens();
+                    }
+                }
+            }
+
+            is_loading.set(true);
+            error_message.set(None);
+            load_summaries_and_game(
+                &server_url,
+                auth_token.as_deref(),
+                None,
+                game,
+                game_summaries,
+                info_message,
+                error_message,
+                dragging_tile_id,
+                selected_blank_letter,
+                staged_placements,
+                selected_cell,
+                exchange_mode,
+                exchange_selected,
+                direction_override,
+            )
+            .await;
+            is_loading.set(false);
+        });
+    }
+
+    // Once we know we're offline (a request failed at the network level —
+    // see `mark_offline`/`IS_ONLINE`), keep pinging `/health` in the
+    // background until it answers, then reload whatever was on screen. A
+    // plain WebSocket reconnect (below) isn't enough on its own: the server
+    // doesn't replay missed events to a freshly (re)connected socket, so
+    // anything that happened while we were disconnected — including the
+    // very first load if the server was down at launch — needs an explicit
+    // reload to catch up.
+    let mut is_reconnecting = use_signal(|| false);
+
+    {
+        let server_url = server_url.clone();
+        use_effect(move || {
+            // Subscribe to IS_ONLINE (we want to re-run when it flips), but read
+            // the `is_reconnecting` guard with `.peek()` so we DON'T subscribe to
+            // a signal this same effect also writes below — a tracked read + write
+            // of one signal makes the effect re-trigger itself (Dioxus flags it as
+            // a "read and write in the same scope" loop). `.peek()` keeps it as a
+            // plain re-entrancy guard.
+            if IS_ONLINE() || *is_reconnecting.peek() {
+                return;
+            }
+            is_reconnecting.set(true);
+            let server_url = server_url.clone();
+            let current_game_id = game().as_ref().map(|current| current.id.clone());
+            let auth_token = session().map(|current| current.session_token.clone());
+            spawn(async move {
+                loop {
+                    *RECONNECT_PHASE.write() = ReconnectPhase::Probing;
+                    // Recovery is never delayed: a successful probe leaves
+                    // immediately, without waiting out the label.
+                    if check_server_reachable(&server_url).await {
+                        break;
+                    }
+                    sleep_ms(PROBE_LABEL_MS).await;
+                    for remaining in (1..=RECONNECT_POLL_SECS).rev() {
+                        *RECONNECT_PHASE.write() = ReconnectPhase::WaitingFor(remaining);
+                        sleep_ms(1000).await;
+                    }
+                }
+                *IS_ONLINE.write() = true;
+                info_message.set(Some("Reconnected — catching up...".to_string()));
+                load_summaries_and_game(
+                    &server_url,
+                    auth_token.as_deref(),
+                    current_game_id,
+                    game,
+                    game_summaries,
+                    info_message,
+                    error_message,
+                    dragging_tile_id,
+                    selected_blank_letter,
+                    staged_placements,
+                    selected_cell,
+                    exchange_mode,
+                    exchange_selected,
+                    direction_override,
+                )
+                .await;
+                // A reconnect usually means the server was redeployed, which
+                // may have changed its api version. Re-check now so a tab left
+                // open across a deploy warns (minor skew) or blocks (major)
+                // just like a fresh load. Applied after the reload because a
+                // successful load clears `info_message`, which would otherwise
+                // bury a soft skew notice.
+                apply_version_check(
+                    check_api_version(&server_url).await,
+                    info_message,
+                    error_message,
+                );
+                // A reconnect almost always means a deploy just happened, so
+                // this is where a new client build shows up. Checked on its
+                // own rather than only when the api version moved: the api
+                // version describes the wire contract, and a client can
+                // change without it — a bug fix in `crates/ui` has no
+                // business touching it, and used to reach nobody who already
+                // had the app open. `version.txt` holds the web container's
+                // build id, so this reloads exactly when there is different
+                // code to run.
+                #[cfg(target_arch = "wasm32")]
+                watch_for_new_bundle(info_message, None);
+                is_reconnecting.set(false);
+            });
+        });
+    }
+
+    if let Some(current_game) = game()
+        && websocket_game_id().as_deref() != Some(current_game.id.as_str())
+    {
+        let game_id = current_game.id.clone();
+        websocket_game_id.set(Some(game_id.clone()));
+        let server_url = server_url.clone();
+        let token = session().map(|current| current.session_token.clone());
+        spawn(async move {
+            // Keep retrying for as long as this is still the selected
+            // game — a dropped connection (network blip, server
+            // restart) shouldn't leave live updates dead for the rest
+            // of the session. `subscribe_to_game_events` itself marks
+            // `IS_ONLINE` on connect/disconnect (see `mark_online` /
+            // `mark_offline`); this loop just keeps trying.
+            while websocket_game_id().as_deref() == Some(game_id.as_str()) {
+                let _ = subscribe_to_game_events(
+                    &server_url,
+                    &game_id,
+                    token.as_deref(),
+                    game,
+                    websocket_game_id,
+                )
+                .await;
+                if websocket_game_id().as_deref() != Some(game_id.as_str()) {
+                    break;
+                }
+                sleep_ms(WEBSOCKET_RETRY_MS).await;
+            }
+        });
+    }
+
+    // The reacting half of the build-id header. `note_server_build` records that
+    // a response came from a different build; this decides what to do about it,
+    // because it has the signals to say so and a request helper does not.
+    //
+    // It does not reload on the header. That describes the *server*, and the
+    // bundle comes from a different container — inside a deploy window the
+    // server is already new while the old bundle is still being served, so
+    // reloading would fetch the old bundle, see the header again, and loop.
+    // `watch_for_new_bundle` polls `/version.txt`, which is served alongside
+    // the bundle and therefore knows what is actually being served, and
+    // reloads only once they differ.
+    //
+    // So the header supplies the trigger this check never had: it used to hang
+    // off offline-recovery, which meant it reached nobody who had not first
+    // lost the server and got it back.
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        if build_differs(SERVER_BUILD().as_deref(), CLIENT_BUILD_ID) {
+            watch_for_new_bundle(info_message, None);
+        }
+    });
+
+    // Session death, handled once wherever it is noticed.
+    //
+    // It used to be handled only inside the games-list poll, so whether a dead
+    // session cleared up depended on which request happened to meet the 401
+    // first. Any other one turned it into an error string and showed it, over a
+    // board that was still on screen — the account was gone and the app looked
+    // like it was working.
+    use_effect(move || {
+        // `session.peek()`, not `session()`: this effect must not subscribe to
+        // the signal it is about to clear. And it must not write
+        // `SESSION_INVALID` either — reading and writing one signal in a single
+        // effect is the "read and write in the same scope" loop Dioxus flags,
+        // which the reconnect effect above already guards against with `peek`.
+        //
+        // Nothing resets the flag here. Clearing sets `session` to `None`, so
+        // this condition stops holding on its own; the flag is cleared where a
+        // *new* session is established, which is the moment it stops being true.
+        if SESSION_INVALID() && session.peek().is_some() {
+            crate::local_storage::clear_tokens();
+            clear_session_state(
+                session,
+                game,
+                game_summaries,
+                websocket_game_id,
+                dragging_tile_id,
+                selected_blank_letter,
+                staged_placements,
+                selected_cell,
+                exchange_mode,
+                exchange_selected,
+                direction_override,
+            );
+        }
+    });
+
+    if !game_list_polling_started() {
+        game_list_polling_started.set(true);
+        let server_url = server_url.clone();
+        spawn(async move {
+            loop {
+                sleep_ms(GAME_LIST_POLL_MS).await;
+                let Some(token) = session().map(|current| current.session_token.clone()) else {
+                    continue;
+                };
+                // Errors are deliberately dropped. A dead session is handled
+                // by the effect above, which sees it whichever request met the
+                // 401 — this one, a move, a chat send — and anything else is a
+                // transient failure a poll running every ten seconds will
+                // retry anyway.
+                if let Ok(summaries) = load_game_summaries(&server_url, Some(&token)).await {
+                    game_summaries.set(summaries);
+                }
+            }
+        });
+    }
+
+    if let Some(current_game) = game() {
+        let language = current_game.language.clone();
+        if !dictionary_fetch_started().contains(&language) {
+            dictionary_fetch_started.with_mut(|started| {
+                started.insert(language.clone());
+            });
+            let server_url = server_url.clone();
+            let token = session().map(|current| current.session_token.clone());
+            spawn(async move {
+                if let Some(dictionary) =
+                    load_client_dictionary(&server_url, &language, token).await
+                {
+                    client_dictionaries.with_mut(|dictionaries| {
+                        dictionaries.insert(language, dictionary);
+                    });
+                }
+            });
+        }
+    }
+
+    // Marks the currently-open game's chat as seen — fires both when a game
+    // The watermark advances when the messages have been *seen*, not when they
+    // arrive. It used to advance the instant a message arrived into an open
+    // game — "watching the panel counts as reading it" — which marked as read
+    // every message that landed in a panel scrolled off the bottom of a phone,
+    // or into a tab in the background. That is the defect (#86); the clock
+    // below is what replaces it.
+    {
+        let mut clock = use_signal(crate::seen_clock::SeenClock::new);
+        // When each message arrived, measured on the clock above rather than on
+        // the wall — so a message ages only while the chat is actually in front
+        // of somebody. Memory only: the watermark is what persists, and this is
+        // rebuilt from it whenever a game is opened.
+        let mut arrived_at = use_signal(HashMap::<String, i64>::new);
+        let mut watching_game = use_signal(|| None::<String>);
+
+        // One ticker, sampling. An observer would be the tidier way to learn
+        // about visibility, but a clock has to be ticked anyway to notice that
+        // it has finished — so a single 500ms sample that reads visibility and
+        // advances the clock is one mechanism rather than two, and cheap enough
+        // at that rate.
+        let mut seen_ticker_started = use_signal(|| false);
+        if !seen_ticker_started() {
+            seen_ticker_started.set(true);
+            spawn(async move {
+                loop {
+                    sleep_ms(500).await;
+                    let now_ms = now_millis();
+                    let visible = chat_messages_are_visible();
+                    *CHAT_IS_VISIBLE.write() = visible;
+
+                    // Advance the accumulator first, so everything below reads
+                    // the same instant. Done before the open-game check,
+                    // because the indicator now covers every game and must
+                    // keep working with none open.
+                    clock.with_mut(|c| {
+                        if visible {
+                            c.became_visible(now_ms);
+                        } else {
+                            c.became_hidden(now_ms);
+                        }
+                    });
+                    let visible_ms = clock.peek().visible_ms(now_ms);
+                    *CHAT_VISIBLE_MS.write() = visible_ms;
+
+                    // A scroll asked for before its game had loaded.
+                    if *SCROLL_CHAT_PENDING.peek() && chat_panel_exists() {
+                        scroll_chat_into_view();
+                        *SCROLL_CHAT_PENDING.write() = false;
+                    }
+
+                    let Some(current_game) = game() else {
+                        // Nothing open, so no message is ageing — but other
+                        // games can still be unread, and this indicator now
+                        // speaks for all of them.
+                        let marks = chat_watermarks();
+                        let any = game_summaries().iter().any(|summary| {
+                            unread_for(
+                                summary.last_message_received_at,
+                                marks.get(&summary.id).copied(),
+                            )
+                        });
+                        if *HAS_UNREAD_CHAT.peek() != any {
+                            *HAS_UNREAD_CHAT.write() = any;
+                        }
+                        if *UNREAD_IS_THIS_GAME.peek() {
+                            *UNREAD_IS_THIS_GAME.write() = false;
+                        }
+                        let target = game_summaries().iter().find_map(|summary| {
+                            unread_for(
+                                summary.last_message_received_at,
+                                marks.get(&summary.id).copied(),
+                            )
+                            .then(|| summary.id.clone())
+                        });
+                        if *UNREAD_GAME_ID.peek() != target {
+                            *UNREAD_GAME_ID.write() = target;
+                        }
+                        continue;
+                    };
+
+                    // Switching games drops the stamps: they are readings of a
+                    // clock, and the messages they described are gone from view.
+                    if watching_game() != Some(current_game.id.clone()) {
+                        watching_game.set(Some(current_game.id.clone()));
+                        arrived_at.with_mut(|m| m.clear());
+                    }
+
+                    let watermark = chat_watermarks().get(&current_game.id).copied();
+                    let viewer = session().map(|current| current.player_id.clone());
+
+                    // Stamp anything not seen before with the clock's reading
+                    // now. Messages already under the watermark were read in an
+                    // earlier session and must not start again, so they are
+                    // stamped far enough back to be seen immediately.
+                    arrived_at.with_mut(|marks| {
+                        for message in &current_game.messages {
+                            if marks.contains_key(&message.id) {
+                                continue;
+                            }
+                            let already_read =
+                                watermark.is_some_and(|seen| message.created_at <= seen);
+                            marks.insert(
+                                message.id.clone(),
+                                if already_read {
+                                    visible_ms - crate::seen_clock::SEEN_AFTER_MS
+                                } else {
+                                    visible_ms
+                                },
+                            );
+                        }
+                    });
+                    *CHAT_MESSAGE_ARRIVED_AT.write() = arrived_at();
+
+                    // The watermark is the newest message that has had its ten
+                    // seconds. Monotonic, because an earlier arrival has an
+                    // earlier stamp to beat — which is what lets one high-water
+                    // mark stand for per-message state.
+                    let stamps = arrived_at();
+                    let mut seen_now = watermark;
+                    let seen_upto = current_game
+                        .messages
+                        .iter()
+                        .filter(|m| {
+                            stamps
+                                .get(&m.id)
+                                .is_some_and(|at| clock.peek().is_seen(*at, now_ms))
+                        })
+                        .map(|m| m.created_at)
+                        .max();
+                    if let Some(seen_upto) = seen_upto
+                        && watermark != Some(seen_upto)
+                    {
+                        seen_now = Some(seen_upto);
+                        chat_watermarks.with_mut(|marks| {
+                            marks.insert(current_game.id.clone(), seen_upto);
+                        });
+                        crate::local_storage::save_chat_watermarks(
+                            &crate::local_storage::StoredChatWatermarks {
+                                last_seen: chat_watermarks(),
+                            },
+                        );
+                    }
+
+                    // One rule for "is anything unread", shared with the games
+                    // list: the newest message somebody else sent, later than
+                    // the watermark. Derived here from the *live* messages
+                    // rather than from the polled summary, which is up to
+                    // GAME_LIST_POLL_MS stale — ten seconds is far too long for
+                    // an indicator that should appear as the message does.
+                    //
+                    // Equivalent to asking whether any received message is
+                    // still inside its own ten seconds, because completion is
+                    // monotonic in arrival order. Stated once rather than
+                    // derived twice, so a later change cannot make the two
+                    // icons disagree.
+                    let last_received = current_game
+                        .messages
+                        .iter()
+                        .filter(|m| viewer.as_deref() != Some(m.player_id.as_str()))
+                        .map(|m| m.created_at)
+                        .max();
+                    // **Any** game, not just the open one. The games you are
+                    // not looking at are the ones worth alerting about; an
+                    // indicator that only ever spoke for the game already in
+                    // front of you told you what you could see.
+                    //
+                    // The open game answers from live messages, every other
+                    // from its summary — one rule, applied per game, then OR'd.
+                    let marks = chat_watermarks();
+                    let here = unread_for(last_received, seen_now);
+                    if *UNREAD_IS_THIS_GAME.peek() != here {
+                        *UNREAD_IS_THIS_GAME.write() = here;
+                    }
+                    let elsewhere = game_summaries().iter().find_map(|s| {
+                        (s.id != current_game.id
+                            && unread_for(s.last_message_received_at, marks.get(&s.id).copied()))
+                        .then(|| s.id.clone())
+                    });
+                    let unread = here || elsewhere.is_some();
+                    // This game first: if both are unread, the one in front of
+                    // you is the one a click should reach.
+                    let target = if here {
+                        Some(current_game.id.clone())
+                    } else {
+                        elsewhere
+                    };
+                    if *UNREAD_GAME_ID.peek() != target {
+                        *UNREAD_GAME_ID.write() = target;
+                    }
+                    if *HAS_UNREAD_CHAT.peek() != unread {
+                        *HAS_UNREAD_CHAT.write() = unread;
+                    }
+                }
+            });
+        }
+    }
+
+    let game_for_view = game().clone().unwrap_or_else(empty_live_game);
+    let viewer_player_id = session().map(|current| current.player_id.clone());
+    let can_start = IS_ONLINE()
+        && game()
+            .as_ref()
+            .is_some_and(|current| current.status == GameStatus::Waiting);
+    let can_submit_human_action = IS_ONLINE()
+        && game().as_ref().is_some_and(|current| {
+            current.status == GameStatus::Active
+                && current
+                    .participants
+                    .get(current.current_seat as usize)
+                    .is_some_and(|participant| {
+                        participant.kind == SeatKind::Human
+                            && seat_is_open_or_owned_by(participant, viewer_player_id.as_deref())
+                    })
+        });
+    // Which seat's rack this viewer gets to see at all: their own claimed
+    // seat if they have one (even on another player's turn — you can
+    // always see your own tiles while you wait), else the current seat if
+    // it's unclaimed (anonymous/open play, unchanged from before), else
+    // nothing — a logged-in viewer who isn't a participant, or an
+    // anonymous one looking at a game with claimed seats, sees no rack at
+    // all rather than relying on the server to reject an attempted move
+    // after the fact.
+    let viewer_rack_seat = viewer_rack_seat(&game_for_view, viewer_player_id.as_deref());
+    let can_view_rack = viewer_rack_seat.is_some();
+    // Resigning isn't turn-gated (see `GameSession::apply_resign`): whoever
+    // controls a live, not-yet-resigned seat can give up even on another
+    // player's turn. `viewer_rack_seat` is exactly that seat — the viewer's own
+    // claimed seat, or the current unclaimed seat in anonymous play.
+    let can_resign = IS_ONLINE()
+        && game_for_view.status == GameStatus::Active
+        && viewer_rack_seat
+            .and_then(|seat| game_for_view.participants.get(seat))
+            .is_some_and(|participant| !participant.resigned);
+    // `None` unless this game just moved the viewer's own rating — either
+    // it's still in progress, this ending skipped rating (timeout/forced
+    // resignation/admin force-end), or the viewer holds no seat here at
+    // all. See `ParticipantDto.rating_before`/`rating_after`.
+    let my_rating_delta = viewer_player_id.as_deref().and_then(|my_id| {
+        game_for_view
+            .participants
+            .iter()
+            .find(|p| p.player_id.as_deref() == Some(my_id))
+            .and_then(|participant| Some((participant.rating_before?, participant.rating_after?)))
+    });
+    let unordered_rack_tiles =
+        rack_tiles_for_seat(&game_for_view, viewer_rack_seat, &staged_placements());
+    if rack_order().len() != unordered_rack_tiles.len() {
+        rack_order.set((0..unordered_rack_tiles.len()).collect());
+    }
+    let rack_tiles = apply_rack_order(&unordered_rack_tiles, &rack_order());
+    let can_submit_manual_action =
+        can_submit_human_action && !exchange_mode() && !staged_placements().is_empty();
+
+    // Computed straight from current state, not a signal — this runs the
+    // same `RulesEngine::validate_game_move` the server does, entirely
+    // locally, so there's no network round-trip and (since nothing here is
+    // async) no possibility of a stale response landing after the state
+    // it was computed from has moved on. Needs the active game's dictionary
+    // to have finished loading first (instant on native, a real fetch on
+    // wasm) — until then this just shows nothing, same as "nothing staged
+    // yet".
+    let staged_preview = match (
+        can_submit_human_action && !staged_placements().is_empty(),
+        client_dictionaries().get(&game_for_view.language).copied(),
+    ) {
+        (true, Some(dictionary)) => {
+            let direction = infer_typing_direction(
+                &game_for_view,
+                &staged_placements(),
+                selected_cell(),
+                direction_override(),
+            );
+            compute_client_preview(&game_for_view, &staged_placements(), direction, dictionary)
+        }
+        _ => None,
+    };
+    let server_url_for_login = server_url.clone();
+    let server_url_for_logout = server_url.clone();
+    let server_url_for_custom_create = server_url.clone();
+    let server_url_for_accept = server_url.clone();
+    let server_url_for_invite_accept = server_url.clone();
+    let server_url_for_reject = server_url.clone();
+    let server_url_for_refresh = server_url.clone();
+    let server_url_for_select = server_url.clone();
+    let server_url_for_unread = server_url.clone();
+    let server_url_for_start = server_url.clone();
+    let server_url_for_exchange = server_url.clone();
+    let server_url_for_pass = server_url.clone();
+    let server_url_for_chat = server_url.clone();
+    let server_url_for_remove = server_url.clone();
+    let server_url_for_reorder = server_url.clone();
+    let server_url_for_send_invitation = server_url.clone();
+    let server_url_for_add_seat = server_url.clone();
+    let server_url_for_remove_seat = server_url.clone();
+    let server_url_for_withdraw_seat = server_url.clone();
+    let server_url_for_force_resign = server_url.clone();
+    let server_url_for_abort = server_url.clone();
+    let server_url_for_resign = server_url.clone();
+    let server_url_for_manual = server_url.clone();
+    let game_for_home = game_for_view.clone();
+    let game_for_drop = game_for_view.clone();
+    let game_for_select = game_for_view.clone();
+    let game_for_move = game_for_view.clone();
+    let game_for_click = game_for_view.clone();
+    let game_for_type = game_for_view.clone();
+    let game_for_backspace = game_for_view.clone();
+    let game_for_toggle = game_for_view.clone();
+    let can_toggle_direction = staged_placements().len() == 1;
+    let current_typing_direction = infer_typing_direction(
+        &game_for_view,
+        &staged_placements(),
+        selected_cell(),
+        direction_override(),
+    );
+
+    // Shown in the top bar so you can always tell which build/wire-contract is
+    // actually running — `app` mirrors GET /health's `app_version` (includes
+    // the +build-sha on deployed builds), `api` mirrors `api_version`.
+    let app_version = crate::app_version();
+    let api_version = api::API_VERSION.to_string();
+
+    rsx! {
+        document::Link { rel: "stylesheet", href: MAIN_CSS }
+
+        if let Some(token) = reset_password_token_from_url() {
+            ResetPassword { server_url: server_url.clone(), token }
+        } else {
+        div { class: "app-shell",
+            header { class: "topbar",
+                div { class: "topbar-brand",
+                    p { class: "topbar-kicker", "Tile Lite Elite" }
+                    p { class: "topbar-version", "app {app_version} · api {api_version}" }
+                }
+                if !IS_ONLINE() {
+                    span { class: "offline-indicator",
+                        match RECONNECT_PHASE() {
+                            ReconnectPhase::Probing => "Can't reach the server — retrying...".to_string(),
+                            ReconnectPhase::WaitingFor(secs) => {
+                                format!("Can't reach the server — retrying in {secs}s...")
+                            }
+                        }
+                    }
+                }
+                AuthPanel {
+                    server_url: server_url.clone(),
+                    session: session().clone(),
+                    invite_inviter_name: invite_preview().map(|preview| preview.inviting_player_display_name),
+                    on_authenticated: move |(new_session, remember, stay): (api::PlayerSessionDto, bool, bool)| {
+                        crate::local_storage::save_authenticated(
+                            if remember {
+                                Some(new_session.display_name.clone())
+                            } else {
+                                None
+                            },
+                            &new_session.session_token,
+                            stay,
+                        );
+                        let token = new_session.session_token.clone();
+                        // As above: a fresh session invalidates the flag.
+                        *SESSION_INVALID.write() = false;
+                        session.set(Some(new_session));
+
+                        let server_url = server_url_for_login.clone();
+                        spawn(async move {
+                            is_loading.set(true);
+                            load_summaries_and_game(
+                                &server_url,
+                                Some(&token),
+                                None,
+                                game,
+                                game_summaries,
+                                info_message,
+                                error_message,
+                                dragging_tile_id,
+                                selected_blank_letter,
+                                staged_placements,
+                                selected_cell,
+                                exchange_mode,
+                                exchange_selected,
+                                direction_override,
+                            )
+                            .await;
+                            is_loading.set(false);
+                        });
+                    },
+                    on_logout: move |_| {
+                        // Delete the session server-side now — the precise
+                        // "logged out" signal (idle expiry is only the
+                        // fallback for sessions never explicitly closed).
+                        // Best-effort: local state is cleared below whether
+                        // or not this reaches the server.
+                        if let Some(token) = session().map(|current| current.session_token.clone()) {
+                            let server_url = server_url_for_logout.clone();
+                            spawn(async move {
+                                logout(&server_url, &token).await;
+                            });
+                        }
+                        crate::local_storage::clear_tokens();
+                        clear_session_state(
+                            session,
+                            game,
+                            game_summaries,
+                            websocket_game_id,
+                            dragging_tile_id,
+                            selected_blank_letter,
+                            staged_placements,
+                            selected_cell,
+                            exchange_mode,
+                            exchange_selected,
+                            direction_override,
+                        );
+                        info_message.set(Some("Logged out".to_string()));
+                    },
+                    on_password_changed: move |_| {
+                        // The server invalidates every session for this
+                        // player on a password change, including the one
+                        // that made the request — so the client just needs
+                        // to drop its own local copy, same as a manual
+                        // logout, and prompt a fresh login.
+                        let stored = crate::local_storage::load();
+                        crate::local_storage::save(&crate::local_storage::StoredAuth {
+                            remembered_name: stored.remembered_name,
+                            session_token: None,
+                        });
+                        clear_session_state(
+                            session,
+                            game,
+                            game_summaries,
+                            websocket_game_id,
+                            dragging_tile_id,
+                            selected_blank_letter,
+                            staged_placements,
+                            selected_cell,
+                            exchange_mode,
+                            exchange_selected,
+                            direction_override,
+                        );
+                        info_message.set(Some("Password changed — please log in again.".to_string()));
+                    },
+                    on_details_updated: move |updated: api::PlayerDto| {
+                        session.with_mut(|current| {
+                            if let Some(current) = current {
+                                current.display_name = updated.display_name;
+                                current.email = updated.email;
+                            }
+                        });
+                        info_message.set(Some("Details updated".to_string()));
+                    },
+                    on_open_stats: move |_| show_stats.set(true),
+                }
+            }
+
+            if session().is_some() && show_stats() {
+                div { class: "modal-backdrop",
+                    div { class: "modal-card stats-card",
+                        StatsView {
+                            server_url: server_url.clone(),
+                            player_id: session().as_ref().map(|s| s.player_id.clone()),
+                            token: session().as_ref().map(|s| s.session_token.clone()),
+                            on_close: move |_| show_stats.set(false),
+                        }
+                    }
+                }
+            }
+
+            // Reached once a session exists — either it was already there
+            // ("stay logged in") or `AuthPanel`'s blocking modal above just
+            // produced one. Either way, this confirmation is the one place
+            // the visitor can back out, including the case where the wrong
+            // account happened to already be signed in on this browser (see
+            // `SeatClaim::Email`'s doc comment: there's no cryptographic
+            // check that the confirmer is really the emailed person).
+            if session().is_some() && pending_invite_id().is_some() {
+                div { class: "modal-backdrop",
+                    div { class: "auth-panel modal-card",
+                        if let Some(error) = invite_preview_error() {
+                            h2 { class: "modal-title", "Invitation unavailable" }
+                            p { class: "modal-copy", "{error}" }
+                            div { class: "modal-actions",
+                                button {
+                                    class: "toggle-button",
+                                    onclick: move |_| {
+                                        pending_invite_id.set(None);
+                                        invite_preview.set(None);
+                                        invite_preview_error.set(None);
+                                        strip_invite_from_url();
+                                    },
+                                    "Dismiss"
+                                }
+                            }
+                        } else if let Some(preview) = invite_preview() {
+                            if preview.status == api::InvitationStatus::Pending {
+                                h2 { class: "modal-title", "Game invitation" }
+                                p { class: "modal-copy",
+                                    "{preview.inviting_player_display_name} invited you to play Tile Lite Elite."
+                                }
+                                div { class: "modal-actions",
+                                    button {
+                                        class: "toggle-button toggle-button-muted",
+                                        onclick: move |_| {
+                                            pending_invite_id.set(None);
+                                            invite_preview.set(None);
+                                            strip_invite_from_url();
+                                        },
+                                        "Not now"
+                                    }
+                                    button {
+                                        class: "toggle-button",
+                                        onclick: move |_| {
+                                            let server_url = server_url_for_invite_accept.clone();
+                                            let token = session().map(|current| current.session_token.clone());
+                                            let Some(invitation_id) = pending_invite_id() else { return; };
+                                            spawn(async move {
+                                                is_loading.set(true);
+                                                error_message.set(None);
+                                                match accept_invitation(&server_url, &invitation_id, token.as_deref()).await {
+                                                    Ok(joined) => {
+                                                        info_message.set(None);
+                                                        websocket_game_id.set(None);
+                                                        apply_game_update(game, joined);
+                                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                                            game_summaries.set(summaries);
+                                                        }
+                                                        pending_invite_id.set(None);
+                                                        invite_preview.set(None);
+                                                        strip_invite_from_url();
+                                                    }
+                                                    Err(error) => error_message.set(Some(error)),
+                                                }
+                                                is_loading.set(false);
+                                            });
+                                        },
+                                        "Accept"
+                                    }
+                                }
+                            } else {
+                                h2 { class: "modal-title", "Invitation unavailable" }
+                                p { class: "modal-copy",
+                                    "This invitation is no longer available — it may already have been accepted or declined."
+                                }
+                                div { class: "modal-actions",
+                                    button {
+                                        class: "toggle-button",
+                                        onclick: move |_| {
+                                            pending_invite_id.set(None);
+                                            invite_preview.set(None);
+                                            strip_invite_from_url();
+                                        },
+                                        "Dismiss"
+                                    }
+                                }
+                            }
+                        } else {
+                            p { class: "modal-copy", "Loading invitation..." }
+                        }
+                    }
+                }
+            }
+
+            div { class: "workspace-shell",
+                GamesPanel {
+                    server_url: server_url.clone(),
+                    token: session().map(|current| current.session_token.clone()),
+                    summaries: game_summaries().clone(),
+                    selected_id: game().as_ref().map(|current| current.id.clone()),
+                    current_game: game().clone(),
+                    viewer_player_id: viewer_player_id.clone(),
+                    chat_watermarks: chat_watermarks(),
+                    is_loading: is_loading(),
+                    my_display_name: session().map(|current| current.display_name.clone()),
+                    can_start,
+                    on_send_chat: move |body: String| {
+                        let server_url = server_url_for_chat.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                error_message.set(None);
+                                match submit_chat_message(&server_url, &current_game, body, token.as_deref())
+                                    .await
+                                {
+                                    Ok(updated) => apply_game_update(game, updated),
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                            });
+                        }
+                    },
+                    on_start: move |_| {
+                        let server_url = server_url_for_start.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match start_game(&server_url, &current_game.id, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        reset_composer_state(
+                                            dragging_tile_id,
+                                            selected_blank_letter,
+                                            staged_placements,
+                                            selected_cell,
+                                            exchange_mode,
+                                            exchange_selected,
+                                            direction_override,
+                                        );
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_select: move |game_id: String| {
+                        let server_url = server_url_for_select.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match load_game_by_id(&server_url, &game_id, token.as_deref()).await {
+                                Ok(loaded) => {
+                                    info_message.set(None);
+                                    reset_composer_state(
+                                        dragging_tile_id,
+                                        selected_blank_letter,
+                                        staged_placements,
+                                        selected_cell,
+                                        exchange_mode,
+                                        exchange_selected,
+                                        direction_override,
+                                    );
+                                    websocket_game_id.set(None);
+                                    apply_game_update(game, loaded);
+                                }
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_custom_new_game: move |submission: crate::components::games_panel::CustomGameSubmission| {
+                        let server_url = server_url_for_custom_create.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        // Copied out before the submission moves, so the
+                        // builder can be dismissed on success only — a refusal
+                        // leaves it up with the values that caused it.
+                        let mut draft_open = submission.draft_open;
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            let start_immediately = submission.start_immediately;
+                            match create_custom_game(&server_url, token.as_deref(), &submission).await {
+                                Ok(created) => {
+                                    draft_open.set(false);
+                                    reset_composer_state(
+                                        dragging_tile_id,
+                                        selected_blank_letter,
+                                        staged_placements,
+                                        selected_cell,
+                                        exchange_mode,
+                                        exchange_selected,
+                                        direction_override,
+                                    );
+                                    websocket_game_id.set(None);
+                                    // Select the game *before* calling `/start` (below),
+                                    // rather than after — this makes the reactive
+                                    // WebSocket-subscription effect connect right away.
+                                    // A roster with no invitation left to wait on starts
+                                    // immediately, and for an all-engine game `/start`
+                                    // runs the entire game to completion inside that one
+                                    // request; without an already-open connection, the
+                                    // moves would never be visible, only the final
+                                    // state once the request finally resolves. With one
+                                    // open, `run_engine_turns` broadcasting after every
+                                    // individual engine turn means they stream in live
+                                    // while the request is still in flight.
+                                    apply_game_update(game, created.clone());
+                                    // The games list only renders a detail panel (where
+                                    // live moves would actually show up) for a game that
+                                    // has a matching entry in `game_summaries` — without
+                                    // this early refresh, the newly created game has no
+                                    // row to render into at all until the final refresh
+                                    // below, defeating the point of subscribing early.
+                                    if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                        game_summaries.set(summaries);
+                                    }
+                                    // A roster with no invitation left to wait on (every
+                                    // seat already resolved) starts right away — the
+                                    // "Start" label on the draft button promised that,
+                                    // rather than leaving the game in `Waiting` behind a
+                                    // second, redundant per-game Start click.
+                                    let started = if start_immediately {
+                                        start_game(&server_url, &created.id, token.as_deref()).await
+                                    } else {
+                                        Ok(created)
+                                    };
+                                    match started {
+                                        Ok(game_state) => {
+                                            info_message.set(None);
+                                            apply_game_update(game, game_state);
+                                            if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                                game_summaries.set(summaries);
+                                            }
+                                        }
+                                        Err(error) => error_message.set(Some(error)),
+                                    }
+                                }
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_accept_invitation: move |invitation_id: String| {
+                        let server_url = server_url_for_accept.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match accept_invitation(&server_url, &invitation_id, token.as_deref()).await {
+                                Ok(joined) => {
+                                    info_message.set(None);
+                                    websocket_game_id.set(None);
+                                    apply_game_update(game, joined);
+                                    if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                        game_summaries.set(summaries);
+                                    }
+                                }
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_reject_invitation: move |invitation_id: String| {
+                        let server_url = server_url_for_reject.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match reject_invitation(&server_url, &invitation_id, token.as_deref()).await {
+                                Ok(_) => {
+                                    if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                        game_summaries.set(summaries);
+                                    }
+                                }
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_remove_game: move |game_id: String| {
+                        let server_url = server_url_for_remove.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match remove_game(&server_url, &game_id, token.as_deref()).await {
+                                Ok(_) => {
+                                    // The removed game's row is about to
+                                    // disappear from the list — if it was
+                                    // the one currently open, deselect it
+                                    // rather than leaving a stale detail
+                                    // panel open for a game no longer in
+                                    // view.
+                                    if game().as_ref().is_some_and(|current| current.id == game_id) {
+                                        game.set(None);
+                                    }
+                                    if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                        game_summaries.set(summaries);
+                                    }
+                                }
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_reorder_seats: move |(seat_a, seat_b): (u8, u8)| {
+                        let server_url = server_url_for_reorder.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match swap_seats(&server_url, &current_game.id, seat_a, seat_b, token.as_deref())
+                                    .await
+                                {
+                                    Ok(updated) => apply_game_update(game, updated),
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    // "Open seat" is the exact placeholder `add_seat_row`
+                    // (and the original pre-creation draft builder,
+                    // `build_seats`) both use for an Open-claim seat's
+                    // `display_name` — there's no dedicated field on
+                    // `ParticipantDto` recording a Named seat's claim, so
+                    // this reuses that same already-established convention
+                    // to tell "resend to this named person" from "this is an
+                    // open invitation" apart, rather than introducing a
+                    // second way to encode it. An Email seat *does* have a
+                    // dedicated field (`invited_email`), so that one's
+                    // unambiguous.
+                    on_send_invitation: move |seat_number: u8| {
+                        let server_url = server_url_for_send_invitation.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            let participant = current_game
+                                .participants
+                                .iter()
+                                .find(|participant| participant.seat_number == seat_number);
+                            let invited_email = participant.and_then(|p| p.invited_email.clone());
+                            let invited_display_name = if invited_email.is_some() {
+                                None
+                            } else {
+                                participant
+                                    .filter(|participant| participant.display_name != "Open seat")
+                                    .map(|participant| participant.display_name.clone())
+                            };
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match invite_player(&server_url, &current_game.id, seat_number, invited_display_name, invited_email, token.as_deref()).await {
+                                    Ok(_) => {
+                                        if let Ok(loaded) = load_game_by_id(&server_url, &current_game.id, token.as_deref()).await {
+                                            apply_game_update(game, loaded);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_add_seat: move |submission: crate::components::games_panel::AddSeatSubmission| {
+                        let server_url = server_url_for_add_seat.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match add_seat(
+                                &server_url,
+                                &submission.game_id,
+                                submission.kind,
+                                submission.display_name,
+                                submission.claim,
+                                token.as_deref(),
+                            )
+                            .await
+                            {
+                                Ok(updated) => apply_game_update(game, updated),
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_remove_seat: move |seat_number: u8| {
+                        let server_url = server_url_for_remove_seat.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match remove_seat(&server_url, &current_game.id, seat_number, token.as_deref()).await {
+                                    Ok(updated) => apply_game_update(game, updated),
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_withdraw_seat: move |seat_number: u8| {
+                        let server_url = server_url_for_withdraw_seat.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match withdraw_from_seat(&server_url, &current_game.id, seat_number, token.as_deref()).await {
+                                    Ok(updated) => apply_game_update(game, updated),
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_force_resign: move |seat_number: u8| {
+                        let server_url = server_url_for_force_resign.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match force_resign_seat(&server_url, &current_game.id, seat_number, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_abort: move |_| {
+                        let server_url = server_url_for_abort.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match abort_game(&server_url, &current_game.id, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_refresh: move |_| {
+                        let server_url = server_url_for_refresh.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            match load_game_summaries(&server_url, token.as_deref()).await {
+                                Ok(summaries) => game_summaries.set(summaries),
+                                Err(error) => error_message.set(Some(error)),
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                }
+
+                Home {
+                    game: game_for_home,
+                    is_live: game().is_some(),
+                    is_loading: is_loading(),
+                    my_rating_delta,
+                    info_message: info_message().clone(),
+                    error_message: error_message().clone(),
+                    rack_tiles,
+                    on_shuffle_rack: move |_| {
+                        rack_order.with_mut(|order| shuffle_order(order));
+                    },
+                    can_view_rack,
+                    staged_placements: staged_placements().clone(),
+                    can_stage_moves: can_submit_human_action && !exchange_mode(),
+                    selected_cell: selected_cell(),
+                    can_toggle_direction,
+                    current_typing_direction,
+                    on_toggle_direction: move |_| {
+                        toggle_direction_override(
+                            &game_for_toggle,
+                            staged_placements,
+                            direction_override,
+                            selected_cell,
+                        );
+                    },
+                    on_drag_rack_tile: move |tile_id| {
+                        dragging_tile_id.set(Some(tile_id));
+                        dragging_from_board_index.set(None);
+                    },
+                    on_drag_end_rack_tile: move |_| {
+                        dragging_tile_id.set(None);
+                    },
+                    on_drop_rack_tile: move |target_id: usize| {
+                        if dragging_from_board_index().is_some() {
+                            // A staged board tile dropped back onto the
+                            // rack — leave dragging_from_board_index alone
+                            // so on_drag_end_staged_tile's fallback still
+                            // unstages it; nothing to reorder here.
+                            return;
+                        }
+                        let Some(dragged_id) = dragging_tile_id() else {
+                            return;
+                        };
+                        rack_order.with_mut(|order| {
+                            *order = reorder_rack_order(order, dragged_id, target_id);
+                        });
+                        dragging_tile_id.set(None);
+                    },
+                    on_drag_staged_tile: move |board_index: usize| {
+                        let tile_id = staged_placements()
+                            .iter()
+                            .find(|p| p.board_index == board_index)
+                            .map(|p| p.rack_tile_id);
+                        let Some(tile_id) = tile_id else { return };
+                        dragging_tile_id.set(Some(tile_id));
+                        dragging_from_board_index.set(Some(board_index));
+                    },
+                    on_drag_end_staged_tile: move |board_index: usize| {
+                        // Fires whether or not the drop landed anywhere —
+                        // if this same origin is still recorded, nothing
+                        // claimed it (dropped off the board, or on an
+                        // invalid cell), so it goes back to the rack. A
+                        // successful move to another cell already clears
+                        // this before drag-end fires.
+                        if dragging_from_board_index() == Some(board_index) {
+                            staged_placements
+                                .with_mut(|placements| placements.retain(|p| p.board_index != board_index));
+                            dragging_tile_id.set(None);
+                            dragging_from_board_index.set(None);
+                            // Same reasoning as `on_remove_staged` — the
+                            // freed cell is the natural place to keep
+                            // composing from.
+                            selected_cell.set(Some(board_index));
+                        }
+                    },
+                    on_drop_board_cell: move |board_index| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        let target_is_taken = game_for_drop
+                            .board
+                            .get(board_index)
+                            .is_some_and(|cell: &BoardCellDto| cell.letter.is_some())
+                            || staged_placements()
+                                .iter()
+                                .any(|p| p.board_index == board_index);
+                        if target_is_taken {
+                            // Dropping on an occupied/staged cell just
+                            // fails — if this drag picked up an existing
+                            // placement, clear the "in flight" marker so
+                            // on_drag_end_staged_tile (which fires next,
+                            // regardless of drop outcome) sees it's already
+                            // been dealt with and leaves the tile exactly
+                            // where it was, rather than reading a failed
+                            // drop here the same as a genuine drop off the
+                            // board entirely.
+                            dragging_tile_id.set(None);
+                            dragging_from_board_index.set(None);
+                            return;
+                        }
+                        let Some(tile_id) = dragging_tile_id() else {
+                            return;
+                        };
+                        // Any change to the staged placements invalidates a
+                        // previous submit/typing message — the live preview
+                        // banner is the one source of truth for the current
+                        // arrangement going forward.
+                        error_message.set(None);
+                        info_message.set(None);
+                        if let Some(old_index) = dragging_from_board_index() {
+                            // Moving an already-staged tile: carry over its
+                            // existing display/tile (a resolved blank keeps
+                            // its chosen letter) rather than re-deriving a
+                            // fresh, unresolved one from the rack.
+                            let existing = staged_placements()
+                                .iter()
+                                .find(|p| p.board_index == old_index && p.rack_tile_id == tile_id)
+                                .cloned();
+                            if let Some(existing) = existing {
+                                staged_placements.with_mut(|placements| {
+                                    placements.retain(|p| p.board_index != old_index);
+                                    placements.push(StagedPlacementView {
+                                        board_index,
+                                        ..existing
+                                    });
+                                });
+                            }
+                            dragging_tile_id.set(None);
+                            dragging_from_board_index.set(None);
+                            return;
+                        }
+                        let Some(tile) = current_rack_tiles(&game_for_drop, &staged_placements())
+                            .into_iter()
+                            .find(|t| t.id == tile_id)
+                            else {
+                            dragging_tile_id.set(None);
+                            return;
+                        };
+                        let placement = stage_tile_at_cell(board_index, &tile, None);
+                        staged_placements
+                            .with_mut(|placements| placements.push(placement));
+                        dragging_tile_id.set(None);
+                        advance_selection(
+                            &game_for_drop,
+                            staged_placements,
+                            selected_cell,
+                            direction_override(),
+                            board_index,
+                        );
+                    },
+                    on_show_unread: move |_| {
+                        // The icon promises messages, so it delivers them —
+                        // switching game if that is where they are. Anything
+                        // less makes the indicator a puzzle rather than a
+                        // pointer.
+                        let Some(target) = UNREAD_GAME_ID() else {
+                            return;
+                        };
+                        if game().is_some_and(|open| open.id == target) {
+                            scroll_chat_into_view();
+                            return;
+                        }
+                        // Elsewhere: load it, then scroll once it has rendered.
+                        // The panel does not exist yet at this instant, which
+                        // is what SCROLL_CHAT_PENDING is for.
+                        *SCROLL_CHAT_PENDING.write() = true;
+                        let server_url = server_url_for_unread.clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        spawn(async move {
+                            is_loading.set(true);
+                            error_message.set(None);
+                            if let Ok(loaded) =
+                                load_game_by_id(&server_url, &target, token.as_deref()).await
+                            {
+                                info_message.set(None);
+                                game.set(Some(loaded));
+                            } else {
+                                *SCROLL_CHAT_PENDING.write() = false;
+                            }
+                            is_loading.set(false);
+                        });
+                    },
+                    on_select_cell: move |board_index: usize| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        if game_for_select
+                            .board
+                            .get(board_index)
+                            .is_some_and(|cell: &BoardCellDto| cell.letter.is_some())
+                        {
+                            return;
+                        }
+                        selected_cell.set(Some(board_index));
+                    },
+                    // Arrow-key navigation: `direction`/`forward` are a raw
+                    // 2D step (Left/Right = Horizontal, Up/Down = Vertical),
+                    // not this turn's inferred typing direction. Uses the
+                    // wrapping variant, not `find_next_placeable_cell` —
+                    // moving the selection by hand should cycle around the
+                    // edge of the board rather than get stuck there (that
+                    // "stop at the edge" behavior is deliberately kept for
+                    // advancing through a word as it's typed/placed — see
+                    // `advance_selection`). Still skips over any occupied
+                    // square — a permanently-played letter or a tile staged
+                    // earlier this turn — landing on the next free cell if
+                    // there's room anywhere in the row/column, or leaving
+                    // the selection where it is if the whole line is full.
+                    on_move_selection: move |(direction, forward, onto_occupied): (
+                        DirectionDto,
+                        bool,
+                        bool,
+                    )| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        let Some(current) = selected_cell() else {
+                            return;
+                        };
+                        // With a modifier held, step exactly one cell (wrapping)
+                        // and land there regardless of occupancy; otherwise skip
+                        // to the next free cell as before.
+                        let next = if onto_occupied {
+                            Some(step_index_wrapping(current, direction, forward))
+                        } else {
+                            find_next_placeable_cell_wrapping(
+                                &game_for_move,
+                                &staged_placements(),
+                                current,
+                                direction,
+                                forward,
+                            )
+                        };
+                        if let Some(next) = next {
+                            selected_cell.set(Some(next));
+                        }
+                    },
+                    on_click_rack_tile: move |tile_id: usize| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        // A tile that's already staged on the board shows as a
+                        // greyed "used" slot in the rack; clicking that slot
+                        // returns the tile to the rack (removes its placement)
+                        // and reselects the freed cell to keep composing there —
+                        // the click counterpart to dragging a staged tile off
+                        // the board.
+                        if let Some(placement) = staged_placements()
+                            .iter()
+                            .find(|p| p.rack_tile_id == tile_id)
+                            .cloned()
+                        {
+                            error_message.set(None);
+                            info_message.set(None);
+                            staged_placements
+                                .with_mut(|placements| {
+                                    placements.retain(|p| p.rack_tile_id != tile_id)
+                                });
+                            selected_cell.set(Some(placement.board_index));
+                            return;
+                        }
+                        let Some(cell_index) = selected_cell() else {
+                            return;
+                        };
+                        if game_for_click
+                            .board
+                            .get(cell_index)
+                            .is_some_and(|cell: &BoardCellDto| cell.letter.is_some())
+                        {
+                            return;
+                        }
+                        if staged_placements()
+                            .iter()
+                            .any(|p| p.board_index == cell_index)
+                        {
+                            return;
+                        }
+                        let Some(tile) = current_rack_tiles(&game_for_click, &staged_placements())
+                            .into_iter()
+                            .find(|t| t.id == tile_id)
+                        else {
+                            return;
+                        };
+                        error_message.set(None);
+                        info_message.set(None);
+                        let placement = stage_tile_at_cell(cell_index, &tile, None);
+                        staged_placements
+                            .with_mut(|placements| placements.push(placement));
+                        advance_selection(
+                            &game_for_click,
+                            staged_placements,
+                            selected_cell,
+                            direction_override(),
+                            cell_index,
+                        );
+                    },
+                    on_type_letter: move |letter: char| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        let Some(cell_index) = selected_cell() else {
+                            return;
+                        };
+                        if game_for_type
+                            .board
+                            .get(cell_index)
+                            .is_some_and(|cell: &BoardCellDto| cell.letter.is_some())
+                        {
+                            return;
+                        }
+                        if staged_placements()
+                            .iter()
+                            .any(|p| p.board_index == cell_index)
+                        {
+                            return;
+                        }
+                        let rack = current_rack_tiles(&game_for_type, &staged_placements());
+                        // Prefer an exact unused letter tile; fall back to an
+                        // unused blank, auto-resolved to the typed letter
+                        // (skips the manual blank-letter picker, since the
+                        // player already told us the letter by typing it).
+                        let typed = letter.to_string();
+                        let chosen = rack
+                            .iter()
+                            .find(|t| {
+                                !t.is_used
+                                    && matches!(&t.tile, TileDto::Letter { letter: l } if *l == typed)
+                            })
+                            .or_else(|| {
+                                rack.iter()
+                                    .find(|t| !t.is_used && matches!(t.tile, TileDto::Blank { .. }))
+                            });
+                        let Some(tile) = chosen else {
+                            return;
+                        };
+                        let resolved =
+                            matches!(tile.tile, TileDto::Blank { .. }).then(|| typed.clone());
+                        let placement = stage_tile_at_cell(cell_index, tile, resolved);
+                        error_message.set(None);
+                        info_message.set(None);
+                        staged_placements
+                            .with_mut(|placements| placements.push(placement));
+                        advance_selection(
+                            &game_for_type,
+                            staged_placements,
+                            selected_cell,
+                            direction_override(),
+                            cell_index,
+                        );
+                    },
+                    on_backspace: move |_| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        let Some(cell_index) = selected_cell() else {
+                            return;
+                        };
+                        // The cursor normally sits one past the last typed
+                        // tile (ready for the next letter), so backspace
+                        // targets the previous editable cell — the tile just
+                        // behind the cursor — and removes/lands on exactly
+                        // that one cell, rather than also skipping past it.
+                        // If the cursor is already sitting directly on a
+                        // staged tile (e.g. after clicking it), act on that
+                        // cell in place instead of stepping back further.
+                        let cursor_has_tile = staged_placements()
+                            .iter()
+                            .any(|p| p.board_index == cell_index);
+                        let target = if cursor_has_tile {
+                            Some(cell_index)
+                        } else {
+                            let direction = infer_typing_direction(
+                                &game_for_backspace,
+                                &staged_placements(),
+                                Some(cell_index),
+                                direction_override(),
+                            );
+                            find_previous_editable_cell(&game_for_backspace, cell_index, direction)
+                        };
+                        let Some(target) = target else {
+                            return;
+                        };
+                        error_message.set(None);
+                        info_message.set(None);
+                        staged_placements
+                            .with_mut(|placements| placements.retain(|p| p.board_index != target));
+                        selected_cell.set(Some(target));
+                    },
+                    on_delete: move |_| {
+                        if !can_submit_human_action || exchange_mode() {
+                            return;
+                        }
+                        let Some(cell_index) = selected_cell() else {
+                            return;
+                        };
+                        error_message.set(None);
+                        info_message.set(None);
+                        // Forward-delete: removes a staged tile at the
+                        // cursor without moving the cursor, unlike backspace.
+                        staged_placements
+                            .with_mut(|placements| placements.retain(|p| p.board_index != cell_index));
+                    },
+                    on_clear_staged: move |_| {
+                        dragging_tile_id.set(None);
+                        selected_blank_letter.set(None);
+                        staged_placements.set(Vec::new());
+                        selected_cell.set(None);
+                        direction_override.set(None);
+                        error_message.set(None);
+                        info_message.set(None);
+                    },
+                    on_remove_staged: move |board_index| {
+                        error_message.set(None);
+                        info_message.set(None);
+                        staged_placements
+                            .with_mut(|placements| {
+                                placements.retain(|p| p.board_index != board_index);
+                            });
+                        // The cell that just gave up its tile is the most
+                        // natural place to keep composing from — lets
+                        // right-click-to-remove immediately be followed by
+                        // typing a replacement letter, rather than leaving
+                        // nothing selected.
+                        selected_cell.set(Some(board_index));
+                    },
+                    on_set_blank_letter: move |letter: String| {
+                        error_message.set(None);
+                        info_message.set(None);
+                        selected_blank_letter.set(Some(letter.clone()));
+                        staged_placements
+                            .with_mut(|placements| {
+                                if let Some(placement) = placements
+                                    .iter_mut()
+                                    .find(|p| matches!(p.tile, TileDto::Blank { acting_as: None }))
+                                {
+                                    placement.display = letter.to_lowercase();
+                                    placement.tile = TileDto::Blank {
+                                        acting_as: Some(letter),
+                                    };
+                                }
+                            });
+                    },
+                    selected_blank_letter: selected_blank_letter(),
+                    staged_preview,
+                    is_your_turn: can_submit_human_action,
+                    can_pass: can_submit_human_action && !exchange_mode(),
+                    on_pass: move |_| {
+                        let server_url = server_url_for_pass.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match submit_pass(&server_url, &current_game, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        reset_composer_state(
+                                            dragging_tile_id,
+                                            selected_blank_letter,
+                                            staged_placements,
+                                            selected_cell,
+                                            exchange_mode,
+                                            exchange_selected,
+                                            direction_override,
+                                        );
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    can_resign: can_resign && !exchange_mode(),
+                    on_resign: move |_| {
+                        let server_url = server_url_for_resign.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        let resign_seat = viewer_rack_seat;
+                        if let (Some(current_game), Some(seat)) = (current_game, resign_seat) {
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match submit_resign(&server_url, &current_game, seat as u8, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        reset_composer_state(
+                                            dragging_tile_id,
+                                            selected_blank_letter,
+                                            staged_placements,
+                                            selected_cell,
+                                            exchange_mode,
+                                            exchange_selected,
+                                            direction_override,
+                                        );
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    can_submit_manual: can_submit_manual_action,
+                    on_submit_manual: move |_| {
+                        let server_url = server_url_for_manual.clone();
+                        let current_game = game().clone();
+                        let staged = staged_placements().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        if let Some(current_game) = current_game {
+                            let direction = infer_typing_direction(
+                                &current_game,
+                                &staged,
+                                selected_cell(),
+                                direction_override(),
+                            );
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match submit_manual_move(
+                                        &server_url,
+                                        &current_game,
+                                        &staged,
+                                        direction,
+                                        token.as_deref(),
+                                    )
+                                    .await
+                                {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        reset_composer_state(
+                                            dragging_tile_id,
+                                            selected_blank_letter,
+                                            staged_placements,
+                                            selected_cell,
+                                            exchange_mode,
+                                            exchange_selected,
+                                            direction_override,
+                                        );
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    exchange_mode: exchange_mode(),
+                    exchange_selected: exchange_selected().clone(),
+                    can_toggle_exchange: can_submit_human_action,
+                    on_toggle_exchange_mode: move |_| {
+                        if !can_submit_human_action {
+                            return;
+                        }
+                        let turning_on = !exchange_mode();
+                        if turning_on {
+                            // Placing and exchanging are mutually exclusive
+                            // for a turn; drop any in-progress placement so
+                            // the two states can never mix.
+                            reset_composer_state(
+                                dragging_tile_id,
+                                selected_blank_letter,
+                                staged_placements,
+                                selected_cell,
+                                exchange_mode,
+                                exchange_selected,
+                                direction_override,
+                            );
+                            exchange_mode.set(true);
+                        } else {
+                            exchange_mode.set(false);
+                            exchange_selected.set(HashSet::new());
+                        }
+                    },
+                    on_toggle_exchange_tile: move |tile_id: usize| {
+                        exchange_selected
+                            .with_mut(|selected| {
+                                if !selected.remove(&tile_id) {
+                                    selected.insert(tile_id);
+                                }
+                            });
+                    },
+                    can_confirm_exchange: IS_ONLINE() && exchange_mode() && !exchange_selected().is_empty(),
+                    on_confirm_exchange: move |_| {
+                        let server_url = server_url_for_exchange.clone();
+                        let current_game = game().clone();
+                        let token = session().map(|current| current.session_token.clone());
+                        let selected_ids = exchange_selected().clone();
+                        if let Some(current_game) = current_game {
+                            let tiles: Vec<TileDto> = current_rack_tiles(&current_game, &Vec::new())
+                                .into_iter()
+                                .filter(|tile| selected_ids.contains(&tile.id))
+                                .map(|tile| tile.tile)
+                                .collect();
+                            spawn(async move {
+                                is_loading.set(true);
+                                error_message.set(None);
+                                match submit_exchange(&server_url, &current_game, tiles, token.as_deref()).await {
+                                    Ok(updated) => {
+                                        info_message.set(None);
+                                        reset_composer_state(
+                                            dragging_tile_id,
+                                            selected_blank_letter,
+                                            staged_placements,
+                                            selected_cell,
+                                            exchange_mode,
+                                            exchange_selected,
+                                            direction_override,
+                                        );
+                                        apply_game_update(game, updated);
+                                        if let Ok(summaries) = load_game_summaries(&server_url, token.as_deref()).await {
+                                            game_summaries.set(summaries);
+                                        }
+                                    }
+                                    Err(error) => error_message.set(Some(error)),
+                                }
+                                is_loading.set(false);
+                            });
+                        }
+                    },
+                    on_cancel_exchange: move |_| {
+                        exchange_mode.set(false);
+                        exchange_selected.set(HashSet::new());
+                    },
+                }
+            }
+        }
+        }
+    }
+}
+fn empty_live_game() -> GameStateDto {
+    GameStateDto {
+        id: "not-connected".to_string(),
+        version: 0,
+        status: GameStatus::Waiting,
+        creator_player_id: None,
+        variant: "official".to_string(),
+        language: "sowpods".to_string(),
+        board_layout: "official".to_string(),
+        turn_number: 0,
+        current_seat: 0,
+        winner_seat: None,
+        final_bonus_seat: None,
+        final_bonus_points: None,
+        bag_count: 100,
+        move_time_limit_seconds: 0,
+        turn_started_at: 0,
+        participants: vec![ParticipantDto {
+            seat_number: 0,
+            kind: SeatKind::Human,
+            display_name: "Open a game".to_string(),
+            player_id: None,
+            engine_id: None,
+            score: 0,
+            invitation_status: None,
+            invited_email: None,
+            rating_before: None,
+            rating_after: None,
+            current_rating: None,
+            resigned: false,
+        }],
+        board: empty_board(),
+        racks: vec![RackDto {
+            counts: Vec::new(),
+            blanks: 0,
+        }],
+        moves: vec![],
+        messages: vec![],
+    }
+}
+
+/// The board shown before any game is open.
+///
+/// Derived from `rules-shared` rather than written out here. It used to be a
+/// literal, and when the played layout changed the literal did not — so the
+/// landing page displayed a board nobody plays on. Deriving it means the
+/// placeholder cannot drift from the real thing again.
+///
+/// Any variant would do: every edition shares one board (see
+/// `VariantRules`'s note that the premium layout is not part of what an
+/// edition varies).
+/// Drop everything belonging to the account whose session just ended.
+///
+/// Leaving it in place shows the next person to log in on this device — or
+/// the same person re-logging in — a stale games list, board and rack until
+/// something happens to overwrite it. Observed after an account was deleted
+/// server-side: the login modal appeared over a still-visible board, and
+/// registering as a new user left the previous player's tiles on screen.
+///
+/// Called from every path that ends a session: the Logout button, a session
+/// found dead server-side, and a password change (which invalidates every
+/// session for that player, including this one).
+#[allow(clippy::too_many_arguments)]
+fn clear_session_state(
+    mut session: Signal<Option<api::PlayerSessionDto>>,
+    mut game: Signal<Option<GameStateDto>>,
+    mut game_summaries: Signal<Vec<api::GameSummaryDto>>,
+    mut websocket_game_id: Signal<Option<String>>,
+    dragging_tile_id: Signal<Option<usize>>,
+    selected_blank_letter: Signal<Option<String>>,
+    staged_placements: Signal<Vec<StagedPlacementView>>,
+    selected_cell: Signal<Option<usize>>,
+    exchange_mode: Signal<bool>,
+    exchange_selected: Signal<HashSet<usize>>,
+    direction_override: Signal<Option<DirectionDto>>,
+) {
+    session.set(None);
+    game.set(None);
+    game_summaries.set(Vec::new());
+    websocket_game_id.set(None);
+    reset_composer_state(
+        dragging_tile_id,
+        selected_blank_letter,
+        staged_placements,
+        selected_cell,
+        exchange_mode,
+        exchange_selected,
+        direction_override,
+    );
+}
+
+fn empty_board() -> Vec<BoardCellDto> {
+    rules_shared::VariantRules::official()
+        .premiums
+        .iter()
+        .map(|premium| BoardCellDto {
+            premium: crate::client_rules::premium_to_dto(*premium),
+            letter: None,
+            is_blank: false,
+        })
+        .collect()
+}
+
+/// Minimal percent-encoding for a single query-string value — just enough
+/// to keep a display name with a space or other reserved character (`&`,
+/// `#`, `+`, ...) from corrupting the `?q=` query string it's placed into.
+/// No crate already in this workspace does this for the client (`reqwest`/
+/// `gloo-net` both expect the caller to have a well-formed URL already).
+fn url_encode_query_param(value: &str) -> String {
+    value
+        .bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                (byte as char).to_string()
+            }
+            _ => format!("%{byte:02X}"),
+        })
+        .collect()
+}
+
+pub(crate) async fn search_players(
+    server_url: &str,
+    query: &str,
+    token: Option<&str>,
+) -> Result<Vec<String>, String> {
+    get_json_auth(
+        &format!(
+            "{server_url}/players/search?q={}",
+            url_encode_query_param(query)
+        ),
+        token,
+    )
+    .await
+}
+
+pub(crate) async fn fetch_player_stats(
+    server_url: &str,
+    player_id: &str,
+    token: Option<&str>,
+) -> Result<api::PlayerStatsDto, String> {
+    get_json_auth(&format!("{server_url}/players/{player_id}/stats"), token).await
+}
+
+pub(crate) async fn fetch_player_rating_history(
+    server_url: &str,
+    player_id: &str,
+    token: Option<&str>,
+) -> Result<Vec<api::RatingPointDto>, String> {
+    get_json_auth(
+        &format!("{server_url}/players/{player_id}/rating-history"),
+        token,
+    )
+    .await
+}
+
+/// Sentinel error returned by the authenticated GET path on a `401`, so the
+/// games-list poll can tell "the session is gone server-side" apart from an
+/// ordinary request failure and drop to the login modal instead of retrying
+/// forever.
+/// Returned by any request that gets a 401, and matched by the handler that
+/// clears the session.
+///
+/// It reads as a sentence rather than as `__session_invalid__`, because it
+/// leaks: a dozen callers do `error_message.set(Some(error))` with no idea this
+/// value is special, and until they all route through `SESSION_INVALID`
+/// below, one of them will occasionally win the race and put this on screen.
+/// Observed on 2026-08-11 as `__session_invalid__` sitting above the board.
+/// A sentinel that is also a decent message costs nothing and cannot embarrass
+/// anybody.
+pub(crate) const SESSION_INVALID_MESSAGE: &str = "Your session has ended — please sign in again.";
+
+/// Set the moment any request is told the session is invalid.
+///
+/// The clearing itself needs signals a request helper does not have, so this
+/// records the fact and the app effect acts on it — the same split as
+/// `SERVER_BUILD`. Before this, session death was only handled where the
+/// games-list poll happened to notice it first; every other caller turned a
+/// 401 into a string and showed it, leaving a dead session apparently working
+/// behind a stale board.
+pub(crate) static SESSION_INVALID: GlobalSignal<bool> = Signal::global(|| false);
+
+/// A 401 on a request that carried no token: this needed signing in, which is
+/// not the same as a session having ended. Kept separate so nothing mistakes an
+/// ordinary signed-out state for something going wrong.
+pub(crate) const NOT_SIGNED_IN_MESSAGE: &str = "Sign in to do that.";
+
+/// Best-effort explicit log-out: asks the server to delete this session now.
+/// The caller clears its local state regardless, so a failure (offline,
+/// already-gone) just means the row gets cleaned up later by idle expiry —
+/// nothing for the UI to react to.
+pub(crate) async fn logout(server_url: &str, token: &str) {
+    let _ = post_no_content(&format!("{server_url}/auth/logout"), Some(token), &()).await;
+}
+
+async fn load_game_summaries(
+    server_url: &str,
+    token: Option<&str>,
+) -> Result<Vec<api::GameSummaryDto>, String> {
+    get_json_auth::<Vec<api::GameSummaryDto>>(&format!("{server_url}/games"), token).await
+}
+
+pub(crate) async fn register_player(
+    server_url: &str,
+    display_name: &str,
+    email: &str,
+    password: &str,
+    stay_logged_in: bool,
+    retry_message: Signal<Option<String>>,
+) -> Result<api::PlayerSessionDto, String> {
+    let request = api::RegisterPlayerRequest {
+        display_name: display_name.to_string(),
+        email: email.to_string(),
+        password: password.to_string(),
+        stay_logged_in,
+    };
+    let url = format!("{server_url}/auth/register");
+    with_network_retry(retry_message, || post_json(&url, None, &request)).await
+}
+
+pub(crate) async fn login_player(
+    server_url: &str,
+    display_name: &str,
+    password: &str,
+    stay_logged_in: bool,
+    retry_message: Signal<Option<String>>,
+) -> Result<api::PlayerSessionDto, String> {
+    let request = api::LoginPlayerRequest {
+        display_name: display_name.to_string(),
+        password: password.to_string(),
+        stay_logged_in,
+    };
+    let url = format!("{server_url}/auth/login");
+    with_network_retry(retry_message, || post_json(&url, None, &request)).await
+}
+
+pub(crate) async fn change_password(
+    server_url: &str,
+    token: &str,
+    current_password: &str,
+    new_password: &str,
+) -> Result<(), String> {
+    let request = api::ChangePasswordRequest {
+        current_password: current_password.to_string(),
+        new_password: new_password.to_string(),
+    };
+    post_no_content(
+        &format!("{server_url}/auth/change-password"),
+        Some(token),
+        &request,
+    )
+    .await
+}
+
+pub(crate) async fn update_player_details(
+    server_url: &str,
+    token: &str,
+    display_name: &str,
+    email: &str,
+) -> Result<api::PlayerDto, String> {
+    let request = api::UpdatePlayerDetailsRequest {
+        display_name: Some(display_name.to_string()),
+        email: Some(email.to_string()),
+    };
+    post_json(
+        &format!("{server_url}/auth/update-details"),
+        Some(token),
+        &request,
+    )
+    .await
+}
+
+pub(crate) async fn request_password_reset(server_url: &str, email: &str) -> Result<(), String> {
+    let request = api::RequestPasswordResetRequest {
+        email: email.to_string(),
+    };
+    post_no_content(
+        &format!("{server_url}/auth/forgot-password"),
+        None,
+        &request,
+    )
+    .await
+}
+
+pub(crate) async fn reset_password(
+    server_url: &str,
+    token: &str,
+    new_password: &str,
+) -> Result<(), String> {
+    let request = api::ResetPasswordRequest {
+        token: token.to_string(),
+        new_password: new_password.to_string(),
+    };
+    post_no_content(&format!("{server_url}/auth/reset-password"), None, &request).await
+}
+
+/// Unauthenticated — see `api::InvitationPreviewDto`'s doc comment for why
+/// this is safe to call before the visitor has registered or logged in.
+pub(crate) async fn preview_invitation(
+    server_url: &str,
+    invitation_id: &str,
+) -> Result<api::InvitationPreviewDto, String> {
+    get_json(&format!("{server_url}/invitations/{invitation_id}/preview")).await
+}
+
+async fn validate_session(server_url: &str, session_token: &str) -> Result<api::PlayerDto, String> {
+    let request = api::ValidateSessionRequest {
+        session_token: session_token.to_string(),
+    };
+    post_json(&format!("{server_url}/auth/validate"), None, &request).await
+}
+
+async fn load_game_by_id(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    get_json_auth::<GameStateDto>(&format!("{server_url}/games/{game_id}"), token).await
+}
+
+/// A bare reachability probe — unlike `get_json`, doesn't care about the
+/// response body (the `/health` endpoint returns plain text, not JSON),
+/// only whether a response came back at all. Used by the reconnect loop to
+/// poll without spamming `mark_offline`/`mark_online` state churn on every
+/// attempt.
+#[cfg(not(target_arch = "wasm32"))]
+async fn check_server_reachable(server_url: &str) -> bool {
+    // `.is_ok()` would accept a 502: the request succeeded, it just carried
+    // a failure status. That made the recovery poll declare the server back
+    // on its first proxy error, flip `IS_ONLINE` true and stop retrying —
+    // the second half of the stuck-tab bug.
+    reqwest::Client::new()
+        .get(format!("{server_url}/health"))
+        .send()
+        .await
+        .map(|response| response.status().is_success())
+        .unwrap_or(false)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn check_server_reachable(server_url: &str) -> bool {
+    // See the native twin above: a 502 is an `Ok` response, so this has to
+    // look at the status, not merely at whether a response arrived.
+    Request::get(&format!("{server_url}/health"))
+        .send()
+        .await
+        .map(|response| response.ok())
+        .unwrap_or(false)
+}
+
+/// Result of comparing this client's compiled-in `api::API_VERSION`
+/// against what the server reported at `/health` on first connect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VersionCheck {
+    Compatible,
+    /// Non-breaking drift — old client still works, just without whatever
+    /// the newer/older side added. Worth a soft, non-blocking notice.
+    MinorMismatch {
+        server: api::ApiVersion,
+        client: api::ApiVersion,
+    },
+    /// Breaking drift — this client build can't be trusted to talk to this
+    /// server correctly. Should block further use, not just warn.
+    MajorMismatch {
+        server: api::ApiVersion,
+        client: api::ApiVersion,
+    },
+    /// `/health` didn't answer at all — not a version problem, the normal
+    /// offline/reachability handling elsewhere in bootstrap covers it.
+    Unreachable,
+}
+
+/// How to update, phrased for the platform this build targets: a web client
+/// updates by reloading the page (it gets a fresh static bundle from the
+/// server); a desktop client needs a new download/install. No download link
+/// yet — there's no download page to point at (see the follow-up notes); the
+/// message stays generic until there is.
+fn update_hint_hard() -> &'static str {
+    #[cfg(feature = "desktop")]
+    {
+        "A newer version is available — please download and install the latest desktop client to continue."
+    }
+    #[cfg(not(feature = "desktop"))]
+    {
+        "Please refresh your browser to load the latest version."
+    }
+}
+
+fn update_hint_soft() -> &'static str {
+    #[cfg(feature = "desktop")]
+    {
+        "some features may be unavailable until you update the desktop client."
+    }
+    #[cfg(not(feature = "desktop"))]
+    {
+        "some features may be unavailable until you refresh your browser."
+    }
+}
+
+/// Apply an incoming full game snapshot to `signal`, dropping it if it's older
+/// than what's already shown. A different game id always applies; for the same
+/// game, only a strictly greater `version` wins. Full snapshots arrive from
+/// both the WebSocket and HTTP responses with no cross-source ordering
+/// guarantee, so this is the single choke point that keeps a late/stale one
+/// from clobbering a newer state (see `api::GameStateDto.version`).
+fn apply_game_update(mut signal: Signal<Option<GameStateDto>>, incoming: GameStateDto) {
+    if should_apply_update(signal.peek().as_ref(), &incoming) {
+        signal.set(Some(incoming));
+    }
+}
+
+/// The pure decision behind `apply_game_update` (unit-tested): a different game
+/// id always applies; for the same game only a strictly greater `version` wins;
+/// nothing currently shown means anything applies.
+fn should_apply_update(current: Option<&GameStateDto>, incoming: &GameStateDto) -> bool {
+    match current {
+        Some(current) => current.id != incoming.id || incoming.version > current.version,
+        None => true,
+    }
+}
+
+fn compare_api_version(server: api::ApiVersion, client: api::ApiVersion) -> VersionCheck {
+    if server.major != client.major {
+        VersionCheck::MajorMismatch { server, client }
+    } else if server.minor != client.minor {
+        VersionCheck::MinorMismatch { server, client }
+    } else {
+        VersionCheck::Compatible
+    }
+}
+
+/// Checked once, at the start of bootstrap, before anything else talks to
+/// the server — see the call site in `RootApp`.
+async fn check_api_version(server_url: &str) -> VersionCheck {
+    match get_json::<api::HealthDto>(&format!("{server_url}/health")).await {
+        Ok(health) => compare_api_version(health.api_version, api::API_VERSION),
+        Err(_) => VersionCheck::Unreachable,
+    }
+}
+
+/// Respond to a `VersionCheck` and report whether the client should keep
+/// talking to the server. Shared by the initial bootstrap and the
+/// reconnect-recovery loop, so a tab left open across a deploy reacts just
+/// like a fresh load instead of silently running a stale client. Returns
+/// `false` only on a breaking (major) mismatch, where the caller should stop.
+///
+/// The response differs by platform because the *remedy* does. On the web,
+/// fixing either kind of skew is the same act and costs the user nothing —
+/// reload, and the origin serves the current bundle — so the client just does
+/// it (via `watch_for_new_bundle`) rather than nagging someone to press a key
+/// we can press ourselves. On desktop the remedy is a download and install,
+/// which genuinely needs the user, so it keeps the banners.
+fn apply_version_check(
+    check: VersionCheck,
+    mut info_message: Signal<Option<String>>,
+    mut error_message: Signal<Option<String>>,
+) -> bool {
+    let (server, client, breaking) = match check {
+        VersionCheck::Compatible | VersionCheck::Unreachable => return true,
+        VersionCheck::MinorMismatch { server, client } => (server, client, false),
+        VersionCheck::MajorMismatch { server, client } => (server, client, true),
+    };
+
+    // Built on both platforms: web uses them as the give-up text once the
+    // auto-update has waited long enough, at which point "please refresh"
+    // is exactly the right thing to say.
+    let soft = format!(
+        "Server API v{server} differs from this client's v{client} (non-breaking) — {}",
+        update_hint_soft()
+    );
+    let hard = format!(
+        "This client (API v{client}) is incompatible with the server (API v{server}). {}",
+        update_hint_hard()
+    );
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        if breaking {
+            // Say why the app has stopped working rather than showing a bare
+            // "updating..." — the reload may be seconds away (waiting on the
+            // web container to finish restarting), and an unexplained dead
+            // app for that long is worse than an explained one.
+            error_message.set(Some(hard));
+        } else {
+            info_message.set(Some(
+                "A new version is available — updating shortly...".to_string(),
+            ));
+        }
+        // On a breaking mismatch the error above already stands; only the
+        // soft notice needs replacing if we end up giving up.
+        watch_for_new_bundle(info_message, if breaking { None } else { Some(soft) });
+        !breaking
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if breaking {
+            error_message.set(Some(hard));
+            false
+        } else {
+            info_message.set(Some(soft));
+            true
+        }
+    }
+}
+
+/// How often a pending auto-update re-checks whether the origin has started
+/// serving a different bundle, and how many times before it gives up. ~60s
+/// total: comfortably longer than the gap between the server and the web
+/// container being recreated during a deploy, short enough that a genuinely
+/// stuck deploy surfaces as a banner instead of spinning silently forever.
+#[cfg(target_arch = "wasm32")]
+const BUNDLE_POLL_MS: u64 = 3000;
+#[cfg(target_arch = "wasm32")]
+const BUNDLE_POLL_ATTEMPTS: usize = 20;
+
+/// The build id of the **web container** — the one serving this bundle —
+/// from the `/version.txt` written into its image (see the Dockerfile).
+///
+/// This is the one question a running tab asks that does not go to the server,
+/// and it has to be: the server can only report its own build, and during a
+/// deploy the two containers are briefly on different commits. `None` if it
+/// cannot be read — the web container mid-restart, or a dev build that wrote
+/// no file — in which case "would reloading help?" is answered "cannot tell",
+/// and the caller declines rather than guesses.
+#[cfg(target_arch = "wasm32")]
+async fn fetch_web_build_id() -> Option<String> {
+    let response = Request::get("/version.txt").send().await.ok()?;
+    if !response.ok() {
+        return None;
+    }
+    parse_served_version(&response.text().await.ok()?)
+}
+
+/// Validates that a `/version.txt` body really is a bundle id before
+/// anything compares it against ours.
+///
+/// A 200 response is not enough on its own. Caddy's SPA fallback
+/// (`try_files {path} /index.html`) serves **index.html with status 200** for
+/// any path that isn't a real file, so an origin without a `/version.txt` —
+/// a `dx serve` dev build, a hand-built image — answers this probe with a
+/// page of HTML rather than a 404. Taken at face value that HTML would never
+/// match, so the watcher would reload, get the same fallback again, and
+/// spin: precisely the loop this check exists to prevent.
+///
+/// The id is a git commit id (see the Dockerfile), so anything that is not
+/// plain hex of a sane length is treated as "no answer". HTML fails on the
+/// leading `<`, and also on its spaces and newlines.
+///
+/// **The lower bound is 7, not 8.** `git rev-parse --short` gives seven
+/// characters and that is what a deploy stamps, so a bound of 8 would reject
+/// every real id — leaving the client permanently unable to tell, silently
+/// never reloading, with nothing failing to say so. That is exactly the
+/// failure this whole mechanism exists to remove, so it is asserted below.
+// Deliberately not `#[cfg(target_arch = "wasm32")]` like its caller: keeping
+// it target-independent is what lets the tests below run under a normal
+// `cargo test`, which is the only place this logic is actually exercised.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn parse_served_version(body: &str) -> Option<String> {
+    let id = body.trim();
+    let plausible = (7..=64).contains(&id.len()) && id.chars().all(|c| c.is_ascii_hexdigit());
+    plausible.then(|| id.to_string())
+}
+
+/// Reload the page as soon — and only as soon — as doing so would actually
+/// land on different code.
+///
+/// The naive version of this (reload the moment skew is detected) loops.
+/// `docker compose up -d` recreates `server` before `web`, so there's a
+/// window where the new server is live while this container still serves the
+/// old bundle; a tab reloading into that window gets the same bundle back and
+/// tries again. Worse, reloading a moment later, while `web` itself is
+/// restarting, lands the tab on a browser connection-error page with no
+/// client code left running to recover itself.
+///
+/// Comparing the served build against our own sidesteps both: an unchanged
+/// or unreadable `/version.txt` means we simply wait and ask again. It also
+/// naturally handles skew that a reload can't fix at all — a fresh load
+/// already has the current bundle, so if the versions match we poll, give up,
+/// and fall back to telling the user, which is all that was ever possible.
+/// True while a watcher is running, so a header arriving on every response
+/// cannot start a second one alongside the first.
+#[cfg(target_arch = "wasm32")]
+static WATCHING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_arch = "wasm32")]
+fn watch_for_new_bundle(mut info_message: Signal<Option<String>>, give_up_message: Option<String>) {
+    use std::sync::atomic::Ordering;
+    // The header arrives on every response, so without this a busy tab would
+    // start a watcher every few seconds and run them all at once.
+    if WATCHING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    spawn(async move {
+        // Our own build, compiled in. Without one — a dev build that set no
+        // TILE_LITE_ELITE_BUILD_ID — there is nothing to compare against, and
+        // "cannot tell" must never become "reload".
+        let Some(ours) = CLIENT_BUILD_ID else {
+            WATCHING.store(false, Ordering::SeqCst);
+            if let Some(message) = give_up_message {
+                info_message.set(Some(message));
+            }
+            return;
+        };
+        for _ in 0..BUNDLE_POLL_ATTEMPTS {
+            if let Some(web) = fetch_web_build_id().await {
+                let server = SERVER_BUILD.peek().clone();
+                // The containers disagreeing means a deploy is in flight. Wait:
+                // whichever of them moved first, the other is about to follow,
+                // and reloading now lands this tab on a half-updated pair.
+                let mid_deploy = server.as_deref().is_some_and(|server| server != web);
+                if !mid_deploy && web != ours {
+                    if let Some(window) = web_sys::window() {
+                        let _ = window.location().reload();
+                    }
+                    return;
+                }
+            }
+            sleep_ms(BUNDLE_POLL_MS).await;
+        }
+        WATCHING.store(false, Ordering::SeqCst);
+        if let Some(message) = give_up_message {
+            info_message.set(Some(message));
+        }
+    });
+}
+
+/// Loads the games list and a target game (a specific id if given, else the
+/// most recent one), replacing whatever's currently shown. Shared by the
+/// initial bootstrap and the reconnect-recovery loop so both end up in the
+/// same state after a successful load.
+#[allow(clippy::too_many_arguments)]
+async fn load_summaries_and_game(
+    server_url: &str,
+    token: Option<&str>,
+    preferred_game_id: Option<String>,
+    game: Signal<Option<GameStateDto>>,
+    mut game_summaries: Signal<Vec<api::GameSummaryDto>>,
+    mut info_message: Signal<Option<String>>,
+    mut error_message: Signal<Option<String>>,
+    dragging_tile_id: Signal<Option<usize>>,
+    selected_blank_letter: Signal<Option<String>>,
+    staged_placements: Signal<Vec<StagedPlacementView>>,
+    selected_cell: Signal<Option<usize>>,
+    exchange_mode: Signal<bool>,
+    exchange_selected: Signal<HashSet<usize>>,
+    direction_override: Signal<Option<DirectionDto>>,
+) {
+    // The games list is per-account now (the server 401s without a
+    // session), so there's nothing meaningful to fetch until the caller is
+    // signed in — surface that as guidance rather than an "error".
+    let Some(token) = token else {
+        game_summaries.set(Vec::new());
+        info_message.set(Some("Sign in to see your games.".to_string()));
+        return;
+    };
+
+    match load_game_summaries(server_url, Some(token)).await {
+        Ok(summaries) => {
+            let target_id = preferred_game_id.or_else(|| summaries.first().map(|s| s.id.clone()));
+            game_summaries.set(summaries);
+            match target_id {
+                Some(game_id) => match load_game_by_id(server_url, &game_id, Some(token)).await {
+                    Ok(loaded) => {
+                        info_message.set(None);
+                        reset_composer_state(
+                            dragging_tile_id,
+                            selected_blank_letter,
+                            staged_placements,
+                            selected_cell,
+                            exchange_mode,
+                            exchange_selected,
+                            direction_override,
+                        );
+                        apply_game_update(game, loaded);
+                    }
+                    Err(error) => error_message.set(Some(error)),
+                },
+                None => {
+                    info_message.set(Some("No games yet. Create one to begin.".to_string()));
+                }
+            }
+        }
+        Err(error) => error_message.set(Some(error)),
+    }
+}
+
+async fn create_custom_game(
+    server_url: &str,
+    token: Option<&str>,
+    submission: &crate::components::games_panel::CustomGameSubmission,
+) -> Result<GameStateDto, String> {
+    let request = CreateGameRequest {
+        seats: submission.seats.clone(),
+        seed: None,
+        variant: submission.variant.clone(),
+        language: None,
+        board_layout: None,
+        move_time_limit_seconds: submission.move_time_limit_seconds,
+    };
+    post_json(&format!("{server_url}/games"), token, &request).await
+}
+
+/// Neither endpoint takes a request body (the invitation id in the path is
+/// all the server needs), but `post_json` always serializes a payload — `()`
+/// serializes to `null`, which the handlers simply never look at.
+async fn accept_invitation(
+    server_url: &str,
+    invitation_id: &str,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/invitations/{invitation_id}/accept"),
+        token,
+        &(),
+    )
+    .await
+}
+
+async fn reject_invitation(
+    server_url: &str,
+    invitation_id: &str,
+    token: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    post_json(
+        &format!("{server_url}/invitations/{invitation_id}/reject"),
+        token,
+        &(),
+    )
+    .await
+}
+
+/// Hides a finished game from the caller's own games list — see
+/// `crate::components::games_panel::game_row`'s "Remove" button.
+async fn remove_game(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    post_json(&format!("{server_url}/games/{game_id}/remove"), token, &()).await
+}
+
+async fn start_game(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/start"),
+        token,
+        &StartGameRequest::default(),
+    )
+    .await
+}
+
+async fn swap_seats(
+    server_url: &str,
+    game_id: &str,
+    seat_a: u8,
+    seat_b: u8,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/reorder-seats"),
+        token,
+        &api::SwapSeatsRequest { seat_a, seat_b },
+    )
+    .await
+}
+
+/// Sends (or resends, after a decline) the invitation for a seat that
+/// already exists in the roster — creator-only server-side. Both `None`
+/// invites any logged-in player (an `Open` seat); `invited_display_name`
+/// targets one specific person by name (a `Named` seat); `invited_email`
+/// targets a join-link address (an `Email` seat) — mutually exclusive, same
+/// as the request DTO itself.
+async fn invite_player(
+    server_url: &str,
+    game_id: &str,
+    seat_number: u8,
+    invited_display_name: Option<String>,
+    invited_email: Option<String>,
+    token: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/invite"),
+        token,
+        &InvitePlayerRequest {
+            invited_display_name,
+            invited_email,
+            seat_number,
+        },
+    )
+    .await
+}
+
+/// Adds a new seat to an already-created `Waiting` game — creator-only.
+/// Doesn't send its invitation; that's a separate `invite_player` call, so
+/// several additions can be staged before any of them go out.
+async fn add_seat(
+    server_url: &str,
+    game_id: &str,
+    kind: SeatKind,
+    display_name: String,
+    claim: Option<SeatClaim>,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/seats"),
+        token,
+        &CreateSeatRequest {
+            kind,
+            display_name,
+            engine_id: None,
+            claim,
+        },
+    )
+    .await
+}
+
+/// Removes a seat entirely — creator-only, works whether or not it's
+/// claimed (this is also how the creator kicks a confirmed participant).
+async fn remove_seat(
+    server_url: &str,
+    game_id: &str,
+    seat_number: u8,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/seats/{seat_number}/remove"),
+        token,
+        &(),
+    )
+    .await
+}
+
+/// Gives back a claimed seat voluntarily, before the game starts — only
+/// the seat's own holder may call this (not the creator, and not for the
+/// creator's own seat).
+async fn withdraw_from_seat(
+    server_url: &str,
+    game_id: &str,
+    seat_number: u8,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/seats/{seat_number}/withdraw"),
+        token,
+        &(),
+    )
+    .await
+}
+
+/// The `Active`-game escape hatch for a seat that's gone unresponsive —
+/// creator-only, ends the game immediately in favor of whoever's left.
+async fn force_resign_seat(
+    server_url: &str,
+    game_id: &str,
+    seat_number: u8,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{game_id}/seats/{seat_number}/force-resign"),
+        token,
+        &(),
+    )
+    .await
+}
+
+async fn abort_game(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(&format!("{server_url}/games/{game_id}/abort"), token, &()).await
+}
+
+async fn submit_pass(
+    server_url: &str,
+    game: &GameStateDto,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    let request = GameActionRequest {
+        seat_number: game.current_seat,
+        action: api::PlayerActionDto::Pass,
+    };
+    post_json(
+        &format!("{server_url}/games/{}/actions", game.id),
+        token,
+        &request,
+    )
+    .await
+}
+
+/// Not routed through `submit_pass`/`submit_resign`'s `GameActionRequest`
+/// shape — chat has its own endpoint, not gated by turn ownership (see the
+/// matching note on the server's `post_chat_message` handler).
+async fn submit_chat_message(
+    server_url: &str,
+    game: &GameStateDto,
+    body: String,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    post_json(
+        &format!("{server_url}/games/{}/chat", game.id),
+        token,
+        &api::PostChatMessageRequest { body },
+    )
+    .await
+}
+
+async fn submit_resign(
+    server_url: &str,
+    game: &GameStateDto,
+    seat_number: u8,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    // The viewer's *own* seat, not `current_seat` — resigning isn't turn-gated,
+    // so on another player's turn this must still be the resigner's seat (the
+    // server rejects acting on a seat you don't own).
+    let request = GameActionRequest {
+        seat_number,
+        action: api::PlayerActionDto::Resign,
+    };
+    post_json(
+        &format!("{server_url}/games/{}/actions", game.id),
+        token,
+        &request,
+    )
+    .await
+}
+
+async fn submit_exchange(
+    server_url: &str,
+    game: &GameStateDto,
+    tiles: Vec<TileDto>,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    let request = GameActionRequest {
+        seat_number: game.current_seat,
+        action: api::PlayerActionDto::Exchange { tiles },
+    };
+    post_json(
+        &format!("{server_url}/games/{}/actions", game.id),
+        token,
+        &request,
+    )
+    .await
+}
+
+async fn submit_manual_move(
+    server_url: &str,
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    direction: DirectionDto,
+    token: Option<&str>,
+) -> Result<GameStateDto, String> {
+    let request = build_manual_move_request(game, staged, direction)?;
+    post_json(
+        &format!("{server_url}/games/{}/actions", game.id),
+        token,
+        &request,
+    )
+    .await
+}
+
+async fn post_json<T, R>(url: &str, token: Option<&str>, payload: &T) -> Result<R, String>
+where
+    T: serde::Serialize + ?Sized,
+    R: serde::de::DeserializeOwned,
+{
+    post_json_impl(url, token, payload).await
+}
+
+/// For endpoints that respond `204 No Content` (nothing to deserialize) —
+/// `post_json::<_, ()>` would fail trying to parse an empty body as JSON.
+async fn post_no_content<T>(url: &str, token: Option<&str>, payload: &T) -> Result<(), String>
+where
+    T: serde::Serialize + ?Sized,
+{
+    post_no_content_impl(url, token, payload).await
+}
+
+/// Text shown for a request that never got a response at all — as opposed
+/// to a response the server sent back rejecting it, which keeps its own
+/// specific message. This is the one signal that distinguishes "the server
+/// is down/unreachable" from "you made an illegal move."
+/// A refusal the caller can do something about: the server's own message, plus
+/// how long to wait when it said.
+///
+/// `429` is the caller asking too often — their own doing, and fixable by
+/// slowing down. Deliberately *not* part of `backend_is_unreachable`: the
+/// service is answering perfectly well, and dropping a working session into
+/// the reconnect loop over a rate limit would be the opposite of what the
+/// status means.
+///
+/// `Retry-After` carries a number of seconds. Anything else is ignored rather
+/// than guessed at — a wrong wait is worse than none, because somebody will
+/// believe it.
+fn refusal_message(status: u16, retry_after: Option<String>, body: String) -> String {
+    if status != 429 {
+        return body;
+    }
+    match retry_after
+        .as_deref()
+        .map(str::trim)
+        .and_then(|value| value.parse::<u32>().ok())
+    {
+        // "in 0 seconds" is absurd and "in 1 seconds" is unfinished. Our own
+        // server never sends 0 — `refusal` floors it at one — so this is for
+        // whatever a proxy or a future server might say, and the honest
+        // rendering of "wait none" is that there is nothing to wait for.
+        Some(0) => format!("{body} Try again now."),
+        Some(1) => format!("{body} Try again in 1 second."),
+        Some(seconds) => format!("{body} Try again in {seconds} seconds."),
+        None => body,
+    }
+}
+
+#[cfg(test)]
+mod refusal_message_tests {
+    use super::refusal_message;
+
+    /// Everything that is not a rate limit passes through untouched — a 400 or
+    /// a 404 has no wait to offer and inventing one would be a lie.
+    #[test]
+    fn other_statuses_are_left_alone() {
+        assert_eq!(
+            refusal_message(400, Some("5".into()), "Bad request".into()),
+            "Bad request"
+        );
+        assert_eq!(refusal_message(404, None, "Not found".into()), "Not found");
+    }
+
+    /// The whole point: a caller told to slow down is told for how long.
+    #[test]
+    fn a_rate_limit_says_how_long_to_wait() {
+        assert_eq!(
+            refusal_message(429, Some("30".into()), "You are asking too often.".into()),
+            "You are asking too often. Try again in 30 seconds."
+        );
+    }
+
+    /// The plural agrees with the number: 0 seconds, 1 second, 2 seconds. "In
+    /// 1 seconds" makes an interface look unfinished, and "in 0 seconds" is
+    /// absurd — a wait of none is not a wait, so it is said as one.
+    #[test]
+    fn the_wait_agrees_with_its_number() {
+        assert_eq!(
+            refusal_message(429, Some("1".into()), "Slow down.".into()),
+            "Slow down. Try again in 1 second."
+        );
+        assert_eq!(
+            refusal_message(429, Some("2".into()), "Slow down.".into()),
+            "Slow down. Try again in 2 seconds."
+        );
+        assert_eq!(
+            refusal_message(429, Some("0".into()), "Slow down.".into()),
+            "Slow down. Try again now."
+        );
+    }
+
+    /// `Retry-After` may also be an HTTP date, and a proxy may mangle it. A
+    /// wait we cannot read is left out rather than guessed — a wrong number is
+    /// worse than no number, because somebody will believe it.
+    #[test]
+    fn an_unreadable_wait_is_omitted_not_invented() {
+        for value in [
+            None,
+            Some("Wed, 21 Oct 2026 07:28:00 GMT"),
+            Some(""),
+            Some("soon"),
+        ] {
+            assert_eq!(
+                refusal_message(429, value.map(str::to_string), "Slow down.".into()),
+                "Slow down.",
+                "value: {value:?}"
+            );
+        }
+    }
+
+    /// Whitespace around the number is a proxy's doing, not the caller's.
+    #[test]
+    fn surrounding_whitespace_does_not_lose_the_wait() {
+        assert_eq!(
+            refusal_message(429, Some("  12  ".into()), "Slow down.".into()),
+            "Slow down. Try again in 12 seconds."
+        );
+    }
+}
+
+const UNREACHABLE_MESSAGE: &str = "Can't reach the server.";
+
+/// Marks the backend unreachable. Called only at the point where a request
+/// never got a response — a genuine connection failure, not an HTTP error
+/// status. Returns `UNREACHABLE_MESSAGE` for convenience at call sites.
+/// Whether an HTTP status means the service cannot process requests right
+/// now, as opposed to having processed this one and rejected it.
+///
+/// The useful line is not *who emitted the response* but *what the client
+/// should do about it*. 502, 503 and 504 all mean "not serving requests" —
+/// back off and retry — whoever produced them. 503 in particular is
+/// unambiguous even from the app itself: it says the service is
+/// unavailable, and retrying is exactly the right response.
+///
+/// A 500 is the other case: the service is up and answered, this one
+/// request failed. Dropping a working session into the reconnect loop over
+/// that would be worse than the bug this fixes.
+///
+/// What made this necessary: `web` (Caddy) and `server` are separate
+/// containers, so a deploy stops the server while Caddy carries on
+/// answering, and the client gets a real HTTP response carrying 502.
+/// Counting that as "the server is talking to us" left a tab open across a
+/// deploy stuck on the error forever — `IS_ONLINE` stayed true, and the
+/// reconnect loop only runs while it is false.
+fn backend_is_unreachable(status: u16) -> bool {
+    (502..=504).contains(&status)
+}
+
+/// Does the game currently open have chat nobody has read yet?
+///
+/// One signal for both indicators — the rack panel's and the chat panel's —
+/// rather than each computing it. Two derivations of one fact is how a seat's
+/// invitation status came to be right in one place and wrong in the other
+/// (#71), and these two sit on screen together where disagreeing would be
+/// obvious.
+pub static HAS_UNREAD_CHAT: GlobalSignal<bool> = Signal::global(|| false);
+
+/// Which game the indicator is pointing at, so clicking it can go there.
+pub static UNREAD_GAME_ID: GlobalSignal<Option<String>> = Signal::global(|| None);
+
+/// Scroll the chat into view as soon as there is a chat to scroll to.
+///
+/// Set when the destination is a game that is not open yet: selecting it is
+/// asynchronous, and the panel does not exist at the moment of the click. The
+/// ticker below retries until it does, which is simpler than threading a
+/// callback through the load.
+pub static SCROLL_CHAT_PENDING: GlobalSignal<bool> = Signal::global(|| false);
+
+/// Is the unread message in the game currently open, rather than another one?
+///
+/// Drives which colour the indicator wears: gold for "here", clay for
+/// "elsewhere", matching the mail icon on the game row it refers to. Only
+/// meaningful while `HAS_UNREAD_CHAT` is true.
+pub static UNREAD_IS_THIS_GAME: GlobalSignal<bool> = Signal::global(|| false);
+
+/// Total time the chat has been visible, which is what messages age against.
+/// Published so the panel can render each message's own progress without
+/// owning a second clock.
+pub static CHAT_VISIBLE_MS: GlobalSignal<i64> = Signal::global(|| 0);
+
+/// The reading of `CHAT_VISIBLE_MS` when each message arrived, by message id.
+/// A message's elapsed time is the difference between the two, which is what
+/// drives both its highlight and how far through its fade it should be — so a
+/// rebuilt element resumes rather than starting again.
+pub static CHAT_MESSAGE_ARRIVED_AT: GlobalSignal<HashMap<String, i64>> =
+    Signal::global(HashMap::new);
+
+/// Wall-clock milliseconds, from whichever clock the target has.
+///
+/// Only ever used as a difference between two readings, so the epoch does not
+/// matter — and `SeenClock` refuses to bank a negative interval, which is the
+/// guard against this jumping backwards.
+fn now_millis() -> i64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as i64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0)
+    }
+}
+
+/// The desktop client has no scrolled-past-the-bottom problem and no document
+/// to ask, so an open game counts as visible. The ten-second rule still
+/// applies, which is the part that matters: a message is read once somebody has
+/// had it in front of them, not the moment it lands.
+#[cfg(not(target_arch = "wasm32"))]
+fn chat_messages_are_visible() -> bool {
+    true
+}
+
+/// Is a game unread: has somebody else's message arrived since the watermark?
+///
+/// The one rule, so the rack indicator and every games-list row give the same
+/// answer for the same game. Only the *input* differs — live messages for the
+/// game that is open, the polled summary for the rest.
+pub fn unread_for(last_received_at: Option<i64>, watermark: Option<i64>) -> bool {
+    last_received_at.is_some_and(|received| watermark.is_none_or(|seen| received > seen))
+}
+
+/// Is there a chat panel on the page yet? The pending-scroll retry needs to
+/// know, since a freshly selected game renders a moment after it loads.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn chat_panel_exists() -> bool {
+    false
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn chat_panel_exists() -> bool {
+    web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(".chat-messages").ok().flatten())
+        .is_some()
+}
+
+/// Bring the chat into view — what the unread indicator beside the rack does
+/// when clicked.
+///
+/// The indicator sits by the rack because that is where the eye is during a
+/// game, but the panel it refers to can be a long way down the page on a phone.
+/// Telling somebody there is a message and leaving them to find it is half a
+/// feature.
+///
+/// Scrolling the panel into view also *is* the fix for the message being
+/// unread: `chat_messages_are_visible` starts returning true, the seen clock
+/// starts counting, and the mark clears on its own.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn scroll_chat_into_view() {}
+
+#[cfg(target_arch = "wasm32")]
+pub fn scroll_chat_into_view() {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    if let Ok(Some(panel)) = document.query_selector(".chat-messages") {
+        panel.scroll_into_view();
+    }
+}
+
+/// Are the chat messages somewhere a person could actually see them?
+///
+/// Two conditions, because either alone is wrong. `document.hidden` catches the
+/// background tab, which no amount of scroll position would reveal. The panel's
+/// own rectangle catches the case the phone makes ordinary: the tab is in front
+/// of you and the chat is scrolled past the bottom of the screen.
+///
+/// Absent panel — no game open, or the element not yet rendered — is "not
+/// visible", which is the safe answer: it leaves the message marked unread
+/// rather than clearing something nobody saw.
+#[cfg(target_arch = "wasm32")]
+fn chat_messages_are_visible() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    let Some(document) = window.document() else {
+        return false;
+    };
+    if document.hidden() {
+        return false;
+    }
+    let Ok(Some(panel)) = document.query_selector(".chat-messages") else {
+        return false;
+    };
+    let rect = panel.get_bounding_client_rect();
+    let viewport_height = window
+        .inner_height()
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    // Any part of it on screen counts. Requiring the whole panel would mean a
+    // tall conversation never counted as visible at all.
+    rect.bottom() > 0.0 && rect.top() < viewport_height && rect.height() > 0.0
+}
+
+/// Whether the chat messages are somewhere a person could actually see them:
+/// the tab in the foreground, and the panel on screen rather than scrolled past.
+///
+/// Read by the message fade, which pauses when this is false, and by the seen
+/// clock, which stops accumulating. One signal so the two cannot disagree about
+/// what "visible" means — the fade somebody watches finishing has to be the
+/// same thing that marks the message read.
+pub static CHAT_IS_VISIBLE: GlobalSignal<bool> = Signal::global(|| false);
+
+/// The build this client was compiled from, matching what the server stamps on
+/// every response. `None` on a build with no id, where the comparison below
+/// cannot be made and correctly is not.
+// Only the browser reloads, so only the wasm build reads this. Kept
+// target-independent rather than cfg'd out, so the comparison below can be
+// tested under a plain `cargo test` — which is the only place it is exercised
+// at all.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const CLIENT_BUILD_ID: Option<&str> = option_env!("TILE_LITE_ELITE_BUILD_ID");
+
+/// The build the server said it was running, on the most recent response.
+///
+/// Kept rather than reduced to a flag, because the *value* is half of the
+/// deploy-window test: the web container and the server disagreeing is what
+/// tells a tab an upgrade is in flight and it should wait rather than reload.
+///
+/// The reload is not decided here. A request helper has no signals to explain
+/// itself with, and this header describes the **server** while the bundle comes
+/// from a different container — so on its own it can say that something moved,
+/// never that new code is ready for this tab.
+static SERVER_BUILD: GlobalSignal<Option<String>> = Signal::global(|| None);
+
+/// The generic half of a response: the parts every caller handles identically,
+/// whatever it was asking for.
+///
+/// It exists because the two HTTP clients this crate uses — `reqwest` on the
+/// desktop, `gloo` in the browser — share no response type, so there was
+/// nowhere for "what do we do with a response" to live and it had been written
+/// out at each of six call sites. Not because the headers differ: `Retry-After`
+/// is standard and `x-build-id` is ours, and `header_string` reduces the
+/// libraries' difference to one line each.
+///
+/// That duplication is why the build-id check had nowhere obvious to go, and
+/// why `Retry-After` had to be changed in six places when its meaning moved.
+struct ResponseHeaders {
+    retry_after: Option<String>,
+    build_id: Option<String>,
+}
+
+impl ResponseHeaders {
+    /// Does the generic handling, and hands back the retry hint for whatever
+    /// message the caller is building. Content handling stays with the caller;
+    /// this is only the envelope.
+    fn handle(self) -> Option<String> {
+        note_server_build(self.build_id.as_deref());
+        self.retry_after
+    }
+}
+
+/// One header, as text, whichever client fetched the response.
+///
+/// Nothing about these headers resists common code — `Retry-After` is standard
+/// and `x-build-id` is ours. What differs is only how the two libraries hand a
+/// header back: `reqwest` gives bytes that may not be UTF-8, so it needs
+/// `to_str`, while `gloo` has already done that work against the browser's
+/// Fetch `Headers`. Both shapes are one line, and having both under one name
+/// keeps the difference here instead of at every call site.
+#[cfg(not(target_arch = "wasm32"))]
+fn header_string(headers: &reqwest::header::HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
+}
+
+/// See the note on the desktop version above.
+#[cfg(target_arch = "wasm32")]
+fn header_string(headers: gloo_net::http::Headers, name: &str) -> Option<String> {
+    headers.get(name)
+}
+
+/// Records that the server is running a build this client is not.
+///
+/// Two silences, both deliberate. A server with no build id sets no header, and
+/// a client with no build id cannot compare — in either case we cannot tell new
+/// code from old, and the honest response is to do nothing rather than guess.
+fn note_server_build(served: Option<&str>) {
+    let Some(served) = served else {
+        return;
+    };
+    if SERVER_BUILD.peek().as_deref() == Some(served) {
+        return;
+    }
+    *SERVER_BUILD.write() = Some(served.to_string());
+}
+
+/// Split from `note_server_build` so it can be tested: `CLIENT_BUILD_ID` is
+/// fixed at compile time and unset under `cargo test`, so a test going through
+/// it could only ever see the "cannot tell" case.
+///
+/// Answers **only** the question "do I know these are different". Both unknowns
+/// are `false`, which is what makes the caller's silence the right silence: not
+/// knowing must never be treated as a change, or an unidentified build would
+/// reload on every response forever.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn build_differs(served: Option<&str>, ours: Option<&str>) -> bool {
+    match (served, ours) {
+        (Some(served), Some(ours)) => !served.is_empty() && !ours.is_empty() && served != ours,
+        _ => false,
+    }
+}
+
+fn mark_offline() -> String {
+    *IS_ONLINE.write() = false;
+    UNREACHABLE_MESSAGE.to_string()
+}
+
+/// Marks the backend reachable — called as soon as any HTTP response
+/// arrives at all, even a rejection, since that still proves the server is
+/// up and talking to us.
+fn mark_online() {
+    if !*IS_ONLINE.read() {
+        *IS_ONLINE.write() = true;
+    }
+}
+
+/// Caps how long a single attempt inside `with_network_retry` can take. A
+/// dropped-then-suspended mobile request (backgrounded tab) can otherwise
+/// sit forever without either resolving or rejecting, which would leave
+/// `is_submitting` stuck `true` — and the submit button disabled — with no
+/// error ever arriving to trigger a retry.
+const NETWORK_ATTEMPT_TIMEOUT_MS: u64 = 8_000;
+
+async fn with_attempt_timeout<T>(
+    fut: impl std::future::Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    use futures_util::future::{Either, select};
+    futures_util::pin_mut!(fut);
+    let timeout = sleep_ms(NETWORK_ATTEMPT_TIMEOUT_MS);
+    futures_util::pin_mut!(timeout);
+    match select(fut, timeout).await {
+        Either::Left((result, _)) => result,
+        Either::Right(_) => Err(mark_offline()),
+    }
+}
+
+/// Retries `attempt` a few times, but only while it keeps failing with
+/// `UNREACHABLE_MESSAGE` — a single dropped request (a mobile network blip
+/// mid-flight) shouldn't leave the caller stuck with nothing to do but
+/// notice a small error message and retry by hand. A genuine rejection
+/// (wrong password, taken email, ...) comes back as a different message and
+/// is returned immediately, since trying again can't change that outcome.
+/// Each attempt is individually time-capped (see `with_attempt_timeout`) so
+/// a hung request can't keep this — and the caller's "submitting" state —
+/// stuck indefinitely. `retry_message` is set to a user-visible status
+/// between attempts and always cleared before returning, so the caller
+/// doesn't need its own bookkeeping to know when retrying has stopped.
+async fn with_network_retry<T, F, Fut>(
+    mut retry_message: Signal<Option<String>>,
+    mut attempt: F,
+) -> Result<T, String>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, String>>,
+{
+    retry_message.set(None);
+    let mut result = with_attempt_timeout(attempt()).await;
+    for attempt_number in 1..=NETWORK_RETRY_ATTEMPTS {
+        if !matches!(&result, Err(error) if error == UNREACHABLE_MESSAGE) {
+            break;
+        }
+        retry_message.set(Some(format!(
+            "Having trouble reaching the server — retrying ({attempt_number}/{NETWORK_RETRY_ATTEMPTS})…"
+        )));
+        sleep_ms(NETWORK_RETRY_DELAY_MS).await;
+        result = with_attempt_timeout(attempt()).await;
+    }
+    retry_message.set(None);
+    result
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn get_json<R>(url: &str) -> Result<R, String>
+where
+    R: serde::de::DeserializeOwned,
+{
+    get_json_auth(url, None).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn get_json_auth<R>(url: &str, token: Option<&str>) -> Result<R, String>
+where
+    R: serde::de::DeserializeOwned,
+{
+    let mut request = reqwest::Client::new().get(url);
+    if let Some(token) = token {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request.send().await.map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status().as_u16()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.status().is_success() {
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            // Only a request that *carried* a token can be told its session
+            // died. Without one a 401 means "this needs signing in", which is
+            // ordinary on a signed-out tab — and reporting it as a session
+            // ending told somebody who had just opened the app that their
+            // session had expired, over a login form they had not used yet.
+            if token.is_some() {
+                *SESSION_INVALID.write() = true;
+                return Err(SESSION_INVALID_MESSAGE.to_string());
+            }
+            return Err(NOT_SIGNED_IN_MESSAGE.to_string());
+        }
+        let status = response.status().as_u16();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| "Request failed".to_string());
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    response.json::<R>().await.map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_json<R>(url: &str) -> Result<R, String>
+where
+    R: serde::de::DeserializeOwned,
+{
+    get_json_auth(url, None).await
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn get_json_auth<R>(url: &str, token: Option<&str>) -> Result<R, String>
+where
+    R: serde::de::DeserializeOwned,
+{
+    let mut builder = Request::get(url);
+    if let Some(token) = token {
+        builder = builder.header("Authorization", &format!("Bearer {token}"));
+    }
+    let response = builder.send().await.map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.ok() {
+        if response.status() == 401 {
+            // Only a request that *carried* a token can be told its session
+            // died. Without one a 401 means "this needs signing in", which is
+            // ordinary on a signed-out tab — and reporting it as a session
+            // ending told somebody who had just opened the app that their
+            // session had expired, over a login form they had not used yet.
+            if token.is_some() {
+                *SESSION_INVALID.write() = true;
+                return Err(SESSION_INVALID_MESSAGE.to_string());
+            }
+            return Err(NOT_SIGNED_IN_MESSAGE.to_string());
+        }
+        let status = response.status();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| format!("HTTP {status}"));
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    response
+        .json::<R>()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Plain-text GET — for the dictionary word list (`get_json` assumes a
+/// JSON body, which this isn't). Only the wasm build calls this: the
+/// native dictionary is compiled in, so `load_client_dictionary`'s native
+/// path never needs to fetch anything.
+///
+/// Takes a token because `/dictionaries/{name}` requires sign-in — see the
+/// handler's own note for why that endpoint isn't public.
+#[cfg(target_arch = "wasm32")]
+async fn get_text(url: &str, token: Option<&str>) -> Result<String, String> {
+    let mut request = Request::get(url);
+    if let Some(token) = token {
+        request = request.header("Authorization", &format!("Bearer {token}"));
+    }
+    let response = request.send().await.map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.ok() {
+        return Err(format!(
+            "HTTP {} {}",
+            response.status(),
+            response.status_text()
+        ));
+    }
+    response.text().await.map_err(|error| error.to_string())
+}
+
+/// The dictionary the live move preview validates against, for the given
+/// `VariantRules.language` (e.g. "sowpods", "enable2k"). Native builds
+/// (server and desktop) already have every known dictionary compiled in —
+/// nothing to fetch. The wasm/web build deliberately doesn't embed any of
+/// them (see `rules_shared::dictionary`'s doc comments), so this is a real
+/// network round-trip there, resolving to `None` if it fails or the
+/// language is unrecognized (the preview just stays absent, same as while
+/// nothing's staged yet — never a hard error).
+#[cfg(not(target_arch = "wasm32"))]
+async fn load_client_dictionary(
+    _server_url: &str,
+    language: &str,
+    _token: Option<String>,
+) -> Option<&'static rules_shared::TieredDictionary> {
+    rules_shared::dictionary_by_name(language)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn load_client_dictionary(
+    server_url: &str,
+    language: &str,
+    token: Option<String>,
+) -> Option<&'static rules_shared::TieredDictionary> {
+    let text = get_text(
+        &format!("{server_url}/dictionaries/{language}"),
+        token.as_deref(),
+    )
+    .await
+    .ok()?;
+    // The fetched text is dropped once the structure is built — it copies
+    // what it needs into its own arena. The previous implementation leaked
+    // the whole ~2.7MB string as well, which mattered on a page load.
+    let alphabet = rules_shared::alphabet_by_name(language)?;
+    Some(Box::leak(Box::new(
+        rules_shared::TieredDictionary::from_word_list(&text, &alphabet),
+    )))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn post_json_impl<T, R>(url: &str, token: Option<&str>, payload: &T) -> Result<R, String>
+where
+    T: serde::Serialize + ?Sized,
+    R: serde::de::DeserializeOwned,
+{
+    let mut request = reqwest::Client::new().post(url).json(payload);
+    if let Some(token) = token {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request.send().await.map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status().as_u16()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| "Request failed".to_string());
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    response.json::<R>().await.map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn post_json_impl<T, R>(url: &str, token: Option<&str>, payload: &T) -> Result<R, String>
+where
+    T: serde::Serialize + ?Sized,
+    R: serde::de::DeserializeOwned,
+{
+    let mut builder = Request::post(url);
+    if let Some(token) = token {
+        builder = builder.header("Authorization", &format!("Bearer {token}"));
+    }
+    let response = builder
+        .json(payload)
+        .map_err(|error| error.to_string())?
+        .send()
+        .await
+        .map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.ok() {
+        let status = response.status();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| format!("HTTP {status}"));
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    response
+        .json::<R>()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn post_no_content_impl<T>(url: &str, token: Option<&str>, payload: &T) -> Result<(), String>
+where
+    T: serde::Serialize + ?Sized,
+{
+    let mut request = reqwest::Client::new().post(url).json(payload);
+    if let Some(token) = token {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request.send().await.map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status().as_u16()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| "Request failed".to_string());
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn post_no_content_impl<T>(url: &str, token: Option<&str>, payload: &T) -> Result<(), String>
+where
+    T: serde::Serialize + ?Sized,
+{
+    let mut builder = Request::post(url);
+    if let Some(token) = token {
+        builder = builder.header("Authorization", &format!("Bearer {token}"));
+    }
+    let response = builder
+        .json(payload)
+        .map_err(|error| error.to_string())?
+        .send()
+        .await
+        .map_err(|_| mark_offline())?;
+    if backend_is_unreachable(response.status()) {
+        return Err(mark_offline());
+    }
+    mark_online();
+    if !response.ok() {
+        let status = response.status();
+        let retry_after = ResponseHeaders {
+            retry_after: header_string(response.headers(), "retry-after"),
+            build_id: header_string(response.headers(), "x-build-id"),
+        }
+        .handle();
+        let msg = response
+            .json::<api::ApiError>()
+            .await
+            .map(|e| e.message)
+            .unwrap_or_else(|_| format!("HTTP {status}"));
+        let msg = refusal_message(status, retry_after, msg);
+        return Err(msg);
+    }
+    Ok(())
+}
+
+async fn subscribe_to_game_events(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+    game_signal: Signal<Option<GameStateDto>>,
+    websocket_game_id: Signal<Option<String>>,
+) -> Result<(), String> {
+    subscribe_to_game_events_impl(server_url, game_id, token, game_signal, websocket_game_id).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn subscribe_to_game_events_impl(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+    game_signal: Signal<Option<GameStateDto>>,
+    websocket_game_id: Signal<Option<String>>,
+) -> Result<(), String> {
+    let ws_url = websocket_url(server_url, game_id, token)?;
+    let (stream, _) = connect_async(ws_url).await.map_err(|_| mark_offline())?;
+    mark_online();
+    let (_, mut read) = stream.split();
+
+    while let Some(message) = read.next().await {
+        // The player may have switched to a different game while this
+        // connection was awaiting its next message. Stop applying updates
+        // (and drop `read`, closing the socket) rather than clobbering the
+        // now-selected game's state with this abandoned game's events.
+        if websocket_game_id.peek().as_deref() != Some(game_id) {
+            break;
+        }
+        let message = message.map_err(|_| mark_offline())?;
+        let text = match message.to_text() {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
+        let event =
+            serde_json::from_str::<GameEventDto>(text).map_err(|error| error.to_string())?;
+        let updated = match event {
+            GameEventDto::StateUpdated { game }
+            | GameEventDto::GameStarted { game }
+            | GameEventDto::GameFinished { game } => game,
+        };
+        if updated.id == game_id {
+            apply_game_update(game_signal, updated);
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn subscribe_to_game_events_impl(
+    server_url: &str,
+    game_id: &str,
+    token: Option<&str>,
+    game_signal: Signal<Option<GameStateDto>>,
+    websocket_game_id: Signal<Option<String>>,
+) -> Result<(), String> {
+    let ws_url = websocket_url(server_url, game_id, token)?;
+    let mut read = WebSocket::open(&ws_url).map_err(|_| mark_offline())?;
+    mark_online();
+
+    while let Some(message) = read.next().await {
+        // See the native impl's comment: without this check, a connection
+        // left over from a game the player has since navigated away from
+        // keeps delivering events that would otherwise overwrite the
+        // currently-selected game's state.
+        if websocket_game_id.peek().as_deref() != Some(game_id) {
+            break;
+        }
+        let message = message.map_err(|_| mark_offline())?;
+        let text = match message {
+            WsMessage::Text(text) => text,
+            WsMessage::Bytes(_) => continue,
+        };
+        let event =
+            serde_json::from_str::<GameEventDto>(&text).map_err(|error| error.to_string())?;
+        let updated = match event {
+            GameEventDto::StateUpdated { game }
+            | GameEventDto::GameStarted { game }
+            | GameEventDto::GameFinished { game } => game,
+        };
+        if updated.id == game_id {
+            apply_game_update(game_signal, updated);
+        }
+    }
+
+    Ok(())
+}
+
+/// `token` travels as a query parameter, not the `Authorization` header
+/// every other request uses — browsers' native `WebSocket` API can't set
+/// custom headers on the handshake. Session tokens are plain UUIDs (hex
+/// digits and hyphens only), so no percent-encoding is needed here.
+fn websocket_url(server_url: &str, game_id: &str, token: Option<&str>) -> Result<String, String> {
+    if let Some(url) = server_url.strip_prefix("http://") {
+        return Ok(with_token_query(
+            format!("ws://{url}/games/{game_id}/events"),
+            token,
+        ));
+    }
+    if let Some(url) = server_url.strip_prefix("https://") {
+        return Ok(with_token_query(
+            format!("wss://{url}/games/{game_id}/events"),
+            token,
+        ));
+    }
+    // An empty `server_url` means "same origin as the page" (see
+    // `default_server_url` — used when a reverse proxy serves both the
+    // static assets and the API from one host, e.g. the container
+    // deployment). There's no explicit scheme/host to rewrite in that case,
+    // so it's derived from the browser's own location instead.
+    if server_url.is_empty() {
+        return same_origin_websocket_url(game_id, token);
+    }
+    Err(format!("Unsupported server url: {server_url}"))
+}
+
+fn with_token_query(url: String, token: Option<&str>) -> String {
+    match token {
+        Some(token) => format!("{url}?token={token}"),
+        None => url,
+    }
+}
+
+/// The app has no router (see `crates/ui/src/views/reset_password.rs`'s doc
+/// comment for why) — this is the one place a URL path/query is read to
+/// decide what to render. Only meaningful on web: a password-reset link is
+/// always clicked from an email client into a browser, never opened by the
+/// desktop build, which has no URL bar to land a deep link on.
+#[cfg(target_arch = "wasm32")]
+fn reset_password_token_from_url() -> Option<String> {
+    let location = web_sys::window()?.location();
+    if location.pathname().ok()?.trim_end_matches('/') != "/reset-password" {
+        return None;
+    }
+    let search = location.search().ok()?;
+    // Tokens are plain UUIDs (hex digits and hyphens only), so there's
+    // nothing here that could need percent-decoding — a plain split is
+    // enough without pulling in a URL-encoding crate for this one call site.
+    search.strip_prefix('?')?.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        (key == "token" && !value.is_empty()).then(|| value.to_string())
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn reset_password_token_from_url() -> Option<String> {
+    None
+}
+
+/// Same pattern as `reset_password_token_from_url` — an emailed
+/// `SeatClaim::Email` join link (`/invite?id=...`) is the other place this
+/// app reads a URL, always clicked from an email client, never opened by
+/// the desktop build.
+#[cfg(target_arch = "wasm32")]
+fn invite_id_from_url() -> Option<String> {
+    let location = web_sys::window()?.location();
+    if location.pathname().ok()?.trim_end_matches('/') != "/invite" {
+        return None;
+    }
+    let search = location.search().ok()?;
+    search.strip_prefix('?')?.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        (key == "id" && !value.is_empty()).then(|| value.to_string())
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn invite_id_from_url() -> Option<String> {
+    None
+}
+
+/// Clears `/invite?id=...` back to `/` once the invitation's been handled
+/// (accepted or dismissed) — so reloading or navigating back doesn't
+/// re-trigger the confirmation flow for an invitation that's already been
+/// dealt with. A no-op if the app never had a URL to read from in the first
+/// place (native, or web with nothing to strip).
+#[cfg(target_arch = "wasm32")]
+fn strip_invite_from_url() {
+    if let Some(history) = web_sys::window().and_then(|window| window.history().ok()) {
+        let _ =
+            history.replace_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some("/"));
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn strip_invite_from_url() {}
+
+#[cfg(target_arch = "wasm32")]
+fn same_origin_websocket_url(game_id: &str, token: Option<&str>) -> Result<String, String> {
+    let location = web_sys::window()
+        .ok_or_else(|| "No browser window available".to_string())?
+        .location();
+    let protocol = location
+        .protocol()
+        .map_err(|_| "Could not read page protocol".to_string())?;
+    let host = location
+        .host()
+        .map_err(|_| "Could not read page host".to_string())?;
+    let ws_scheme = if protocol == "https:" { "wss" } else { "ws" };
+    Ok(with_token_query(
+        format!("{ws_scheme}://{host}/games/{game_id}/events"),
+        token,
+    ))
+}
+
+/// The desktop build never runs with a same-origin (empty) `server_url` — it
+/// always talks to an explicit configured server — so this is unreachable
+/// in practice; it exists only so `websocket_url` compiles for both targets.
+#[cfg(not(target_arch = "wasm32"))]
+fn same_origin_websocket_url(_game_id: &str, _token: Option<&str>) -> Result<String, String> {
+    Err("Same-origin server URLs are only supported on the web build".to_string())
+}
+
+fn build_manual_move_request(
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    direction_hint: DirectionDto,
+) -> Result<GameActionRequest, String> {
+    if game.status != GameStatus::Active {
+        return Err("Game is not active".to_string());
+    }
+    if staged.is_empty() {
+        return Err("No staged placements to submit.".to_string());
+    }
+
+    let mut placements = staged.to_vec();
+    placements.sort_by_key(|placement| placement.board_index);
+
+    let positions: Vec<(u8, u8)> = placements
+        .iter()
+        .map(|p| {
+            (
+                (p.board_index % BOARD_WIDTH) as u8,
+                (p.board_index / BOARD_WIDTH) as u8,
+            )
+        })
+        .collect();
+
+    let same_row = positions.iter().all(|(_, y)| *y == positions[0].1);
+    let same_column = positions.iter().all(|(x, _)| *x == positions[0].0);
+
+    let direction = if placements.len() == 1 {
+        infer_single_tile_direction(game, placements[0].board_index, direction_hint)
+    } else if same_row {
+        DirectionDto::Horizontal
+    } else if same_column {
+        DirectionDto::Vertical
+    } else {
+        return Err("Staged placements must be in a single row or single column.".to_string());
+    };
+
+    let (start_x, start_y) = match direction {
+        DirectionDto::Horizontal => {
+            let min_x = positions.iter().map(|(x, _)| *x).min().unwrap_or(0);
+            (min_x, positions[0].1)
+        }
+        DirectionDto::Vertical => {
+            let min_y = positions.iter().map(|(_, y)| *y).min().unwrap_or(0);
+            (positions[0].0, min_y)
+        }
+    };
+
+    let mut tile_placements = placements
+        .into_iter()
+        .map(|p| {
+            let x = (p.board_index % BOARD_WIDTH) as u8;
+            let y = (p.board_index / BOARD_WIDTH) as u8;
+            let offset = match direction {
+                DirectionDto::Horizontal => x - start_x,
+                DirectionDto::Vertical => y - start_y,
+            };
+            TilePlacementDto {
+                offset,
+                tile: p.tile,
+            }
+        })
+        .collect::<Vec<_>>();
+    tile_placements.sort_by_key(|p| p.offset);
+
+    Ok(GameActionRequest {
+        seat_number: game.current_seat,
+        action: api::PlayerActionDto::Place {
+            candidate: MoveCandidateDto {
+                start: PositionDto {
+                    x: start_x,
+                    y: start_y,
+                },
+                direction,
+                tiles: tile_placements,
+            },
+        },
+    })
+}
+
+/// Runs the same validation/scoring the server would for this candidate —
+/// entirely locally, via `rules-shared` (the crate the server's own move
+/// handling is built on) — so the live preview is instant and needs no
+/// network round-trip. The server still gets the final say when the move
+/// is actually submitted (`submit_manual_move`); this is purely a
+/// responsiveness optimization for the composer, not a trust boundary.
+fn compute_client_preview(
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    direction_hint: DirectionDto,
+    dictionary: &rules_shared::TieredDictionary,
+) -> Option<MovePreviewView> {
+    let request = match build_manual_move_request(game, staged, direction_hint) {
+        Ok(r) => r,
+        Err(detail) => {
+            return Some(MovePreviewView {
+                is_legal: false,
+                headline: "Cannot preview this arrangement".to_string(),
+                detail,
+                score: None,
+            });
+        }
+    };
+    let candidate_dto = match request.action {
+        api::PlayerActionDto::Place { candidate } => candidate,
+        _ => return None,
+    };
+
+    // `language`/`board_layout` are vestigial display fields derived from
+    // `variant` server-side (see `VariantRules` — an edition bundles all
+    // three under one name), so `variant` alone determines which ruleset
+    // this game actually uses. Falls back to no preview (rather than a
+    // wrong one) for an edition this client doesn't recognize.
+    let rules = rules_shared::VariantRules::by_name_including_retired(&game.variant)?;
+    let board_state = crate::client_rules::to_rules_board_state(&game.board, &rules.alphabet);
+    let state = rules_shared::GameState::from_board(board_state, &rules, dictionary);
+    let rack = game
+        .racks
+        .get(request.seat_number as usize)
+        .map(crate::client_rules::to_rules_rack);
+    let candidate = crate::client_rules::to_rules_candidate(&candidate_dto, &rules.alphabet);
+
+    let engine = rules_shared::RulesEngine {
+        rules: &rules,
+        dictionary,
+    };
+
+    match engine.validate_game_move(&state, rack.as_ref(), &candidate) {
+        Ok(validated) => Some(MovePreviewView {
+            is_legal: true,
+            headline: format!(
+                "{} for {} points",
+                validated.preview.main_word, validated.score.total
+            ),
+            detail: if validated.preview.cross_words.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "Cross words: {}",
+                    validated
+                        .preview
+                        .cross_words
+                        .iter()
+                        .map(|w| w.word.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            },
+            score: Some(validated.score.total),
+        }),
+        Err(error) => Some(MovePreviewView {
+            is_legal: false,
+            headline: rules_shared::format_move_error(&error),
+            detail: String::new(),
+            score: None,
+        }),
+    }
+}
+
+fn infer_single_tile_direction(
+    game: &GameStateDto,
+    board_index: usize,
+    direction_hint: DirectionDto,
+) -> DirectionDto {
+    let x = board_index % BOARD_WIDTH;
+    let y = board_index / BOARD_WIDTH;
+
+    let has_horizontal_neighbor = (x > 0
+        && game
+            .board
+            .get(board_index - 1)
+            .is_some_and(board_cell_has_letter))
+        || (x + 1 < BOARD_WIDTH
+            && game
+                .board
+                .get(board_index + 1)
+                .is_some_and(board_cell_has_letter));
+    let has_vertical_neighbor = (y > 0
+        && game
+            .board
+            .get(board_index - BOARD_WIDTH)
+            .is_some_and(board_cell_has_letter))
+        || (y + 1 < BOARD_HEIGHT
+            && game
+                .board
+                .get(board_index + BOARD_WIDTH)
+                .is_some_and(board_cell_has_letter));
+
+    match (has_horizontal_neighbor, has_vertical_neighbor) {
+        (true, false) => DirectionDto::Horizontal,
+        (false, true) => DirectionDto::Vertical,
+        _ => direction_hint,
+    }
+}
+
+fn board_cell_has_letter(cell: &BoardCellDto) -> bool {
+    cell.letter.is_some()
+}
+
+/// The direction this turn's staged placements would submit in — same
+/// logic `build_manual_move_request` uses, exposed standalone so the
+/// click/keyboard composer can auto-advance in the direction the move will
+/// actually be read in, not always horizontally.
+///
+/// With exactly one staged tile the direction is inherently ambiguous, so
+/// two extra (purely-current-state) signals get a say, in priority order:
+/// `selected_cell`, when it's aligned with the staged tile on one axis, is
+/// the strongest signal — it's the player explicitly clicking elsewhere to
+/// point out which way the word should run. Failing that, `direction_override`
+/// (set by the space-bar/button toggle) wins. Only once both are silent does
+/// this fall back to the permanent-neighbor-based guess.
+fn infer_typing_direction(
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    selected_cell: Option<usize>,
+    direction_override: Option<DirectionDto>,
+) -> DirectionDto {
+    match staged.len() {
+        0 => DirectionDto::Horizontal,
+        1 => {
+            let anchor = staged[0].board_index;
+            if let Some(selected) = selected_cell
+                && let Some(direction) = aligned_direction(anchor, selected)
+            {
+                return direction;
+            }
+            infer_single_tile_direction(
+                game,
+                anchor,
+                direction_override.unwrap_or(DirectionDto::Horizontal),
+            )
+        }
+        _ => {
+            let positions: Vec<(usize, usize)> = staged
+                .iter()
+                .map(|p| (p.board_index % BOARD_WIDTH, p.board_index / BOARD_WIDTH))
+                .collect();
+            let same_row = positions.iter().all(|(_, y)| *y == positions[0].1);
+            if same_row {
+                DirectionDto::Horizontal
+            } else {
+                DirectionDto::Vertical
+            }
+        }
+    }
+}
+
+/// If `other` shares exactly one axis with `anchor` (same row, different
+/// column, or same column, different row), returns the direction that
+/// alignment implies. `None` if they're the same cell or share neither axis
+/// (diagonal) — genuinely ambiguous, not this function's call to make.
+fn aligned_direction(anchor: usize, other: usize) -> Option<DirectionDto> {
+    if anchor == other {
+        return None;
+    }
+    let (ax, ay) = (anchor % BOARD_WIDTH, anchor / BOARD_WIDTH);
+    let (ox, oy) = (other % BOARD_WIDTH, other / BOARD_WIDTH);
+    match (ax == ox, ay == oy) {
+        (false, true) => Some(DirectionDto::Horizontal),
+        (true, false) => Some(DirectionDto::Vertical),
+        _ => None,
+    }
+}
+
+/// Steps one cell from `index` in `direction`; `forward` picks which way
+/// along that axis. Returns `None` at the board edge.
+fn step_index(index: usize, direction: DirectionDto, forward: bool) -> Option<usize> {
+    let x = index % BOARD_WIDTH;
+    let y = index / BOARD_WIDTH;
+    match (direction, forward) {
+        (DirectionDto::Horizontal, true) => (x + 1 < BOARD_WIDTH).then(|| index + 1),
+        (DirectionDto::Horizontal, false) => (x > 0).then(|| index - 1),
+        (DirectionDto::Vertical, true) => (y + 1 < BOARD_HEIGHT).then(|| index + BOARD_WIDTH),
+        (DirectionDto::Vertical, false) => (y > 0).then(|| index - BOARD_WIDTH),
+    }
+}
+
+/// Walks from `from_index` in `direction`, skipping over cells that are
+/// already occupied (a permanently-played letter, or a tile staged earlier
+/// this turn), and returns the first free one. Used to auto-advance to the
+/// next slot when typing a word — skipping past a tile just staged is
+/// correct going forward, since typing shouldn't double back onto what it
+/// just placed.
+fn find_next_placeable_cell(
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    from_index: usize,
+    direction: DirectionDto,
+    forward: bool,
+) -> Option<usize> {
+    let mut current = from_index;
+    loop {
+        current = step_index(current, direction, forward)?;
+        let is_permanent = game.board.get(current).is_some_and(board_cell_has_letter);
+        let is_staged = staged.iter().any(|p| p.board_index == current);
+        if !is_permanent && !is_staged {
+            return Some(current);
+        }
+    }
+}
+
+/// Like `step_index`, but wraps around to the other side of the row/column
+/// instead of stopping at the board edge.
+fn step_index_wrapping(index: usize, direction: DirectionDto, forward: bool) -> usize {
+    let x = index % BOARD_WIDTH;
+    let y = index / BOARD_WIDTH;
+    match (direction, forward) {
+        (DirectionDto::Horizontal, true) => y * BOARD_WIDTH + (x + 1) % BOARD_WIDTH,
+        (DirectionDto::Horizontal, false) => y * BOARD_WIDTH + (x + BOARD_WIDTH - 1) % BOARD_WIDTH,
+        (DirectionDto::Vertical, true) => ((y + 1) % BOARD_HEIGHT) * BOARD_WIDTH + x,
+        (DirectionDto::Vertical, false) => {
+            ((y + BOARD_HEIGHT - 1) % BOARD_HEIGHT) * BOARD_WIDTH + x
+        }
+    }
+}
+
+/// Arrow-key navigation's counterpart to `find_next_placeable_cell`: wraps
+/// around the edge of the row/column instead of stopping there, since
+/// moving the cursor by hand should cycle rather than get stuck — unlike
+/// advancing through a word being typed, which should stop at the edge
+/// (see `find_next_placeable_cell`'s own doc comment). Still skips over
+/// occupied cells the same way, and is bounded to one full lap of the
+/// row/column, so a completely full line returns `None` (meaning: don't
+/// move) instead of spinning forever.
+fn find_next_placeable_cell_wrapping(
+    game: &GameStateDto,
+    staged: &[StagedPlacementView],
+    from_index: usize,
+    direction: DirectionDto,
+    forward: bool,
+) -> Option<usize> {
+    let line_length = match direction {
+        DirectionDto::Horizontal => BOARD_WIDTH,
+        DirectionDto::Vertical => BOARD_HEIGHT,
+    };
+    let mut current = from_index;
+    for _ in 0..line_length.saturating_sub(1) {
+        current = step_index_wrapping(current, direction, forward);
+        let is_permanent = game.board.get(current).is_some_and(board_cell_has_letter);
+        let is_staged = staged.iter().any(|p| p.board_index == current);
+        if !is_permanent && !is_staged {
+            return Some(current);
+        }
+    }
+    None
+}
+
+/// Walks backward from `from_index`, skipping only permanently-played
+/// letters (not staged ones — unlike `find_next_placeable_cell`), and
+/// returns the first cell that isn't a permanent letter. That's the cell
+/// backspace should act on: either a staged tile to remove, or — if nothing
+/// has been typed there yet — the next empty slot to land the cursor on.
+/// Landing *on* the previous staged tile (rather than skipping past it) is
+/// what makes backspace delete exactly one tile per press.
+fn find_previous_editable_cell(
+    game: &GameStateDto,
+    from_index: usize,
+    direction: DirectionDto,
+) -> Option<usize> {
+    let mut current = from_index;
+    loop {
+        current = step_index(current, direction, false)?;
+        let is_permanent = game.board.get(current).is_some_and(board_cell_has_letter);
+        if !is_permanent {
+            return Some(current);
+        }
+    }
+}
+
+/// Moves `selected_cell` to the next placeable cell after `from_index`,
+/// following the direction this turn's placements are currently reading
+/// in. Falls back to reselecting `from_index` (the cell just played) at the
+/// edge of the board, rather than clearing the selection or wrapping — so
+/// typing a word that runs off the edge leaves the cursor on the last tile
+/// placed instead of dropping it entirely.
+fn advance_selection(
+    game: &GameStateDto,
+    staged_placements: Signal<Vec<StagedPlacementView>>,
+    mut selected_cell: Signal<Option<usize>>,
+    direction_override: Option<DirectionDto>,
+    from_index: usize,
+) {
+    let staged = staged_placements();
+    let direction = infer_typing_direction(game, &staged, Some(from_index), direction_override);
+    let next = find_next_placeable_cell(game, &staged, from_index, direction, true);
+    selected_cell.set(next.or(Some(from_index)));
+}
+
+/// Flips the effective typing direction (space bar / direction button).
+/// Only meaningful with exactly one staged tile — with zero or two-plus,
+/// direction isn't ambiguous, so this is a no-op. Moves `selected_cell` to
+/// follow the new direction immediately, so the cursor lands where the next
+/// letter would actually go rather than leaving it in the old direction's
+/// slot.
+fn toggle_direction_override(
+    game: &GameStateDto,
+    staged_placements: Signal<Vec<StagedPlacementView>>,
+    mut direction_override: Signal<Option<DirectionDto>>,
+    mut selected_cell: Signal<Option<usize>>,
+) {
+    let staged = staged_placements();
+    if staged.len() != 1 {
+        return;
+    }
+    let anchor = staged[0].board_index;
+    let current = infer_typing_direction(game, &staged, selected_cell(), direction_override());
+    let next = match current {
+        DirectionDto::Horizontal => DirectionDto::Vertical,
+        DirectionDto::Vertical => DirectionDto::Horizontal,
+    };
+    direction_override.set(Some(next));
+    selected_cell.set(find_next_placeable_cell(game, &staged, anchor, next, true));
+}
+
+/// Builds the staged placement for dropping/clicking/typing `tile` onto
+/// `board_index`. `resolved_letter` is `Some` only when a blank is being
+/// auto-assigned a letter because the player typed it directly (keyboard
+/// path) — the mouse path still leaves blanks unresolved for the
+/// blank-letter picker, same as before.
+fn stage_tile_at_cell(
+    board_index: usize,
+    tile: &RackTileView,
+    resolved_letter: Option<String>,
+) -> StagedPlacementView {
+    let (tile_for_board, display_for_board) = match (&tile.tile, resolved_letter) {
+        (TileDto::Blank { .. }, Some(letter)) => {
+            let display = letter.to_lowercase();
+            (
+                TileDto::Blank {
+                    acting_as: Some(letter),
+                },
+                display,
+            )
+        }
+        (TileDto::Blank { .. }, None) => (TileDto::Blank { acting_as: None }, "?".to_string()),
+        (other, _) => (other.clone(), tile.display.clone()),
+    };
+    StagedPlacementView {
+        board_index,
+        rack_tile_id: tile.id,
+        display: display_for_board,
+        tile: tile_for_board,
+    }
+}
+
+/// Resets everything about an in-progress move/exchange composition —
+/// called whenever the game state moves on from under it (a new game
+/// loaded, an action submitted, a turn started).
+fn reset_composer_state(
+    mut dragging_tile_id: Signal<Option<usize>>,
+    mut selected_blank_letter: Signal<Option<String>>,
+    mut staged_placements: Signal<Vec<StagedPlacementView>>,
+    mut selected_cell: Signal<Option<usize>>,
+    mut exchange_mode: Signal<bool>,
+    mut exchange_selected: Signal<HashSet<usize>>,
+    mut direction_override: Signal<Option<DirectionDto>>,
+) {
+    dragging_tile_id.set(None);
+    selected_blank_letter.set(None);
+    staged_placements.set(Vec::new());
+    selected_cell.set(None);
+    exchange_mode.set(false);
+    exchange_selected.set(HashSet::new());
+    direction_override.set(None);
+}
+
+/// True if this seat is either unclaimed (anonymous/open play — anyone may
+/// view or act on it, unchanged from before) or claimed by exactly this
+/// viewer. Mirrors the server's own ownership rule (`submit_action` et al)
+/// client-side, so the UI doesn't show a seat as live only for the server
+/// to reject the attempt after the fact.
+fn seat_is_open_or_owned_by(participant: &ParticipantDto, viewer_player_id: Option<&str>) -> bool {
+    match participant.player_id.as_deref() {
+        None => true,
+        Some(owner) => Some(owner) == viewer_player_id,
+    }
+}
+
+/// The seat whose rack this viewer should see, if any: their own claimed
+/// seat (regardless of whose turn it is), else the current seat if it's
+/// unclaimed, else `None`.
+fn viewer_rack_seat(game: &GameStateDto, viewer_player_id: Option<&str>) -> Option<usize> {
+    if let Some(viewer_player_id) = viewer_player_id
+        && let Some(owned) = game
+            .participants
+            .iter()
+            .find(|participant| participant.player_id.as_deref() == Some(viewer_player_id))
+    {
+        return Some(owned.seat_number as usize);
+    }
+    let current = game.participants.get(game.current_seat as usize)?;
+    if current.player_id.is_none() {
+        Some(game.current_seat as usize)
+    } else {
+        None
+    }
+}
+
+fn current_rack_tiles(game: &GameStateDto, staged: &[StagedPlacementView]) -> Vec<RackTileView> {
+    rack_tiles_for_seat(game, Some(game.current_seat as usize), staged)
+}
+
+fn rack_tiles_for_seat(
+    game: &GameStateDto,
+    seat_index: Option<usize>,
+    staged: &[StagedPlacementView],
+) -> Vec<RackTileView> {
+    let Some(seat_index) = seat_index else {
+        return Vec::new();
+    };
+    let Some(rack) = game.racks.get(seat_index) else {
+        return Vec::new();
+    };
+
+    let rules = rules_shared::VariantRules::by_name_including_retired(&game.variant)
+        .unwrap_or_else(rules_shared::VariantRules::official);
+    let used_ids: std::collections::HashSet<usize> = staged
+        .iter()
+        .map(|placement| placement.rack_tile_id)
+        .collect();
+    let mut next_id = 0usize;
+    let mut tiles = Vec::new();
+
+    for (index, count) in rack.counts.iter().enumerate() {
+        let Some(grapheme) = rules
+            .alphabet
+            .to_grapheme(rules_shared::Letter::from(index as u8))
+        else {
+            continue;
+        };
+        let letter_text = grapheme.to_string();
+        for _ in 0..*count {
+            tiles.push(RackTileView {
+                id: next_id,
+                display: letter_text.clone(),
+                tile: TileDto::Letter {
+                    letter: letter_text.clone(),
+                },
+                is_used: used_ids.contains(&next_id),
+            });
+            next_id += 1;
+        }
+    }
+
+    for _ in 0..rack.blanks {
+        tiles.push(RackTileView {
+            id: next_id,
+            display: "*".to_string(),
+            tile: TileDto::Blank { acting_as: None },
+            is_used: used_ids.contains(&next_id),
+        });
+        next_id += 1;
+    }
+
+    tiles
+}
+
+/// Reorders already-computed rack tiles for display — `rack_tiles_for_seat`
+/// always returns them in a fixed alphabetical order, so the visual
+/// shuffle lives entirely in which permutation gets applied on top of it.
+/// Out-of-range indices (shouldn't happen; `order` is reset to identity
+/// whenever the tile count changes) are silently dropped rather than
+/// panicking.
+fn apply_rack_order(tiles: &[RackTileView], order: &[usize]) -> Vec<RackTileView> {
+    order
+        .iter()
+        .filter_map(|&i| tiles.get(i).cloned())
+        .collect()
+}
+
+/// Moves `dragged_id` to sit where `target_id` currently is (dragging a
+/// rack tile onto another one to reorder the rack), shifting everything
+/// between them over by one. A no-op (returns `order` unchanged) if either
+/// id isn't present or they're the same tile.
+fn reorder_rack_order(order: &[usize], dragged_id: usize, target_id: usize) -> Vec<usize> {
+    if dragged_id == target_id {
+        return order.to_vec();
+    }
+    let (Some(from), Some(to)) = (
+        order.iter().position(|&id| id == dragged_id),
+        order.iter().position(|&id| id == target_id),
+    ) else {
+        return order.to_vec();
+    };
+    let mut new_order = order.to_vec();
+    new_order.remove(from);
+    let insert_at = if from < to { to - 1 } else { to };
+    new_order.insert(insert_at, dragged_id);
+    new_order
+}
+
+#[cfg(target_arch = "wasm32")]
+fn random_index_below(bound: usize) -> usize {
+    (js_sys::Math::random() * bound as f64) as usize
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn random_index_below(bound: usize) -> usize {
+    use rand::Rng;
+    rand::thread_rng().gen_range(0..bound)
+}
+
+/// Fisher–Yates, in place.
+fn shuffle_order(order: &mut [usize]) {
+    for i in (1..order.len()).rev() {
+        let j = random_index_below(i + 1);
+        order.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A different build on the server is what triggers the update check. This
+    /// is the whole of that decision, and the interesting half is when it says
+    /// **no**.
+    ///
+    /// A tab that had been idle across a deploy used to never notice at all:
+    /// the check hung off offline-recovery, so it needed the client to have
+    /// lost the server and got it back. A tab holding no connection never does.
+    #[test]
+    fn a_different_server_build_is_noticed() {
+        assert!(
+            build_differs(Some("b2d4e10"), Some("a1c9f02")),
+            "a server running different code is the case this exists for"
+        );
+        assert!(
+            !build_differs(Some("a1c9f02"), Some("a1c9f02")),
+            "the same build is not a reason to reload"
+        );
+    }
+
+    /// Not knowing is never a change.
+    ///
+    /// A server with no build id sets no header; a client with no build id has
+    /// nothing to compare. Either way the honest answer is "cannot tell", and
+    /// it must not be reported as a difference — a build that answered "yes" to
+    /// an unknown would reload on every response, forever, which is a worse
+    /// failure than the staleness this fixes.
+    #[test]
+    fn an_unknown_build_is_never_treated_as_a_change() {
+        assert!(!build_differs(None, Some("a1c9f02")), "server said nothing");
+        assert!(!build_differs(Some("a1c9f02"), None), "we have no id");
+        assert!(!build_differs(None, None), "neither end knows");
+        assert!(
+            !build_differs(Some(""), Some("a1c9f02")),
+            "empty is not an id"
+        );
+        assert!(!build_differs(Some("a1c9f02"), Some("")), "nor is ours");
+    }
+
+    /// A tab left open across a deploy used to stick on `HTTP 502` and never
+    /// retry. `web` (Caddy) and `server` are separate containers, so while
+    /// the server restarts Caddy answers with 502 — a real response, which
+    /// the client counted as proof the server was up. `IS_ONLINE` stayed
+    /// true, and the reconnect loop only runs while it is false.
+    #[test]
+    fn the_gateway_family_means_the_server_is_down_not_the_request_wrong() {
+        for status in [502, 503, 504] {
+            assert!(
+                backend_is_unreachable(status),
+                "{status} is the proxy saying it cannot reach the app server, \
+                 so the client should go offline and start retrying"
+            );
+        }
+    }
+
+    /// The other side of the line, which matters just as much: these come
+    /// *from* the server, so it is up. Treating them as unreachable would
+    /// drop a working session into the reconnect loop over one bad request.
+    #[test]
+    fn other_failures_do_not_mean_the_server_is_down() {
+        for status in [200, 400, 401, 403, 404, 409, 422, 500] {
+            assert!(
+                !backend_is_unreachable(status),
+                "{status} is the server itself answering — it is reachable"
+            );
+        }
+    }
+
+    fn sample_tile(id: usize, letter: char) -> RackTileView {
+        RackTileView {
+            id,
+            display: letter.to_string(),
+            tile: TileDto::Letter {
+                letter: letter.to_string(),
+            },
+            is_used: false,
+        }
+    }
+
+    #[test]
+    fn served_version_accepts_a_bundle_hash() {
+        assert_eq!(
+            parse_served_version("a1b2c3d4e5f60789"),
+            Some("a1b2c3d4e5f60789".to_string())
+        );
+    }
+
+    #[test]
+    fn served_version_trims_whitespace() {
+        assert_eq!(
+            parse_served_version("  a1b2c3d4e5f60789\n"),
+            Some("a1b2c3d4e5f60789".to_string())
+        );
+    }
+
+    /// The id identifies the bundle by content, so a release version is no
+    /// longer what lives here — and must not be accepted, or a tab that
+    /// somehow met an old-format file would treat it as a real id and
+    /// reload against unchanged code.
+    #[test]
+    fn served_version_rejects_the_old_release_version_format() {
+        assert_eq!(parse_served_version("0.4.10"), None);
+        assert_eq!(parse_served_version("0.4.10+a1c9f02"), None);
+    }
+
+    /// The one that matters: Caddy's SPA fallback answers a missing
+    /// /version.txt with index.html and a 200, and treating that as a
+    /// version would put the update watcher into a reload loop.
+    #[test]
+    fn served_version_rejects_an_html_spa_fallback() {
+        assert_eq!(
+            parse_served_version("<!DOCTYPE html>\n<html><head><title>Tile Lite Elite</title>"),
+            None
+        );
+    }
+
+    #[test]
+    fn served_version_rejects_empty_or_whitespace_only_bodies() {
+        assert_eq!(parse_served_version(""), None);
+        assert_eq!(parse_served_version("   \n  "), None);
+    }
+
+    #[test]
+    fn served_version_rejects_anything_that_is_not_plain_hex() {
+        assert_eq!(parse_served_version("v0.4.10"), None);
+        assert_eq!(parse_served_version("not a version"), None);
+        // Hex-ish but with separators, which the hash never has.
+        assert_eq!(parse_served_version("a1b2-c3d4-e5f6"), None);
+    }
+
+    #[test]
+    fn served_version_rejects_implausible_lengths() {
+        assert_eq!(parse_served_version(&"a".repeat(65)), None);
+        // Too short to be a digest — likelier a truncated read than an id.
+        assert_eq!(parse_served_version("abc"), None);
+    }
+
+    /// The length actually produced by the Dockerfile, so the two cannot
+    /// drift into disagreeing about what a valid id looks like.
+    ///
+    /// **Seven characters is the real case.** `version.txt` holds the build id
+    /// — a `git rev-parse --short` commit id — and every one this project has
+    /// ever deployed is seven. The bound used to start at 8, from when the file
+    /// held a 16-character digest, and leaving it there while changing what the
+    /// file contains would have rejected every genuine id: the client would
+    /// read "cannot tell" forever, decline to reload forever, and report
+    /// nothing. A silent no-op is the failure this mechanism exists to remove,
+    /// so it is pinned here rather than left to be noticed in production.
+    #[test]
+    fn served_version_accepts_the_length_the_build_writes() {
+        for id in ["3d821e9", "8a5d71d", "b717733"] {
+            assert_eq!(
+                parse_served_version(id),
+                Some(id.to_string()),
+                "{id} is a real deployed build id and must be readable"
+            );
+        }
+        // The previous format, still valid: nothing needs it, but a bound that
+        // rejected it would mean the check had drifted the other way.
+        assert!(parse_served_version("0123456789abcdef").is_some());
+    }
+
+    #[test]
+    fn apply_rack_order_reorders_tiles_to_match() {
+        let tiles = vec![
+            sample_tile(0, 'A'),
+            sample_tile(1, 'B'),
+            sample_tile(2, 'C'),
+        ];
+        let reordered = apply_rack_order(&tiles, &[2, 0, 1]);
+        let letters: Vec<String> = reordered.iter().map(|t| t.display.clone()).collect();
+        assert_eq!(letters, vec!["C", "A", "B"]);
+    }
+
+    #[test]
+    fn apply_rack_order_drops_out_of_range_indices_defensively() {
+        let tiles = vec![sample_tile(0, 'A'), sample_tile(1, 'B')];
+        let reordered = apply_rack_order(&tiles, &[1, 5, 0]);
+        let letters: Vec<String> = reordered.iter().map(|t| t.display.clone()).collect();
+        assert_eq!(letters, vec!["B", "A"]);
+    }
+
+    #[test]
+    fn reorder_rack_order_moves_a_tile_forward_to_the_target() {
+        // [A,B,C,D], drag A onto C -> A ends up right before C.
+        assert_eq!(reorder_rack_order(&[0, 1, 2, 3], 0, 2), vec![1, 0, 2, 3]);
+    }
+
+    #[test]
+    fn reorder_rack_order_moves_a_tile_backward_to_the_target() {
+        // [A,B,C,D], drag D onto B -> D takes B's slot, B and C shift right.
+        assert_eq!(reorder_rack_order(&[0, 1, 2, 3], 3, 1), vec![0, 3, 1, 2]);
+    }
+
+    #[test]
+    fn reorder_rack_order_dropping_a_tile_on_itself_is_a_no_op() {
+        assert_eq!(reorder_rack_order(&[0, 1, 2], 1, 1), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn reorder_rack_order_ignores_an_unknown_id() {
+        assert_eq!(reorder_rack_order(&[0, 1, 2], 5, 1), vec![0, 1, 2]);
+        assert_eq!(reorder_rack_order(&[0, 1, 2], 0, 5), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn shuffle_order_stays_a_permutation_of_the_same_indices() {
+        let mut order: Vec<usize> = (0..7).collect();
+        shuffle_order(&mut order);
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..7).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn shuffle_order_leaves_a_single_tile_in_place() {
+        let mut order = vec![0];
+        shuffle_order(&mut order);
+        assert_eq!(order, vec![0]);
+    }
+
+    #[test]
+    fn websocket_url_rewrites_http_and_https_schemes() {
+        assert_eq!(
+            websocket_url("http://example.com:3000", "game-1", None),
+            Ok("ws://example.com:3000/games/game-1/events".to_string())
+        );
+        assert_eq!(
+            websocket_url("https://example.com", "game-1", None),
+            Ok("wss://example.com/games/game-1/events".to_string())
+        );
+    }
+
+    #[test]
+    fn websocket_url_appends_a_token_query_parameter_when_present() {
+        assert_eq!(
+            websocket_url("http://example.com:3000", "game-1", Some("tok-123")),
+            Ok("ws://example.com:3000/games/game-1/events?token=tok-123".to_string())
+        );
+    }
+
+    #[test]
+    fn websocket_url_rejects_an_unrecognized_scheme() {
+        assert!(websocket_url("ftp://example.com", "game-1", None).is_err());
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn websocket_url_same_origin_is_only_supported_on_web() {
+        // The desktop/native build never actually passes an empty
+        // server_url (it always talks to an explicit configured server),
+        // so this just confirms the fallback doesn't panic — same-origin
+        // resolution itself is only meaningful in a browser.
+        assert!(websocket_url("", "game-1", None).is_err());
+    }
+
+    #[test]
+    fn matching_version_is_compatible() {
+        let v = api::ApiVersion { major: 1, minor: 2 };
+        assert_eq!(compare_api_version(v, v), VersionCheck::Compatible);
+    }
+
+    /// The placeholder board must be the board games are played on.
+    ///
+    /// It used to be a hardcoded literal of the official layout — triple-word
+    /// in the corners, the classic double-word diagonal — which is precisely
+    /// the layout this project moved away from. When the played board
+    /// changed, the literal did not, and the landing page kept showing the
+    /// old one. Deriving it fixes that; this test stops a literal creeping
+    /// back.
+    #[test]
+    fn placeholder_board_matches_the_real_layout() {
+        let board = empty_board();
+        let expected = rules_shared::VariantRules::official().premiums;
+
+        assert_eq!(board.len(), expected.len(), "board should be 15x15");
+        for (index, cell) in board.iter().enumerate() {
+            assert_eq!(
+                crate::client_rules::to_rules_premium(&cell.premium),
+                expected[index],
+                "premium at index {index} should match the played layout"
+            );
+        }
+    }
+
+    /// The specific thing that was wrong, asserted directly: the corner is
+    /// not a triple-word. Redundant against the test above, and worth having
+    /// because it names the mistake rather than the mechanism.
+    #[test]
+    fn the_corner_is_not_a_triple_word() {
+        let board = empty_board();
+        assert_ne!(
+            board[0].premium,
+            api::PremiumDto::TripleWord,
+            "a triple-word corner is the official layout, which this project does not use"
+        );
+    }
+
+    #[test]
+    fn should_apply_update_drops_stale_keeps_newer_and_always_switches_games() {
+        let mut v5 = empty_live_game();
+        v5.id = "g".to_string();
+        v5.version = 5;
+        let mut v6 = v5.clone();
+        v6.version = 6;
+        let mut v4 = v5.clone();
+        v4.version = 4;
+
+        // Nothing shown yet → anything applies.
+        assert!(should_apply_update(None, &v5));
+        // Strictly newer version of the same game → apply.
+        assert!(should_apply_update(Some(&v5), &v6));
+        // Same version (a duplicate/echo) → drop.
+        assert!(!should_apply_update(Some(&v5), &v5));
+        // Older version (a late/out-of-order arrival) → drop.
+        assert!(!should_apply_update(Some(&v5), &v4));
+        // A different game id always applies, even at a lower version
+        // (switching games, not a stale update of the current one).
+        let mut other = v4.clone();
+        other.id = "other".to_string();
+        assert!(should_apply_update(Some(&v5), &other));
+    }
+
+    #[test]
+    fn differing_major_is_a_hard_mismatch() {
+        let server = api::ApiVersion { major: 2, minor: 0 };
+        let client = api::ApiVersion { major: 1, minor: 0 };
+        assert_eq!(
+            compare_api_version(server, client),
+            VersionCheck::MajorMismatch { server, client }
+        );
+    }
+
+    #[test]
+    fn differing_minor_with_matching_major_is_a_soft_mismatch() {
+        let server = api::ApiVersion { major: 1, minor: 3 };
+        let client = api::ApiVersion { major: 1, minor: 1 };
+        assert_eq!(
+            compare_api_version(server, client),
+            VersionCheck::MinorMismatch { server, client }
+        );
+    }
+
+    fn test_game(board: Vec<BoardCellDto>) -> GameStateDto {
+        GameStateDto {
+            board,
+            ..empty_live_game()
+        }
+    }
+
+    fn letter_placement(
+        board_index: usize,
+        rack_tile_id: usize,
+        letter: char,
+    ) -> StagedPlacementView {
+        StagedPlacementView {
+            board_index,
+            rack_tile_id,
+            display: letter.to_string(),
+            tile: TileDto::Letter {
+                letter: letter.to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn step_index_stops_at_board_edges() {
+        assert_eq!(step_index(0, DirectionDto::Horizontal, false), None);
+        assert_eq!(step_index(0, DirectionDto::Vertical, false), None);
+        assert_eq!(step_index(0, DirectionDto::Horizontal, true), Some(1));
+        assert_eq!(
+            step_index(0, DirectionDto::Vertical, true),
+            Some(BOARD_WIDTH)
+        );
+
+        let last = BOARD_WIDTH * BOARD_HEIGHT - 1;
+        assert_eq!(step_index(last, DirectionDto::Horizontal, true), None);
+        assert_eq!(step_index(last, DirectionDto::Vertical, true), None);
+    }
+
+    #[test]
+    fn find_next_placeable_cell_skips_permanent_and_staged_tiles() {
+        let mut board = empty_board();
+        board[12].letter = Some("A".to_string());
+        let game = test_game(board);
+        let staged = vec![letter_placement(11, 0, 'B')];
+
+        // From 10 going right: 11 is staged, 12 is permanently filled, 13 is
+        // the first genuinely free cell.
+        assert_eq!(
+            find_next_placeable_cell(&game, &staged, 10, DirectionDto::Horizontal, true),
+            Some(13)
+        );
+    }
+
+    #[test]
+    fn find_next_placeable_cell_returns_none_past_the_edge() {
+        let game = test_game(empty_board());
+        assert_eq!(
+            find_next_placeable_cell(&game, &[], BOARD_WIDTH - 1, DirectionDto::Horizontal, true),
+            None
+        );
+    }
+
+    #[test]
+    fn step_index_wrapping_cycles_to_the_other_side_of_the_row_or_column() {
+        assert_eq!(
+            step_index_wrapping(BOARD_WIDTH - 1, DirectionDto::Horizontal, true),
+            0
+        );
+        assert_eq!(
+            step_index_wrapping(0, DirectionDto::Horizontal, false),
+            BOARD_WIDTH - 1
+        );
+        let last_row_start = (BOARD_HEIGHT - 1) * BOARD_WIDTH;
+        assert_eq!(
+            step_index_wrapping(last_row_start, DirectionDto::Vertical, true),
+            0
+        );
+        assert_eq!(
+            step_index_wrapping(0, DirectionDto::Vertical, false),
+            last_row_start
+        );
+    }
+
+    #[test]
+    fn find_next_placeable_cell_wrapping_cycles_around_the_board_edge() {
+        // Arrow-key navigation (unlike advancing through a typed word)
+        // should wrap rather than stop at the edge.
+        let game = test_game(empty_board());
+        assert_eq!(
+            find_next_placeable_cell_wrapping(
+                &game,
+                &[],
+                BOARD_WIDTH - 1,
+                DirectionDto::Horizontal,
+                true
+            ),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn find_next_placeable_cell_wrapping_skips_occupied_cells_on_the_way_around() {
+        let mut board = empty_board();
+        // Fill the whole row except index 5.
+        for (x, cell) in board.iter_mut().enumerate().take(BOARD_WIDTH) {
+            if x != 5 {
+                cell.letter = Some("A".to_string());
+            }
+        }
+        let game = test_game(board);
+        assert_eq!(
+            find_next_placeable_cell_wrapping(&game, &[], 4, DirectionDto::Horizontal, true),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn find_next_placeable_cell_wrapping_returns_none_when_the_whole_line_is_full() {
+        let mut board = empty_board();
+        for cell in board.iter_mut().take(BOARD_WIDTH) {
+            cell.letter = Some("A".to_string());
+        }
+        let game = test_game(board);
+        assert_eq!(
+            find_next_placeable_cell_wrapping(&game, &[], 4, DirectionDto::Horizontal, true),
+            None
+        );
+    }
+
+    #[test]
+    fn find_previous_editable_cell_lands_on_the_immediately_preceding_staged_tile() {
+        // Regression test: backspace used to skip straight past the last
+        // staged tile (landing one cell further back than intended) because
+        // it reused the forward-advance helper, which treats staged cells
+        // as something to skip over rather than stop on.
+        let game = test_game(empty_board());
+        assert_eq!(
+            find_previous_editable_cell(&game, 12, DirectionDto::Horizontal),
+            Some(11)
+        );
+    }
+
+    #[test]
+    fn find_previous_editable_cell_skips_over_permanent_letters_only() {
+        let mut board = empty_board();
+        board[11].letter = Some("A".to_string());
+        board[10].letter = Some("B".to_string());
+        let game = test_game(board);
+
+        // From 12 going left: 11 and 10 are permanent, so backspace should
+        // land on 9 — the first cell that isn't a permanent letter.
+        assert_eq!(
+            find_previous_editable_cell(&game, 12, DirectionDto::Horizontal),
+            Some(9)
+        );
+    }
+
+    #[test]
+    fn find_previous_editable_cell_returns_none_past_the_edge() {
+        let game = test_game(empty_board());
+        assert_eq!(
+            find_previous_editable_cell(&game, 0, DirectionDto::Horizontal),
+            None
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_defaults_to_horizontal_when_empty_or_isolated() {
+        let game = test_game(empty_board());
+        assert_eq!(
+            infer_typing_direction(&game, &[], None, None),
+            DirectionDto::Horizontal
+        );
+
+        let staged = vec![letter_placement(112, 0, 'A')];
+        assert_eq!(
+            infer_typing_direction(&game, &staged, None, None),
+            DirectionDto::Horizontal
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_follows_the_existing_neighbor_for_a_single_tile() {
+        let staged = vec![letter_placement(112, 0, 'A')];
+
+        let mut board_with_left_neighbor = empty_board();
+        board_with_left_neighbor[111].letter = Some("C".to_string());
+        let game = test_game(board_with_left_neighbor);
+        assert_eq!(
+            infer_typing_direction(&game, &staged, None, None),
+            DirectionDto::Horizontal
+        );
+
+        let mut board_with_top_neighbor = empty_board();
+        board_with_top_neighbor[112 - BOARD_WIDTH].letter = Some("C".to_string());
+        let game = test_game(board_with_top_neighbor);
+        assert_eq!(
+            infer_typing_direction(&game, &staged, None, None),
+            DirectionDto::Vertical
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_follows_multi_tile_alignment() {
+        let game = test_game(empty_board());
+
+        let same_row = vec![letter_placement(100, 0, 'A'), letter_placement(102, 1, 'B')];
+        assert_eq!(
+            infer_typing_direction(&game, &same_row, None, None),
+            DirectionDto::Horizontal
+        );
+
+        let same_column = vec![
+            letter_placement(100, 0, 'A'),
+            letter_placement(100 + BOARD_WIDTH * 2, 1, 'B'),
+        ];
+        assert_eq!(
+            infer_typing_direction(&game, &same_column, None, None),
+            DirectionDto::Vertical
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_follows_the_selected_cell_for_a_single_ambiguous_tile() {
+        // No permanent neighbor on either axis, so this is genuinely
+        // ambiguous — the currently selected cell (the player having clicked
+        // elsewhere to imply a direction) should win over the plain default.
+        let game = test_game(empty_board());
+        let staged = vec![letter_placement(112, 0, 'A')];
+
+        // Selecting the cell to the right implies horizontal.
+        assert_eq!(
+            infer_typing_direction(&game, &staged, Some(113), None),
+            DirectionDto::Horizontal
+        );
+        // Selecting the cell below implies vertical.
+        assert_eq!(
+            infer_typing_direction(&game, &staged, Some(112 + BOARD_WIDTH), None),
+            DirectionDto::Vertical
+        );
+        // Selecting the tile's own cell isn't a signal either way.
+        assert_eq!(
+            infer_typing_direction(&game, &staged, Some(112), None),
+            DirectionDto::Horizontal
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_selected_cell_beats_a_stale_direction_override() {
+        let game = test_game(empty_board());
+        let staged = vec![letter_placement(112, 0, 'A')];
+
+        // An override says Vertical, but the player has since clicked a cell
+        // that unambiguously implies Horizontal — the explicit click wins.
+        assert_eq!(
+            infer_typing_direction(&game, &staged, Some(113), Some(DirectionDto::Vertical)),
+            DirectionDto::Horizontal
+        );
+    }
+
+    #[test]
+    fn infer_typing_direction_falls_back_to_the_override_when_selection_is_ambiguous() {
+        let game = test_game(empty_board());
+        let staged = vec![letter_placement(112, 0, 'A')];
+
+        // No selected cell at all falls back to the override.
+        assert_eq!(
+            infer_typing_direction(&game, &staged, None, Some(DirectionDto::Vertical)),
+            DirectionDto::Vertical
+        );
+        // A diagonally-selected cell shares neither axis, so it's not a
+        // signal either — falls back to the override too.
+        assert_eq!(
+            infer_typing_direction(
+                &game,
+                &staged,
+                Some(112 + BOARD_WIDTH + 1),
+                Some(DirectionDto::Vertical)
+            ),
+            DirectionDto::Vertical
+        );
+    }
+
+    #[test]
+    fn aligned_direction_reads_the_axis_two_cells_share() {
+        assert_eq!(aligned_direction(112, 113), Some(DirectionDto::Horizontal));
+        assert_eq!(
+            aligned_direction(112, 112 + BOARD_WIDTH),
+            Some(DirectionDto::Vertical)
+        );
+        assert_eq!(aligned_direction(112, 112), None);
+        assert_eq!(aligned_direction(112, 112 + BOARD_WIDTH + 1), None);
+    }
+
+    #[test]
+    fn stage_tile_at_cell_keeps_letter_tiles_unchanged() {
+        let tile = RackTileView {
+            id: 5,
+            display: "Q".to_string(),
+            tile: TileDto::Letter {
+                letter: "Q".to_string(),
+            },
+            is_used: false,
+        };
+        let placement = stage_tile_at_cell(42, &tile, None);
+        assert_eq!(placement.board_index, 42);
+        assert_eq!(placement.rack_tile_id, 5);
+        assert_eq!(placement.display, "Q");
+        assert_eq!(
+            placement.tile,
+            TileDto::Letter {
+                letter: "Q".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn stage_tile_at_cell_resolves_a_typed_blank_and_lowercases_its_display() {
+        let tile = RackTileView {
+            id: 6,
+            display: "*".to_string(),
+            tile: TileDto::Blank { acting_as: None },
+            is_used: false,
+        };
+        let placement = stage_tile_at_cell(7, &tile, Some("Z".to_string()));
+        assert_eq!(placement.display, "z");
+        assert_eq!(
+            placement.tile,
+            TileDto::Blank {
+                acting_as: Some("Z".to_string())
+            }
+        );
+    }
+
+    /// A digraph tile's assigned blank (e.g. Spanish's RR) lowercases as
+    /// a whole grapheme, not truncated to one character.
+    #[test]
+    fn stage_tile_at_cell_lowercases_a_digraph_blank_assignment() {
+        let tile = RackTileView {
+            id: 6,
+            display: "*".to_string(),
+            tile: TileDto::Blank { acting_as: None },
+            is_used: false,
+        };
+        let placement = stage_tile_at_cell(7, &tile, Some("RR".to_string()));
+        assert_eq!(placement.display, "rr");
+        assert_eq!(
+            placement.tile,
+            TileDto::Blank {
+                acting_as: Some("RR".to_string())
+            }
+        );
+    }
+
+    #[test]
+    fn stage_tile_at_cell_leaves_an_unresolved_blank_for_the_mouse_path() {
+        let tile = RackTileView {
+            id: 6,
+            display: "*".to_string(),
+            tile: TileDto::Blank { acting_as: None },
+            is_used: false,
+        };
+        let placement = stage_tile_at_cell(7, &tile, None);
+        assert_eq!(placement.display, "?");
+        assert_eq!(placement.tile, TileDto::Blank { acting_as: None });
+    }
+
+    fn participant(seat_number: u8, player_id: Option<&str>) -> ParticipantDto {
+        ParticipantDto {
+            seat_number,
+            kind: SeatKind::Human,
+            display_name: format!("Seat {seat_number}"),
+            player_id: player_id.map(str::to_string),
+            engine_id: None,
+            score: 0,
+            invitation_status: None,
+            invited_email: None,
+            rating_before: None,
+            rating_after: None,
+            current_rating: None,
+            resigned: false,
+        }
+    }
+
+    fn game_with_participants(participants: Vec<ParticipantDto>, current_seat: u8) -> GameStateDto {
+        let racks = participants
+            .iter()
+            .map(|_| RackDto {
+                counts: Vec::new(),
+                blanks: 0,
+            })
+            .collect();
+        GameStateDto {
+            participants,
+            racks,
+            current_seat,
+            ..test_game(empty_board())
+        }
+    }
+
+    #[test]
+    fn seat_is_open_or_owned_by_lets_anyone_use_an_unclaimed_seat() {
+        let unclaimed = participant(0, None);
+        assert!(seat_is_open_or_owned_by(&unclaimed, None));
+        assert!(seat_is_open_or_owned_by(&unclaimed, Some("alice")));
+        assert!(seat_is_open_or_owned_by(&unclaimed, Some("mallory")));
+    }
+
+    #[test]
+    fn seat_is_open_or_owned_by_restricts_a_claimed_seat_to_its_owner() {
+        let claimed = participant(0, Some("alice"));
+        assert!(seat_is_open_or_owned_by(&claimed, Some("alice")));
+        assert!(!seat_is_open_or_owned_by(&claimed, Some("mallory")));
+        assert!(!seat_is_open_or_owned_by(&claimed, None));
+    }
+
+    #[test]
+    fn viewer_rack_seat_shows_your_own_seat_even_when_its_not_your_turn() {
+        // Alice owns seat 0, Bob owns seat 1, it's Bob's turn — Alice
+        // should still see her own rack while she waits.
+        let game = game_with_participants(
+            vec![participant(0, Some("alice")), participant(1, Some("bob"))],
+            1,
+        );
+        assert_eq!(viewer_rack_seat(&game, Some("alice")), Some(0));
+        assert_eq!(viewer_rack_seat(&game, Some("bob")), Some(1));
+    }
+
+    #[test]
+    fn viewer_rack_seat_hides_a_claimed_game_from_a_non_participant() {
+        let game = game_with_participants(
+            vec![participant(0, Some("alice")), participant(1, Some("bob"))],
+            0,
+        );
+        assert_eq!(viewer_rack_seat(&game, Some("mallory")), None);
+        assert_eq!(viewer_rack_seat(&game, None), None);
+    }
+
+    #[test]
+    fn viewer_rack_seat_stays_open_for_an_anonymous_game() {
+        // Neither seat is claimed — matches today's anonymous-play
+        // behavior, unaffected by ownership gating.
+        let game = game_with_participants(vec![participant(0, None), participant(1, None)], 0);
+        assert_eq!(viewer_rack_seat(&game, None), Some(0));
+        assert_eq!(viewer_rack_seat(&game, Some("anyone")), Some(0));
+    }
+}

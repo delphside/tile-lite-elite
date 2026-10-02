@@ -1,0 +1,573 @@
+use dioxus::prelude::*;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum AuthMode {
+    Login,
+    Register,
+}
+
+/// Shared by the submit button's onclick and the Enter-key handler on each
+/// input — a plain function taking every signal it needs explicitly rather
+/// than a shared closure, since a closure capturing non-Copy state (the
+/// server URL) can't be reused across several `move` handlers in the same
+/// render without fighting the borrow checker.
+#[allow(clippy::too_many_arguments)]
+fn submit_login_or_register(
+    server_url: String,
+    mode: AuthMode,
+    display_name: Signal<String>,
+    email: Signal<String>,
+    password: Signal<String>,
+    remember_me: Signal<bool>,
+    stay_logged_in: Signal<bool>,
+    mut is_submitting: Signal<bool>,
+    mut error_message: Signal<Option<String>>,
+    retry_message: Signal<Option<String>>,
+    on_authenticated: EventHandler<(api::PlayerSessionDto, bool, bool)>,
+) {
+    let name = display_name().trim().to_string();
+    let email_value = email().trim().to_string();
+    let password_value = password();
+    let remember = remember_me();
+    let stay = stay_logged_in();
+
+    if name.is_empty() || password_value.is_empty() {
+        error_message.set(Some("Display name and password are required".to_string()));
+        return;
+    }
+    if mode == AuthMode::Register && email_value.is_empty() {
+        error_message.set(Some("Email is required to register".to_string()));
+        return;
+    }
+
+    spawn(async move {
+        is_submitting.set(true);
+        error_message.set(None);
+        let outcome = match mode {
+            AuthMode::Login => {
+                crate::app::login_player(&server_url, &name, &password_value, stay, retry_message)
+                    .await
+            }
+            AuthMode::Register => {
+                crate::app::register_player(
+                    &server_url,
+                    &name,
+                    &email_value,
+                    &password_value,
+                    stay,
+                    retry_message,
+                )
+                .await
+            }
+        };
+        match outcome {
+            Ok(session) => on_authenticated.call((session, remember, stay)),
+            Err(error) => error_message.set(Some(error)),
+        }
+        is_submitting.set(false);
+    });
+}
+
+#[component]
+pub fn AuthPanel(
+    server_url: String,
+    session: Option<api::PlayerSessionDto>,
+    /// Set once the emailed join link's invitation preview has loaded — see
+    /// `RootApp`'s `invite_preview` — shown as a banner above the tabs so a
+    /// first-time visitor following that link knows what they're signing up
+    /// for before they register.
+    invite_inviter_name: Option<String>,
+    on_authenticated: EventHandler<(api::PlayerSessionDto, bool, bool)>,
+    on_logout: EventHandler<()>,
+    on_password_changed: EventHandler<()>,
+    /// Fired after a successful display-name/email save — `RootApp` patches
+    /// its own `session` signal with the returned values so "Logged in as
+    /// X" and everywhere else that reads the session stay in sync without a
+    /// fresh login (unlike a password change, this doesn't invalidate the
+    /// session, so there's no re-login to piggyback the refresh on).
+    on_details_updated: EventHandler<api::PlayerDto>,
+    /// Opens the Stats view (rating graph + win/loss/tie/timeout/
+    /// resignation/bingo counters) — `RootApp` owns the actual modal, this
+    /// button just asks for it, same pattern as `on_logout`.
+    on_open_stats: EventHandler<()>,
+) -> Element {
+    let stored = crate::local_storage::load();
+    let has_remembered_name = stored.remembered_name.is_some();
+    let remembered_name = stored.remembered_name.unwrap_or_default();
+
+    let mut mode = use_signal(|| AuthMode::Login);
+    let mut display_name = use_signal(move || remembered_name);
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut remember_me = use_signal(move || has_remembered_name);
+    let mut stay_logged_in = use_signal(|| false);
+    let mut error_message = use_signal(|| None::<String>);
+    let retry_message = use_signal(|| None::<String>);
+    let is_submitting = use_signal(|| false);
+
+    let mut show_edit_details = use_signal(|| false);
+    let mut edit_display_name_input = use_signal(String::new);
+    let mut edit_email_input = use_signal(String::new);
+    let mut edit_details_error = use_signal(|| None::<String>);
+    let mut is_updating_details = use_signal(|| false);
+
+    let mut current_password_input = use_signal(String::new);
+    let mut new_password_input = use_signal(String::new);
+    let mut confirm_password_input = use_signal(String::new);
+    let mut change_password_error = use_signal(|| None::<String>);
+    let mut is_changing_password = use_signal(|| false);
+
+    let mut show_forgot_password = use_signal(|| false);
+    let mut forgot_password_email = use_signal(String::new);
+    let mut forgot_password_message = use_signal(|| None::<String>);
+    let mut is_requesting_reset = use_signal(|| false);
+
+    if let Some(session) = session {
+        // Two closures below each need their own owned copy of `server_url`
+        // — a `move` closure that does `server_url.clone()` on the outer
+        // parameter still moves that outer value into itself first, so a
+        // second such closure would otherwise be moving an already-moved
+        // value (same reasoning as the `server_url_for_*` clones above).
+        let server_url_for_save_details = server_url.clone();
+        let server_url_for_update_password = server_url.clone();
+        return rsx! {
+            div { class: "auth-widget",
+                div { class: "auth-widget-row",
+                    span { class: "auth-status", "Logged in as {session.display_name}" }
+                    button {
+                        class: "toggle-button toggle-button-muted",
+                        onclick: {
+                            let session = session.clone();
+                            move |_| {
+                                let opening = !show_edit_details();
+                                show_edit_details.set(opening);
+                                edit_details_error.set(None);
+                                if opening {
+                                    // Prefill from the live session each time
+                                    // it's opened, not just on first mount —
+                                    // otherwise a save earlier in the same
+                                    // page load would leave stale values here.
+                                    edit_display_name_input.set(session.display_name.clone());
+                                    edit_email_input.set(session.email.clone());
+                                } else {
+                                    change_password_error.set(None);
+                                    current_password_input.set(String::new());
+                                    new_password_input.set(String::new());
+                                    confirm_password_input.set(String::new());
+                                }
+                            }
+                        },
+                        "Edit user details"
+                    }
+                    button {
+                        class: "toggle-button toggle-button-muted",
+                        onclick: move |_| on_open_stats.call(()),
+                        "Stats"
+                    }
+                    button {
+                        class: "toggle-button toggle-button-muted",
+                        onclick: move |_| {
+                            // Logging out should hand back a clean modal,
+                            // not whatever was left over from before — the
+                            // password (and, in Register mode, email) must
+                            // never carry over. Display name is the one
+                            // exception: it survives if "Remember me" is
+                            // what's asking it to (see local_storage.rs).
+                            mode.set(AuthMode::Login);
+                            email.set(String::new());
+                            password.set(String::new());
+                            stay_logged_in.set(false);
+                            if !remember_me() {
+                                display_name.set(String::new());
+                            }
+                            on_logout.call(());
+                        },
+                        "Log out"
+                    }
+                }
+                if show_edit_details() {
+                    div { class: "edit-details-form",
+                        div { class: "edit-details-section",
+                            input {
+                                class: "auth-input",
+                                placeholder: "Display name",
+                                value: "{edit_display_name_input}",
+                                oninput: move |event| edit_display_name_input.set(event.value()),
+                            }
+                            input {
+                                class: "auth-input",
+                                placeholder: "Email",
+                                value: "{edit_email_input}",
+                                oninput: move |event| edit_email_input.set(event.value()),
+                            }
+                            if let Some(error) = edit_details_error() {
+                                p { class: "error-banner", "{error}" }
+                            }
+                            div { class: "auth-panel-actions",
+                                button {
+                                    class: "toggle-button toggle-button-muted",
+                                    disabled: is_updating_details(),
+                                    onclick: move |_| {
+                                        show_edit_details.set(false);
+                                        edit_details_error.set(None);
+                                        change_password_error.set(None);
+                                        current_password_input.set(String::new());
+                                        new_password_input.set(String::new());
+                                        confirm_password_input.set(String::new());
+                                    },
+                                    "Cancel"
+                                }
+                                button {
+                                    class: "toggle-button",
+                                    disabled: is_updating_details(),
+                                    onclick: {
+                                        let session = session.clone();
+                                        let server_url = server_url_for_save_details.clone();
+                                        move |_| {
+                                            let server_url = server_url.clone();
+                                            let token = session.session_token.clone();
+                                            let new_display_name = edit_display_name_input().trim().to_string();
+                                            let new_email = edit_email_input().trim().to_string();
+
+                                            if new_display_name.is_empty() || new_email.is_empty() {
+                                                edit_details_error.set(Some("Display name and email cannot be blank".to_string()));
+                                                return;
+                                            }
+
+                                            spawn(async move {
+                                                is_updating_details.set(true);
+                                                edit_details_error.set(None);
+                                                match crate::app::update_player_details(&server_url, &token, &new_display_name, &new_email).await {
+                                                    Ok(updated) => {
+                                                        // A remembered display name should track a rename —
+                                                        // otherwise the next login's pre-filled name would be
+                                                        // the one that no longer exists.
+                                                        let stored = crate::local_storage::load();
+                                                        if stored.remembered_name.is_some() {
+                                                            crate::local_storage::save(&crate::local_storage::StoredAuth {
+                                                                remembered_name: Some(updated.display_name.clone()),
+                                                                session_token: stored.session_token,
+                                                            });
+                                                        }
+                                                        show_edit_details.set(false);
+                                                        on_details_updated.call(updated);
+                                                    }
+                                                    Err(error) => edit_details_error.set(Some(error)),
+                                                }
+                                                is_updating_details.set(false);
+                                            });
+                                        }
+                                    },
+                                    "Save user details"
+                                }
+                            }
+                        }
+                        hr { class: "edit-details-divider" }
+                        div { class: "edit-details-section",
+                            span { class: "edit-details-section-title", "Change password" }
+                            input {
+                                class: "auth-input",
+                                r#type: "password",
+                                placeholder: "Current password",
+                                value: "{current_password_input}",
+                                oninput: move |event| current_password_input.set(event.value()),
+                            }
+                            input {
+                                class: "auth-input",
+                                r#type: "password",
+                                placeholder: "New password",
+                                value: "{new_password_input}",
+                                oninput: move |event| new_password_input.set(event.value()),
+                            }
+                            input {
+                                class: "auth-input",
+                                r#type: "password",
+                                placeholder: "Confirm new password",
+                                value: "{confirm_password_input}",
+                                oninput: move |event| confirm_password_input.set(event.value()),
+                            }
+                            if let Some(error) = change_password_error() {
+                                p { class: "error-banner", "{error}" }
+                            }
+                            div { class: "auth-panel-actions",
+                                button {
+                                    class: "toggle-button toggle-button-muted",
+                                    disabled: is_changing_password(),
+                                    onclick: move |_| {
+                                        show_edit_details.set(false);
+                                        edit_details_error.set(None);
+                                        change_password_error.set(None);
+                                        current_password_input.set(String::new());
+                                        new_password_input.set(String::new());
+                                        confirm_password_input.set(String::new());
+                                    },
+                                    "Cancel"
+                                }
+                                button {
+                                    class: "toggle-button",
+                                    disabled: is_changing_password(),
+                                    onclick: {
+                                        let session = session.clone();
+                                        let server_url = server_url_for_update_password.clone();
+                                        move |_| {
+                                        let server_url = server_url.clone();
+                                        let token = session.session_token.clone();
+                                        let current = current_password_input();
+                                        let new_password_value = new_password_input();
+                                        let confirm = confirm_password_input();
+
+                                        if current.is_empty() || new_password_value.is_empty() {
+                                            change_password_error.set(Some("Both current and new password are required".to_string()));
+                                            return;
+                                        }
+                                        if new_password_value != confirm {
+                                            change_password_error.set(Some("New password and confirmation don't match".to_string()));
+                                            return;
+                                        }
+
+                                        spawn(async move {
+                                            is_changing_password.set(true);
+                                            change_password_error.set(None);
+                                            match crate::app::change_password(&server_url, &token, &current, &new_password_value).await {
+                                                Ok(()) => {
+                                                    current_password_input.set(String::new());
+                                                    new_password_input.set(String::new());
+                                                    confirm_password_input.set(String::new());
+                                                    mode.set(AuthMode::Login);
+                                                    email.set(String::new());
+                                                    password.set(String::new());
+                                                    stay_logged_in.set(false);
+                                                    if !remember_me() {
+                                                        display_name.set(String::new());
+                                                    }
+                                                    on_password_changed.call(());
+                                                }
+                                                Err(error) => change_password_error.set(Some(error)),
+                                            }
+                                            is_changing_password.set(false);
+                                        });
+                                        }
+                                    },
+                                    "Update password"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    // Nothing in the app works while signed out (every action needs a
+    // player), so this is a blocking modal rather than a dismissable
+    // widget — no "Cancel", no collapsed state. It's the first thing you
+    // see on open.
+    let submit_label = if mode() == AuthMode::Login {
+        "Log in"
+    } else {
+        "Register"
+    };
+    // One owned copy per `move` closure that needs it — `server_url` is a
+    // non-Copy String. Enter-to-submit now comes from the native `<form>`
+    // submit below rather than per-input key handlers, so there are just
+    // two closures left: the form's submit, and the forgot-password request.
+    let server_url_for_submit = server_url.clone();
+    let server_url_for_forgot_password = server_url.clone();
+
+    rsx! {
+        div { class: "modal-backdrop",
+        div { class: "auth-panel modal-card",
+            h2 { class: "modal-title", "Welcome to Tile Lite Elite" }
+            if let Some(inviter_name) = &invite_inviter_name {
+                p { class: "modal-copy invite-banner",
+                    "{inviter_name} invited you to play — log in or register below to accept."
+                }
+            }
+            p { class: "modal-copy", "Log in or register to create and play games." }
+            div { class: "auth-panel-tabs",
+                button {
+                    r#type: "button",
+                    class: if mode() == AuthMode::Login { "auth-tab auth-tab-active" } else { "auth-tab" },
+                    onclick: move |_| {
+                        mode.set(AuthMode::Login);
+                        error_message.set(None);
+                    },
+                    "Log in"
+                }
+                button {
+                    r#type: "button",
+                    class: if mode() == AuthMode::Register { "auth-tab auth-tab-active" } else { "auth-tab" },
+                    onclick: move |_| {
+                        mode.set(AuthMode::Register);
+                        error_message.set(None);
+                    },
+                    "Register"
+                }
+            }
+
+            // A real <form> so Enter submits natively and browsers'
+            // autofill / password managers behave. Deliberately NOT using
+            // per-input `onkeydown` Enter handlers: a browser autofill
+            // selection dispatches a keydown-shaped event with `.key`
+            // undefined, and Dioxus marshalling that missing key threw
+            // mid-render, wedging the reactive runtime ("RefCell already
+            // borrowed" in diff/node.rs) and freezing the whole modal.
+            form {
+                class: "auth-form",
+                // Do NOT call `event.prevent_default()` here. dioxus-web (0.6)
+                // already suppresses a form's native submit/navigation by
+                // default for `submit` events — calling prevent_default would
+                // counterintuitively RE-ENABLE it and reload the page (see the
+                // inverted "submit" handling in dioxus-web's dom.rs). So we
+                // just run the submit logic and let dioxus swallow the submit.
+                onsubmit: move |_| {
+                    submit_login_or_register(
+                        server_url_for_submit.clone(),
+                        mode(),
+                        display_name,
+                        email,
+                        password,
+                        remember_me,
+                        stay_logged_in,
+                        is_submitting,
+                        error_message,
+                        retry_message,
+                        on_authenticated,
+                    );
+                },
+                input {
+                    class: "auth-input",
+                    placeholder: "Display name",
+                    autocomplete: "username",
+                    value: "{display_name}",
+                    oninput: move |event| display_name.set(event.value()),
+                }
+                if mode() == AuthMode::Register {
+                    input {
+                        class: "auth-input",
+                        placeholder: "Email",
+                        autocomplete: "email",
+                        value: "{email}",
+                        oninput: move |event| email.set(event.value()),
+                    }
+                }
+                input {
+                    class: "auth-input",
+                    r#type: "password",
+                    placeholder: "Password",
+                    autocomplete: if mode() == AuthMode::Login { "current-password" } else { "new-password" },
+                    value: "{password}",
+                    oninput: move |event| password.set(event.value()),
+                }
+
+                label {
+                    class: "auth-checkbox-label",
+                    title: "Pre-fills your display name next time you log in. Doesn't keep you signed in or store your password.",
+                    input {
+                        r#type: "checkbox",
+                        checked: remember_me(),
+                        oninput: move |event| remember_me.set(event.value() == "true"),
+                    }
+                    "Remember me"
+                }
+                label {
+                    class: "auth-checkbox-label",
+                    title: "Keeps you signed in on this device — no need to log in again next time. Leave unchecked on a shared or public computer.",
+                    input {
+                        r#type: "checkbox",
+                        checked: stay_logged_in(),
+                        oninput: move |event| stay_logged_in.set(event.value() == "true"),
+                    }
+                    "Stay logged in"
+                }
+
+                if let Some(message) = retry_message() {
+                    p { class: "status-banner", "{message}" }
+                }
+                if let Some(error) = error_message() {
+                    p { class: "error-banner", "{error}" }
+                }
+
+                div { class: "modal-actions",
+                    button {
+                        r#type: "submit",
+                        class: "toggle-button",
+                        disabled: is_submitting(),
+                        "{submit_label}"
+                    }
+                }
+            }
+
+            // Below the form, not inside it — its own field and buttons must
+            // never be part of the login/register submission (and pressing
+            // Enter in its email box must not submit the form above). Only
+            // meaningful once an account exists, so Login mode only.
+            if mode() == AuthMode::Login {
+                button {
+                    r#type: "button",
+                    class: "toggle-button toggle-button-muted",
+                    onclick: move |_| {
+                        show_forgot_password.set(!show_forgot_password());
+                        forgot_password_message.set(None);
+                    },
+                    "Forgot password?"
+                }
+            }
+            if show_forgot_password() {
+                div { class: "auth-panel",
+                    input {
+                        class: "auth-input",
+                        placeholder: "Email",
+                        autocomplete: "email",
+                        value: "{forgot_password_email}",
+                        oninput: move |event| forgot_password_email.set(event.value()),
+                    }
+                    if let Some(message) = forgot_password_message() {
+                        p { class: "modal-copy", "{message}" }
+                    }
+                    div { class: "auth-panel-actions",
+                        button {
+                            r#type: "button",
+                            class: "toggle-button toggle-button-muted",
+                            disabled: is_requesting_reset(),
+                            onclick: move |_| {
+                                show_forgot_password.set(false);
+                                forgot_password_email.set(String::new());
+                                forgot_password_message.set(None);
+                            },
+                            "Cancel"
+                        }
+                        button {
+                            r#type: "button",
+                            class: "toggle-button",
+                            disabled: is_requesting_reset(),
+                            onclick: move |_| {
+                                let server_url = server_url_for_forgot_password.clone();
+                                let email_value = forgot_password_email().trim().to_string();
+                                if email_value.is_empty() {
+                                    forgot_password_message.set(Some("Enter the email you registered with".to_string()));
+                                    return;
+                                }
+                                spawn(async move {
+                                    is_requesting_reset.set(true);
+                                    // Same message whether or not the email is
+                                    // registered — the server's response
+                                    // already doesn't distinguish the two
+                                    // cases (see RequestPasswordResetRequest's
+                                    // doc comment), so neither should this UI.
+                                    let _ = crate::app::request_password_reset(&server_url, &email_value).await;
+                                    forgot_password_message.set(Some(
+                                        "If that email is registered, a reset link is on its way.".to_string(),
+                                    ));
+                                    is_requesting_reset.set(false);
+                                });
+                            },
+                            "Send reset link"
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+}

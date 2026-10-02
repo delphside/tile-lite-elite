@@ -1,0 +1,19 @@
+[package]
+name = "rules-shared"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+repository.workspace=true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+# Classifies a word as offensive/profane/sexual/mean. Used only by the
+# `generate-greylist` example to propose a list, never at run time: this crate
+# compiles to wasm, and classifying 1.6M words on every process start is the
+# cost `normalise` exists to avoid. Its output is committed as plain text, so
+# the shipped binary never links it. Pinned because a regenerated list that
+# silently differs is worse than no list — see ATTRIBUTIONS.md.
+rustrict = "=0.7.38"

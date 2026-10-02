@@ -1,0 +1,3 @@
+timestamp_unix_seconds,git_commit,host,target,per_ip_refused_after,health_under_load,sessions_separate,registration_refused_after,hash_median_ms,checks_failed
+1786385125,b6b5160,stephen-len,https://129.151.84.183.sslip.io,3,true,untested,0,untested,3
+1786385399,b6b5160-dirty,stephen-len,https://129.151.84.183.sslip.io,3,true,true,3,111,0

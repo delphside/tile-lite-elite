@@ -1,0 +1,8 @@
+# Words removed from every dictionary — invalid for everyone, human and bot.
+#
+# Format: one word per line, uppercase. Blank lines and lines starting with `#`
+# are ignored. Matched whole-word and exactly; nothing here is ever treated as a
+# substring (see the README beside this file for why that matters).
+#
+# EMPTY ON PURPOSE. The mechanism is built and tested; the contents are not
+# invented. See README.md, "Filling these in".

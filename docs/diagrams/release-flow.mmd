@@ -1,0 +1,87 @@
+---
+config:
+  layout: elk
+  elk:
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart TB
+    %% Line language, applied consistently:
+    %%   -->    code moves, in the direction it moves
+    %%   -.->   an answer comes back — a query, nothing shipped
+    %% Bold is an action somebody takes; normal weight is something that
+    %% happens on its own or a question being asked. Bold comes from
+    %% mermaid markdown strings (backtick-quoted labels) rather than <b>,
+    %% which leaks literally while htmlLabels is false.
+    %% .
+    %% Every arrow is numbered, in the order events happen, so the whole
+    %% sequence can be followed by reading the numbers. A letter suffix
+    %% breaks one runbook step into its ordered parts — 1.a-1.e are things
+    %% you do, 7.a-7.e are what one command does on your behalf.
+    %% .
+    %%   {  }   a decision on an action arrow — the action stops here and
+    %%          is tested before it continues. Checks feed into it.
+    %% .
+    %% .
+    %% Preview deliberately does not feed the gate. It is where you look at a
+    %% change; the gate asks whether the release *mechanism* worked, which is
+    %% what the rehearsal host answers. A gate can check that bits were
+    %% present somewhere, never that somebody looked at them and was happy.
+    %% .
+    %% The gate is a decision on the *action*, not a property of production:
+    %% it happens inside deploy.sh, before anything ships, and the two
+    %% checks are inputs to it. Drawing it as arrows into Production implied
+    %% a relationship between Actions and Production that does not exist.
+    %% .
+    %% No linkStyle anywhere: the shapes carry the meaning. Edge indices
+    %% silently pointed at the wrong arrows four times when they did.
+    %% .
+    %% Steps 3, 6 and 7.a start at local git rather than Dev on purpose, and
+    %% this is literally true of the scripts: both check the commit out into
+    %% a throwaway git worktree and build that, so the working tree cannot
+    %% reach either environment. Do not "correct" these to start at DEV.
+    DEV["Dev<br/>working tree<br/>:3000 server · :8080 web"]
+    STG["Preview<br/>:8081 · docker"]
+    REH["Rehearsal<br/>&lt;ip&gt;.sslip.io · docker"]
+    PROD["Production<br/>tileliteelite.com"]
+    LG["local git<br/>commit history"]
+    subgraph GH["GitHub"]
+        REPO["repo · main"]
+        ACT["Actions"]
+    end
+
+
+    DEV ~~~ STG
+    STG ~~~ REH
+    REH ~~~ GATE
+    %% Without this, ELK floats Production up beside the others and "ships
+    %% the image" points upward. Pinning it last puts the environments in
+    %% descending order and the deploy flow downward through the gate.
+    REH ~~~ PROD
+
+    DEV -->|"`1.a · **$ cargo build**
+**$ services.sh restart**
+**$ cargo test**`"| DEV
+    DEV -->|"`1.b · **$ git add**
+**$ git commit**`"| LG
+    LG -->|"`1.c · **$ git push**`"| REPO
+    REPO -->|"1.d · CI runs (automatic)"| ACT
+    ACT -.->|"`1.e · **$ ci-status.sh --wait**`"| LG
+    PROD -.->|"`2 · **$ deploy-preview.sh at prod**`"| STG
+    LG -->|"`3 · **$ deploy-preview.sh**`"| STG
+    STG -.->|"`4 · **$ curl /health**`"| STG
+    STG -.->|"`5 · **user test**`"| STG
+    LG -->|"`6 · **$ deploy-rehearsal.sh**`"| REH
+    LG -->|"`7.a · **$ deploy.sh**`"| GATE{"gate"}
+    GATE -->|"7.d · ships the image"| PROD
+    ACT -.->|"7.b · CI green for this commit?"| GATE
+    REH -.->|"7.c · rehearsal on this commit?"| GATE
+    LG -->|"7.e · tag + version bump"| REPO
+    PROD -.->|"`8 · **$ deploy-preview.sh verify**`"| STG
+
+    classDef gate fill:#fbe9dc,stroke:#b06a2c,color:#7a4318
+    classDef env fill:#e4eff8,stroke:#39698c,color:#12303f
+    classDef repo fill:#f7efe0,stroke:#96763f,color:#3a2c12
+    class DEV,STG,REH,PROD env
+    class LG,REPO,ACT repo
+    class GATE gate
+    style GH fill:#fdf9f1,stroke:#96763f,color:#3a2c12

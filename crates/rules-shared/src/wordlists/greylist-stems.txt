@@ -1,0 +1,155 @@
+# Stems the greylist generator expands, and the words it must not catch.
+#
+# Nothing here is generated: this file is the judgement, which is why it is
+# committed and reviewed rather than recomputed. See
+# docs/3.5-word-lists-and-dictionaries.md, "Generating the greylist".
+#
+# REVIEWED IN FULL by the owner, 2026-08-12. ESCORT* and DOMINATION* struck as
+# ordinary words; everything else kept, including the contested rows — WELCH*,
+# SODOM*, NONG, the GYP family and the MONGOL family — and TWINKIE*, on the
+# grounds that a trademark is not a competing legitimate sense.
+#
+# So every entry below is a decision, not a proposal. Adding one is cheap and
+# safe; removing one lets the bot play those words, so it wants the same look
+# these got.
+#
+# WHY THIS FILE EXISTS. rustrict catches most of what the greylist wants, but
+# its recall gaps are arbitrary: it flags NEGROES, NEGROID and NEGROIDS but not
+# NEGRO; POOFTER but not POOF or POOFTAH; POONTANG but not POON; SMUTTY but not
+# SMUT; and misses MONG entirely. A base word slipping through while its
+# inflections are caught is exactly the case the greylist exists to prevent.
+#
+# SYNTAX
+#   WORD      grey this word, exactly
+#   PREFIX*   grey every dictionary word starting with PREFIX
+#   !WORD     never grey this word, whatever else matched it
+#
+# ERR LONG. A wrongly greyed word is one the bot declines to play, which nobody
+# can observe; a missed one is a bot playing something a child should not read.
+# The two are not comparable, so entries below lean towards greying. Striking an
+# entry is cheap — that is what this draft is for.
+#
+# ENGLISH ONLY. Applies to sowpods and enable2k. German and Spanish are out of
+# scope: neither can be reviewed by somebody who does not speak the language,
+# which is the blocker rather than the sourcing.
+#
+# The word counts in comments are what each line adds beyond what rustrict
+# already flags, measured against sowpods (267,752 words).
+
+
+# ---------------------------------------------------------------------------
+# Slurs rustrict misses. The reason this file exists; strike with care.
+# ---------------------------------------------------------------------------
+
+NEGRO*          # 20 words. NEGROES/NEGROID/NEGROIDS were already flagged.
+!NEGRONI        # a cocktail
+!NEGRONIS
+
+POOF*           # 7 words. POOFTER/POOFTERS were already flagged.
+POON*           # 8 words, incl. POONCE. POONAC is cattle feed, harmless to grey.
+LEZ*            # 6 words: LEZ LEZES LEZZ LEZZA LEZZAS LEZZES
+
+WOG*            # WOG WOGGISH WOGS
+!WOGGLE         # the ring that holds a scout's neckerchief
+!WOGGLES
+
+DAGO*           # DAGO DAGOES DAGOS
+!DAGOBA         # a Buddhist shrine
+!DAGOBAS
+
+# ABO* would catch 118 words — ABOARD, ABODE, ABOUT, ABORT. Exact only.
+ABO
+ABOS
+
+# MONG* would catch 48 — MONGER, MONGOOSE, MONGREL, MONGST. Exact only.
+# The MONGOL family is here as an outdated term for Down syndrome, not as
+# the nationality; strike if you would rather keep the geographic sense.
+MONG
+MONGS
+MONGOL
+MONGOLS
+MONGOLISM
+MONGOLISMS
+MONGOLOID
+MONGOLOIDS
+
+
+# ---------------------------------------------------------------------------
+# Contested. Offensive to some, ordinary to others — strike freely.
+# ---------------------------------------------------------------------------
+
+# "To gyp" is to cheat, from Gypsy. GYP* would catch GYPSUM, GYPSOPHILA and
+# GYPLURE, so these are exact.
+GYP
+GYPS
+GYPPED
+GYPPER
+GYPPERS
+GYPPING
+GYPSY
+GYPSIES
+
+WELCH*          # 4 words. To welch on a bet; WELSH the nationality is untouched.
+SODOM*          # 10 words, incl. the place name.
+
+# NONG* would catch NONGAME, NONGLARE, NONGOVERNMENT. Exact only.
+NONG            # mild Australian insult
+NONGS
+
+
+# ---------------------------------------------------------------------------
+# Sexual and vulgar base words rustrict misses.
+# From LDNOOBW's `en` list, restricted to entries playable on a board.
+# ---------------------------------------------------------------------------
+
+SMUT*           # 16 words. Includes the SMUTCH family (a variant of smudge);
+                # harmless to grey and not worth eight exclusions to save.
+SNATCH*         # 12 words
+BAREBACK*       # 4 words
+BIMBO*          # 3 words
+EROTISM*        # 2 words
+SWINGER*        # 2 words
+DINGLEBERR*     # 1 word: DINGLEBERRIES
+HARDCORE*       # 2 words
+SHRIMPING*      # 2 words
+SNOWBALLING     # 1 word
+THROATING       # 1 word
+BUSTY
+
+SKEET*          # 4 words. SKEETER is a mosquito — greyed, harmless.
+
+# SCAT* would catch 67 words: SCATTER, SCATHE, SCATHELESS. Exact only.
+SCAT
+SCATS
+
+
+# ---------------------------------------------------------------------------
+# Reviewed and kept, where the innocent reading did not survive a look.
+# ---------------------------------------------------------------------------
+
+# The snack is a trademark, so it is not why the word is in a Scrabble
+# dictionary — there is no clean common-noun sense to protect here. Owner's
+# call, 2026-08-12.
+TWINKIE*        # 2 words
+
+# ---------------------------------------------------------------------------
+# Struck. Proposed in the first draft, removed on review.
+#
+# Recorded here because removing a stem is as much a decision as adding one,
+# and this file is where the judgement lives — a commit message is harder to
+# find a year later. Written without the trailing glob so that no line here
+# can be mistaken for an entry, or become one by losing its `#`.
+#
+# Nothing below was ever taken out of a dictionary. These were our own
+# proposals to keep words away from the bot; striking one simply lets the bot
+# play them again, and people could play them all along.
+# ---------------------------------------------------------------------------
+#
+# ESCORT, ESCORTAGE, ESCORTAGES, ESCORTED, ESCORTING, ESCORTS — 2026-08-12
+#   Ordinary words. A naval escort, escorting somebody home; ESCORTAGE is the
+#   act of escorting. The other sense needs context a board cannot supply.
+#
+# DOMINATION, DOMINATIONS — 2026-08-12
+#   An ordinary noun — world domination, domination of a market. DOMINATIONS
+#   is in the dictionary as a rank of angels rather than for any modern
+#   reading.

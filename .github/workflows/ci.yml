@@ -1,0 +1,221 @@
+name: CI
+
+# The `check` job (fmt · clippy · test · wasm) runs on every push (any branch),
+# on pull requests, and on demand. The heavier `e2e` job (Playwright against the
+# preview Docker stack) is gated to main pushes, PRs, and manual runs — it does a
+# full image build, so it doesn't run on every branch push. See
+# docs/3.3-testing-ci-and-release.md for how this fits alongside local preview.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch/PR cancels an in-progress run for it, so we
+# don't burn minutes finishing a run that's already superseded.
+#
+# **Except on `main`.** Every commit there is one that might be released, and
+# the deploy gate judges the push-to-main run for the exact commit it ships. On
+# the day 0.5.0 went out, `deploy.sh` pushed its version bump 2m22s after the
+# release commit landed — against an e2e job that takes 4-10 minutes — so the
+# deploy cancelled the CI run for the commit it had just released. The minutes
+# saved were the minutes that would have caught it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # .cargo/config.toml sets `rustc-wrapper = sccache` for fast local rebuilds,
+  # but sccache isn't installed on the runner and is incompatible with the
+  # wasm32 target anyway (see docs/3.2-development.md's "Known Build Issues").
+  # An empty value disables the wrapper for the whole job; the wasm32
+  # `target-feature` rustflags in that same config file still apply.
+  RUSTC_WRAPPER: ""
+
+jobs:
+  check:
+    name: fmt · clippy · test · wasm
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — deploy.test.sh runs deploy.sh's gates against real
+      # commits in this repository's history, with only `gh` and `curl`
+      # stubbed. A shallow checkout does not have them, and the suite fails
+      # with "not a valid local git ref" — locally green, red on the runner,
+      # which is the trap these suites keep relearning.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+
+      # Formatting is checked only on the crates in this repo. old-crates are
+      # an untouched historical archive and are excluded from the lint gate.
+      - name: Format check
+        run: >
+          cargo fmt
+          -p api -p engine-core -p rules-shared
+          -p server-game -p admin-cli -p tile-lite-elite-ui
+          --check
+
+      # The release scripts have one piece of parsing that both deploy.sh and
+      # check-commit-stamp.sh depend on, and it has failed twice — once loudly,
+      # taking a production deploy down between two commands, and once quietly,
+      # by returning nothing so the stamp check skipped itself.
+      #
+      # deploy.test.sh runs deploy.sh's own gates under DEPLOY_GATES_ONLY.
+      # Those gates decide what reaches users, and were previously exercised
+      # only by deploying — so the branch where each says *no* almost never
+      # ran, which is how two of them came to fail open and a third to refuse
+      # every rehearsal for a day.
+      - name: Shell script tests
+        run: |
+          ./scripts/tests/read-api-version.test.sh
+          ./scripts/tests/check-release-version.test.sh
+          ./scripts/tests/check-commit-stamp.test.sh
+          ./scripts/tests/ci-status.test.sh
+          ./scripts/tests/deploy.test.sh
+
+      # -D warnings makes any clippy or rustc warning fail the build. Scoped to
+      # this repo's crates (old-crates carry many pre-existing warnings we don't
+      # maintain), but across all targets so tests and examples are linted too.
+      - name: Clippy (deny warnings)
+        run: >
+          cargo clippy
+          --workspace --exclude first-try
+          --all-targets
+          -- -D warnings
+
+      # Full workspace, including old-crates (their tests still pass and the git
+      # utils dependency resolves, so there's no reason to hide them here).
+      - name: Test
+        run: cargo test --workspace
+
+      # Compiles the web client to wasm — the deploy's Docker build does this
+      # too, and native checks above won't catch wasm-only breakage. This is a
+      # plain cargo compile (default `web` feature); it deliberately does not
+      # run the full dx / wasm-bindgen packaging pipeline the release build uses.
+      - name: Wasm build (web client)
+        run: cargo build -p tile-lite-elite-ui --target wasm32-unknown-unknown
+
+  # End-to-end UI tests: build + run the preview Docker stack (the same images
+  # scripts/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
+  # inside the Dockerfile, not reproduced on the runner) and drive the real
+  # client in a browser with Playwright. Heavier than `check` (a full image
+  # build), so it's gated to main pushes / PRs / manual runs, and only after
+  # `check` passes — no point burning a build if the code doesn't lint. See
+  # docs/3.3's runbook step 3 and e2e/README.md.
+  stamp:
+    name: commit stamp (app/api versions)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the check reads each commit's own Cargo.toml and
+      # API_VERSION, so it needs history, not just a snapshot.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Checks the commits this push actually added, not all of history:
+      # commits predating the convention would fail it forever. `before` is
+      # all-zeros for a new branch, in which case fall back to HEAD alone.
+      - name: Check the version stamp on each new commit
+        run: |
+          before="${{ github.event.before }}"
+          if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            ./scripts/check-commit-stamp.sh
+          else
+            ./scripts/check-commit-stamp.sh "$before..${{ github.sha }}"
+          fi
+
+  e2e:
+    name: e2e (Playwright · preview stack)
+    runs-on: ubuntu-latest
+    needs: check
+    if: >
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build the preview images with a GitHub Actions layer cache. The big,
+      # stable win is the builder stage's `cargo install dioxus-cli`/
+      # `wasm-bindgen-cli` layer (compiled from source, minutes) — invariant
+      # unless those pinned versions change, so it's restored from cache on
+      # every run. `bake` reads the same compose file (so image tags match the
+      # `up --no-build` below) and builds both services against the one shared,
+      # cached `builder` stage. Deps/app still recompile on a source change (no
+      # cargo-chef here).
+      - name: Build the preview images (cached)
+        uses: docker/bake-action@v7
+        with:
+          # Build from the checked-out working directory. Required from v6
+          # onwards: bake-action changed its default to the *Git* context
+          # (buildkit fetches the repo itself from a remote bake definition)
+          # to match docker/build-push-action. Without this the build would
+          # no longer be the tree this job checked out — silently, since a
+          # git-context build of the same commit still succeeds.
+          source: .
+          files: docker-compose.preview.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+        env:
+          TILE_LITE_ELITE_BUILD_ID: ${{ github.sha }}
+
+      - name: Start the preview stack
+        env:
+          TILE_LITE_ELITE_BUILD_ID: ${{ github.sha }}
+        run: docker compose -f docker-compose.preview.yml up -d --no-build
+
+      - name: Wait for preview to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8081/health >/dev/null; then
+              echo "preview is up:"; curl -s http://localhost:8081/health; echo
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::preview did not become healthy within 5 minutes"
+          docker compose -f docker-compose.preview.yml logs --tail=200
+          exit 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright suite
+        working-directory: e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8081
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down the preview stack
+        if: always()
+        run: docker compose -f docker-compose.preview.yml down -v
