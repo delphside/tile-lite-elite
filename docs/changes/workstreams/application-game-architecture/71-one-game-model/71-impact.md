@@ -55,7 +55,8 @@ The other 16 are readers and helpers, which stay.
 **Where the work is**: `game_state.rs` mostly, plus every caller. The handlers
 currently call methods directly (`game.remove_seat(n)`), so each call site
 becomes a message. *Inferred*: roughly 40–60 call sites across `games.rs`,
-`roster.rs`, `invitations.rs`, `admin.rs` and `sweeps.rs` — I counted the lock
+`roster.rs`, `invitations.rs`, `admin.rs` and the sweeps (`sweeps.rs` when
+measured, now `sweeps_game.rs`, `sweeps_capacity.rs` and `scheduler_jobs.rs`) — I counted the lock
 acquisitions rather than the method calls, so treat this as an order of
 magnitude.
 
@@ -92,7 +93,7 @@ removes; under one write path it deletes itself.
 **The design**: `HashMap<String, Arc<RwLock<GameSession>>>`.
 
 **Measured**: **35 call sites** take `state.games.read()` or `.write()`, across
-six modules — `games.rs` 15, `roster.rs` 6, `admin.rs` 5, `sweeps.rs` 5,
+six modules — `games.rs` 15, `roster.rs` 6, `admin.rs` 5, `sweeps.rs` 5 (since split),
 `invitations.rs` 3, `events.rs` 1 — plus **27 more** in `tests.rs` and
 `tests_account_lifecycle.rs`. Every one changes shape: today they hold the map
 lock and index it; afterwards they take the map lock briefly, clone an `Arc`,
@@ -151,12 +152,13 @@ arrival.
 says the rules engine, dictionaries, scoring and validation do not change. The
 work is in how it is driven, which lives in `games.rs`: `run_engine_turns`
 (`:913`), `MAX_ENGINE_TURNS_PER_TRIGGER` (400), `ENGINE_TURN_TIMEOUT` (5s), and
-the `engine_limit` semaphore in `app.rs:100` that bounds how many searches run
-at once on the two-core production VM.
+the `engine_limit` setting in `app.rs` (`TILE_LITE_ELITE_ENGINE_CONCURRENCY`,
+default 2), which is read but never acquired (#429). Whether it becomes the
+bound on parallel searches is Decision #462 (D62).
 
 **Depends on per-game locking**, and gains most of its value from it. Today the
-search runs holding the *map's* write lock, so the semaphore is bounding
-something the lock has already serialised across games. Per-game locking is
+search runs holding the *map's* write lock, so searches are serialised across
+games by the lock, and nothing else bounds them. Per-game locking is
 what makes "the engine is a client that takes as long as it takes" true rather
 than aspirational; this work package then removes the remaining coupling.
 
@@ -191,36 +193,40 @@ set rather than adding a new mechanism.
 Ordered by dependency. Each is separately testable, which is the property that
 matters if this ships in pieces.
 
-**A — per-game locking.** 35 call sites, mechanical, no behaviour change, no
+The cuts are numbered so that they are not confused with the lettered work
+packages, which are a different division.
+
+**1 — per-game locking.** 35 call sites, mechanical, no behaviour change, no
 wire change. Testable by the existing suite passing unchanged. Nothing depends
 on it being done first except the engine change, and everything is easier
 after it.
 
-**B — one version, moved in one place.** The `GameMessage` handler, with seat
+**2 — one version, moved in one place.** The `GameMessage` handler, with seat
 state still where it is. Removes the three rides-along coincidences. No wire
 change. Testable by a second client seeing every invitation change — the
-capability exists now (`startTwoPlayerGame`, `e2e/tests/live.spec.ts`), and the
+capability exists now (`startTwoPlayerGame`, `e2e/tests/helpers.ts`), and the
 **four-second window** matters: the games list polls every ten seconds, so a
 longer timeout passes against a completely broken implementation.
 
-**C — seat state onto the seat.** Migration, `snapshot_json` shape, the
-deletion-guard question. Depends on B being the single write path, or it
+**3 — seat state onto the seat.** Migration, `snapshot_json` shape, the
+deletion-guard question. Depends on 2 being the single write path, or it
 multiplies the places to change.
 
-**D — DTOs and redaction.** `SeatRack`, the round-trip property test, the
+**4 — DTOs and redaction.** `SeatRack`, the round-trip property test, the
 opponent tile count in the UI. Moves `API_VERSION` by a major. The only work package
 with something for a person to look at.
 
-**E — the engine as a client.** Depends on A. Small in `engine-core`, mostly in
+**5 — the engine as a client.** Depends on 1. Small in `engine-core`, mostly in
 how the turn is driven.
 
-**F — the client state model (#157).** `selected_game` as real state, composition
-keyed to the game and turn it belongs to, and one transition per invariant. See
+**6 — the client state model (#157).** `selected_game` as real state, and the
+composition keyed to the game and seat it belongs to and matched on read rather
+than cleared. See
 *The client has the same defect* in the note. Client-only: no server change, no
 API move, no migration. It is delivered in Core Client UI (#269), and its
 failing tests (`e2e/tests/ui-state.spec.ts`) are that package's acceptance.
 
-A and B are independent of the design's open questions and useful whatever
+1 and 2 are independent of the design's open questions and useful whatever
 the note concludes. They are the natural first cuts.
 
 ---
