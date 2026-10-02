@@ -199,7 +199,7 @@ assume a game is in a single "invitation phase".
 ```rust
 pub struct Seat {
     pub number: u8,
-    pub name: String,                    // a label until claimed, the player's name after
+    pub player: Option<PlayerId>,        // resolved when the seat is created; a name is looked up, never stored
     pub invitation: Option<Invitation>,  // fixed when the seat is created
     pub state: SeatState,
 }
