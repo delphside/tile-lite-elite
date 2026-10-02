@@ -11,20 +11,24 @@ argues what must be true; that one says what gets written. Where they differ,
 this one is right.
 
 **Pending decisions.** Where the text below is not final it says so and names
-the Decision issue that will settle it. The open ones, as of 2026-10-02:
+the Decision issue that will settle it. They are answered in this order: the
+documents' structure, then functional requirements, then technical decisions,
+with delivery planning last (owner, 2026-10-02). The open ones, as of
+2026-10-02:
 
-| decision | what it settles | where it bites |
-| --- | --- | --- |
-| [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
-| [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
-| [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | whether #10's harness is a work package of this project | *The harness runs the bots* |
-| [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | branches and milestones per delivery | `71-delivery.md` |
-| [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
-| [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
-| [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | which package carries the requirements not yet allocated | #71's body |
-| [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | what aborting does to seats that have no player | *The two lifecycles together* |
-| [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | what a failed save leaves in memory | *One version, moved in one place* |
-| [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | whether this project or #408 owns the games map | *Locking is per game* |
+| order | decision | kind | what it settles | where it bites |
+| --- | --- | --- | --- | --- |
+| 1 | [#472](https://github.com/delphside/tile-lite-elite/issues/472) D71 | technical, frames the rest | how these documents are structured and sequenced | this folder |
+| 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | *The two lifecycles together* |
+| 2 | [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | functional requirement | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
+| 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
+| 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
+| 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
+| 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
+| 3 | [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | technical | whether this project or #408 owns the games map | *Locking is per game* |
+| 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
+| 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
+| 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
 
 The design map this project starts from, in the format #406 is agreeing, is
 not drawn yet; it waits on #406's open questions.
