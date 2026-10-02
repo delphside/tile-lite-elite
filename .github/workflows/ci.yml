@@ -195,8 +195,20 @@ jobs:
       # Checks the commits this push actually added, not all of history:
       # commits predating the convention would fail it forever. `before` is
       # all-zeros for a new branch, in which case fall back to HEAD alone.
+      #
+      # **A pull request checks its own commits: base to head.** On a
+      # `pull_request` event `github.sha` is GitHub's merge of the branch with
+      # its base, and `before` is the branch's previous head — so the range
+      # above took in everything on `main` the branch did not have. Found on
+      # 2026-10-02 by a branch cut from a `prod-*` tag (docs/3.3 §1.13): the
+      # job reported a stampless commit from `main`, and would have refused
+      # every emergency for a commit that was not the emergency's.
       - name: Check the version stamp on each new commit
         run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            ./scripts/check-commit-stamp.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+            exit
+          fi
           before="${{ github.event.before }}"
           if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
             ./scripts/check-commit-stamp.sh

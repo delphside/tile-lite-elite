@@ -42,6 +42,9 @@ $(row 31417856444 push 0.5.0 completed success https://example/branch)"
   export PR_FAILED="$GREEN_MAIN
 $(row 901 pull_request some-branch completed failure https://example/pr)"
   export BRANCH_RUN="$(row 902 push some-branch completed success https://example/branch)"
+  # An emergency's two runs: its branch push, and the pull request that ran e2e.
+  export EMERGENCY_RUNS="$(row 903 push emergency-fix completed success https://example/branch)
+$(row 904 pull_request emergency-fix completed success https://example/pr)"
   export GREEN_JOBS="fmt · clippy · test · wasm${TAB}success
 commit stamp (app/api versions)${TAB}success
 e2e (Playwright · preview stack)${TAB}success"
@@ -173,7 +176,7 @@ ahead() {
 @test "a database ahead of the image is refused, emergency or not" {
   gates "$GREEN_MAIN" "$GREEN_JOBS" "$(ahead)" $GOOD_COMMIT
   assert_equal "$status" 1
-  gates "$GREEN_MAIN" "$GREEN_JOBS" "$(ahead)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
+  gates "$EMERGENCY_RUNS" "$GREEN_JOBS" "$(ahead)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
   assert_equal "$status" 1
 }
 
@@ -188,16 +191,26 @@ ahead() {
 # --- emergency: it may skip the two gates that cost an image build, and nothing else
 
 @test "an emergency skips a stale preview and rehearsal, and says so" {
-  gates "$GREEN_MAIN" "$GREEN_JOBS" "$(stale preview)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
+  gates "$EMERGENCY_RUNS" "$GREEN_JOBS" "$(stale preview)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
   assert_success
   assert_output --partial "Skipping the rehearsal gate (emergency)"
+}
+
+# An emergency is cut from the last prod-* tag (docs/3.3 §1.13), so its commit
+# has no push-to-main run and its branch push skips e2e. The run that answers
+# for it is the pull request's, which does execute e2e against the branch.
+@test "an emergency is judged by its pull request's run, with e2e, and names it" {
+  gates "$EMERGENCY_RUNS" "$GREEN_JOBS" "$(all_current $GOOD_COMMIT)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
+  assert_success
+  assert_output --partial "pull_request"
 }
 
 # The one that matters most: an emergency is not a way past a failing test.
 @test "an emergency still requires CI, and e2e to have run" {
   gates "$FOUR_RUNS" "$GREEN_JOBS" "$(all_current $BAD_COMMIT)" $BAD_COMMIT DEPLOY_EMERGENCY=drill
   assert_equal "$status" 1
-  gates "$GREEN_MAIN" "$SKIPPED_E2E" "$(all_current $GOOD_COMMIT)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
+  gates "$EMERGENCY_RUNS" "$SKIPPED_E2E" "$(all_current $GOOD_COMMIT)" $GOOD_COMMIT DEPLOY_EMERGENCY=drill
+  assert_equal "$status" 1
   assert_output --partial e2e
 }
 

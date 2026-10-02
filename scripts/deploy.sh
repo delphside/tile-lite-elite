@@ -1079,7 +1079,18 @@ echo "==> $TARGET_SHA confirmed on the remote ($REMOTE_BRANCHES)"
 # the build. And e2e cannot be required of a branch push, because it does not
 # run there: requiring it would refuse every rehearsal rather than every other
 # one.
-if (( IS_RELEASE )); then
+#
+# **An emergency is judged by its pull request's run.** It is cut from the last
+# `prod-*` tag, never from `main` (docs/3.3 §1.13), so its commit has no
+# push-to-`main` run to wait for — and a branch push skips e2e. The pull
+# request's run is the one that exercises e2e against the branch, which is the
+# run the second gate below already reads; here it is required, with e2e, so
+# that an emergency still cannot ship past a failing test. An emergency with no
+# pull request has no run that executed e2e, and waits here as a release waits
+# for its push to `main`. Found on the first emergency, 2026-10-02.
+if (( IS_RELEASE )) && [[ -n "$EMERGENCY" ]]; then
+  CI_RUN=(--run pull_request --require e2e)
+elif (( IS_RELEASE )); then
   CI_RUN=(--run push:main --require e2e)
 else
   CI_RUN=(--run push)
