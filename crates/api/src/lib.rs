@@ -84,9 +84,13 @@ use serde::{Deserialize, Serialize};
 // 2.15 — `GET /admin/scheduler-health` joins the admin surface, for #400's
 // R5 (last-completed and errored-item-count per scheduled job). Minor by
 // the 2.4 test: loopback-only, one client, ships in the same container.
+// 2.16 — statuses changed on paths that already existed (docs/3.3's third
+// row): a sign-in is now required where one was optional, and a request the
+// board or alphabet cannot address is refused as a 400. Old clients still
+// work; a signed-in one sees no difference.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 2,
-    minor: 15,
+    minor: 16,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
