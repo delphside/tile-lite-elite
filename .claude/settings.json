@@ -10,6 +10,17 @@
             "statusMessage": "Checking the GitHub inbox..."
           }
         ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/cloud-setup.sh",
+            "timeout": 300,
+            "statusMessage": "Installing the build and test tools (cloud only)..."
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
