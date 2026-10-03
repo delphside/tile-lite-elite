@@ -515,7 +515,7 @@ player holding two has one of their own racks hidden from them.
 | --- | --- |
 | `games` | add `version`, `turn` and `last_scoring_turn`, all `integer not null default 0`. `snapshot_json` changes shape and gains `schema_version` (#302, below) |
 | `game_participants` | drop `display_name`. Add `state text not null`, `invitation_id text`, `hidden_by_player integer not null default 0`. Keep `outcome`, `bingo_count`, `score` — stats read them without loading a snapshot |
-| `game_invitations` | gains `addressee_id text`, null unless the address invited was a verified account's when it was sent (see *Binding by address* in `71-design.md`).[^d59] It stays the record of who was asked and what they said, which DEL-2 reads |
+| `game_invitations` | gains `addressee_id text`, null unless the address invited was a verified account's when it was sent (see *Binding by address* in `71-design.md`).[^d59] Whether it also restricts who may accept is pending [D72](https://github.com/delphside/tile-lite-elite/issues/479). It stays the record of who was asked and what they said, which DEL-2 reads |
 | `player_ratings`, `rating_history` | the key becomes `(player_id, edition)` and `subject_kind` goes, in one migration with the rest of Core.[^d58] An edition is the game's `variant` (`games.variant`, 4.2), so a game is rated in the edition it was played in, bot against bot included. A bot's rows move to the id of its account, and every existing row becomes English (International)'s; other editions start at 1500 |
 | `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured. Whether `game_moves` stays a table rewritten on every save or becomes an append-only event log is Decision #461 (D61) |
 

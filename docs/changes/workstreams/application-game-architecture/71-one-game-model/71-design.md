@@ -27,6 +27,7 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | --- | --- | --- | --- | --- |
 | 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | `71-functional.md`, *The game and its seats* |
 | 2 | [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | functional requirement | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
+| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account | *Binding by address* |
 | 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
 | 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
@@ -325,6 +326,14 @@ would trade a recoverable mistake for an unrecoverable one: signing in as the
 wrong account is fixed today by signing in properly and clicking again, because
 the **link is the credential, not the address**. Bind at sign-in and the same
 slip fixes the seat to an account that cannot then accept it.
+
+> **Pending [D72](https://github.com/delphside/tile-lite-elite/issues/479).** The
+> owner has ruled that an email address is unique, identifies one account, and
+> can be changed (#439 R2, R6). That removes the premise of *The address invited
+> need not be the address the account uses*; it and the rules below stand until
+> D72 is decided. Its recommendation
+> keeps them but makes `addressee_id` restrict who may accept, rather than only
+> list the invitation.
 
 **Binding by address.** The invitation records the address it was sent to. When
 that address is a *verified* address of an account at the moment of sending,
