@@ -32,6 +32,11 @@ class ProgrammeDocuments(unittest.TestCase):
                  "docs/programme-activity-log.csv")
         self.assertEqual(list(paths), of("programme", *paths))
 
+    def test_the_artefact_register_is_a_programme_record(self):
+        # docs/5.2: 4.8 is this application's instance of the artefact register,
+        # a record, so it changes on main (owner, 2026-10-03, #474).
+        self.assertEqual(["docs/4.8-artefacts.md"], of("programme", "docs/4.8-artefacts.md"))
+
     def test_an_application_document_is_not_one(self):
         self.assertEqual([], of("programme", "docs/4.3-api-schema.md", "docs/3.0-tools.md"))
 

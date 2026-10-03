@@ -5,7 +5,8 @@ application*), and the class decides how it changes:
 
 - **generic programme assets** (processes, role definitions, templates) and
 - **programme records** (instances produced by operating the programme: the
-  delivery log, the workstream list, reports, change notes) are `programme`.
+  delivery log, the workstream list, the artefact register in docs/4.8,
+  reports, change notes) are `programme`.
   They belong to no project and change on `main`: a copy on a branch
   disagrees with `main` until it merges, and makes the programme wait on a
   project it has nothing to do with. `.githooks/pre-commit` asks here before
@@ -43,6 +44,7 @@ PROGRAMME_DOCUMENTS = (
     "AGENTS.md",
     "docs/README.md",
     "docs/programme-activity-log.csv",
+    "docs/4.8-artefacts.md",  # a record: this application's artefact register
 )
 PROGRAMME_PREFIXES = (
     "docs/1.4-",
