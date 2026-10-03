@@ -2,7 +2,10 @@
 <!--
 Copy to `docs/reports/capacity_plan/<YYYY-MM>.md` and fill it in.
 
-**Claude measures and writes it; Steve reviews it.** #291 R2, and the recurrence
+Paragraphs marked *(this application)* are this application's answers, not
+the template's generic shape.
+
+*(this application)* **Claude measures and writes it; Steve reviews it.** #291 R2, and the recurrence
 that raises it is a date in #291's body — `Next capacity plan due: <date>`.
 Doing this moves that date on a month.
 
@@ -16,7 +19,7 @@ where".
 dropped on desktops, and the name has to mean something once it is off the
 path.
 
-**Where the numbers come from.** The application posts nothing — D49, because
+*(this application)* **Where the numbers come from.** The application posts nothing — D49, because
 the instance principal is a host credential. Host figures are read on the box;
 games and accounts come from the admin CLI over loopback, which is the owner's
 to run (CLAUDE.md, "Production access is the owner's to run").
@@ -32,7 +35,9 @@ elsewhere or estimated, and say which.
 ## What is consumed, against what ceiling
 
 Every resource with a ceiling, and every resource without one — an absent
-ceiling is a finding, not an omission.
+ceiling is a finding, not an omission. The indented rows, the snapshot
+ceiling and the last two rows are this application's; another application
+lists its own.
 
 | | consumed | ceiling | headroom |
 | --- | --- | --- | --- |
