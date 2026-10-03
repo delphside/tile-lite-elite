@@ -32,9 +32,7 @@ true of every seat in every state; the rest move into the state that owns them.
 ```rust
 pub struct Seat {
     pub number: u8,
-    pub kind: SeatKind,                   // Human | Engine, as today
-    pub player: Option<PlayerId>,         // resolved when the seat is created
-    pub engine: Option<EngineId>,
+    pub player: Option<PlayerId>,         // resolved when the seat is created; a bot is a player
     pub invitation: Option<Invitation>,   // fixed at creation; None for own seat and bots
     pub state: SeatState,
     pub hidden_by_player: bool,           // "removed from my list" — per seat, not per game
@@ -46,6 +44,8 @@ pub struct Seat {
 `SeatState::Departed { how: Departure::Resigned, .. }` says it, and says which
 of the three ways it happened. `score` and `rack` move inside the states that
 have them, which is what stops a `Claimed` seat carrying a rack it cannot have.
+`kind` and `engine` are gone: a bot is a user account, and the account says
+which engine it runs (*Bots are users* in the note).
 
 `SeatState`, `Invitation`, `Departure` and `SeatRack` are as
 [`71-design.md`](71-design.md) gives them, and are not repeated here.
@@ -57,113 +57,42 @@ pub struct GameSession {
     pub id: GameId,
     pub status: GameStatus,
     // …variant, language, board_layout, rules, state, bag, moves, messages,
-    //   consecutive_scoreless_turns, move_time_limit_seconds, turn_started_at
-    //   are unchanged…
+    //   move_time_limit_seconds, turn_started_at are unchanged…
     pub seats: Vec<Seat>,                 // was `participants: Vec<ParticipantState>`
     pub current_seat: u8,
     pub turn: i64,                        // was `turn_number`; game state, walks back under undo
     pub version: i64,                     // every change, of any kind. Never decreases
-    pub board_version: i64,               // the `version` at which the board last changed
-    pub last_scoring_turn: i64,           // see "Deriving beats accumulating"
-
+    pub last_scoring_turn: i64,           // replaces `consecutive_scoreless_turns`; see below
 }
 ```
 
-**Three counters, and only one of them is monotonic.** Corrected 2026-08-29;
-an earlier draft of this section had two and used `turn` as the composition
-key, which undo breaks.
+**Two counters, and only one of them is monotonic.**
 
 | | what it counts | monotonic? |
 | --- | --- | --- |
 | `version` | every change a client can see, including chat and a rename | **yes, always** |
 | `turn` | turns taken since the game started — **game state** | **no**: undo takes it back, redo returns it |
-| `board_version` | the `version` at which the board last changed | **yes** |
 
-Owner, 2026-08-29: *"turn is part of game state, how many turns have been taken
-since the game started. As you know we intend to introduce undo/redo, so turn
-could go backwards. Version always increments."*
-
-**So `turn` cannot key the composition**, and the reason is the one this note
-already gives for `version` being a counter rather than a description: a game
-can **return to a value it already held**. Undo to turn 7, redo to turn 8, and a
-composition staged at turn 8 before the undo matches again — against a board
-that is no longer the one it was composed on. That is the same silent-wrong-
-answer this whole note exists to remove, reintroduced by the key I chose.
-
-**`board_version` is the key**: the version at the moment the board last
-changed. It is a `version`, so it never repeats; it moves only when the board
-does, so an opponent's chat leaves a half-typed word alone; and undo *does*
-move it, because undo changes the board and produces a new higher version.
-
-```rust
-pub struct CompositionKey {
-    pub game: GameId,
-    pub board_version: i64,   // not `turn` — turn repeats, this cannot
-    pub seat: u8,
-}
-```
-
-**One field, and it costs nothing to maintain**: `apply` sets
-`board_version = version` in the arms that touch the board — `Place`, `Pass`,
-`Exchange`, and undo — and leaves it alone in the others. It is the one place
-that could be forgotten, which is why it belongs inside the single handler
-rather than anywhere else.
-
-**Undo increments `board_version`; it does not restore it.** Asked directly,
-2026-08-29, and worth stating because the opposite is the natural thing to
-write: *"if there is an undo the board version would increment rather than
-return to what it had been?"* It increments.
-
-```text
-turn 8, board_version 41   a word is staged, keyed on 41
-undo                        turn 7, board_version 42   ← new, higher
-redo                        turn 8, board_version 43   ← new again
-```
-
-The board at `board_version 43` is byte-for-byte the board at 41. **The number
-is not**, and that is the point: the staged word is discarded at the undo and
-stays discarded through the redo, because it was composed against a board the
-player has since moved away from and back to. A key that restored to 41 would
-resurrect it.
-
-This is the note's own rule about `version` — *"a game can return to a state it
-already held, so anything derived from state repeats and a client comparing
-with `>` silently ignores the update"* — applied one level down. `turn` is a
-description of the game and repeats; `board_version` is an identifier for *when
-the board was last set* and cannot.
-
-**So restoring it would be the bug**, and it is the plausible mistake: undo
-restores the board, and restoring the field that describes the board looks
-consistent. It is not. Undo restores **content**; versions only ever count
-**changes**, and an undo is a change.
+`turn` is game state: it is what undo walks, what the scoreless rule reads and
+what a player is shown (owner, 2026-08-29). Because it can return to a value it
+already held, it keys nothing — the same reason the note gives for `version`
+being a counter rather than a description.
 
 ### Which changes move which counter
 
-Asked 2026-08-29: *"if a player passes then the turn will increment, the version
-will increment: will the board version increment?"* No.
-
-| change | `version` | `turn` | `board_version` |
-| --- | --- | --- | --- |
-| a word placed | ✓ | ✓ | ✓ |
-| a pass | ✓ | ✓ | — |
-| an exchange | ✓ | ✓ | — |
-| a chat message | ✓ | — | — |
-| an invitation sent, accepted, declined | ✓ | — | — |
-| a rename (`UpdateUserDetails`) | ✓ | — | — |
-| a resignation, force-resign, timeout | ✓ | — | — |
-| undo, redo | ✓ | ✓ back / ✓ forward | ✓ |
-| a seat added, removed, reordered | ✓ | — | — |
-
-**A pass leaving `board_version` alone is the useful case**, not an edge one: a
-word staged while waiting survives an opponent's pass, because the board it was
-composed against is unchanged. Under `turn` as the key it would have been
-discarded for nothing.
+| change | `version` | `turn` |
+| --- | --- | --- |
+| a word placed | ✓ | ✓ |
+| a pass | ✓ | ✓ |
+| an exchange | ✓ | ✓ |
+| a chat message | ✓ | — |
+| an invitation sent, accepted, declined | ✓ | — |
+| a rename (`UpdateUserDetails`) | ✓ | — |
+| a resignation, force-resign, timeout | ✓ | — |
+| undo, redo | ✓ | ✓ back / ✓ forward |
+| a seat added, removed, reordered, hidden | ✓ | — |
 
 ### Three categories of change
-
-Owner, 2026-08-29: *"pass and exchange do move the game state on, especially
-exchange, as does resign. So we just need to be clear what is affected and what
-we are interested in."*
 
 | category | what is in it | changed by |
 | --- | --- | --- |
@@ -171,44 +100,28 @@ we are interested in."*
 | **the game** | the board, plus racks, scores, the turn, resignations and timeouts | everything above, plus pass, exchange, resign, force-resign, timeout, start, abort |
 | **periphery** | chat messages | posting a message |
 
-**Only two counters exist**, and the categories are not a third and fourth.
-`version` moves for all three categories — it answers *is what I hold stale*.
-`board_version` moves for the first — it answers *is a staged word still
-placeable*. Nothing needs a counter for the middle category, because a client
-that hears anything at all replaces the whole state.
-
-**What the categories are for is deciding what to do**, and that is a property
-of the **event**, not of a counter. The envelope already carries it —
+**The categories are not counters.** `version` moves for all three and answers
+*is what I hold stale*. What a category decides is what to do, and that is a
+property of the **event**: the envelope carries it —
 `State { game, because: Option<GameEventDto> }` — so a client classifies the
 event rather than comparing numbers:
 
 | the client is told | it does |
 | --- | --- |
-| a **board** event | redraw the board; a staged word is void, and the `board_version` check has already discarded it |
+| a **board** event | redraw the board; a staged word whose cells are now taken is discarded by the occupancy check below |
 | a **game** event | redraw the panes — racks, scores, whose turn. Notify if it is now this player's turn |
 | a **periphery** event | a chat badge. Nothing else moves |
 | **nothing** — a refetch or a reconnect | rebuild everything, because there is no event to classify |
 
-**Exchange is the case that proves the categories are not the counters.** It
-changes the game and not the board: `version` moves, `turn` moves,
-`board_version` does not. A staged word survives it — correctly, since the board
-is unchanged — but the *exchanging seat's* rack does not, which is why the rack
-is checked separately below rather than folded into `board_version`.
+**Exchange is the case that shows why.** It changes the game and not the
+board: a staged word survives it, but the exchanging seat's rack does not,
+which is why the rack is checked on its own below.
 
-**And it is why `board_version` is named for the board rather than for play.**
-An earlier draft of this document used it for both jobs, which would have
-discarded a staged word every time an opponent passed.
+### The composition is keyed by game and seat
 
-### Staged tiles are displaced by occupancy, not by change
-
-Owner, 2026-08-29: *"on staged tiles, they only need to be displaced if a tile
-is played in the same cell."*
-
-That is narrower than anything above, and it removes the field. A staged word
-does not care that the board changed; it cares whether **its own cells** are
-still free. An opponent playing in the far corner takes nothing away.
-
-So there is no board counter in the composition key at all:
+A staged word is displaced only when a tile is played in one of its own cells
+(owner, 2026-08-29). An opponent playing elsewhere takes nothing away, so no
+counter is part of the key:
 
 ```rust
 pub struct CompositionKey {
@@ -226,16 +139,17 @@ fn live_composition(&self) -> Option<Composition> {
 }
 ```
 
-**Both conditions are comparisons against the state the DTO already carries** —
-the cells are empty, the tiles are still in the rack. Nothing is stored, nothing
-is bumped, and nothing can be forgotten in a handler. This is the third time in
-this document that deriving has beaten a counter, and the first where it removes
-one already proposed.
+**Both conditions compare against the state the DTO already carries** — the
+cells are empty, the tiles are still in the rack. The rack check covers what
+the board check cannot: a rack changes without the board changing, after an
+exchange or a timeout returning tiles to the bag, and a composition names tiles
+by rack position. Nothing is stored, nothing is bumped, and nothing can be
+forgotten in a handler.
 
-**`board_version` therefore goes.** It was invented two revisions ago to key the
-composition, survived one narrowing when a pass turned out not to move it, and
-does not survive this one. `version` and `turn` remain; the schema and the DTO
-lose a column and a field.
+**Composing does not need the turn; submitting does.** A composition survives
+an opponent's turn, so a player can arrange a word while waiting (#88, carried
+by this project). The client offers Submit only when `current_seat` is the
+key's seat, and the server refuses anything else with `ApplyError::NotYourTurn`.
 
 **Validity is a separate question from survival**, and conflating them would
 throw work away. An opponent playing *adjacent* to a staged word leaves its
@@ -249,8 +163,7 @@ or a connection that has become something else.
 
 The client already runs the rules engine — `client_rules.rs` validates and
 scores before sending — so it can re-validate on every board change and mark the
-word rather than silently dismantling it. Losing a half-built word because
-somebody played elsewhere is exactly the behaviour this design exists to remove.
+word rather than silently dismantling it.
 
 ### Three tile states, and all three already exist
 
@@ -303,44 +216,6 @@ One field, no server state, and the log wants it anyway. Worth listing
 separately rather than folding in: it is a change to what a player sees, and it
 should be somebody's decision rather than something that arrives with a
 refactor.
-
-### What `board_version` did not cover
-
-The design note sets the requirement as *"same game, still this player's turn,
-same board underneath"*. `board_version` answers the third. The other two are
-comparisons against current state rather than parts of the key:
-
-```rust
-fn live_composition(&self) -> Option<Composition> {
-    let game = self.cache.peek().as_ref()?;
-    let c    = self.composition.peek().clone()?;
-    (c.key.game == game.id
-        && c.key.board_version == game.board_version
-        && staged_tiles_still_held(&c, game))
-        .then_some(c)
-}
-```
-
-**The rack is the gap `board_version` leaves.** A rack changes without the board
-changing — an exchange, and a timeout returning tiles to the bag. A composition
-names tiles by rack position, so a changed rack invalidates it even though the
-board is untouched.
-
-**No third counter is needed for that.** The staged tiles can be checked against
-the rack the DTO already carries — seven tiles, compared on read — and it is a
-check the composer needs anyway, since a tile you no longer hold cannot be
-placed. Deriving beats accumulating here too.
-
-**"Still this player's turn" is deliberately not in the test above**, and that
-is a decision waiting on #88. Today a composition is only submittable on your
-turn, so requiring `current_seat == key.seat` would be right. #88 asks for
-staging *out of turn* — provisionally arranging a word while waiting — and under
-that, holding a composition through the opponent's turn is the feature. The
-board and rack conditions are correct either way; whether the turn joins them
-is #88's to settle, and it is one clause.
-
-**`turn` still earns its place**, as the note says: it is game state, it is what
-undo walks, and it is what a player is shown. It is simply not a key.
 
 ### Deriving beats accumulating, and the scoreless rule is the case
 
@@ -405,6 +280,7 @@ pub enum ApplyError {
     NotYourTurn { seat: u8 },
     SeatNotPlaying { seat: u8 },
     GameNotActive,
+    GameNotWaiting,            // a seat message (invite, accept, claim) after the start
     IllegalMove(rules_shared::MoveError),
     Unknown(String),
 }
@@ -412,7 +288,9 @@ pub enum ApplyError {
 
 **`next` is how a bot's turn is noticed** without anybody searching for one. The
 handler already knows who is on turn after applying; returning it means the
-caller can hand that seat to the engine runner and return.
+caller can hand that seat to the engine runner and return. Every arm returns it, so
+a bot comes on turn after a timeout, a force-resign or a seat leaving just as it
+does after a move.
 
 ### The one handler
 
@@ -434,6 +312,17 @@ either disappear into `apply` or become callers of it.
 for what the outside needs. A second writer then does not compile, which is the
 difference between this and `announce_invitation_change`.
 
+Two other ways in are named so that they are not mistaken for writers.
+`GameSession::from_snapshot` builds a game from its stored row, which is how
+persistence loads one; it validates the snapshot and changes nothing. Tests
+build games through `GameSession::new` and `apply`, the public path, so a test
+cannot reach a state the handler could not produce.
+
+**What a failed save leaves** is open: the handler mutates in memory and the
+caller persists, so a failed write can leave memory ahead of the database.
+Decision #469 (D69) chooses between applying to a copy and swapping it in after
+the save, or reloading on failure.
+
 ## 2 · The wire
 
 ### The seat, on the wire
@@ -441,9 +330,7 @@ difference between this and `announce_invitation_change`.
 ```rust
 pub struct SeatDto {
     pub number: u8,
-    pub kind: SeatKind,
     pub player_id: Option<String>,
-    pub engine_id: Option<String>,
     pub state: SeatStateDto,          // mirrors SeatState, tagged
     pub rack: Option<SeatRackDto>,    // present only for Playing
     pub score: Option<i32>,
@@ -468,7 +355,6 @@ pub struct GameStateDto {
     pub id: String,
     pub version: i64,
     pub turn: i64,                    // new — game state, shown to the player
-    pub board_version: i64,           // new — the composition key
     pub status: GameStatus,
     // …variant, language, board_layout, current_seat, winner_seat,
     //   final_bonus_*, bag_count, move_time_limit_seconds, turn_started_at,
@@ -505,12 +391,17 @@ pub enum GameEventDto {
     Passed        { seat: u8 },
     Exchanged     { seat: u8, count: u8 },
     Resigned      { seat: u8 },
-    ForceResigned { seat: u8, by: String },
+    ForceResigned { seat: u8 },
     TimedOut      { seat: u8 },
     SeatInvited   { seat: u8 },
     InvitationAccepted { seat: u8 },
     InvitationDeclined { seat: u8 },
     SeatWithdrawn { seat: u8 },
+    SeatAdded     { seat: u8 },
+    SeatRemoved   { seat: u8 },
+    SeatsSwapped  { a: u8, b: u8 },
+    SeatHidden    { seat: u8 },
+    ReminderSent  { seat: u8 },
     Started, Aborted, Finished { winner: Option<u8> },
     UserDetailsUpdated { player: String },
     ChatPosted    { seat: Option<u8>, player: String },
@@ -531,6 +422,10 @@ impl GameEventDto {
 
 pub enum ChangeCategory { Board, Game, Periphery }
 ```
+
+**`ForceResigned` does not say who did it.** Every client of the game receives
+the event, and which administrator acted is not theirs to know; the server's own
+log records it.
 
 **Undo and redo are classified by what they undo**, not by being undo — undoing
 a placement is a board change, undoing a pass is a game change. That falls out
@@ -618,11 +513,33 @@ player holding two has one of their own racks hidden from them.
 
 | table | change |
 | --- | --- |
-| `games` | add `version`, `turn`, `board_version` and `last_scoring_turn`, all `integer not null default 0`. `snapshot_json` changes shape |
+| `games` | add `version`, `turn` and `last_scoring_turn`, all `integer not null default 0`. `snapshot_json` changes shape and gains `schema_version` (#302, below) |
 | `game_participants` | drop `display_name`. Add `state text not null`, `invitation_id text`, `hidden_by_player integer not null default 0`. Keep `outcome`, `bingo_count`, `score` — stats read them without loading a snapshot |
-| `game_invitations` | gains `addressee_id text`, null unless the address invited was a verified account's when it was sent (see *Binding by address* in `71-design.md`).[^d59] It stays the record of who was asked and what they said, which DEL-2 reads |
-| `player_ratings`, `rating_history` | the key becomes `(player_id, edition)` and `subject_kind` goes, in one migration with the rest of Core.[^d58] A bot's rows move to the id of its account, and every existing row becomes English (International)'s; other editions start at 1500 |
-| `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured |
+| `game_invitations` | gains `addressee_id text`, null unless the address invited was a verified account's when it was sent (see *Binding by address* in `71-design.md`).[^d59] Whether it also restricts who may accept is pending [D72](https://github.com/delphside/tile-lite-elite/issues/479). It stays the record of who was asked and what they said, which DEL-2 reads |
+| `player_ratings`, `rating_history` | the key becomes `(player_id, edition)` and `subject_kind` goes, in one migration with the rest of Core.[^d58] An edition is the game's `variant` (`games.variant`, 4.2), so a game is rated in the edition it was played in, bot against bot included. A bot's rows move to the id of its account, and every existing row becomes English (International)'s; other editions start at 1500 |
+| `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured. Whether `game_moves` stays a table rewritten on every save or becomes an append-only event log is Decision #461 (D61) |
+
+**Foreign keys arrive with this migration (#253).** Every table is rewritten
+anyway, so the constraints 4.2 says are missing are declared now, matching the
+deletes `persistence.rs` does by hand today, and `PRAGMA foreign_keys = ON` is
+set on every connection:
+
+| reference | on delete |
+| --- | --- |
+| `game_moves`, `game_messages`, `game_participants`, `game_invitations` → `games` | cascade |
+| `sessions`, `password_reset_tokens`, `game_invitations`, `player_ratings`, `rating_history` → `players` | cascade |
+| `game_participants.player_id`, and any other reference from game history to a player → `players` | set null — the seat is unclaimed, not deleted |
+| `rating_history.game_id` → `games` | set null — the point outlives its game (RET-2, DEL-10) |
+
+The last row is #66's fix: `RatingPointDto.game_id` becomes `Option<String>`, so
+a client is told plainly that the game has gone rather than handed an id that
+names nothing.
+
+**`schema_version` is a field of `snapshot_json`** (#302), an integer whose
+first value is 1, read before anything else in the blob. A reader matches on it
+and has one deserialiser per version it still accepts; a version it does not
+know is an error naming the version, not a missing-field error. Why it is
+separate from `version` is in the note's *So that this is the last deletion*.
 
 **`version` and `turn` become columns** rather than living only inside
 `snapshot_json`, because a sweep needs to find games by state without
@@ -640,14 +557,15 @@ survives the move to `(player_id, edition)`.
 | module | what happens to it |
 | --- | --- |
 | `game_state.rs` | `ParticipantState` → `Seat`; gains `apply`; loses every other mutator. Its private fields are what enforce the single writer |
-| `app/games.rs` (999 lines) | the action handlers become thin: parse, build a `GameMessage`, call `apply`, publish. `run_engine_turns` and `MAX_ENGINE_TURNS_PER_TRIGGER` go |
+| `app/games.rs` (1,030 lines) | the action handlers become thin: parse, build a `GameMessage`, call `apply`, publish. `run_engine_turns` and `MAX_ENGINE_TURNS_PER_TRIGGER` go |
 | `app/roster.rs` (391) | seat add/remove/swap become `GameMessage`s |
-| `app/invitations.rs` (367) | send/accept/decline become `GameMessage`s; the table write stays, the seat write moves into `apply` |
+| `app/invitations.rs` (442) | send/accept/decline become `GameMessage`s; the table write stays, the seat write moves into `apply` |
 | `app/events.rs` (105) | gains `publish(Applied)` — persist, broadcast, one place |
-| `app/sweeps.rs` (268) | timeouts and retention go through `apply` rather than writing rows, which is what makes them visible to clients |
-| `app/admin.rs` (370) | force-resign and force-end become `GameMessage`s |
+| `app/sweeps_game.rs` (301), `app/scheduler_jobs.rs` (248) | timeouts and reminders go through `apply` rather than writing rows, which is what makes them visible to clients. A scheduler job is a caller like any other |
+| `app/sweeps_capacity.rs` (81) | expiring a finished game deletes it rather than changing it, so it publishes the removal and does not call `apply` |
+| `app/admin.rs` (430) | force-resign and force-end become `GameMessage`s |
 | `app/stats.rs`, `ratings.rs` | unchanged in substance; read `Applied.finished` instead of inspecting status transitions |
-| `crates/ui/src/app.rs` (5,500) | section 7 |
+| `crates/ui/src/app.rs` (5,522) | section 7 |
 | `crates/engine-core` | **unchanged.** The trait already takes a request and returns an action; what changes is who calls it |
 
 ## 7 · The client
@@ -670,8 +588,7 @@ pub struct Composition {
 
 pub struct CompositionKey {
     pub game: GameId,
-    pub board_version: i64,   // not `turn`: turn repeats under undo, this cannot
-    pub seat: u8,
+    pub seat: u8,             // no counter: see §1, *The composition is keyed by game and seat*
 }
 ```
 
@@ -756,6 +673,18 @@ that seat is an engine seat:
 5. **the move is re-validated on arrival**, because the game may have moved —
    aborted, or the seat retired. A rejection is normal, not an error
 
+**The number of searches running at once is bounded.** Today a search holds the
+games write lock, so searches run one at a time by accident and `engine_limit`
+(`TILE_LITE_ELITE_ENGINE_CONCURRENCY`, default 2, the VM's core count) is read
+but never acquired. Once the task holds nothing, N bot games on turn are N
+parallel searches. Where the bound lives is Decision #462 (D62); the
+recommendation is that the spawned task acquires `engine_limit` before
+searching.
+
+**A search that fails, panics or runs out of time** leaves the seat on turn,
+exactly as a silent human is, and the move time limit retires it. It is logged
+and never answered to the human whose move triggered it.
+
 **In a client**, the loop is the same three steps with a socket in the middle:
 
 ```text
@@ -768,6 +697,10 @@ on each State frame:
                 POST /games/{id}/actions   ← the same public route a person uses
             }
 ```
+
+**A harness meets the throttle; the server's own runner does not.** An
+in-process engine submits straight to `apply`, while a harness posts like any
+client and can be answered 429 with `Retry-After`. Its retry policy is #10's.
 
 **Nothing mediates.** There is no proxy and no bot-specific route: a bot posts
 the action a person posts, over the session of the bot's own account, and its
@@ -825,13 +758,6 @@ undo, 2026-08-29: yes. Under undo `turn` walks backwards while `moves` does not
 necessarily — an undone move stays in the log, since the log is the record of
 what happened and undo is itself an event. So they diverge the first time undo
 is used, and `moves.len()` was only ever a coincidence.
-
-**Is `board_version` a fourth thing to keep in step?** It is set in the same
-handler, in the arms that touch the board, and it is the only field of the four
-whose maintenance is a rule rather than a consequence. If any of these is going
-to be forgotten it is this one — so it is worth a test that asserts
-`board_version` moves for `Place`, `Pass`, `Exchange` and undo, and does not
-move for chat, an invitation or a rename.
 
 [^d58]: Decision #444 (D58): editions and bots as accounts change the rating key
     once, in Core.
