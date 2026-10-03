@@ -1,27 +1,26 @@
-"""Which documents are the programme's and which the application's — decided once.
+"""Which documents change on `main` and which ride a project branch — decided once.
 
-Owner, 2026-09-25: a process document describes the programme and how it
-operates; a technical document describes the application. The technical ones
-change with the code, on the project branch. The process ones belong to no
-project, so they change on `main`: a copy on a branch disagrees with `main`
-until it merges, and makes the process wait on a project it has nothing to do
-with. `.githooks/pre-commit` asks here before committing one on a branch.
+Everything maintained is in one of three classes (docs/5.2, *Programme and
+application*), and the class decides how it changes:
 
-Owner, 2026-09-29/30 (#421 R5): every document is on one side or the other,
-as the scripts are (docs/5.0), and the words are *programme* and
-*application*. The programme's are the 5.x group, the root instructions, the
-index, the roadmap and programme overviews, and everything outside the
-numbered set: templates, reports, diagrams' standard and change notes. Change
-notes stay on `main` even for a project with a branch, because branches are
-now short-lived and many per project. An application document committed to
-`main` is warned about, not refused (owner: keep some flexibility).
+- **generic programme assets** (processes, role definitions, templates) and
+- **programme records** (instances produced by operating the programme: the
+  delivery log, the workstream list, reports, change notes) are `programme`.
+  They belong to no project and change on `main`: a copy on a branch
+  disagrees with `main` until it merges, and makes the programme wait on a
+  project it has nothing to do with. `.githooks/pre-commit` asks here before
+  committing one on a branch.
+- **application assets** are `application`: their documents describe the
+  application and change with its code, on the project branch. One committed
+  to `main` is warned about, not refused (owner: keep some flexibility).
+
+This answers the branch question only, which follows the class. It does not
+say which `programme` documents are generic and which are records; docs/5.2
+lists the generic assets and their instances.
 
 Generated documents belong to neither: `docs/1.5` and `docs/1.6` are built
 from whichever branch they are on, and regenerated there after the rebase that
-precedes a merge.
-
-Owned here since 2026-09-26; the list was the hook's own `PROCESS_DOCUMENTS`,
-and three documents repeated it in prose (#421). Pure: paths in, answers out.
+precedes a merge. Pure: paths in, answers out.
 """
 
 from __future__ import annotations
