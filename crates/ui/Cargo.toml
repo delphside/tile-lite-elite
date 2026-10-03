@@ -1,0 +1,55 @@
+[package]
+name = "tile-lite-elite-ui"
+version.workspace=true
+authors = ["Stephen Morris"]
+edition.workspace=true
+license.workspace=true
+repository.workspace=true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+api = { path = "../api" }
+rules-shared = { path = "../rules-shared" }
+dioxus = { version = "0.6", features = ["web"] }
+dioxus-web = "0.6.3"
+dioxus-desktop = { version = "0.6", optional = true }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dirs = "5"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+tokio = { version = "1", features = ["time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+gloo-net = { version = "0.6", features = ["http", "websocket"] }
+gloo-storage = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
+js-sys = "0.3"
+# `IntersectionObserver` and friends: the unread indicator has to know whether
+# the messages are actually on screen, not merely rendered (#86). `Document` and
+# `Element` come with it — the observer needs a target and the document's own
+# visibility for the background-tab case.
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Location",
+    "History",
+    "Document",
+    "Element",
+    "IntersectionObserver",
+    "IntersectionObserverInit",
+    "IntersectionObserverEntry",
+    "VisibilityState",
+] }
+
+[features]
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop", "dep:dioxus-desktop"]
+
+

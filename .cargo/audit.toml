@@ -1,0 +1,56 @@
+# What `cargo audit` is told to overlook, and why.
+#
+# **The single criterion is reachability**, not severity. `cargo audit` reads
+# `Cargo.lock`, which carries every crate any feature combination *could* pull
+# in — including optional dependencies of dependencies that nothing enables. So
+# a finding here may be against a crate that is in no build graph at all.
+#
+# Severity does not predict reachability, and on 2026-09-06 it got it exactly
+# backwards: both *vulnerabilities* were unreachable, and both findings that
+# reach the server binary were *warnings*. Hence `--deny warnings` in the
+# workflow, with this list as the only thing that quiets it. See #297.
+#
+# **Every entry says how it was established.** An entry with no reason is a
+# defect: it is indistinguishable from something nobody looked at.
+#
+# **The review trigger is #38.** If no desktop build is distributed, the eleven
+# entries marked `dioxus-desktop` go with the feature.
+
+[advisories]
+ignore = [
+  # `rsa`, reached only through `sqlx-mysql`. That feature is not enabled, and
+  # `cargo tree -i rsa` finds it at no feature combination — it is a lockfile
+  # entry rather than a dependency.
+  "RUSTSEC-2023-0071",
+
+  # `rand` 0.7.3 and 0.8.5, and `fxhash`. In the lockfile, in no build graph:
+  # `cargo tree -i rand --all-features` returns nothing.
+  "RUSTSEC-2026-0097",
+  "RUSTSEC-2025-0057",
+
+  # `webbrowser` and `instant`, reached only through `dioxus-desktop`
+  # (`webbrowser` directly, `instant` via `tao`). Neither is in the server
+  # binary or the wasm bundle.
+  "RUSTSEC-2026-0257",
+  "RUSTSEC-2024-0384",
+
+  # The GTK3 bindings and `glib`: `gtk` -> `libappindicator` -> `dioxus-desktop`.
+  # No dioxus version removes them, so these cannot be acted on while a desktop
+  # build exists at all. #38 decides whether one is distributed.
+  "RUSTSEC-2024-0411",  # gdkwayland-sys
+  "RUSTSEC-2024-0412",  # gdk
+  "RUSTSEC-2024-0413",  # atk
+  "RUSTSEC-2024-0414",  # gdkx11-sys
+  "RUSTSEC-2024-0415",  # gtk
+  "RUSTSEC-2024-0416",  # atk-sys
+  "RUSTSEC-2024-0417",  # gdkx11
+  "RUSTSEC-2024-0418",  # gdk-sys
+  "RUSTSEC-2024-0419",  # gtk3-macros
+  "RUSTSEC-2024-0420",  # gtk-sys
+  "RUSTSEC-2024-0429",  # glib, unsound
+
+  # `proc-macro-error`, reached only as a build-time proc macro of
+  # `glib-macros`, and only on the desktop path. It is not in any shipped
+  # binary even when the desktop build is made.
+  "RUSTSEC-2024-0370",
+]

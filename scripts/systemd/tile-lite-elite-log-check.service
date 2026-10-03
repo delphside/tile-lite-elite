@@ -1,0 +1,23 @@
+# The nightly log hygiene check (#174). Reads the day's journal, validates it
+# against docs/4.7's schema, writes exceptions to its own log, and refreshes a
+# marker object only on a clean run.
+#
+# Reads and writes nothing else — no accounts, no email, no driving of flows.
+# The rare events are covered in CI, by the regression suite.
+#
+# **Three files travel together** into /opt/tile-lite-elite/, because the
+# validator is useless without the schema and the schema is a repository
+# document: check-log-hygiene-nightly.sh, check-log-hygiene.py, and
+# docs/4.7-log-events.md. There is no checkout on this host — deploy.sh ships
+# images, not source — so they are copied by the delivery, which is also why they
+# appear in the project's artefact list as `production:` entries distinct from
+# their repository originals. A logging change that does not re-copy them leaves
+# the host validating against last month's schema.
+[Unit]
+Description=Tile Lite Elite — validate the day's log against docs/4.7
+
+[Service]
+Type=oneshot
+User=ubuntu
+# The user must be able to read the journal: `usermod -aG systemd-journal ubuntu`.
+ExecStart=/opt/tile-lite-elite/check-log-hygiene-nightly.sh

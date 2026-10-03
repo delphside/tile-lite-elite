@@ -1,0 +1,12 @@
+# 03:40 UTC — after the backup, so a slow upload and a journal read do not
+# contend on a 1 GB VM, and so the check sees a full day.
+[Unit]
+Description=Run the Tile Lite Elite log check nightly
+
+[Timer]
+OnCalendar=*-*-* 03:40:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

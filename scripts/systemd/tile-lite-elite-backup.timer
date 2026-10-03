@@ -1,0 +1,14 @@
+# 03:10 UTC, with a jitter, because it shares a machine with the log check and
+# neither wants to meet the other on a 1 GB box.
+[Unit]
+Description=Run the Tile Lite Elite backup nightly
+
+[Timer]
+OnCalendar=*-*-* 03:10:00 UTC
+RandomizedDelaySec=300
+# Catch up after the machine has been off. A backup missed because the VM was
+# down is exactly the kind of gap nobody notices until they need the backup.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

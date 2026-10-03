@@ -1,0 +1,121 @@
+name: Docs
+
+# The document review workflow (#183). Two jobs, one principle:
+#
+#   **A workflow reports and labels. It never acts on the repository.**
+#
+# Owner, 2026-08-19: *"I am not keen on approval automatically closing a PR, or
+# doing anything other than updating the state."* So nothing here merges,
+# pushes, closes or deploys — the worst a bug in this file can do is set a
+# wrong label and puzzle a reader. Merging stays a deliberate act, because
+# approving and merging are different decisions: a document can be approved
+# while its merge waits for something else to land.
+#
+# It needs no secrets. `GITHUB_TOKEN` is enough, and Actions minutes are free
+# on a public repository.
+#
+# **There was a third job, handling comment commands, and an `issue_comment`
+# trigger for it.** Both were removed; the trigger was left behind and fired a
+# workflow run on every comment in which every job skipped, because the one
+# remaining job requires a `pull_request` event. Removed 2026-09-07 — #339 R4.
+#
+# The reason that job was awkward is worth keeping and now lives in
+# `docs/3.3` §2.5.2: `issue_comment` workflows always run the copy of the file
+# on the **default branch**, never the one in the pull request.
+
+on:
+  # **No `paths:` filter, deliberately.** There was one, listing `docs/**` and
+  # `*.md`, left from when this file also ran lint, links and placement. Those
+  # moved to CI and the filter stayed — so a pull request touching only
+  # `crates/` or `scripts/` got **no `review-checklist` run at all**: not a
+  # pass, no run. A review checklist is about the pull request *body*, which
+  # has nothing to do with which files changed. #339 R3.
+  #
+  # It never showed because every pull request to date happened to touch
+  # `docs/`. That is luck, not design.
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint, links and placement are **not** here. CI already runs
+  #    `scripts/programme/docs/check-docs.sh` on every push, so a copy on pull requests would
+  #    be the same check twice and two places to change it. This file carries
+  #    only what CI cannot: the parts of a review that are a person's.
+  #
+  # 1. The review checklist as a check. Fails while any box under a review
+  #    heading in the pull request body is unticked; ticking one edits the body,
+  #    which re-runs this, which goes green.
+  #
+  #    **Any heading level, and a trailing word allowed** — `## Review`,
+  #    `### Review checklist`, `#### Review notes` all count. It required
+  #    exactly `## Review` until 2026-08-29, and every pull request written
+  #    that week used `### Review checklist`: the check reported **success**
+  #    while five boxes sat unticked, because it found no section and exited 0.
+  #    A gate that silently does not apply is worse than no gate, since the
+  #    green tick is read as an answer.
+  #
+  #    **And no heading at all now fails**, since 2026-09-10. That was the same
+  #    defect one step further out: widening the pattern fixed the wrong heading
+  #    and left the missing one exiting 0, so #334 and #335 sat green and
+  #    awaiting review with nothing to tick. Noticed only because #338 went red
+  #    beside them — #339 R1. A change needing no review says so under the
+  #    heading; that sentence is evidence, and an absent section is not.
+  #
+  #    **Advisory until a ruleset makes it required** — `main` is unprotected, so
+  #    a red check here is a red X somebody can merge past. That is deliberate
+  #    for now and worth revisiting with the ruleset question on #183.
+  #
+  #    The body is read from the API into a file rather than interpolated into
+  #    the shell: `${{ github.event.pull_request.body }}` in a `run:` block is a
+  #    script-injection vector, since anybody who can write a body can write
+  #    shell.
+  #    **Drafts are skipped.** A draft is work in progress, not a review — gating
+  #    it would make every branch red while it is being written, and a check that
+  #    is usually red is a check nobody reads.
+  review-checklist:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unticked boxes under a review heading
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$REPO/pulls/$NUMBER" --jq '.body // ""' > /tmp/pr-body.md
+          # Any heading level, and anything after the word: `## Review`,
+          # `### Review checklist`, `#### Review notes`. The section ends at the
+          # next heading of any level, so a checklist followed by `### Not in
+          # this change` stops there rather than swallowing it.
+          if ! grep -qiE '^#{1,6} +Review' /tmp/pr-body.md; then
+            echo "::error::No review heading in the pull request body."
+            echo "The body is the review surface (CLAUDE.md), so a pull request with no"
+            echo "review section gives the reviewer nothing to tick. This check used to"
+            echo "call that success — which is how #334 and #335 sat green and awaiting"
+            echo "review with nothing to act on, noticed only because #338 went red"
+            echo "beside them."
+            echo
+            echo "Add a heading at any level whose first word is Review. A change that"
+            echo "genuinely needs no review still has to say so, because a sentence"
+            echo "somebody wrote is evidence and a missing section is not:"
+            echo
+            echo "    ## Review"
+            echo
+            echo "    None — this is a documentation move and the diff is the whole of it."
+            exit 1
+          fi
+          SECTION="$(sed -n '/^#\{1,6\} \+[Rr]eview/,/^#\{1,6\} /{ /^#\{1,6\} \+[Rr]eview/!{ /^#\{1,6\} /q }; p }' /tmp/pr-body.md)"
+          UNTICKED="$(printf '%s\n' "$SECTION" | grep -c '^\s*- \[ \]' || true)"
+          printf '%s\n' "$SECTION"
+          if [ "$UNTICKED" -gt 0 ]; then
+            echo "::error::$UNTICKED review item(s) still unticked."
+            exit 1
+          fi
+          echo "Every review item is ticked."

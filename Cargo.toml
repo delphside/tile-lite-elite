@@ -1,0 +1,23 @@
+[workspace]
+resolver="3"
+members=["crates/*", "old-crates/*"]
+default-members=["crates/*"]
+[workspace.dependencies]
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+[workspace.package]
+edition="2024"
+version = "0.9.2"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/delphside/tile-lite-elite"

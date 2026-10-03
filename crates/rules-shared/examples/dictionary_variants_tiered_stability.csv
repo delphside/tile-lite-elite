@@ -1,0 +1,13 @@
+host,run,list,tiered_walk_ns_per_step
+prod-epyc7551-2core,1,sowpods,62
+prod-epyc7551-2core,2,sowpods,61
+prod-epyc7551-2core,3,sowpods,61
+prod-epyc7551-2core,1,enable2k,56
+prod-epyc7551-2core,2,enable2k,55
+prod-epyc7551-2core,3,enable2k,56
+prod-epyc7551-2core,1,german,93
+prod-epyc7551-2core,2,german,91
+prod-epyc7551-2core,3,german,90
+prod-epyc7551-2core,1,spanish,95
+prod-epyc7551-2core,2,spanish,91
+prod-epyc7551-2core,3,spanish,92

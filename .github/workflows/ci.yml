@@ -1,0 +1,349 @@
+name: CI
+
+# The `check` job (fmt · clippy · test · wasm) runs on every push (any branch),
+# on pull requests, and on demand. The heavier `e2e` job (Playwright against the
+# preview Docker stack) is gated to main pushes, PRs, and manual runs — it does a
+# full image build, so it doesn't run on every branch push. See
+# docs/3.3-testing-ci-and-release.md for how this fits alongside local preview.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch/PR cancels an in-progress run for it, so we
+# don't burn minutes finishing a run that's already superseded.
+#
+# **Except on `main`.** Every commit there is one that might be released, and
+# the deploy gate judges the push-to-main run for the exact commit it ships. On
+# the day 0.5.0 went out, `deploy.sh` pushed its version bump 2m22s after the
+# release commit landed — against an e2e job that takes 4-10 minutes — so the
+# deploy cancelled the CI run for the commit it had just released. The minutes
+# saved were the minutes that would have caught it.
+#
+# **And except on a release branch, for the same reason** — #344 R7. Projects
+# merge into a release branch one after another, and `merge-to-release.sh` gates
+# each merge on the branch tip's own run. Two merges in quick succession would
+# cancel the first run, leaving the commit it judged with no verdict at all:
+# the same failure as 0.5.0's, reached by merging rather than by deploying.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/release/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # .cargo/config.toml sets `rustc-wrapper = sccache` for fast local rebuilds,
+  # but sccache isn't installed on the runner and is incompatible with the
+  # wasm32 target anyway (see docs/3.2-development.md's "Known Build Issues").
+  # An empty value disables the wrapper for the whole job; the wasm32
+  # `target-feature` rustflags in that same config file still apply.
+  RUSTC_WRAPPER: ""
+
+jobs:
+  check:
+    name: fmt · clippy · test · wasm · docs
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — deploy.bats runs deploy.sh's gates against real
+      # commits in this repository's history, with only `gh` and `curl`
+      # stubbed. A shallow checkout does not have them, and the suite fails
+      # with "not a valid local git ref" — locally green, red on the runner,
+      # which is the trap these suites keep relearning.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The documents are checked here because they were not checked anywhere:
+      # the config (.markdownlint.jsonc) existed for weeks and was only ever run
+      # by hand, so an error reached `main` on 2026-08-16 and would have stayed.
+      #
+      # It runs `scripts/programme/docs/check-docs.sh` rather than a copy of the command, so
+      # the check made before pushing and the one CI enforces are the same code
+      # — the same reason `ci-status.sh` is shared between `deploy.sh` and the
+      # terminal. The script adds two checks to the lint: every `](#anchor)`
+      # resolves, and change documents sit in the folders #156 settled.
+      #
+      # First in the job because it takes seconds and the Rust steps take
+      # minutes.
+      - name: Check documents
+        run: ./scripts/programme/docs/check-docs.sh
+
+      # **No toolchain action: `rust-toolchain.toml` is the whole of it.**
+      #
+      # It names the channel, the components and the targets, and rustup
+      # installs all three the first time cargo runs in this directory.
+      # Measured 2026-09-20 from zero: a directory holding only that file
+      # produced toolchain `1.97.1`, both components and the wasm32 target,
+      # with no action and no install step.
+      #
+      # **What this removes is a second place to pin the version.** The action
+      # was pinned by hand to match the file, because it does not read one --
+      # and Dependabot then proposed `dtolnay/rust-toolchain@1.120.0`, which is
+      # a pre-created branch for a Rust release that does not exist and will
+      # not for years (#393). It compares refs numerically and cannot tell a
+      # placeholder from a release. With no version here, there is nothing for
+      # it to misread.
+      #
+      # The runner has rustup already. The first cargo step below pays for the
+      # download when the pin moves, which is the same cost the action paid.
+      - name: Show the toolchain the project pins
+        run: rustup show
+
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+
+      # Formatting is checked only on the crates in this repo. old-crates are
+      # an untouched historical archive and are excluded from the lint gate.
+      - name: Format check
+        run: >
+          cargo fmt
+          -p api -p engine-core -p rules-shared
+          -p server-game -p admin-cli -p tile-lite-elite-ui
+          --check
+
+      # The Python tooling's tests, on the standard library's runner (docs/3.3
+      # §2.4): the board model's in scripts/programme/board/tests/, and checks of the
+      # repository's own files in scripts/tests/test_*.py. Two runs, because the
+      # model imports as `board` from scripts/programme/.
+      - name: Python tooling tests
+        run: |
+          python3 -m unittest discover -s scripts -t scripts -v
+          python3 -m unittest discover -s scripts/programme -t scripts/programme -v
+
+      # The release scripts have one piece of parsing that both deploy.sh and
+      # check-commit-stamp.sh depend on, and it has failed twice — once loudly,
+      # taking a production deploy down between two commands, and once quietly,
+      # by returning nothing so the stamp check skipped itself.
+      #
+      # deploy.bats runs deploy.sh's own gates under DEPLOY_GATES_ONLY.
+      # Those gates decide what reaches users, and were previously exercised
+      # only by deploying — so the branch where each says *no* almost never
+      # ran, which is how two of them came to fail open and a third to refuse
+      # every rehearsal for a day.
+      #
+      # bats-core runs the shell tooling's tests (docs/3.3 §2.2), with the
+      # standard bats-support and bats-assert helpers. None is on the image.
+      # Every *.bats in the directory, not a list: the list CI once kept by
+      # hand had lost three suites, including one a project's post-deployment
+      # check claimed was "run in CI".
+      - name: Shell tooling tests (bats)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats bats-support bats-assert
+          bats scripts/tests
+
+      # -D warnings makes any clippy or rustc warning fail the build. Scoped to
+      # this repo's crates (old-crates carry many pre-existing warnings we don't
+      # maintain), but across all targets so tests and examples are linted too.
+      #
+      # --locked refuses to update Cargo.lock, so a manifest and a lockfile
+      # that disagree fail here rather than shipping a silently regenerated
+      # lockfile (#372) -- and it catches third-party drift the same way, which
+      # a check comparing only the two files' workspace versions would not.
+      - name: Clippy (deny warnings)
+        run: >
+          cargo clippy
+          --locked
+          --workspace --exclude first-try
+          --all-targets
+          -- -D warnings
+
+      # Full workspace, including old-crates (their tests still pass and the git
+      # utils dependency resolves, so there's no reason to hide them here).
+      - name: Test
+        run: cargo test --workspace
+
+      # Compiles the web client to wasm — the deploy's Docker build does this
+      # too, and native checks above won't catch wasm-only breakage. This is a
+      # plain cargo compile (default `web` feature); it deliberately does not
+      # run the full dx / wasm-bindgen packaging pipeline the release build uses.
+      - name: Log hygiene (the suite's own output, against docs/4.7)
+        run: |
+          # The regression suite is the stream. It drives registration, login,
+          # invitations and the whole password-reset family — including the rare
+          # branches (unknown token, expired token, token already used) that a
+          # week of production would not show — so running the check here covers
+          # what a script driving flows by hand would have, without driving
+          # anything (#174).
+          #
+          # The tests ran in the step above; this run is cheap because
+          # everything is compiled and cached, and it is a separate step so a
+          # hygiene failure reads as one rather than as a test failure.
+          TILE_LITE_ELITE_LOG_CAPTURE="$RUNNER_TEMP/log-events.jsonl" \
+            cargo test -p server-game --quiet
+          python3 scripts/check-log-hygiene.py "$RUNNER_TEMP/log-events.jsonl"
+
+      - name: Wasm build (web client)
+        run: cargo build -p tile-lite-elite-ui --target wasm32-unknown-unknown
+
+  # End-to-end UI tests: build + run the preview Docker stack (the same images
+  # scripts/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
+  # inside the Dockerfile, not reproduced on the runner) and drive the real
+  # client in a browser with Playwright. Heavier than `check` (a full image
+  # build), so it's gated to main pushes / PRs / manual runs, and only after
+  # `check` passes — no point burning a build if the code doesn't lint. See
+  # docs/3.3's runbook step 3 and e2e/README.md.
+  stamp:
+    name: commit stamp (app/api versions)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the check reads each commit's own Cargo.toml and
+      # API_VERSION, so it needs history, not just a snapshot.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Checks the commits this push actually added, not all of history:
+      # commits predating the convention would fail it forever. `before` is
+      # all-zeros for a new branch, in which case fall back to HEAD alone.
+      #
+      # **A pull request checks its own commits: base to head.** On a
+      # `pull_request` event `github.sha` is GitHub's merge of the branch with
+      # its base, and `before` is the branch's previous head — so the range
+      # above took in everything on `main` the branch did not have. Found on
+      # 2026-10-02 by a branch cut from a `prod-*` tag (docs/3.3 §1.13): the
+      # job reported a stampless commit from `main`, and would have refused
+      # every emergency for a commit that was not the emergency's.
+      - name: Check the version stamp on each new commit
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            ./scripts/check-commit-stamp.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+            exit
+          fi
+          before="${{ github.event.before }}"
+          if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            ./scripts/check-commit-stamp.sh
+          else
+            ./scripts/check-commit-stamp.sh "$before..${{ github.sha }}"
+          fi
+
+  # Whether a pull request's diff reaches the image, per scripts/shipping-paths.sh
+  # (#348) — one definition, shared with the pre-commit hook and deploy.sh's
+  # manifest, rather than a second copy of NON_SHIPPING in this file. Only
+  # pull requests ask: R2 applies the condition to pushes unconditionally,
+  # because merge-to-release.sh reads the release branch tip's run with
+  # `--require e2e`, and a push that happened to carry only documents must
+  # still produce a real verdict rather than a correctly-skipped one.
+  touches-image:
+    name: does this pull request reach the image?
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      touches: ${{ steps.check.outputs.touches }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          source scripts/shipping-paths.sh
+          if touches_image_range "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"; then
+            echo "touches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "touches=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    name: e2e (Playwright · preview stack)
+    runs-on: ubuntu-latest
+    needs: [check, touches-image]
+    # A release branch is included with `main` — #344 R2. A pull request into a
+    # release branch already runs e2e when it reaches the image, because
+    # `pull_request` matches whatever the base is; what the push branch of the
+    # condition covers is the **push** the merge itself makes, unconditionally
+    # — #344 R2's own reason: merge-to-release.sh reads that run with
+    # `--require e2e`, and a push that happened to carry only documents must
+    # still produce a real verdict rather than a correctly-skipped one.
+    #
+    # `always()` because `touches-image` only runs for pull requests (#348) and
+    # is otherwise skipped — without it, a job-level `if` treats a skipped need
+    # the same as a failed one and this would never run on a push. The
+    # `needs.check.result == 'success'` clause restores the "only after check
+    # passes" gate that `always()` would otherwise remove.
+    if: >
+      always() &&
+      needs.check.result == 'success' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && needs.touches-image.outputs.touches == 'true') ||
+        (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/release/')))
+      )
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build the preview images with a GitHub Actions layer cache. The big,
+      # stable win is the builder stage's `cargo install dioxus-cli`/
+      # `wasm-bindgen-cli` layer (compiled from source, minutes) — invariant
+      # unless those pinned versions change, so it's restored from cache on
+      # every run. `bake` reads the same compose file (so image tags match the
+      # `up --no-build` below) and builds both services against the one shared,
+      # cached `builder` stage. Deps/app still recompile on a source change (no
+      # cargo-chef here).
+      - name: Build the preview images (cached)
+        uses: docker/bake-action@v7
+        with:
+          # Build from the checked-out working directory. Required from v6
+          # onwards: bake-action changed its default to the *Git* context
+          # (buildkit fetches the repo itself from a remote bake definition)
+          # to match docker/build-push-action. Without this the build would
+          # no longer be the tree this job checked out — silently, since a
+          # git-context build of the same commit still succeeds.
+          source: .
+          files: docker-compose.preview.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+        env:
+          TILE_LITE_ELITE_BUILD_ID: ${{ github.sha }}
+
+      - name: Start the preview stack
+        env:
+          TILE_LITE_ELITE_BUILD_ID: ${{ github.sha }}
+        run: docker compose -f docker-compose.preview.yml up -d --no-build
+
+      - name: Wait for preview to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8081/health >/dev/null; then
+              echo "preview is up:"; curl -s http://localhost:8081/health; echo
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::preview did not become healthy within 5 minutes"
+          docker compose -f docker-compose.preview.yml logs --tail=200
+          exit 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright suite
+        working-directory: e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8081
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down the preview stack
+        if: always()
+        run: docker compose -f docker-compose.preview.yml down -v

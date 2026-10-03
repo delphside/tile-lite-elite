@@ -1,0 +1,8 @@
+date,activity,who,note
+2026-09-10,benchmark-run,Claude,last recorded run before this log existed — engine_timing_results.csv commit 1cac857-dirty
+2026-09-21,capacity-plan,Claude,TLE_CP_2026_09 — first report
+2026-09-22,board-sweep,Claude,backlog decisions PRs and projects reviewed
+2026-09-27,weekly-digest,Claude,TLE_WD_2026_W39 — the first
+2026-09-27,improvement-review,owner,TLE_WD_2026_W39 reviewed and ticked by the owner on GitHub
+2026-09-28,reference-review,Claude,#437 — all six stamped 4.x documents re-verified; every one needed correcting
+2026-09-28,board-sweep,Claude,board-check: #427 milestone set, #421's hold reason recorded; #71 family's effort and priority, and #407's R3 check, brought to the owner

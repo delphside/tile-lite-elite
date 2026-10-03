@@ -1,0 +1,44 @@
+[package]
+name = "server-game"
+edition.workspace=true
+license.workspace=true
+repository.workspace=true
+version.workspace=true
+
+[dependencies]
+api = { path = "../api" }
+argon2 = "0.5"
+axum = { version = "0.8", features = ["ws", "macros"] }
+engine-core = { path = "../engine-core" }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rules-shared = { path = "../rules-shared" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "time"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "set-header"] }
+tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Unicode NFC normalization for case-insensitive display-name matching (see
+# persistence::fold_display_name) — so composed vs decomposed accents match.
+unicode-normalization = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+# `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)` for engine_timing_bench, which needs
+# nanosecond CPU time to tell a 0.3 ms move's work from its waiting. The jiffy
+# counters in /proc are 10 ms granular, which is 30x the thing being measured.
+# A dev-dependency, so nothing here reaches the image.
+libc = "0.2"
+# `?` across HTTP calls in stress_bench (#404), which is all it is used for.
+# A dev-dependency, like libc above — nothing here reaches the image.
+anyhow = "1"
+# `tokio::time::{pause, advance}` for scheduler.rs's tests (#400) — proving
+# an interval's first-tick and no-pile-up behaviour without a real clock.
+# Cargo unions this with the main tokio entry above for test builds only, so
+# `test-util` never reaches the image.
+tokio = { version = "1", features = ["test-util"] }

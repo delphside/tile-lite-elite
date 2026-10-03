@@ -1,0 +1,54 @@
+# Preview equivalent of ./Caddyfile — identical routing, but plain HTTP on
+# :80 (mapped to host 8080 by docker-compose.preview.yml) instead of
+# automatic HTTPS, since there's no real domain to provision a Let's
+# Encrypt certificate for on a local/WSL machine.
+
+# The same loopback-only health listener as ./Caddyfile, so the HEALTHCHECK
+# baked into the image works here too. Preview has no TLS and no redirect, so
+# :80 would have served a probe perfectly well — but the image carries one
+# health check, and it has to find the same listener in both.
+http://127.0.0.1:2020 {
+	root * /srv
+	file_server
+}
+
+:80 {
+	encode zstd gzip
+
+	route {
+		@api path /health /engines /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
+		reverse_proxy @api server:3000
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		# See ./Caddyfile for why this one is deliberately uncached.
+		@version path /version.txt
+		header @version Cache-Control "no-store"
+
+		# "No Cache-Control" is not the same as "do not cache", which is what
+		# the note above assumed. With no directive a browser falls back to
+		# *heuristic* freshness — commonly a fraction of the time since
+		# Last-Modified — so the longer index.html goes unchanged, the longer
+		# a browser will serve it without asking. Observed 2026-08-14: a phone
+		# opened the app on a months-old bundle (0.4.18) and sat there showing
+		# offline against a current server.
+		#
+		# It cannot recover on its own either. The poll that notices a new
+		# bundle lives *in* the client, so a browser pinned to a build old
+		# enough to predate that code has no poller at all.
+		#
+		# `no-cache` means "revalidate before use", not "do not store": the
+		# ETag above is still honoured, so an unchanged document costs a 304
+		# rather than a re-download.
+		@html {
+			not path /assets/*
+			not path /version.txt
+		}
+		header @html Cache-Control "no-cache"
+
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

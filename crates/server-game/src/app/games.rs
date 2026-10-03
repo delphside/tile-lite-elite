@@ -1,0 +1,1030 @@
+use super::*;
+
+/// The fewest seats a game may have. Below this the finish rule — one seat or
+/// fewer still unresigned means the last one standing has won — is true before
+/// anybody has left.
+const MINIMUM_SEATS: usize = 2;
+
+pub(crate) async fn list_games(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<api::GameSummaryDto>>, ApiProblem> {
+    // The list is inherently personal — which games show up depends on who's
+    // asking — so there's no meaningful "browse everything" mode anymore.
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to see your games"))?;
+
+    // Turn expiry and move-time reminders run on the scheduler now (#400,
+    // `scheduler::spawn_scheduler`), not here. Retention and the daily size
+    // measurement stay lazy — deferred by the owner, 2026-09-22, until
+    // Capacity Planning's own schedules are ready.
+    expire_old_terminal_games(&state).await;
+    record_database_size(&state).await;
+    if let Err(error) = persistence::delete_expired_sessions(&state.db).await {
+        tracing::error!(%error, "failed to delete expired sessions");
+    }
+
+    let last_activity = persistence::last_activity_by_game(&state.db)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    let named_invitations = persistence::get_invitations_for_player(&state.db, &caller_player_id)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    let open_invitations = persistence::get_open_invitations(&state.db)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    let games = state.games.read().await;
+    let mut summaries: Vec<api::GameSummaryDto> = Vec::new();
+
+    for game in games.values() {
+        let last_activity_at = last_activity.get(&game.id).copied().unwrap_or(0);
+        // The address a seat was invited at is the creator's to see (for the
+        // re-send button) and nobody else's — the same rule
+        // `redact_game_state` applies to the full state.
+        let summary_for_caller = |game: &GameSession| {
+            let mut summary = game.to_summary_dto(last_activity_at);
+            if game.creator_player_id.as_deref() != Some(caller_player_id.as_str()) {
+                for participant in &mut summary.participants {
+                    participant.invited_email = None;
+                }
+            }
+            summary
+        };
+
+        let is_participant = game
+            .participants
+            .iter()
+            .any(|p| p.player_id.as_deref() == Some(caller_player_id.as_str()));
+        if is_participant {
+            let removed_by_caller = game.participants.iter().any(|p| {
+                p.player_id.as_deref() == Some(caller_player_id.as_str()) && p.removed_by_player
+            });
+            if removed_by_caller {
+                continue;
+            }
+            let relationship = if game.status == api::GameStatus::Active
+                && game
+                    .participants
+                    .get(game.current_seat as usize)
+                    .and_then(|p| p.player_id.as_deref())
+                    == Some(caller_player_id.as_str())
+            {
+                api::GameRelationship::YourTurn
+            } else {
+                api::GameRelationship::Participant
+            };
+            let mut summary = summary_for_caller(game);
+            summary.relationship = relationship;
+            // The newest message this caller did not send. Their own never
+            // counts as unread.
+            summary.last_message_received_at = game
+                .messages
+                .iter()
+                .filter(|message| message.player_id != caller_player_id)
+                .map(|message| message.created_at)
+                .max();
+            summaries.push(summary);
+            continue;
+        }
+
+        if let Some(invitation) = named_invitations
+            .iter()
+            .find(|inv| inv.game_id == game.id && inv.status == "pending")
+        {
+            let mut summary = summary_for_caller(game);
+            summary.relationship = api::GameRelationship::InvitedByName;
+            summary.invitation_id = Some(invitation.id.clone());
+            summaries.push(summary);
+            continue;
+        }
+
+        if let Some(invitation) = open_invitations.iter().find(|inv| inv.game_id == game.id) {
+            let mut summary = summary_for_caller(game);
+            summary.relationship = api::GameRelationship::InvitedOpen;
+            summary.invitation_id = Some(invitation.id.clone());
+            summaries.push(summary);
+            continue;
+        }
+
+        // Not seated and not invited — still show it if the caller is the
+        // one who created it (e.g. an Engine vs Engine game set up to
+        // watch, where nobody is ever seated as a human) and they haven't
+        // removed it (the unseated-creator counterpart to the seated
+        // `removed_by_caller` check above).
+        if game.creator_player_id.as_deref() == Some(caller_player_id.as_str())
+            && !game.removed_by_creator
+        {
+            let mut summary = summary_for_caller(game);
+            summary.relationship = api::GameRelationship::Creator;
+            summaries.push(summary);
+        }
+    }
+
+    summaries.sort_by_key(|s| std::cmp::Reverse(s.last_activity_at));
+
+    Ok(Json(summaries))
+}
+
+pub(crate) async fn create_game(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateGameRequest>,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    // Every seat now needs a real accepting/claiming party (the creator
+    // themselves, a named invitee, or a stranger who accepts an open
+    // invitation) — there's no more "anonymous, open to whoever clicks it"
+    // seat, so creating a game requires being signed in.
+    let creator_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to create a game"))?;
+
+    // Two, not one. A single-seat game is not merely pointless: the game ends
+    // as soon as one seat or fewer is still unresigned, which is true of a
+    // solo game from its first turn, so it finished after one move and
+    // declared that seat the winner. The finish rule is right — somebody left
+    // and one remains — and this is the precondition it always assumed.
+    if request.seats.len() < MINIMUM_SEATS {
+        return Err(ApiProblem::bad_request("A game needs at least two seats"));
+    }
+
+    let creator_claims = request
+        .seats
+        .iter()
+        .filter(|seat| {
+            seat.kind == api::SeatKind::Human && matches!(seat.claim, Some(api::SeatClaim::Creator))
+        })
+        .count();
+    if creator_claims > 1 {
+        return Err(ApiProblem::bad_request(
+            "Only one seat can be claimed by the creator",
+        ));
+    }
+    if request
+        .seats
+        .iter()
+        .any(|seat| seat.kind == api::SeatKind::Human && seat.claim.is_none())
+    {
+        return Err(ApiProblem::bad_request(
+            "Every human seat needs a claim: creator, named, or open",
+        ));
+    }
+
+    // Resolve every named invitee up front, before creating anything, so a
+    // typo'd name fails cleanly instead of leaving a half-built game behind.
+    let mut named_invitees: HashMap<u8, persistence::PlayerRecord> = HashMap::new();
+    for (seat_number, seat) in request.seats.iter().enumerate() {
+        if let Some(api::SeatClaim::Named { display_name }) = &seat.claim {
+            let player = persistence::get_player_by_name(&state.db, display_name)
+                .await
+                .map_err(ApiProblem::from_sqlx)?
+                .ok_or_else(|| {
+                    ApiProblem::not_found(format!("No player named '{display_name}'"))
+                })?;
+            named_invitees.insert(seat_number as u8, player);
+        }
+    }
+
+    let variant_name = request.variant.as_deref().unwrap_or("official");
+    let rules = rules_shared::VariantRules::by_name(variant_name)
+        .ok_or_else(|| ApiProblem::bad_request(format!("Unknown game variant '{variant_name}'")))?;
+    let participants = request
+        .seats
+        .into_iter()
+        .enumerate()
+        .map(|(seat_number, seat)| {
+            let player_id = match &seat.claim {
+                Some(api::SeatClaim::Creator) => Some(creator_player_id.clone()),
+                _ => None,
+            };
+            let invited_email = match &seat.claim {
+                Some(api::SeatClaim::Email { email }) => Some(email.clone()),
+                _ => None,
+            };
+            ParticipantState {
+                seat_number: seat_number as u8,
+                kind: seat.kind,
+                // The invitee's name as *they* registered it, not as the
+                // inviter typed it. Names match case-insensitively, so
+                // inviting "steve" finds Steve — and without this the seat
+                // would carry "steve" for the life of the game, which is
+                // somebody else's name for them. Adding a seat to an existing
+                // game already resolves this way (invitations.rs); creating a
+                // game did not.
+                display_name: named_invitees
+                    .get(&(seat_number as u8))
+                    .map(|player| player.display_name.clone())
+                    .unwrap_or(seat.display_name),
+                player_id,
+                engine_id: seat.engine_id,
+                score: 0,
+                rack: rules_shared::Rack::default(),
+                resigned: false,
+                removed_by_player: false,
+                invited_email,
+                reminder_sent_turn: None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // A caller-supplied seed exists purely for deterministic tests; real
+    // play must get a fresh shuffle each time. The old fallback was a fixed
+    // constant, so every game created through the UI (which never sends a
+    // seed) dealt the exact same racks in the exact same order, every game.
+    let seed = request.seed.unwrap_or_else(rand::random);
+    // Rejected rather than clamped: a caller asking for ten seconds has
+    // misunderstood the feature, and silently substituting an hour hides that
+    // from them. Not reachable through the UI, which offers a fixed set of
+    // choices — this guards what the API accepts from any other client.
+    let move_time_limit_seconds = match request.move_time_limit_seconds {
+        None => crate::game_state::DEFAULT_MOVE_TIME_LIMIT_SECONDS,
+        Some(requested)
+            if (crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS
+                ..=crate::game_state::MAX_MOVE_TIME_LIMIT_SECONDS)
+                .contains(&requested) =>
+        {
+            requested
+        }
+        Some(requested) => {
+            return Err(ApiProblem::bad_request(format!(
+                "move_time_limit_seconds must be between {} and {} seconds (got {requested})",
+                crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS,
+                crate::game_state::MAX_MOVE_TIME_LIMIT_SECONDS,
+            )));
+        }
+    };
+    let game = GameSession::new(
+        Uuid::new_v4().to_string(),
+        participants,
+        Some(creator_player_id.clone()),
+        seed,
+        rules,
+        move_time_limit_seconds,
+    );
+    let access = resolve_viewer_access(&game, Some(&creator_player_id));
+
+    persistence::save_game(&state.db, &game)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    // Only fetched if there's at least one named or email invitee to notify
+    // — the common case (no invitees, or open-only invitations) shouldn't
+    // pay for a lookup nothing will use.
+    let has_notifiable_invitee =
+        !named_invitees.is_empty() || game.participants.iter().any(|p| p.invited_email.is_some());
+    let creator_display_name = if has_notifiable_invitee {
+        persistence::get_player_by_id(&state.db, &creator_player_id)
+            .await
+            .map_err(ApiProblem::from_sqlx)?
+            .map(|player| player.display_name)
+    } else {
+        None
+    };
+
+    // Every Human seat that isn't the creator's needs a pending invitation:
+    // named, email, or open. Named and email invitations have a specific
+    // address to notify — matches invite_player_to_game's identical
+    // reasoning for the same cases.
+    for participant in &game.participants {
+        if participant.kind != api::SeatKind::Human || participant.player_id.is_some() {
+            continue;
+        }
+        let invited_player = named_invitees.get(&participant.seat_number);
+        let invited_email = participant.invited_email.as_deref();
+        let record = persistence::create_invitation(
+            &state.db,
+            &Uuid::new_v4().to_string(),
+            &game.id,
+            invited_player.map(|player| player.id.as_str()),
+            &creator_player_id,
+            participant.seat_number,
+            invited_email,
+        )
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+        if let (Some(invited_player), Some(creator_display_name)) =
+            (invited_player, &creator_display_name)
+        {
+            crate::email::send_invitation(
+                &state.email,
+                &invited_player.email,
+                Some(invited_player.id.as_str()),
+                &invited_player.display_name,
+                creator_display_name,
+                &state.public_base_url,
+            )
+            .await;
+        } else if let (Some(invited_email), Some(creator_display_name)) =
+            (invited_email, &creator_display_name)
+        {
+            let join_url = format!("{}/invite?id={}", state.public_base_url, record.id);
+            crate::email::send_join_invitation(
+                &state.email,
+                invited_email,
+                creator_display_name,
+                &join_url,
+            )
+            .await;
+        }
+    }
+
+    tracing::info!(
+        game_id = %game.id,
+        creator_player_id = %creator_player_id,
+        seats = game.participants.len(),
+        move_time_limit_seconds,
+        "game created"
+    );
+
+    // Built after the invitation-creation loop above, not before — an
+    // early `to_dto()` would show every seat as not-yet-sent even though
+    // their invitations (and this response) go out together.
+    let mut dto = game_dto_with_invitation_status(&state, &game).await?;
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    let dto = redact_game_state(dto, &access);
+    state.games.write().await.insert(game.id.clone(), game);
+    Ok(Json(dto))
+}
+
+pub(crate) async fn get_game(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers).await;
+
+    expire_overdue_turn(&state, &game_id).await;
+
+    let games = state.games.read().await;
+    let game = games
+        .get(&game_id)
+        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+    let access = resolve_viewer_access(game, caller_player_id.as_deref());
+    if access == ViewerAccess::Rejected {
+        // 401 only when there is nobody to be. A signed-in caller who is not
+        // in this game is *authenticated and not allowed*, which is 403 — see
+        // docs/4.3's status table. Answering 401 told the client its session
+        // was invalid, and a client that acts on that logs the caller out for
+        // opening somebody else's game. Every new player meets this, because
+        // the games list includes open invitations they may not view.
+        return Err(match caller_player_id {
+            None => ApiProblem::unauthorized("Sign in to view this game"),
+            Some(_) => ApiProblem::forbidden("You are not part of this game"),
+        });
+    }
+    let mut dto = game_dto_with_invitation_status(&state, game).await?;
+    drop(games);
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    // Not just for the moment a game finishes — reopening an old finished
+    // game later should still show what it did to your rating, not only
+    // the one-time broadcast at the moment it happened. A no-op query
+    // whenever `dto.status` isn't `Finished`.
+    stats::attach_rating_deltas(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    Ok(Json(redact_game_state(dto, &access)))
+}
+
+pub(crate) async fn start_game(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(_request): Json<StartGameRequest>,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers).await;
+
+    {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+        // Checked again here, not only at creation: seats can be removed
+        // afterwards, and a roster taken down to one would otherwise reach
+        // the board and end on its first turn.
+        if game.participants.len() < MINIMUM_SEATS {
+            return Err(ApiProblem::bad_request("A game needs at least two seats"));
+        }
+
+        // Every human seat needs a real occupant (creator or an accepted
+        // invitation) before play can start — an unclaimed human seat means
+        // an invitation is still outstanding, not "open to anyone".
+        if game
+            .participants
+            .iter()
+            .any(|p| p.kind == api::SeatKind::Human && p.player_id.is_none())
+        {
+            return Err(ApiProblem::bad_request(
+                "Every seat must be filled before the game can start",
+            ));
+        }
+
+        if !caller_may_manage_game(game, caller_player_id.as_deref()) {
+            return Err(ApiProblem::forbidden(
+                "Only the game's creator can start it",
+            ));
+        }
+
+        game.start();
+    }
+
+    // Deliberately released before this — see `run_engine_turns`'s own doc
+    // comment for why holding the lock across the whole multi-turn loop
+    // would starve a WebSocket connection's own read lock for the entire
+    // duration of an all-engine game.
+    let engine_turns = run_engine_turns(&state, &game_id).await?;
+
+    let (mut dto, access) = {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        let dto = game.to_dto();
+        persistence::save_game(&state.db, game)
+            .await
+            .map_err(ApiProblem::from_sqlx)?;
+        // For an all-engine game, `caller_player_id` may belong to nobody
+        // tied to this game at all (any signed-in user may start it, per
+        // the check above) — `resolve_viewer_access` correctly resolves
+        // that case to `Rejected`, and `redact_game_state` already treats
+        // `Rejected` the same as `Creator` (no racks, no chat) rather than
+        // panicking, so this is safe to call unconditionally here.
+        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        (dto, access)
+    };
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    // An all-engine game (e.g. Bot Showdown) can finish entirely within
+    // `run_engine_turns` above, before this handler ever gets to broadcast
+    // anything — so `dto.status` may already be `Finished` here, and a
+    // seated participant's rating may have just moved.
+    stats::attach_rating_deltas(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    tracing::info!(game_id = %dto.id, status = ?dto.status, "game started");
+
+    // Broadcast the *unredacted* dto — each connected socket redacts it to
+    // its own viewer's tier in `stream_events`, right before sending. A
+    // pre-redacted broadcast would mean every other connection's own
+    // redaction step operates on already-stripped data (e.g. losing their
+    // own rack because *this* caller's tier didn't include it).
+    // Skipped when an engine already advanced: `run_engine_turns` has
+    // broadcast the resulting state, and this would repeat it at the same
+    // `version` only to be discarded by the client. The loop's events carry
+    // the started game just as this one would — an all-engine game simply
+    // announces itself through those instead.
+    if !engine_turns.announced {
+        let _ = state
+            .events
+            .send(GameEventDto::GameStarted { game: dto.clone() });
+    }
+    Ok(Json(redact_game_state(dto, &access)))
+}
+
+/// The one rule for acting as a seat, shared by `submit_action` and
+/// `preview_move`: the caller is signed in, and the seat is a human seat
+/// that this caller holds.
+///
+/// Stated positively on purpose. The earlier form refused a *human* seat held
+/// by somebody else, which left every other seat — an engine's, or a number
+/// no seat has — open to anybody, signed in or not. A seat with no owner is
+/// nobody's to act for, not everybody's: an engine moves through the
+/// scheduler, and an unclaimed human seat means an invitation is still
+/// outstanding.
+///
+/// 401 without a session and 403 with one — #379. The caller with a session
+/// is authenticated and not allowed, which is what 403 means; 401 tells a
+/// client to refresh its session, and a client that does will refresh, retry
+/// and get 401 forever.
+fn require_own_seat(
+    game: &GameSession,
+    seat_number: u8,
+    caller_player_id: Option<&str>,
+) -> Result<(), ApiProblem> {
+    let caller_player_id =
+        caller_player_id.ok_or_else(|| ApiProblem::unauthorized("Sign in to play this game"))?;
+    let holds_seat = game.participants.iter().any(|participant| {
+        participant.seat_number == seat_number
+            && participant.kind == api::SeatKind::Human
+            && participant.player_id.as_deref() == Some(caller_player_id)
+    });
+    if holds_seat {
+        Ok(())
+    } else {
+        Err(ApiProblem::forbidden(
+            "This seat belongs to a different player",
+        ))
+    }
+}
+
+pub(crate) async fn submit_action(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<GameActionRequest>,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers).await;
+
+    expire_overdue_turn(&state, &game_id).await;
+
+    {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+        require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
+
+        // Converted before anything is applied, so a request the wire accepts
+        // but the rules cannot index with is refused here rather than reaching
+        // the engine while the games lock is held.
+        let action_alphabet = game.rules.alphabet.clone();
+        match request.action {
+            PlayerActionDto::Place { candidate } => {
+                let candidate = move_candidate_from_dto(candidate, &game.rules)
+                    .map_err(ApiProblem::bad_request)?;
+                game.apply_place_move(request.seat_number, candidate)
+                    .map_err(ApiProblem::bad_request)?
+            }
+            PlayerActionDto::Pass => game
+                .apply_pass(request.seat_number)
+                .map_err(ApiProblem::bad_request)?,
+            PlayerActionDto::Exchange { tiles } => {
+                let tiles = tiles
+                    .into_iter()
+                    .map(|tile| tile_from_dto(tile, &action_alphabet))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(ApiProblem::bad_request)?;
+                game.apply_exchange(request.seat_number, tiles)
+                    .map_err(ApiProblem::bad_request)?
+            }
+            PlayerActionDto::Resign => game
+                .apply_resign(request.seat_number)
+                .map_err(ApiProblem::bad_request)?,
+        }
+    }
+
+    // Deliberately released before this — see `run_engine_turns`'s own doc
+    // comment for why holding the lock across the whole multi-turn loop
+    // would starve a WebSocket connection's own read lock.
+    let engine_turns = run_engine_turns(&state, &game_id).await?;
+
+    let (mut dto, access) = {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        let dto = game.to_dto();
+        persistence::save_game(&state.db, game)
+            .await
+            .map_err(ApiProblem::from_sqlx)?;
+        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        (dto, access)
+    };
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    // A no-op unless this move (or a follow-on engine turn triggered by
+    // `run_engine_turns` above) just finished the game via a normal
+    // ending or a voluntary resignation — the only endings that move
+    // rating (see `stats::settle_ratings`).
+    stats::attach_rating_deltas(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    // Broadcast the unredacted dto — per-connection redaction happens in
+    // `stream_events`, not here (see the identical note in `start_game`).
+    // Only when no engine advanced. Otherwise `run_engine_turns` has
+    // already announced this exact state, and repeating it at the same
+    // `version` is a message the client is guaranteed to drop.
+    if !engine_turns.announced {
+        let event = if dto.status == api::GameStatus::Finished {
+            tracing::info!(game_id = %dto.id, winner_seat = ?dto.winner_seat, "game finished");
+            GameEventDto::GameFinished { game: dto.clone() }
+        } else {
+            GameEventDto::StateUpdated { game: dto.clone() }
+        };
+        let _ = state.events.send(event);
+    }
+
+    Ok(Json(redact_game_state(dto, &access)))
+}
+
+/// Not routed through `submit_action`/`PlayerActionDto` — that pipeline
+/// enforces turn ownership (`seat_number` must match `current_seat`), and
+/// chat must work regardless of whose turn it is, or even after the game
+/// has finished. Not gated on game status for the same reason — players can
+/// still chat during the week between a game finishing and its auto-expiry.
+pub(crate) async fn post_chat_message(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<PostChatMessageRequest>,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to chat"))?;
+
+    let (mut dto, access) = {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+        let display_name = game
+            .participants
+            .iter()
+            .find(|participant| participant.player_id.as_deref() == Some(caller_player_id.as_str()))
+            .map(|participant| participant.display_name.clone())
+            .ok_or_else(|| ApiProblem::forbidden("Only seated players can chat in this game"))?;
+
+        game.post_chat_message(&caller_player_id, &display_name, request.body)
+            .map_err(ApiProblem::bad_request)?;
+
+        let dto = game.to_dto();
+        persistence::save_game(&state.db, game)
+            .await
+            .map_err(ApiProblem::from_sqlx)?;
+        let access = resolve_viewer_access(game, Some(&caller_player_id));
+        (dto, access)
+    };
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    // Broadcast the unredacted dto — per-connection redaction happens in
+    // `stream_events`, not here (see the identical note in `start_game`).
+    let _ = state
+        .events
+        .send(GameEventDto::StateUpdated { game: dto.clone() });
+    Ok(Json(redact_game_state(dto, &access)))
+}
+
+/// Hides a finished game from the caller's own games list — see
+/// `GameSession::remove_for_player`. Not broadcast over the WebSocket: this
+/// is purely a per-viewer concern, so nobody else's view of the game (or
+/// even this same player's other logged-in devices, until they next reload
+/// their own list) needs to change in response.
+pub(crate) async fn remove_game_for_player(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to remove this game from your list"))?;
+
+    let mut games = state.games.write().await;
+    let game = games
+        .get_mut(&game_id)
+        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+    game.remove_for_player(&caller_player_id)
+        .map_err(ApiProblem::bad_request)?;
+
+    persistence::save_game(&state.db, game)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    Ok(Json(serde_json::json!({"status": "removed"})))
+}
+
+pub(crate) async fn preview_move(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<PreviewMoveRequest>,
+) -> Result<Json<api::PreviewMoveResponse>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers).await;
+    expire_overdue_turn(&state, &game_id).await;
+    let games = state.games.read().await;
+    let game = games
+        .get(&game_id)
+        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+    // Previewing a seat you don't own would otherwise let a caller probe
+    // an opponent's exact rack contents by repeatedly guessing candidate
+    // placements and reading back legality/score.
+    require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
+
+    if game.status != api::GameStatus::Active {
+        return Ok(Json(api::PreviewMoveResponse {
+            is_legal: false,
+            headline: "Game is not active".to_string(),
+            detail: String::new(),
+            score: None,
+        }));
+    }
+
+    let rack = game
+        .participants
+        .get(request.seat_number as usize)
+        .map(|p| p.rack)
+        .unwrap_or_default();
+
+    let candidate =
+        move_candidate_from_dto(request.candidate, &game.rules).map_err(ApiProblem::bad_request)?;
+    let engine = rules_shared::RulesEngine {
+        rules: &game.rules,
+        dictionary: rules_shared::dictionary_by_name(&game.rules.language)
+            .expect("game rules should reference a known dictionary"),
+    };
+
+    let response = match engine.validate_game_move(&game.state, Some(&rack), &candidate) {
+        Ok(validated) => api::PreviewMoveResponse {
+            is_legal: true,
+            headline: format!(
+                "{} for {} points",
+                validated.preview.main_word, validated.score.total
+            ),
+            detail: if validated.preview.cross_words.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "Cross words: {}",
+                    validated
+                        .preview
+                        .cross_words
+                        .iter()
+                        .map(|w| w.word.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            },
+            score: Some(validated.score.total),
+        },
+        Err(error) => api::PreviewMoveResponse {
+            is_legal: false,
+            headline: format_move_error(&error),
+            detail: String::new(),
+            score: None,
+        },
+    };
+
+    Ok(Json(response))
+}
+
+pub(crate) async fn suggest_move(
+    Path(game_id): Path<String>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<api::GameStateDto>, ApiProblem> {
+    let caller_player_id = authenticated_player_id(&state, &headers).await;
+
+    expire_overdue_turn(&state, &game_id).await;
+
+    {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+        if game.status != api::GameStatus::Active {
+            return Err(ApiProblem::bad_request("Game is not active"));
+        }
+        let current_seat = game.current_seat as usize;
+        let participant = game
+            .participants
+            .get(current_seat)
+            .ok_or_else(|| ApiProblem::bad_request("Current seat missing"))?;
+        if participant.kind != api::SeatKind::Human {
+            return Err(ApiProblem::bad_request(
+                "Current seat is not human-controlled",
+            ));
+        }
+        if caller_player_id.as_deref() != participant.player_id.as_deref() {
+            // 403, not 401 — #379, as above.
+            return Err(ApiProblem::forbidden(
+                "This seat belongs to a different player",
+            ));
+        }
+
+        let rack = participant.rack;
+        let engine = rules_shared::RulesEngine {
+            rules: &game.rules,
+            dictionary: rules_shared::dictionary_by_name(&game.rules.language)
+                .expect("game rules should reference a known dictionary"),
+        };
+
+        use rules_shared::MoveGenerator as _;
+        let mut best_candidate = None;
+        let mut best_score = i16::MIN;
+        for candidate in engine.enumerate_legal_moves(&game.state, &rack) {
+            if let Ok(validated) = engine.validate_game_move(&game.state, Some(&rack), &candidate)
+                && validated.score.total > best_score
+            {
+                best_score = validated.score.total;
+                best_candidate = Some(candidate);
+            }
+        }
+
+        let seat = game.current_seat;
+        match best_candidate {
+            Some(candidate) => game
+                .apply_place_move(seat, candidate)
+                .map_err(ApiProblem::bad_request)?,
+            None => game.apply_pass(seat).map_err(ApiProblem::bad_request)?,
+        }
+    }
+
+    // Deliberately released before this — see `run_engine_turns`'s own doc
+    // comment for why holding the lock across the whole multi-turn loop
+    // would starve a WebSocket connection's own read lock.
+    let engine_turns = run_engine_turns(&state, &game_id).await?;
+
+    let (mut dto, access) = {
+        let mut games = state.games.write().await;
+        let game = games
+            .get_mut(&game_id)
+            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        let dto = game.to_dto();
+        persistence::save_game(&state.db, game)
+            .await
+            .map_err(ApiProblem::from_sqlx)?;
+        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        (dto, access)
+    };
+    stats::attach_current_ratings(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+    // A no-op unless this move (or a follow-on engine turn triggered by
+    // `run_engine_turns` above) just finished the game via a normal
+    // ending or a voluntary resignation — the only endings that move
+    // rating (see `stats::settle_ratings`).
+    stats::attach_rating_deltas(&state.db, &mut dto)
+        .await
+        .map_err(ApiProblem::from_sqlx)?;
+
+    // Broadcast the unredacted dto — per-connection redaction happens in
+    // `stream_events`, not here (see the identical note in `start_game`).
+    // Only when no engine advanced. Otherwise `run_engine_turns` has
+    // already announced this exact state, and repeating it at the same
+    // `version` is a message the client is guaranteed to drop.
+    if !engine_turns.announced {
+        let event = if dto.status == api::GameStatus::Finished {
+            tracing::info!(game_id = %dto.id, winner_seat = ?dto.winner_seat, "game finished");
+            GameEventDto::GameFinished { game: dto.clone() }
+        } else {
+            GameEventDto::StateUpdated { game: dto.clone() }
+        };
+        let _ = state.events.send(event);
+    }
+
+    Ok(Json(redact_game_state(dto, &access)))
+}
+
+/// How long an engine gets to choose an action before the seat auto-passes.
+/// Hobby-project default; not yet configurable per engine or per game.
+pub(crate) const ENGINE_TURN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Safety ceiling on engine turns run per trigger (a `/start` or `/actions`
+/// call). This isn't meant to be hit in practice: `maybe_run_engine_turn`
+/// already stops as soon as the current seat isn't an engine, and a real
+/// game is bounded by its tile bag (well under 200 turns even worst-case).
+/// It exists only to keep a future buggy engine from hanging a request
+/// forever in an all-engine game, where there's no human seat to naturally
+/// break the loop.
+pub(crate) const MAX_ENGINE_TURNS_PER_TRIGGER: usize = 400;
+
+/// Paced gap between broadcasting one engine turn and computing the next.
+/// A greedy move search on a 15x15 board is fast enough (single-digit
+/// milliseconds) that an all-engine game would otherwise finish before a
+/// freshly-opened WebSocket even completes its handshake, let alone before
+/// the client can render each state — so *some* artificial pacing is
+/// required for the moves to be visible at all, not just theoretically
+/// broadcast. Short enough that a full engine-vs-engine game (well under
+/// `MAX_ENGINE_TURNS_PER_TRIGGER`) still finishes in a few seconds.
+pub(crate) const ENGINE_TURN_BROADCAST_DELAY: Duration = Duration::from_millis(120);
+
+/// Broadcasts a `StateUpdated`/`GameFinished` event after every individual
+/// engine turn, not just once when the whole loop finishes. Without this, an
+/// all-engine game (nothing left to block on a human) runs start-to-finish
+/// inside a single `/start` (or `/actions`) request, and a client watching
+/// it live never sees anything but the final state — the moves happen too
+/// fast to be visible in the one HTTP response, but the WebSocket is a
+/// separate connection, so a caller subscribed to this game *before*
+/// issuing that request still receives every intermediate move as it's
+/// computed, even though the request itself won't resolve until the whole
+/// game is done.
+///
+/// Takes `&AppState`/`game_id` and reacquires `state.games`'s write lock
+/// fresh each turn, rather than taking an already-locked `&mut GameSession`
+/// and holding that one lock for the whole loop — holding it continuously
+/// starved every other request needing this lock (most importantly a
+/// WebSocket connection's own read lock in `game_events`) for the entire
+/// multi-turn duration, silently defeating the "subscribe before
+/// triggering" design above: the socket's `state.games.read()` would block
+/// until the whole game had already finished and every broadcast already
+/// sent to nobody. A turn is single-digit milliseconds against the 120ms
+/// pacing gap below, so releasing the lock between turns (before that sleep
+/// and before the broadcast send, both lock-free) still leaves plenty of
+/// room for a pending reader to get in.
+/// What `run_engine_turns` did, so its caller knows whether the current
+/// state has already been announced.
+///
+/// Without this both the loop and its caller broadcast the same state, at
+/// the same `version` — and since the client applies only a strictly
+/// greater version, the caller's event was always discarded. Harmless while
+/// the two payloads matched, and a silent bug the moment they didn't: it is
+/// how both the missing rating change and the blanked-out `current_rating`
+/// reached the UI.
+pub(crate) struct EngineTurnsOutcome {
+    /// An engine advanced, so the loop has already broadcast the resulting
+    /// state. The caller should not broadcast it again.
+    pub(crate) announced: bool,
+}
+
+pub(crate) async fn run_engine_turns(
+    state: &AppState,
+    game_id: &str,
+) -> Result<EngineTurnsOutcome, ApiProblem> {
+    let mut announced = false;
+    for _ in 0..MAX_ENGINE_TURNS_PER_TRIGGER {
+        let outcome = {
+            let mut games = state.games.write().await;
+            let Some(game) = games.get_mut(game_id) else {
+                // Game vanished from under us (e.g. deleted concurrently) —
+                // nothing left to advance.
+                return Ok(EngineTurnsOutcome { announced });
+            };
+            let advanced = game
+                .maybe_run_engine_turn(&state.engines, ENGINE_TURN_TIMEOUT)
+                .await
+                .map_err(ApiProblem::bad_request)?;
+            advanced.then(|| {
+                let dto = game.to_dto();
+                let finished = game.status == api::GameStatus::Finished;
+                (dto, finished)
+            })
+        };
+        let Some((mut dto, finished)) = outcome else {
+            break;
+        };
+
+        // Every broadcast from here must be a *complete* dto, because it is
+        // the one the client keeps: the calling handler re-broadcasts the
+        // same state afterwards, but at the same `version`, and the client
+        // applies an update only on a strictly greater one
+        // (`should_apply_update`). A field left unattached here is therefore
+        // a field the client never sees. `current_rating` was exactly that
+        // — `to_dto()` leaves it `None`, so opponent ratings blanked out of
+        // the panel after every engine move.
+        stats::attach_current_ratings(&state.db, &mut dto)
+            .await
+            .map_err(ApiProblem::from_sqlx)?;
+
+        // Persist *before* announcing the finish, so the event carries the
+        // rating change. `settle_ratings` runs inside `save_game` (gated on
+        // `stats_settled_at`, so it fires exactly once), and
+        // `attach_rating_deltas` reads what it wrote — announcing first
+        // meant broadcasting a finished game whose deltas were still None.
+        //
+        // The caller saves and broadcasts again straight after this loop,
+        // but that second event carries the *same* `version`, and the
+        // client applies an update only on a strictly greater one
+        // (`should_apply_update`). So the delta-less event was the one that
+        // stuck: the end-of-game panel showed the result with no rating
+        // change until you navigated away and back, which refetched via
+        // `get_game`. Only games whose final move was an engine's were
+        // affected — a human's last move is broadcast by `submit_action`,
+        // which already attaches deltas.
+        //
+        // A brief read lock rather than saving inside the write lock above:
+        // this is one save on the finishing turn, not per turn, and the
+        // loop's whole design is about not holding that lock across awaits.
+        if finished {
+            {
+                let games = state.games.read().await;
+                if let Some(game) = games.get(game_id) {
+                    persistence::save_game(&state.db, game)
+                        .await
+                        .map_err(ApiProblem::from_sqlx)?;
+                }
+            }
+            stats::attach_rating_deltas(&state.db, &mut dto)
+                .await
+                .map_err(ApiProblem::from_sqlx)?;
+        }
+
+        let event = if finished {
+            GameEventDto::GameFinished { game: dto }
+        } else {
+            GameEventDto::StateUpdated { game: dto }
+        };
+        let _ = state.events.send(event);
+        announced = true;
+        if finished {
+            break;
+        }
+        tokio::time::sleep(ENGINE_TURN_BROADCAST_DELAY).await;
+    }
+    Ok(EngineTurnsOutcome { announced })
+}

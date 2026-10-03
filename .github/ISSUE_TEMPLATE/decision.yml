@@ -1,0 +1,42 @@
+name: Decision
+description: Propose and track a key decision
+type: Decision
+title: '[Decision]: '
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Set **Workstream** and **Topic** after opening: Workstream is who owns it,
+        Topic is which decision log it belongs to — `Programme`, or a project such
+        as `#71`.
+
+        Discussion happens in the comments; the conclusions go in the body, which
+        is edited to stay current. **Close it when there is an Agreed Decision and
+        every open action is done** — closed means applied, not merely answered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Proposal
+      description: The problem, the options, and a recommendation.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Agreed Decision
+      description: >-
+        Leave blank initially. Filled in once it is settled, and closing without
+        it is what this section exists to make obvious.
+  - type: textarea
+    id: action-items
+    attributes:
+      label: Open actions
+      description: >-
+        What the decision requires, which is why it comes after it. Named
+        `Open actions` and prefixed with an owner because that is what
+        `scripts/actions.py` reads — anything else is invisible to the one tool
+        that reports what is waiting.
+      placeholder: |
+        - [ ] **owner** — decide whether X applies to Y
+        - [ ] **Claude** — record it in docs/5.1 and update the register

@@ -1,0 +1,177 @@
+# Serves the built web client as static files, and reverse-proxies API
+# (including the /games/{id}/events WebSocket) to the server container —
+# same origin for both, which is what lets crates/ui build with an empty
+# TILE_LITE_ELITE_API_BASE_URL (see Dockerfile) instead of a baked-in host.
+#
+# /admin/* is deliberately not listed here: the server only accepts it from
+# loopback callers, and a request proxied in from this container isn't one
+# (see docker-compose.yml). Reach it via
+# `docker compose exec server tile-lite-elite-admin ...` instead.
+#
+# A real hostname (not a bare IP — Let's Encrypt won't certificate one) is
+# all Caddy needs to provision and renew HTTPS automatically: giving it a
+# domain here instead of a bare port is the entire config change. Plain
+# :80 requests get redirected to https:// automatically too.
+#
+# Registered tileliteelite.com on 2026-07-16 (A record -> 129.151.69.246,
+# plus GoDaddy's default www CNAME to the root domain) and kept the
+# sslip.io address alongside it as a fallback that needs no DNS at all —
+# Caddy obtains and renews certs for every hostname listed here.
+#
+# The addresses come from $SITE_ADDRESS, defaulting to production's. Caddy
+# substitutes {$VAR} when it parses this file, so one image serves every
+# host and each supplies its own names via docker-compose's `environment:`.
+# Hard-coding them meant any other host running this image demanded a
+# certificate for tileliteelite.com — which it cannot validate, because DNS
+# points somewhere else. Repeated failures also risk a Let's Encrypt rate
+# limit. A host with no DNS of its own uses <ip>.sslip.io, which resolves
+# back to that IP and certificates immediately (see docs/3.1's HTTPS note).
+
+# A loopback-only health listener, for the container's HEALTHCHECK.
+#
+# The public site cannot be probed from inside the container: Caddy's global
+# HTTP->HTTPS redirect fires for any Host on :80, and the TLS handshake on :443
+# then fails because no certificate matches 127.0.0.1. That is why the check
+# used to poll the admin API instead — which proved the process was alive and
+# nothing about whether the site serves.
+#
+# `http://` on the address disables the redirect for this site alone, so a
+# plain probe works. It serves the same root as the real site, so a probe of
+# /version.txt exercises the file server and the static build — the two things
+# the admin API could never speak for.
+#
+# Not published by docker-compose, so it is reachable only from inside the
+# container. Nothing else is added here: no API proxy, no SPA fallback. The
+# public path is proved from outside by the OCI health check, which is the only
+# place it can honestly be proved from.
+http://127.0.0.1:2020 {
+	root * /srv
+	file_server
+}
+
+{$SITE_ADDRESS:tileliteelite.com, www.tileliteelite.com, 129.151.69.246.sslip.io} {
+	encode zstd gzip
+
+	# Caddy's automatic directive ordering runs try_files/file_server before
+	# reverse_proxy by default, regardless of source order — which rewrites
+	# every unmatched-file request (including real API paths, since they're
+	# not files under /srv) to /index.html before the @api matcher below
+	# ever sees the original path. An explicit route{} block runs its
+	# directives in the order written instead, so the API check happens
+	# first and the SPA fallback only applies to what's left.
+	route {
+		# --- Rehearsal access control (#240) -------------------------------
+		#
+		# **An extra block that only ever fires on rehearsal.** The switch is
+		# the hostname, not a variable: production answers on
+		# tileliteelite.com and its own sslip.io name, so neither matcher below
+		# can match there and the whole thing is inert. One Caddyfile, one
+		# image, and the two environments stay as identical as they can be.
+		#
+		# The names are in a **matcher**, never in the site address, so
+		# production is not asked to certificate a host it does not own — the
+		# failure this file's opening comment records, and the reason a second
+		# site block was rejected.
+		#
+		# Why a cookie rather than an IP allowlist: a cookie is scoped to the
+		# **device**, an address to whatever pool it sits in. Mobile carriers
+		# put thousands of subscribers behind one CGNAT address, and rehearsal
+		# is tested from a phone. Why not basic auth: the client sends
+		# `Authorization: Bearer <session>` on every API call, which replaces
+		# the browser's credentials, so Caddy would 401 behind the first page
+		# load. Both settled on #240.
+		#
+		# `REHEARSAL_ACCESS_KEY` **must be set on every host**, including production
+		# where it is unused. Unset, `{$REHEARSAL_ACCESS_KEY}` expands to nothing and
+		# a cookie of literally `rehearsal=` satisfies the matcher — measured,
+		# not feared. docker-compose.yml makes Compose refuse to start without
+		# it, which is what turns that into a stopped container rather than an
+		# open site.
+		@rehearsal_unlock {
+			host rehearsal.tileliteelite.com 129.151.84.183.sslip.io
+			path /unlock/{$REHEARSAL_ACCESS_KEY}
+		}
+		# **Not inside a `handle`.** A `redir` following a `header` in the same
+		# `handle` block never fires: the cookie is set and the response comes
+		# back 200 with no `Location` — measured 2026-08-30, and it is why this
+		# first shipped as a page saying "now open the site". Outside a handle,
+		# `header` is non-terminal, so the request carries on to `redir`, which
+		# is. Measured both ways 2026-09-01 against this exact file.
+		#
+		# It matters because the link is reached by scanning a QR code: landing
+		# in the game is the whole point, and a page telling you to navigate
+		# somewhere is a step a phone user has to do by hand.
+		#
+		# Ordering is what keeps this safe: `redir` is terminal and sits before
+		# the locked check below, so an unlock request never reaches it — while
+		# `/unlock/<anything-else>` does, and is refused.
+		header @rehearsal_unlock Set-Cookie "rehearsal={$REHEARSAL_ACCESS_KEY}; Path=/; Max-Age=14400; Secure; HttpOnly; SameSite=Lax"
+		redir @rehearsal_unlock / 302
+
+		# /health is the whole exemption list, and it is enough: deploy.sh's
+		# schema check and smoke test, and the external OCI check from #136,
+		# ask for nothing else. Neither container HEALTHCHECK comes through
+		# here at all — the server's hits localhost:3000 and Caddy's the
+		# loopback listener above.
+		@rehearsal_locked {
+			host rehearsal.tileliteelite.com 129.151.84.183.sslip.io
+			not path /health
+			not header_regexp Cookie "(^|;[ ]*)rehearsal={$REHEARSAL_ACCESS_KEY}([;]|$)"
+		}
+		handle @rehearsal_locked {
+			respond "Rehearsal is locked. Run ./scripts/rehearsal-access.sh grant and scan the code." 403
+		}
+		# --- end rehearsal access control ---------------------------------
+
+		@api path /health /engines /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
+		reverse_proxy @api server:3000
+
+		# dx's web build fingerprints every file under /assets with a
+		# content hash (see index.html's script/wasm src attributes) — a
+		# new build always means a new filename, so this exact URL's
+		# bytes can never change. Safe to tell browsers to skip
+		# revalidation entirely instead of a conditional GET on every
+		# load. index.html itself is deliberately left uncached (no
+		# matcher below covers it) since it's what points at the
+		# current hash.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		# The exact opposite of /assets above, for the same reason stated
+		# inversely: this file's whole job is to change when a deploy lands.
+		# An open tab polls it to find out whether the bundle being served
+		# has moved on from the one it's running (see `watch_for_new_bundle`
+		# in crates/ui/src/app.rs). A cached copy would report the old build
+		# indefinitely and the auto-update would never fire. It's outside
+		# /assets/* so nothing above catches it, but the default is a
+		# conditional GET against an ETag rather than no caching at all —
+		# worth being explicit about, given what it's for.
+		@version path /version.txt
+		header @version Cache-Control "no-store"
+
+		# "No Cache-Control" is not the same as "do not cache", which is what
+		# the note above assumed. With no directive a browser falls back to
+		# *heuristic* freshness — commonly a fraction of the time since
+		# Last-Modified — so the longer index.html goes unchanged, the longer
+		# a browser will serve it without asking. Observed 2026-08-14: a phone
+		# opened the app on a months-old bundle (0.4.18) and sat there showing
+		# offline against a current server.
+		#
+		# It cannot recover on its own either. The poll that notices a new
+		# bundle lives *in* the client, so a browser pinned to a build old
+		# enough to predate that code has no poller at all.
+		#
+		# `no-cache` means "revalidate before use", not "do not store": the
+		# ETag above is still honoured, so an unchanged document costs a 304
+		# rather than a re-download.
+		@html {
+			not path /assets/*
+			not path /version.txt
+		}
+		header @html Cache-Control "no-cache"
+
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

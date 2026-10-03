@@ -1,0 +1,227 @@
+name: Project
+description: A bounded piece of work that owns requirements, a design, and one or more deliveries
+type: Project
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **A project is where work happens; a requirement issue is where it was
+        noticed.** Raise this one when a requirement justifies a project — even
+        a single requirement, because the two bodies have opposite lifecycles.
+        This one is kept current; a requirement issue is never edited.
+
+        **Then fold the requirement issues into it**: copy what matters here
+        first, then close each with the `folded` label and a comment naming this
+        project. Fold *before* you freeze — closing an issue whose requirement
+        was never copied loses it.
+
+        **Short is right.** A small project holds all seven headings as text; a
+        larger one links to documents in `docs/changes/…` and keeps the body
+        brief so the two do not drift. See
+        [docs/5.1 §2.11](https://github.com/delphside/tile-lite-elite/blob/main/docs/5.1-change-lifecycle.md).
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: >-
+        What must be true when this is done, and the issues folded in. What is
+        out of scope is worth saying too.
+      value: |
+        **R1 · **
+
+        **Out of scope.**
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Design
+      description: >-
+        **Start with how it works now**, then how it will work. A reader cannot
+        judge a change to a script without knowing what the script currently
+        does, and the owner should not have to read the code to review the
+        design.
+
+        Then how it will be done — text here, or a link to a design note.
+        **Include the context**: where the shape was chosen because of other
+        work, say which work, so that if it is dropped the shape becomes
+        reviewable rather than mysterious.
+    validations:
+      required: true
+
+  - type: textarea
+    id: artefacts
+    attributes:
+      label: Impacted artefacts
+      description: >-
+        Everything it touches, each **new**, **modified** or **reuse**, grouped by
+        delivery. A guess now, accurate once the design is agreed — and worth
+        writing wrong, because it is how two projects discover they collide.
+        Route is derived from the artefact; show it as a column.
+
+        **Reuse is not padding.** It is the difference between *we did not touch
+        it* and *we considered it and it needed nothing*, and only the second is
+        a design decision. From the owner's prior art, 2026-09-22, whose
+        component table carried New, Update and Reuse and asked the presenter to
+        explain the decision behind each.
+      value: |
+        *Provisional until the design is agreed.*
+
+        | artefact | new · modified · reuse | why | route |
+        | --- | --- | --- | --- |
+        | | | | |
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-functional
+    attributes:
+      label: Non-functional design
+      description: >-
+        **Four questions, and *none, because…* is a complete answer to any of
+        them.** Most changes add no load and no timeout; what this section stops
+        is nobody having asked. From the owner's prior art, 2026-09-22, where
+        every design presentation answered capacity, error handling and retry,
+        timeouts and queue depths, and encryption and tokens.
+
+        **Why it is a heading rather than a habit.** #402 and #291 are both
+        projects partly because nothing asked the question per change. Error
+        handling accumulated into a project; so did capacity. Asked here it is
+        cheap, and asked nowhere it is expensive later.
+      value: |
+        **Capacity** — what this adds to load, against which ceiling in the
+        capacity plan. *None, because…*
+
+        **Failure** — what can go wrong, what the caller is told, what reaches
+        the log, and whether the server should act. *None, because…*
+
+        **Limits and timeouts** — any new timeout, queue depth, rate limit or
+        concurrency bound, **and where its number came from**. *None, because…*
+
+        **Secrets and access** — anything touching credentials, tokens, or who
+        can reach what. *None, because…*
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and related work
+      description: >-
+        One line per relation, naming the issue and the reason. **waits on** —
+        cannot start or ship until that one has. **is needed by** — the same
+        edge, declared from this end, so a dependency exists in both bodies
+        rather than in whichever was written second. **overlaps** — touches the
+        same artefact, which comparing artefact lists will tell you.
+        **anticipates** — this design makes room for that project, and naming it
+        is what keeps it from being speculation.
+
+        **Both directions, deliberately.** #400's eight customers were found by
+        somebody going looking rather than by each having declared itself, which
+        is the failure this line exists to stop.
+      value: |
+        - **waits on #** — 
+        - **is needed by #** — 
+        - **overlaps #** — 
+        - **anticipates #** — 
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-approach
+    attributes:
+      label: Test approach
+      description: >-
+        Environment, tools, and what is measured against what criteria.
+
+        **Two headings, and the tests under them are task lists**, because
+        `verify.sh` counts what is still unticked and names the project before
+        the release. Keep the headings exactly as written — they are matched
+        literally.
+
+        The split says **where** each test runs: Preview answers *does it do
+        what was wanted*, Rehearsal answers *does it behave correctly on
+        production-like hardware*. #240's `revoke` test sat in prose owned by
+        neither, and went past a rehearsal deploy, a production deploy and the
+        project's closedown without anybody asking.
+
+        Write "None." under a heading that does not apply. Declining a heading
+        honestly is better than inventing a test to fill it.
+      value: |
+        ### Functional user tests — Preview
+
+        - [ ] **owner** —
+
+        ### Technical tests — Rehearsal
+
+        - [ ] **Claude** —
+    validations:
+      required: true
+
+  - type: textarea
+    id: post-deployment-check
+    attributes:
+      label: Post-deployment check
+      description: >-
+        **What would show this worked, once it is live?** Not the tests — those
+        are above, and they run before it ships. This is what somebody looks at
+        afterwards to say the benefit arrived.
+
+        **It closes the loop back to the scope, so it should match it.** Take the
+        requirements above one at a time and say how each would be seen to be
+        true in production. Commercially this is the question of whether a
+        project met its business case; here it is the same question with the
+        money left out.
+
+        That correspondence is the point, and it works in both directions: a
+        check with no requirement behind it is measuring the wrong thing, and a
+        **requirement with no check is one that can quietly not get built** —
+        which is how R2 of #265 reached a merged delivery without existing.
+
+        **Say how the check is done, not what is being checked.** "Run
+        `verify.sh` and look for this line", not "the gate holds". A check that
+        names a fact and leaves the method to the reader is one nobody can run —
+        and sometimes one nobody *can* run: #282's "the bot does not play JISMS"
+        needed a constructed rack, which production cannot offer.
+
+        **Each row is answered passed, cannot be tested, or failed**, with a note
+        on what happened. *Cannot be tested* is a legitimate answer and has to be
+        visible as one; where it applies, say what evidence stands instead and
+        where it was taken.
+
+        Written now, while the intent is fresh, because by the time it falls due
+        the project has been closed out of everybody's head.
+
+        For a `no-release` project it is often the **next application release**
+        behaving as expected — say so, and say what would count as it not.
+      placeholder: |
+        The next production deploy settles its milestone with every project left
+        open at Post-deployment rather than closed, and its version bump reaches
+        main. If the bump is refused, the bypass is wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliveries
+    attributes:
+      label: Deliveries
+      description: >-
+        One row per delivery, with its milestone. An earlier delivery that has its
+        own Project Delivery issue keeps its steps there and is linked from here;
+        the last delivery has no issue of its own, so its runbook is written below
+        the table. Never both — a runbook in two places is two places to update,
+        and one of them goes stale.
+      value: |
+        | # | what it delivers | milestone | steps |
+        | --- | --- | --- | --- |
+        | 1 | | | #nnn, or below if this is the last |
+        
+        ### Delivery 1 — steps
+        
+        | # | step | route |
+        | --- | --- | --- |
+        | 1 | | |
+    validations:
+      required: true
