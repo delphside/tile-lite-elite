@@ -1,0 +1,43 @@
+---
+config:
+  layout: elk
+  elk:
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart TB
+    %% Flavour A — a pre-approved change. docs/3.3, the flavours table.
+    %% .
+    %% Arrow numbers are docs/3.3 part 1 section numbers, as in every diagram
+    %% here: arrow 1.2.1 is step 1.2.1. A is the shortest flavour and runs
+    %% 1.1 then 1.2, and nothing else.
+    %% .
+    %% There is no branch, no pull request and no delivery: approval is the
+    %% `pre-approved` milestone and the discussion was the review. The push to
+    %% main IS the delivery, which is why no arrow leaves GitHub — nothing is
+    %% deployed because nothing is built into the image.
+    %% .
+    %% Line language matches release-flow.mmd: a solid arrow moves code, a
+    %% dotted arrow returns an answer. Bold is an action somebody takes.
+    DEV["Dev<br/>working tree"]
+    LG["local git<br/>commit history"]
+    subgraph GH["GitHub"]
+        MAIN["repo · main"]
+        ACT["Actions"]
+    end
+    LIVE(["live — the push is the delivery"])
+
+    DEV -->|"`1.1.1 · **$ cargo test**`"| DEV
+    DEV -->|"`1.1.2 · **$ git commit**`"| LG
+    LG -->|"`1.2.1 · **$ git push** to main`"| MAIN
+    MAIN -->|"1.2.2 · CI runs (automatic)"| ACT
+    ACT -.->|"`1.2.3 · **$ ci-status.sh --wait**`"| LG
+    MAIN --> LIVE
+
+    classDef gate fill:#fbe9dc,stroke:#b06a2c,color:#7a4318
+    classDef env fill:#e4eff8,stroke:#39698c,color:#12303f
+    classDef repo fill:#f7efe0,stroke:#96763f,color:#3a2c12
+    classDef branch fill:#eef3ea,stroke:#5c7a4a,color:#243418
+    class DEV env
+    class LG,MAIN,ACT repo
+    class LIVE branch
+    style GH fill:#fdf9f1,stroke:#96763f,color:#3a2c12

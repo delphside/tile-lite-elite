@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# commit-msg — refuse a commit whose subject does not carry the version stamp.
+#
+# CI checks this too, and will keep doing so: a hook lives in a working copy
+# and can be skipped with --no-verify, so it is a convenience rather than a
+# gate. What it buys is the six minutes between making the mistake and being
+# told — and the fix while the commit is still the tip, before anything is
+# pushed and a reword needs a rebase.
+#
+# Deliberately not a copy of check-commit-stamp.sh's logic. That validates a
+# commit against *its own tree*, which does not exist yet at commit-msg time.
+# This checks the two things that can be known now: the shape of the subject,
+# and whether the versions claimed match the tree about to be committed.
+
+MSG_FILE="$1"
+SUBJECT="$(head -1 "$MSG_FILE")"
+
+# A merge's subject is generated and describes no change of its own.
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|fixup!*|squash!*) exit 0 ;;
+esac
+
+STAMP='^app ([0-9]+\.[0-9]+\.[0-9]+) api ([0-9]+\.[0-9]+): .+'
+if [[ ! "$SUBJECT" =~ $STAMP ]]; then
+  echo "commit refused: the subject does not carry the version stamp." >&2
+  echo "  got:    $SUBJECT" >&2
+  echo "  wanted: app <X.Y.Z> api <M.N>: <subject>" >&2
+  echo >&2
+  echo "  The colon after the api version is part of it, and is the one" >&2
+  echo "  people miss." >&2
+  exit 1
+fi
+
+CLAIMED_APP="${BASH_REMATCH[1]}"
+CLAIMED_API="${BASH_REMATCH[2]}"
+HERE="$(git rev-parse --show-toplevel)"
+
+ACTUAL_APP="$(grep -m1 '^version' "$HERE/Cargo.toml" 2>/dev/null | cut -d'"' -f2 || true)"
+ACTUAL_API="$("$HERE/scripts/read-api-version.sh" < "$HERE/crates/api/src/lib.rs" 2>/dev/null || true)"
+
+if [[ -n "$ACTUAL_APP" && "$CLAIMED_APP" != "$ACTUAL_APP" ]]; then
+  echo "commit refused: subject says app $CLAIMED_APP, Cargo.toml says $ACTUAL_APP" >&2
+  exit 1
+fi
+if [[ -n "$ACTUAL_API" && "$CLAIMED_API" != "$ACTUAL_API" ]]; then
+  echo "commit refused: subject says api $CLAIMED_API, API_VERSION is $ACTUAL_API" >&2
+  exit 1
+fi
+
+# Attribution, added rather than demanded.
+#
+# `Co-Authored-By: Claude` was the convention here for 324 commits and then
+# lapsed silently for 104, which is what made it worth automating: under the
+# rule that absence means the owner typed it himself, a forgotten trailer no
+# longer merely loses information, it asserts something false.
+#
+# `CLAUDECODE` is set in Claude Code's environment and in no ordinary shell, so
+# this fires exactly when it should and never on a commit the owner types.
+#
+# **It never demands the trailer**, only adds one. Requiring it would refuse the
+# owner's own commits, which are precisely the case the convention exists to
+# preserve.
+#
+# `--if-exists doNothing` keeps a more specific trailer that was written by
+# hand: the history distinguishes Opus 5, Sonnet 5 and Opus 4.8, and a hook
+# cannot know the model. So a named trailer survives, and this is the backstop
+# for when none was written.
+# --- the commit belongs to the branch it is on ------------------------------
+#
+# **One branch per project, and everything the project touches goes on it.** The
+# reverse also holds: a commit on a project's branch belongs to that project.
+#
+# Twice on 2026-09-02 it did not. Roadmap work was committed to
+# `290-dioxus-07`, and #282's documentation to `214-build-once` — both because
+# a branch was still checked out from earlier work. Neither was noticed until
+# afterwards, and one had to be lifted out with `format-patch`.
+#
+# A branch named for an issue (`214-build-once`, `290-dioxus-07`) says which
+# project owns it. If the message names a different one, that is the mistake.
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+# Both rules are the model's (`scripts/board/refs.py`, #421), asked through
+# `board-refs.py` rather than copied here: which issue a branch is for, and
+# which a message names.
+REFS="$(dirname "$0")/../scripts/board-refs.py"
+BRANCH_ISSUE="$(python3 "$REFS" branch "$BRANCH" 2>/dev/null || true)"
+if [[ -n "$BRANCH_ISSUE" ]]; then
+  MENTIONED="$(python3 "$REFS" named < "$MSG_FILE" 2>/dev/null || true)"
+  if [[ -n "$MENTIONED" ]] && ! printf '%s\n' "$MENTIONED" | grep -qx "$BRANCH_ISSUE"; then
+    echo "commit refused: this is branch $BRANCH, but the message names #$(printf '%s' "$MENTIONED" | head -1)." >&2
+    echo >&2
+    echo "  A branch belongs to one project, and so does a commit on it." >&2
+    echo "  Either this belongs on main or another branch, or the trailer is wrong." >&2
+    echo >&2
+    echo "  --no-verify if the branch genuinely carries both, and say so in the message." >&2
+    exit 1
+  fi
+  if [[ -z "$MENTIONED" ]]; then
+    echo "commit-msg: on branch $BRANCH with no Refs/Closes — assuming #$BRANCH_ISSUE." >&2
+    echo "            Add 'Refs #N' if it belongs to something else." >&2
+  fi
+fi
+
+if [[ -n "${CLAUDECODE:-}" ]]; then
+  git interpret-trailers --in-place --if-exists doNothing \
+    --trailer "Co-Authored-By: Claude <noreply@anthropic.com>" "$MSG_FILE"
+fi

@@ -1,0 +1,26 @@
+[package]
+name = "wordlist-tools"
+version.workspace = true
+edition.workspace = true
+
+# Generators for the word lists that ship. Their output is `include_str!`d into
+# the binary, so a change here changes what production plays with — which is
+# why they are a crate and not examples: `.githooks/pre-commit` excludes
+# `crates/*/examples/` from the rule that an image change takes a branch and a
+# pull request, and that exclusion is only honest if nothing in `examples/`
+# produces something the binary compiles in. Writing a results CSV that is
+# committed is fine, and three benchmarks do it; writing a file that is
+# `include_str!`d is not.
+#
+# A workspace member but not a default member, so `cargo build` at the root
+# does not build it and the Dockerfile's `-p server-game -p admin-cli` never
+# sees it.
+
+[dependencies]
+rules-shared = { path = "../rules-shared" }
+# Classifies a word as offensive/profane/sexual/mean, for generate-greylist
+# only. It lived in rules-shared's dev-dependencies, which compiles to wasm and
+# has the tightest reason of any crate here not to carry a classifier it never
+# calls. Pinned because a regenerated list that silently differs is worse than
+# no list — see ATTRIBUTIONS.md.
+rustrict = "=0.7.38"

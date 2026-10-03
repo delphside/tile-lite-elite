@@ -1,0 +1,20 @@
+// Config for markdownlint (the VS Code extension and markdownlint-cli2 both
+// read this file). Without it, the default ruleset reports ~900 "issues"
+// across docs/, ~95% of them from two purely cosmetic rules the docs have
+// never followed — enough noise to bury the handful that actually matter.
+//
+// Only rules deliberately turned off are listed; everything else stays at
+// its default. Add a line here with its reason rather than reformatting a
+// document to satisfy a rule nobody agreed to.
+{
+  // Line length (default 80). The docs are prose-first and hard-wrapped by
+  // hand at whatever width reads well, and the reference documents (4.2,
+  // 4.3, 4.5) carry wide tables whose cells cannot wrap at all. Enforcing a
+  // column limit would reformat nearly every file to no benefit: it changes
+  // nothing about how GitHub renders them.
+  "MD013": false,
+
+  // Table pipe spacing — wants `| a | b |` where these docs write `|a|b|`.
+  // Cosmetic only, invisible once rendered, and 253 occurrences deep.
+  "MD060": false
+}

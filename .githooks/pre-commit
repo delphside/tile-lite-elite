@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# pre-commit — three refusals, cheapest first.
+#
+# Running a check and gating on it are different things. On 2026-09-02 three
+# commits went out having failed check-docs, because the check reported and the
+# commit happened anyway.
+
+REPO="$(git rev-parse --show-toplevel)"
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR || true)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+MERGING=0
+[ -e "$(git rev-parse --git-dir)/MERGE_HEAD" ] && MERGING=1
+
+# --- 1. an image change on `main` needs a branch ------------------------------
+#
+# **What ships in the image goes through a branch and a pull request.** Documents
+# and scripts are live when they are pushed and need neither; the image is what
+# production runs.
+#
+# The rule is inverted on purpose: it lists what does **not** ship, and refuses
+# everything else. Listing what does ship means a build asset nobody thought of
+# — a new compose file, a config the Dockerfile starts copying — is missed in
+# silence. This way an unrecognised path is refused, which is noisy and visible
+# and fixed by adding one line here.
+#
+# The exclusions are about what reaches the binary, not about what looks like
+# code. `include_str!` compiles data in as surely as source: the four
+# dictionaries, the greylist and denylist and the stems they are generated
+# from, and the five email templates are all `.txt` under `crates/` and all
+# ship. They are refused, and the test suite says so by name.
+#
+# Markdown is allowed anywhere, including under `crates/`, because nothing
+# `include_str!`s a `.md`. The day something does, this line is the reason it
+# passed, and it should stop being true rather than be worked around.
+#
+# `crates/*/examples`, `tests` and `benches` are excluded because they are not
+# built into the image. The exclusion holds only while examples stay
+# demonstration and measurement code: writing a committed results CSV is fine,
+# and three benchmarks do it, but anything generating a file the binary
+# `include_str!`s is a crate instead — see `crates/wordlist-tools` and #306.
+# For the same reason examples are not in the artefact register, which
+# `docs/3.0-tools.md` says in its own words. `old-crates/` is **not** excluded, though nothing in it
+# is compiled into the binaries: the Dockerfile `COPY`s it into the build
+# context, so changing it changes the image that gets built. `Cargo.toml` is not excluded even though it carries
+# dev-dependencies: it is the file that decides what ships, and telling a dev
+# dependency from a real one means parsing it.
+#
+# Measured over 140 commits on `main`, the old form fired once — 0b18a66f, which
+# changed the Caddyfile and docker-compose.yml directly on main during #240.
+# Squash merges are made by GitHub and never reach this hook; a local merge is
+# skipped.
+# The pattern lives in scripts/shipping-paths.sh, sourced here and by deploy.sh,
+# which marks the same commits in its build manifest (#288). Two copies is how
+# the same defect comes to exist in two places, and this one decides both
+# whether a commit is refused and whether a release is described correctly.
+#
+# Located relative to **this hook**, not to the repository being committed to.
+# The two ship together, and `git rev-parse --show-toplevel` points at whatever
+# repo is being committed in — which is the hook's own repo in normal use and a
+# fixture's temporary one under test.
+# shellcheck source=../scripts/shipping-paths.sh
+. "$(cd "$(dirname "$0")/.." && pwd)/scripts/shipping-paths.sh"
+
+# The one image change that belongs on `main`: the post-deploy version bump.
+#
+# `deploy.sh` writes it immediately after a successful production deploy, and
+# `CLAUDE.md` requires it — *"bump dev to the next patch straight after each
+# production deploy; dev leads production by one"*. It cannot take a branch,
+# because a branch holds a change back (§2.2) and this one records a version
+# that is **already live**. So the rule above has an exception that is generated
+# rather than authored, and #316 is the release where the two collided: 0.7.2
+# deployed, tagged and published, then failed on its own last step.
+#
+# Recognised rather than trusted. Two conditions, both required:
+#
+#   - the staged set is exactly `Cargo.toml`, optionally with `Cargo.lock`
+#   - every changed line in them is a `version = "X.Y.Z"` line
+#
+# So a dependency added to `Cargo.toml`, a lockfile that pulls a new crate, or
+# a bump with a `crates/**` file alongside it are all still refused. The
+# exemption cannot be widened by adding a file to the commit, which is the
+# property that makes it safe to have at all.
+#
+# `<<<` and not a pipe into `grep -q`: grep exits on its first match, the
+# writer takes SIGPIPE, and under `pipefail` the pipeline reports 141 — so the
+# test would silently invert. That defect has already cost this project a
+# production deploy; see scripts/issue-mentions.sh.
+# **The rule is the model's**, `scripts/board/shipping.py`'s `version_bump_only`
+# (#421), asked through `board-shipping.py` rather than held here.
+version_bump_only() {
+  python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" version-bump --staged \
+    </dev/null 2>/dev/null
+}
+
+if [ "$MERGING" -eq 0 ] && [ "$BRANCH" = "main" ]; then
+  IMAGE="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-shipping.py" paths 2>/dev/null || true)"
+  if [ -n "$IMAGE" ] && version_bump_only; then
+    IMAGE=""
+  fi
+  if [ -n "$IMAGE" ]; then
+    {
+      echo "commit refused: this changes what ships in the image, on main."
+      echo
+      printf '  %s\n' $IMAGE
+      echo
+      echo "  An image change goes through a branch and a pull request — it is what"
+      echo "  production runs. Documents, scripts, tests and examples are live when"
+      echo "  pushed and need neither."
+      echo
+      echo "  git switch -c <issue>-<name> and commit there, or --no-verify with"
+      echo "  the reason in the message."
+      echo
+      echo "  If one of those genuinely does not ship, add it to the exceptions in"
+      echo "  scripts/board/shipping.py and say why."
+    } >&2
+    exit 1
+  fi
+fi
+
+# --- 1b. the process's own documents live on main -----------------------------
+#
+# **The mirror of section 1, and it is the direction that has no gate.** Section
+# 1 stops an image change reaching `main` without a pull request. Nothing stopped
+# the reverse: work that belongs on `main` being committed to whatever branch
+# happened to be checked out.
+#
+# `commit-msg` catches most of it, by refusing a message that names an issue the
+# branch is not for. **Its hole is a commit with no trailer at all**, which it
+# assumes belongs to the branch -- and process edits are exactly that shape,
+# because they record a rule rather than serving an issue. On 2026-09-21 the
+# ITIL rule, a CLAUDE.md clause and an obligations.py fix were all written onto
+# `399-database-failure-status` while #399's own change sat committed beneath
+# them. Caught by reading `git status`, which is not a gate.
+#
+# **These files are the process, and the process is not a project.** A process
+# document describes the programme and how it operates; a technical document
+# describes the application. The technical ones change with the code, on the
+# project branch. The process ones belong to no project, so they change on
+# `main`: a copy on a branch disagrees with `main` until it merges, and makes the
+# process wait on a project it has nothing to do with (owner, 2026-09-25).
+#
+# **docs/1.6 is not on the list, because it is generated.** It is the map of the
+# headings on whichever branch it is built from, so a branch that adds headings
+# needs its own. Regenerated after the rebase that precedes a merge (docs/3.3
+# §1.9), it is exactly the map `main` will have once the branch fast-forwards.
+#
+# **A project may still change them**, when it is the project that changes the
+# process, or when the document rides its release. So this refuses and offers
+# `--no-verify`, in the same shape as the check above it -- it is asking *did
+# you mean this*, not forbidding it.
+#
+# **The list is the model's**, `scripts/board/documents.py` (#421), asked
+# through `board-documents.py` rather than held here.
+
+if [ "$MERGING" -eq 0 ] && [ "$BRANCH" != "main" ]; then
+  ONMAIN="$(printf '%s\n' "$STAGED" | python3 "$(cd "$(dirname "$0")/.." && pwd)/scripts/board-documents.py" process 2>/dev/null || true)"
+  if [ -n "$ONMAIN" ]; then
+    {
+      echo "commit refused: the process's own documents belong on main, not $BRANCH."
+      echo
+      printf '  %s\n' $ONMAIN
+      echo
+      echo "  A document saying how we work is true for every branch at once, so a"
+      echo "  copy on one branch disagrees with main until it merges. commit-msg"
+      echo "  cannot catch this: a process edit carries no Refs, and a commit with"
+      echo "  no trailer is assumed to belong to the branch."
+      echo
+      echo "  git stash push -u, switch to main, apply there — or --no-verify if"
+      echo "  this project is the one changing the process, and say so."
+    } >&2
+    exit 1
+  fi
+fi
+
+# --- 2. a new artefact is registered ------------------------------------------
+#
+# **Something permanent needs somewhere to be found.** Not an issue — the owner,
+# 2026-09-03: a quick edit should not need a requirement. A row in the register
+# is the whole obligation.
+#
+# Five artefacts were created on 2-3 September and two were unregistered, both
+# within an hour of this being written.
+# `.claude/*.sh` is here because tooling is an artefact whether it runs in
+# production or not (owner, 2026-09-03). Those two hooks were outside the
+# repository and outside this rule until then, which is how turn-check.sh came
+# to be filtering comments on a marker that nothing had written for weeks.
+NEW="$(printf '%s\n' "$STAGED" | grep -E '^(scripts/[^/]+\.(sh|py)$|\.githooks/[^/]+$|\.claude/([^/]+\.sh$|skills/[^/]+/))' || true)"
+if [ -n "$NEW" ]; then
+  UNREGISTERED=""
+  while read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in */tests/*) continue ;; esac
+    # a file already tracked is not new
+    git ls-tree -r --name-only HEAD -- "$f" 2>/dev/null | grep -qx "$f" && continue
+    name="$(basename "$f")"
+    case "$f" in .claude/skills/*) name="$(printf '%s' "$f" | cut -d/ -f3)" ;; esac
+    grep -qF "$name" "$REPO/docs/3.0-tools.md" 2>/dev/null || UNREGISTERED="$UNREGISTERED $f"
+  done <<< "$NEW"
+  if [ -n "$UNREGISTERED" ]; then
+    {
+      echo "commit refused: a new artefact is not in the register."
+      echo
+      printf '  %s\n' $UNREGISTERED
+      echo
+      echo "  Add a row to docs/3.0-tools.md saying what it is and what runs it."
+      echo "  A row, not an issue."
+    } >&2
+    exit 1
+  fi
+fi
+
+# --- 3. Rust that rustfmt would change ----------------------------------------
+#
+# Conditional, like the documents check below: 535 ms, and only when a `.rs`
+# file is staged.
+#
+# CI's format check ran red on `main` for fourteen commits on 2026-09-04 before
+# anybody looked. Nothing local checked formatting, `cargo clippy` does not, and
+# the breakage was two `println!` calls over the line width in an example — the
+# cheapest possible defect, costing a day of red CI and a release gate that
+# would have refused every one of those commits.
+#
+# `--check` exits non-zero and writes a diff without touching the tree, so a
+# refusal here never rewrites what is about to be committed.
+# The `Cargo.toml` guard is not decoration: without it the hook runs `cargo fmt`
+# in any repository that happens to contain a `.rs` file, and cargo exits
+# non-zero outside a project — refusing the commit for a reason that has nothing
+# to do with formatting.
+if printf '%s\n' "$STAGED" | grep -qE '\.rs$' \
+   && [ -f "$REPO/Cargo.toml" ] && command -v cargo > /dev/null; then
+  if ! fmt_out="$(cargo fmt --all -- --check 2>&1)"; then
+    {
+      echo "commit refused: rustfmt would change staged Rust."
+      echo
+      printf '%s\n' "$fmt_out" | grep '^Diff in' | sed 's|.*/tile-lite-elite/|  |' | sort -u
+      echo
+      echo "  Run 'cargo fmt --all' and stage the result. CI denies this, so the"
+      echo "  alternative is a red build and a release gate that refuses the commit."
+    } >&2
+    exit 1
+  fi
+fi
+
+# --- 4. the documentation checks ----------------------------------------------
+#
+# The only conditional one: it reads every markdown file and takes a few
+# seconds, so a commit touching no documents does not pay for it. A check that
+# makes every commit slower is one people bypass.
+if printf '%s\n' "$STAGED" | grep -qE '\.md$' && [ -x "$REPO/scripts/check-docs.sh" ]; then
+  if ! output="$("$REPO/scripts/check-docs.sh" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    cat >&2 <<'MSG'
+
+pre-commit: the documentation checks failed, so nothing was committed.
+
+Fix what is reported above, or commit with --no-verify if you are certain —
+worth explaining in the commit message, because the next person will wonder.
+MSG
+    exit 1
+  fi
+fi

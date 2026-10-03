@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# post-merge — a project branch merged into `main` moves its work package on.
+#
+# Owner, 2026-09-26: "We need to indicate when a wp has moved beyond testing
+# and been merged into main" — and "Can we make it a hook on the merge?"
+# Scheduler core (#414) sat at User testing after its merge, because nothing
+# moves a Phase when a merge happens.
+#
+# **Only `git merge <N-branch>` on `main`.** The same hook runs on every
+# `git pull`, and on merges in a project worktree; neither delivers a work
+# package, so both are told apart by the reflog entry git writes for this
+# merge ("merge 415-x: Fast-forward" against "pull: Fast-forward").
+#
+# **It never fails.** A post-merge hook cannot undo the merge, so a non-zero
+# exit would only print git's own warning. `board-merged.py` prints anything
+# it could not do, with what to set by hand.
+#
+# POST_MERGE_CMD replaces the command it runs, for the test suite.
+set -uo pipefail
+
+[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = main ] || exit 0
+
+entry="$(git reflog -1 --format=%gs HEAD 2>/dev/null)"
+case "$entry" in
+  "merge "*) ;;
+  *) exit 0 ;;
+esac
+branch="${entry#merge }"
+branch="${branch%%:*}"
+branch="${branch#origin/}"
+[[ "$branch" =~ ^[0-9]+- ]] || exit 0
+
+if [ -n "${POST_MERGE_CMD:-}" ]; then
+  "$POST_MERGE_CMD" "$branch" || true
+else
+  python3 "$(git rev-parse --show-toplevel)/scripts/board-merged.py" "$branch" || true
+fi
+exit 0

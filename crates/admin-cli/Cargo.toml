@@ -1,0 +1,42 @@
+[package]
+name = "admin-cli"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+repository.workspace=true
+
+[[bin]]
+name = "tile-lite-elite-admin"
+path = "src/main.rs"
+
+[dependencies]
+api = { path = "../api" }
+# Only to render the server's epoch-second timestamps as readable dates.
+# `default-features = false` deliberately drops `clock`, which exists to read
+# the machine's local timezone and would pull in iana-time-zone for it — this
+# tool formats everything as UTC (see `format_timestamp`), so it never needs
+# to know what timezone the operator is in.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+clap = { version = "4", features = ["derive", "env"] }
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+# Only for the `Serialize` bound on `--json`'s renderer; the DTOs it
+# serializes all come from the `api` crate.
+serde = "1"
+serde_json = "1"
+# Column alignment. `str`'s own `{:<width}` pads by `char` count, which stopped
+# being the right answer once migration 0006 made accented and non-Latin
+# display names first-class: a combining mark occupies a `char` but no column,
+# and a CJK name occupies two columns per `char`. This crate knows the
+# difference; `chars().count()` cannot.
+unicode-width = "0.2"
+
+[dev-dependencies]
+# The CLI test hosts a real server and dials it over loopback TCP, which is
+# the one thing the in-process tests cannot cover: `require_loopback` reads
+# `ConnectInfo`, which Axum fills in only when the app is served with
+# `into_make_service_with_connect_info`.
+server-game = { path = "../server-game" }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+uuid = { version = "1", features = ["v4"] }

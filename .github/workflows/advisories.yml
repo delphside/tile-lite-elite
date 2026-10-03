@@ -1,0 +1,146 @@
+# Reports a dependency that has acquired a known advisory, without anybody
+# remembering to look — #297.
+#
+# **The criterion is reachability, not severity.** `cargo audit` reads
+# `Cargo.lock`, which carries crates no feature combination builds, so most
+# findings here cannot reach us at all. `.cargo/audit.toml` holds the ones that
+# cannot, with a reason each; everything left is something somebody can act on,
+# which is why this runs with `--deny warnings` rather than the default.
+#
+# Measured on 2026-09-06: severity got reachability exactly backwards — both
+# vulnerabilities were unreachable and both findings inside the server binary
+# were warnings.
+#
+# **Nightly, not per-push.** The advisory database changes; `Cargo.lock` mostly
+# does not.
+name: Advisories
+
+on:
+  schedule:
+    # 06:15 UTC. Off the hour, because everything else in the world runs at :00.
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No toolchain action, for the reason `ci.yml` gives: `rust-toolchain.toml`
+      # names the channel and rustup honours it, so naming a version here would
+      # be a second pin. `@stable` was doubly pointless — the runner ships
+      # stable already, and the directory override wants the pinned version
+      # regardless, which rustup treats as a separate toolchain even when the
+      # two are the same release.
+      #
+      # `cargo audit` needs no components, so there is nothing else to install.
+
+      # Pinned rather than floating: this job's whole job is to notice change,
+      # so it should not change underneath itself. `--locked` uses the tool's
+      # own lockfile, not ours.
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+
+      # `tee` keeps the output for the issue body while the exit status still
+      # decides the run. `pipefail` is what makes that true — without it the
+      # status is `tee`'s, which is always zero.
+      - name: Audit
+        id: audit
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo audit --deny warnings 2>&1 | tee /tmp/audit.txt
+
+      # **What a green run suppressed.** Measured on the first two scheduled
+      # runs, 2026-09-11 and 2026-09-12: the audit prints four lines and says
+      # nothing about the ignore list, so a run that quieted seventeen findings
+      # is indistinguishable from one with nothing to find. That is the shape
+      # #339 exists for, and #297 R3 predicted it before merge — *"judge it on
+      # the first scheduled run and, if it reads as expected, print the ignored
+      # ids and their reasons beside the audit."* It read as expected.
+      #
+      # `always()` so it prints whether the audit passed or failed: on a failure
+      # the question *what else is being held back* is more pressing, not less.
+      #
+      # An entry with no reason is named as such. The file's own header calls
+      # that a defect — it is indistinguishable from something nobody looked at.
+      - name: What the ignore list is holding back
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import re, pathlib
+          src = pathlib.Path(".cargo/audit.toml").read_text().splitlines()
+          inside, comment, out = False, [], []
+          for line in src:
+              s = line.strip()
+              if s.startswith("ignore"):
+                  inside = True; comment = []; continue
+              if not inside:
+                  continue
+              if s.startswith("]"):
+                  break
+              if s.startswith("#"):
+                  comment.append(s.lstrip("# ").rstrip()); continue
+              m = re.match(r'"(RUSTSEC-[\d-]+)"', s)
+              if m:
+                  out.append((m.group(1), " ".join(comment)))
+              if not s:
+                  comment = []
+          print(f"{len(out)} advisories are deliberately quieted by .cargo/audit.toml:")
+          for rid, why in out:
+              print(f"  {rid}  {why or '** NO REASON RECORDED — see the file header **'}")
+          EOF
+
+      # Only on a failing audit. `always()` is deliberate: without it a failed
+      # step ends the job and the report never reaches anybody, which is the
+      # whole point of the workflow.
+      - name: Open or update the report
+        if: always() && steps.audit.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "Dependency advisories need review"
+        run: |
+          set -euo pipefail
+          {
+            printf 'A scheduled `cargo audit` found something that reaches us.\n\n'
+            printf 'Raised by `.github/workflows/advisories.yml` ([run](%s/%s/actions/runs/%s)).\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'Everything unreachable is filtered by `.cargo/audit.toml`, so each\n'
+            printf 'finding below is one somebody can act on. Untriaged — #297 R3.\n\n'
+            printf '```\n'
+            # **Strip the colour.** `cargo audit` writes ANSI to the pipe and
+            # `tee` keeps it, so the issue body arrived as `^[[0m^[[1m^[[31m`
+            # around every field. The finding was legible only to somebody
+            # willing to read past it, which is exactly what #297 R3 says a
+            # report must not require -- and #297's own post-deployment check
+            # ("readable without opening the run") is what caught it.
+            # Both forms: the real ESC in the file, and the literal `^[`
+            # GitHub rewrites it to if any survives to the API.
+            sed -r 's/(\x1b|\^\[)\[[0-9;]*[a-zA-Z]//g' /tmp/audit.txt
+            printf '```\n'
+          } > /tmp/body.md
+
+          # Matched locally rather than through `--search`, whose index lags by
+          # minutes and would open a second issue for the same finding.
+          existing="$(gh issue list --state open --limit 200 --json number,title \
+                        --jq "[.[] | select(.title == \"$TITLE\") | .number] | first // empty")"
+
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body-file /tmp/body.md
+            echo "updated #$existing"
+          else
+            # `--type`, because an untyped issue is invisible to every rule
+            # keyed on type -- check-transitions.sh, verify.sh and actions.py
+            # all skip it silently. That was #361, closed after twenty issues
+            # were typed by hand; this line is what stops it recurring, since
+            # a workflow that raises untyped issues refills the hole nightly.
+            gh issue create --type Requirement --title "$TITLE" --body-file /tmp/body.md
+          fi

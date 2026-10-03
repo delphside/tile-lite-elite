@@ -1,0 +1,43 @@
+name: Requirement
+description: Something that should be true and is not — a defect, a change, a gap. Raise it in five seconds
+type: Requirement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Raising an issue is meant to be a five-second act.** Write what you
+        noticed and move on. Nothing downstream assumes it is well formed.
+
+        **The classification lives in the sidebar, not in this form.** Since
+        2026-08-26 the answers are **issue fields**, set beside labels and
+        milestone, and they are the stored value rather than text somebody has
+        to apply by hand afterwards:
+
+        | | |
+        | --- | --- |
+        | **Type of change** | one of seven. Set it if you know; triage will if you do not |
+        | **Milestone** | the release attribute — `patch`, `minor`, `major`, `no-release`, or leave it blank for *not decided yet* |
+        | **Effort**, **Priority** | leave blank unless you have a view. Empty means unknown |
+
+        This form sets the **issue type** to *Requirement* on its own.
+
+        Neither answer is final: triage revisits both — see
+        [docs/3.6 §2.18](https://github.com/delphside/tile-lite-elite/blob/main/docs/3.6-change-lifecycle.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong, and what should be true instead
+      description: The scope. What is excluded is worth saying too.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What would show it works
+      description: >-
+        Evidence follows what the change does, not its type — a migration owes a
+        restore, a rate limit owes a script, a document owes a reader. Three
+        lines is a complete answer: what could go wrong, how we would see it,
+        where it is judged.

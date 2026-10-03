@@ -1,0 +1,9 @@
+timestamp_unix_seconds,git_commit,host,variant,list,words,construct_ms,is_word_hit_ns,is_word_miss_ns,prefix_advance_ns
+1785346408,25e9e09-dirty,laptop-ryzen7235hs,hashset+vec-of-vec-char,sowpods,267752,153.0,240,71,258
+1785346408,25e9e09-dirty,laptop-ryzen7235hs,hashset+vec-of-vec-char,enable2k,169266,84.9,135,35,165
+1785346408,25e9e09-dirty,laptop-ryzen7235hs,hashset+vec-of-vec-char,german,590511,472.6,304,71,322
+1785346408,25e9e09-dirty,laptop-ryzen7235hs,hashset+vec-of-vec-char,spanish,635090,516.9,336,69,369
+1785347409,6d7a055,prod-epyc7551-2core,hashset+vec-of-vec-char,sowpods,267752,478.9,193,76,322
+1785347409,6d7a055,prod-epyc7551-2core,hashset+vec-of-vec-char,enable2k,169266,220.3,163,61,233
+1785347409,6d7a055,prod-epyc7551-2core,hashset+vec-of-vec-char,german,590511,1307.6,282,81,2142
+1785347409,6d7a055,prod-epyc7551-2core,hashset+vec-of-vec-char,spanish,635090,1365.7,280,80,1845

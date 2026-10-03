@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/inbox-hook.sh",
+            "timeout": 30,
+            "statusMessage": "Checking the GitHub inbox..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/turn-check.sh",
+            "timeout": 20,
+            "statusMessage": "Checking GitHub..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/turn-check.sh --reseed-bodies",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

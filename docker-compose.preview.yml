@@ -1,0 +1,138 @@
+# Local preview stack — builds and runs the exact same images
+# scripts/deploy.sh would ship to production, but on this machine (e.g.
+# inside WSL) instead of the Oracle VM, against its own persistent data
+# volume. The point: catch "does this migration actually apply, does the
+# server boot" before either ever reaches the real VM. See
+# docs/operations.md's "Preview Environment" section for the full workflow.
+#
+# A standalone file rather than a docker-compose.yml *override*: Compose's
+# merge rules for list fields (ports, volumes) concatenate rather than
+# replace by default, which is an easy way to silently end up trying to
+# bind host ports 80/443 anyway. This stack's shape (no TLS, no domain,
+# different host port, no cert volumes) diverges enough from production
+# that a full copy is clearer and less fragile than a partial one.
+name: tile-lite-elite-preview
+
+services:
+  server:
+    # Explicit image tag (matches Compose's default project-service name) so a
+    # CI `docker buildx bake` and a later `docker compose up --no-build` agree
+    # on exactly which image to run — see the e2e job in .github/workflows/ci.yml.
+    image: tile-lite-elite-preview-server
+    build:
+      context: .
+      target: runtime-server
+      args:
+        TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
+    environment:
+      TILE_LITE_ELITE_BIND: 0.0.0.0:3000
+      TILE_LITE_ELITE_DATABASE_URL: sqlite:///data/tile-lite-elite.sqlite3
+      # Rate limits — how often a caller may ask, tunable without a rebuild.
+      # Read once when the router is built, so a change takes a container
+      # restart (`docker compose up -d server`) rather than a new image. Set
+      # them in `.env` beside the secrets, which deploy.sh never touches, so a
+      # tuned host keeps its numbers across every redeploy.
+      #
+      # Defaults live in crates/server-game/src/app/throttle.rs and are a
+      # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
+      # the shape against a running server.
+      #
+      # **Preview raises them, rather than inheriting production's.** The whole
+      # e2e suite comes from one address, and every test registers a player, so
+      # production's register allowance is spent three tests in — after which
+      # the client is told to try again in 15 seconds and Playwright gives up
+      # after five. That is not a client failure and not a limiter failure;
+      # they are simply the wrong numbers for a machine driving twenty browsers
+      # in four minutes.
+      #
+      # Rehearsal is where the real numbers are checked, against the defaults,
+      # by check-rate-limits.sh. Preview is for looking at a change. Splitting
+      # them this way is what LIMIT-7 — every limit tunable per host without a
+      # rebuild — exists for.
+      #
+      # Still overridable: set any of these in the environment to test limiting
+      # behaviour here on purpose.
+      TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN: ${TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN:-6000}
+      TILE_LITE_ELITE_LIMIT_REGISTER_BURST: ${TILE_LITE_ELITE_LIMIT_REGISTER_BURST:-1000}
+      TILE_LITE_ELITE_LIMIT_AUTH_PER_MIN: ${TILE_LITE_ELITE_LIMIT_AUTH_PER_MIN:-6000}
+      TILE_LITE_ELITE_LIMIT_AUTH_BURST: ${TILE_LITE_ELITE_LIMIT_AUTH_BURST:-1000}
+      TILE_LITE_ELITE_LIMIT_SESSION_PER_MIN: ${TILE_LITE_ELITE_LIMIT_SESSION_PER_MIN:-6000}
+      TILE_LITE_ELITE_LIMIT_SESSION_BURST: ${TILE_LITE_ELITE_LIMIT_SESSION_BURST:-1000}
+      TILE_LITE_ELITE_LIMIT_GLOBAL_PER_MIN: ${TILE_LITE_ELITE_LIMIT_GLOBAL_PER_MIN:-60000}
+      TILE_LITE_ELITE_LIMIT_GLOBAL_BURST: ${TILE_LITE_ELITE_LIMIT_GLOBAL_BURST:-10000}
+      TILE_LITE_ELITE_PUBLIC_BASE_URL: http://localhost:8081
+      # Same fallback behavior as local dev: unset means every
+      # email-triggering flow still works, it just logs the message
+      # instead of sending it (crates/server-game/src/email.rs).
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS:-Tile Lite Elite <noreply@mail.tileliteelite.com>}
+      # Print the whole email — address, subject and body — when there is no
+      # provider to deliver it (#174). It is how an invitation or reset link is
+      # read out of the log while testing a flow here.
+      #
+      # **Preview only.** Production sets nothing, so it takes the other branch
+      # and logs the message kind alone. The event is marked `debugOnly` in
+      # `docs/4.7-log-events.md`, and `check-log-hygiene.py --source production`
+      # fails if it ever appears on a production journal.
+      TILE_LITE_ELITE_LOG_EMAIL_BODIES: "1"
+    volumes:
+      - tile-lite-elite-preview-data:/data
+    restart: unless-stopped
+    # **journald, not the default json-file** (#174). Docker's default writes
+    # into the container's own filesystem, so **every deploy discards the entire
+    # history** — a new container is a new log file, and redeploying is exactly
+    # what you do when something is wrong. Measured 2026-08-17: the oldest line
+    # the server held was the moment `deploy.sh` recreated it.
+    #
+    # journald's store belongs to the **host**, so it survives that. It already
+    # runs, already persists to /var/log/journal, and already rotates; retention
+    # is set by a drop-in on the host (see docs/3.4), not here. Its rate limit —
+    # 10,000 messages per 30 seconds — is four orders of magnitude above us.
+    #
+    # `tag` is what makes the lines findable afterwards:
+    #   journalctl CONTAINER_TAG=tle-server -o cat | jq .
+    logging:
+      driver: journald
+      options:
+        tag: "tle-preview-server"
+
+  web:
+    image: tile-lite-elite-preview-web
+    build:
+      context: .
+      target: runtime-web
+      args:
+        TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
+    ports:
+      # 8081, not 8080 — 8080 is the local dev web server's port
+      # (scripts/services.sh's `dx serve --port 8080`), so preview needs a
+      # different one to run alongside routine dev work without a clash.
+      - "8081:80"
+    volumes:
+      # Swaps out the image's baked-in production Caddyfile (real domain,
+      # automatic HTTPS) for a plain-HTTP one — there's no domain to
+      # provision a Let's Encrypt cert for on a local machine.
+      - ./Caddyfile.preview:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - server
+    restart: unless-stopped
+    # journald, for the reason given on `server` above (#174). The web
+    # container's output is nearly all health-check noise today; the Dockerfile
+    # change in the same delivery silences it, which is what makes the journal
+    # worth reading at all.
+    #
+    #   journalctl CONTAINER_TAG=tle-preview-web
+    logging:
+      driver: journald
+      options:
+        tag: "tle-preview-web"
+
+volumes:
+  # Deliberately persists across `docker compose down` / re-runs, same as
+  # production's tile-lite-elite-data — running deploy-preview.sh again
+  # against an already-seeded preview DB is what actually exercises "does a
+  # new migration apply to an existing database", not just a fresh one.
+  # `./scripts/deploy-preview.sh reset` wipes it on purpose when you want a
+  # clean slate.
+  tile-lite-elite-preview-data:
+    name: tile-lite-elite-preview-data

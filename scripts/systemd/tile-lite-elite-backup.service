@@ -1,0 +1,18 @@
+# The nightly offsite backup (#174). Installed to /etc/systemd/system/ on the
+# production host — see docs/3.4 and the delivery runbook in the project's design.
+#
+# `Type=oneshot` because it runs and finishes; the timer beside it decides when.
+# A failure exits non-zero and lands in the journal, but **nothing watches for
+# that** — the alarm watches the marker object this refreshes on success, which
+# also catches the cases a failure message never covers.
+[Unit]
+Description=Tile Lite Elite — nightly database backup to OCI object storage
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/tile-lite-elite/backup-to-oci.sh
+# The credential is read from a 0600 file by the script rather than passed here:
+# `systemctl show` output is world readable, and a PAR URL is a bearer token.

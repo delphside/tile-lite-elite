@@ -1,0 +1,170 @@
+# Pinned explicitly rather than left to derive from the containing
+# directory's basename — that basename also determines the image tags
+# `docker compose build` produces (`<name>-server`, `<name>-web`), which
+# `scripts/deploy.sh` references by their exact tag, so an unpinned name
+# would silently break `docker save` the moment the directory's renamed.
+name: tile-lite-elite
+
+services:
+  server:
+    build:
+      context: .
+      target: runtime-server
+      args:
+        # Git short SHA, set by scripts/deploy.sh — see docs/operations.md's
+        # "Versioning" section. Empty when built by hand (`docker compose
+        # build` directly), which is fine: it just means no `+build`
+        # suffix on the reported app version.
+        TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
+    environment:
+      TILE_LITE_ELITE_BIND: 0.0.0.0:3000
+      TILE_LITE_ELITE_DATABASE_URL: sqlite:///data/tile-lite-elite.sqlite3
+      # Only used to build the link inside a password-reset email — see
+      # AppState::public_base_url's doc comment in crates/server-game/src/app.rs.
+      TILE_LITE_ELITE_PUBLIC_BASE_URL: ${TILE_LITE_ELITE_PUBLIC_BASE_URL:-https://tileliteelite.com}
+      # `${VAR}` substitution reads from a `.env` file Compose auto-loads
+      # from this same directory — NOT the `environment:` block above,
+      # which would commit the real secret to git. `deploy.sh` never
+      # touches `.env`, so it's created once on the VM by hand (see
+      # docs/operations.md's Configuration section) and survives every
+      # redeploy untouched, same as the deploy SSH key's own handling.
+      # Missing/empty RESEND_API_KEY just means EmailConfig has no
+      # provider configured — every email-triggering flow still works,
+      # it logs the message instead of sending it (see crates/server-game/src/email.rs).
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS:-Tile Lite Elite <noreply@mail.tileliteelite.com>}
+      # Rate limits — how often a caller may ask, tunable without a rebuild.
+      # Read once when the router is built, so a change takes a container
+      # restart (`docker compose up -d server`) rather than a new image. Set
+      # them in `.env` beside the secrets, which deploy.sh never touches, so a
+      # tuned host keeps its numbers across every redeploy.
+      #
+      # Defaults live in crates/server-game/src/app/throttle.rs and are a
+      # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
+      # the shape against a running server.
+      TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN: ${TILE_LITE_ELITE_LIMIT_REGISTER_PER_MIN:-}
+      TILE_LITE_ELITE_LIMIT_REGISTER_BURST: ${TILE_LITE_ELITE_LIMIT_REGISTER_BURST:-}
+      TILE_LITE_ELITE_LIMIT_AUTH_PER_MIN: ${TILE_LITE_ELITE_LIMIT_AUTH_PER_MIN:-}
+      TILE_LITE_ELITE_LIMIT_AUTH_BURST: ${TILE_LITE_ELITE_LIMIT_AUTH_BURST:-}
+      TILE_LITE_ELITE_LIMIT_SESSION_PER_MIN: ${TILE_LITE_ELITE_LIMIT_SESSION_PER_MIN:-}
+      TILE_LITE_ELITE_LIMIT_SESSION_BURST: ${TILE_LITE_ELITE_LIMIT_SESSION_BURST:-}
+      TILE_LITE_ELITE_LIMIT_GLOBAL_PER_MIN: ${TILE_LITE_ELITE_LIMIT_GLOBAL_PER_MIN:-}
+      TILE_LITE_ELITE_LIMIT_GLOBAL_BURST: ${TILE_LITE_ELITE_LIMIT_GLOBAL_BURST:-}
+    volumes:
+      - tile-lite-elite-data:/data
+    restart: unless-stopped
+    # **journald, not the default json-file** (#174). Docker's default writes
+    # into the container's own filesystem, so **every deploy discards the entire
+    # history** — a new container is a new log file, and redeploying is exactly
+    # what you do when something is wrong. Measured 2026-08-17: the oldest line
+    # the server held was the moment `deploy.sh` recreated it.
+    #
+    # journald's store belongs to the **host**, so it survives that. It already
+    # runs, already persists to /var/log/journal, and already rotates; retention
+    # is set by a drop-in on the host (see docs/3.4), not here. Its rate limit —
+    # 10,000 messages per 30 seconds — is four orders of magnitude above us.
+    #
+    # `tag` is what makes the lines findable afterwards:
+    #   journalctl CONTAINER_TAG=tle-server -o cat | jq .
+    logging:
+      driver: journald
+      options:
+        tag: "tle-server"
+    # Deliberately no `ports:` — only reachable from the `web` container
+    # over the compose network, and via `docker compose exec server ...`
+    # on the host. That keeps the admin endpoints' existing loopback-only
+    # guard meaningful: a request proxied in from `web` is not loopback and
+    # gets rejected by the app itself, same as it would locally.
+
+  web:
+    build:
+      context: .
+      target: runtime-web
+      args:
+        TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 (QUIC) — Caddy tries this opportunistically; harmless if the port's blocked upstream, just falls back to HTTP/2.
+    environment:
+      # Hostnames Caddy serves and obtains certificates for, read by the
+      # {$SITE_ADDRESS} placeholder in the Caddyfile. Any other host sets its
+      # own in the `.env` beside this file.
+      #
+      # The default is repeated here rather than left to the Caddyfile's own
+      # {$SITE_ADDRESS:...} fallback, because Compose always *sets* the
+      # variable — an absent one becomes an empty string, and Caddy applies
+      # its default only when the variable is missing, not when it is empty.
+      # `${SITE_ADDRESS:-}` therefore produced an empty site address and
+      # "Error: adapting config using caddyfile", verified against the real
+      # image. The two defaults must stay in step; this is the one that
+      # applies to every compose deployment.
+      SITE_ADDRESS: ${SITE_ADDRESS:-tileliteelite.com, www.tileliteelite.com, 129.151.69.246.sslip.io}
+
+      # The rehearsal access gate's secret (#240).
+      #
+      # **Not `REHEARSAL_KEY`**, which `scripts/seed-rehearsal.sh` uses for the
+      # ssh *key path*. Two meanings for one name, one of them a private key
+      # and the other a shared secret, is a misreading worth spending a word to
+      # avoid — so this one carries `ACCESS`. Read only by the gate in
+      # the Caddyfile, which fires only for rehearsal's hostnames — so this is
+      # unused on production and harmless there.
+      #
+      # **The default is a sentinel, not empty, and that is the whole point.**
+      # Unset, `{$REHEARSAL_ACCESS_KEY}` expands to nothing inside the matcher and a
+      # cookie of literally `rehearsal=` satisfies it — measured on #240, not
+      # feared. A non-empty default instead means the gate compares against a
+      # value nobody holds, so a rehearsal whose .env is missing the key is
+      # **locked**, not open.
+      #
+      # Why not `:?` to demand it. That fails the deploy on every host until
+      # each VM's .env carries the key, production included, where it is never
+      # read. Loud, but loud in the wrong place — a stopped production deploy
+      # for a rehearsal-only setting. Failing closed costs nothing and needs no
+      # change to production at all.
+      #
+      # `rehearsal-access.sh` recognises this sentinel and says what to do, so
+      # "no key configured" is reported where somebody is looking rather than
+      # arriving as an unexplained 403.
+      #
+      # Same trap as SITE_ADDRESS above, from the other side: Compose always
+      # *sets* the variable, so a default is what decides the behaviour, and an
+      # empty one is a valid config that behaves wrongly.
+      REHEARSAL_ACCESS_KEY: ${REHEARSAL_ACCESS_KEY:-no-rehearsal-key-configured}
+    volumes:
+      # Caddy's obtained TLS certificates live here — without this, a
+      # container recreation (not just a restart) would silently re-request
+      # a fresh certificate from Let's Encrypt every time.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - server
+    restart: unless-stopped
+    # journald, for the reason given on `server` above (#174). The web
+    # container's output is nearly all health-check noise today; the Dockerfile
+    # change in the same delivery silences it, which is what makes the journal
+    # worth reading at all.
+    #
+    #   journalctl CONTAINER_TAG=tle-web
+    logging:
+      driver: journald
+      options:
+        tag: "tle-web"
+
+volumes:
+  # Named volume rather than a bind mount, so it isn't tied to a specific
+  # host path — back it up with `docker run --rm -v tile-lite-elite-data:/data
+  # -v "$PWD":/backup debian tar czf /backup/tile-lite-elite-data.tgz -C /data .`
+  #
+  # Explicit `name:` on every volume below, rather than letting Compose
+  # derive one from the containing directory's basename — that basename is
+  # otherwise the *actual* volume name (e.g. `tile-lite-elite_scrabble-data`,
+  # or `scrabble-px_scrabble-data` before the 2026-07-16 rename), so
+  # renaming the project directory would silently start a fresh, empty
+  # volume on next deploy instead of reattaching to the existing one.
+  tile-lite-elite-data:
+    name: tile-lite-elite-data
+  caddy-data:
+    name: tile-lite-elite-caddy-data
+  caddy-config:
+    name: tile-lite-elite-caddy-config

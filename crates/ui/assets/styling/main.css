@@ -1,0 +1,2014 @@
+:root {
+    --paper: #f3e5c8;
+    --paper-deep: #e1cc9f;
+    --ink: #23190f;
+    --oak: #6f4b2c;
+    --oak-deep: #4d321a;
+    --clay: #c76848;
+    --gold: #d4a23a;
+    --sky: #9dc6d8;
+    /* Deep enough to read against the cream panels, where --sky alone is too
+       pale. Named for the pair it belongs to, like --oak/--oak-deep. Used by
+       the unread indicator for "a game you are not looking at": gold and clay
+       are both warm and were hard to tell apart at a glance, which defeated
+       the point of colouring them differently. */
+    --sky-deep: #3f7d9c;
+    --moss: #8aa07b;
+    --rose: #d98f8b;
+    /* Deliberately outside the board's warm range: everything else here is
+       paper, oak, clay, gold. Used to mark what just changed, where reading
+       as "not part of the board" is the whole point. */
+    --mark: #0d222b;
+    --panel: rgba(255, 251, 243, 0.82);
+    --shadow: 0 24px 60px rgba(50, 29, 8, 0.15);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+    background:
+        radial-gradient(circle at top left, rgba(212, 162, 58, 0.22), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(111, 75, 44, 0.18), transparent 28%),
+        linear-gradient(135deg, #f9f1dd 0%, #f3e7c8 42%, #efe1bf 100%);
+    min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+p {
+    margin: 0;
+}
+
+button {
+    font: inherit;
+}
+
+button:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.app-shell {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.topbar-kicker,
+.eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.72rem;
+    color: rgba(35, 25, 15, 0.66);
+    margin-bottom: 6px;
+}
+
+/* Brand block: the title with the running build/api version directly under it,
+   so you can always tell which build is live (see app.rs). */
+.topbar-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    /* A flex item will not shrink below its content's intrinsic width unless
+       told it may, and `min-width: auto` is the default. The brand block
+       carries "TILE LITE ELITE" at `letter-spacing: 0.18em` plus a version
+       line, which together were 2px wider than a 320px viewport once the
+       font fell back — enough to scroll the whole page sideways.
+
+       Caught on CI rather than locally: the runner has neither "Palatino
+       Linotype" nor "Book Antiqua", so the substituted serif is wider. The
+       layout was only ever fitting by the width of whichever fonts happened
+       to be installed. */
+    min-width: 0;
+}
+
+.topbar-brand > * {
+    overflow-wrap: anywhere;
+}
+
+/* A bit larger than the shared eyebrow style above, and no bottom margin since
+   the version line now sits right beneath it. Keeps the uppercase brand look. */
+.topbar-kicker {
+    font-size: 1.05rem;
+    margin-bottom: 0;
+    color: rgba(35, 25, 15, 0.82);
+}
+
+.topbar-version {
+    font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.68rem;
+    color: rgba(35, 25, 15, 0.5);
+    margin: 0;
+}
+
+.topbar-title,
+.hero-panel h1 {
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.topbar-title {
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 1.04;
+    max-width: 720px;
+}
+
+.offline-indicator {
+    border-radius: 999px;
+    padding: 8px 16px;
+    background: rgba(199, 104, 72, 0.16);
+    color: #8a2d1e;
+    font-size: 0.85rem;
+    font-weight: 600;
+
+    /* The message alternates between "retrying..." and "retrying in 3s...",
+       and the pill resized on every tick, nudging the header around.
+
+       A *fixed* width, not a floor. This span is the middle child of
+       `.topbar`, which is `justify-content: space-between`, so a
+       variable-width item grows outward in both directions and recentres
+       itself — `min-width` left the longer message exceeding the floor, so
+       it still moved. Sizing to the longest message pins both edges, which
+       matters most on the left, where the eye starts reading.
+
+       `min()` caps it at the container so it cannot overflow a narrow
+       phone; there it shrinks and the movement returns, which is the right
+       trade against horizontal scrolling. Tabular digits keep the countdown
+       itself from shuffling. */
+    display: inline-block;
+    width: min(42ch, 100%);
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.toggle-button {
+    border: none;
+    border-radius: 999px;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, var(--oak), var(--clay));
+    color: white;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+}
+
+.toggle-button-muted {
+    background: rgba(255, 255, 255, 0.65);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px rgba(35, 25, 15, 0.1);
+}
+
+/* A step further from Pass/Exchange/Play — ends the game outright, so it
+   gets a quieter, slightly warm-warning tint rather than sitting flush
+   with the routine turn actions next to it. Kept out of their reach by
+   living in its own `.turn-actions-resign` group (see below), not by any
+   margin trick on the button itself. */
+.resign-button {
+    color: #8a2d1e;
+    box-shadow: inset 0 0 0 1px rgba(199, 104, 72, 0.35);
+}
+
+.workspace-shell {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(0, 1.8fr);
+    gap: 20px;
+    align-items: start;
+    height: calc(100vh - 140px);
+    min-height: 480px;
+}
+
+.workspace-main,
+.games-panel {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.workspace-main {
+    display: grid;
+    gap: 20px;
+    align-content: start;
+}
+
+.hero-panel,
+.board-panel,
+.rack-panel,
+.games-panel {
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(111, 75, 44, 0.12);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+}
+
+.hero-panel {
+    padding: 28px;
+}
+
+.hero-copy,
+.empty-copy,
+.history-copy {
+    color: rgba(35, 25, 15, 0.72);
+    line-height: 1.5;
+}
+
+.hero-metadata {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+.status-banner,
+.error-banner {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 16px;
+}
+
+.status-banner {
+    background: rgba(138, 160, 123, 0.18);
+    color: rgba(35, 25, 15, 0.84);
+}
+
+.error-banner {
+    background: rgba(199, 104, 72, 0.18);
+    color: #8a2d1e;
+}
+
+.game-over-banner {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(212, 162, 58, 0.3), rgba(138, 160, 123, 0.22));
+    box-shadow: inset 0 0 0 1px rgba(212, 162, 58, 0.4);
+    font-weight: 700;
+    color: rgba(35, 25, 15, 0.88);
+}
+
+.meta-chip,
+.panel-tag,
+.history-badge,
+.seat-kind {
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: rgba(111, 75, 44, 0.08);
+    font-size: 0.85rem;
+}
+
+.board-panel,
+.rack-panel {
+    padding: 16px;
+}
+
+.status-strip {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.rack-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.rack-row-bag {
+    flex-shrink: 0;
+}
+
+.rack-row .rack-strip {
+    flex: 1;
+}
+
+/* Mirrors `.rack-row`'s layout: a flexible middle region that right-aligns
+   against a fixed-width element at the end (there, the tiles against the
+   Bag chip; here, Pass/Exchange/Play against Resign), so the two rows read
+   as aligned columns rather than one bunched-up cluster. */
+.turn-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 10px;
+}
+
+.turn-actions-left,
+.turn-actions-resign {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.turn-actions-buttons {
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.chat-panel {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(111, 75, 44, 0.12);
+}
+
+/* `column-reverse`, with the messages rendered newest-first, so the panel sits
+   at the latest message rather than the earliest and stays there as more
+   arrive. A reversed column scrolls from the bottom by definition, which is
+   why this needs no scrolling code — and why it cannot drift out of step with
+   the list the way a manual scroll-to-bottom would. */
+.chat-messages {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+/* The two unread indicators, from one signal (`HAS_UNREAD_CHAT`).
+
+   Both are the same mail glyph the games list already uses, so the mark means
+   one thing wherever it appears. The rack one sits with the bag count because
+   that is the row somebody glances at while playing; the chat one sits above
+   the messages, where you are heading once the rack one has caught your eye. */
+.rack-scores-unread {
+    color: var(--gold);
+    font-size: 1rem;
+    line-height: 1;
+    /* A button that has to look like the label it replaced. */
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.game-row-unread-mail:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: 2px;
+}
+
+.rack-scores-unread:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+}
+
+/* Marks a message nobody has read yet, and fades as it earns being read.
+   Keyed on *unread* rather than on the element being created, which is what it
+   used to key on because the watermark advanced the moment a message arrived
+   and there was no unread state left to read. Now the watermark means seen, so
+   there is.
+
+   The fade is not decoration. A colour appearing tells you something changed;
+   a colour *fading while you look at it* tells you which message, and that it
+   is being marked read as you watch. Its duration is the seen clock's, set
+   inline from `SEEN_AFTER_MS` so the two cannot drift, and it is paused
+   whenever the messages are not somewhere a person could see them — the same
+   rule the clock suspends on. What you watch finishing is the thing that marks
+   the message read. */
+@keyframes chat-message-arriving {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+
+
+.chat-empty {
+    font-size: 0.8rem;
+    color: rgba(35, 25, 15, 0.5);
+}
+
+.chat-message {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: baseline;
+    align-self: flex-start;
+    max-width: 88%;
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* Only an unread message fades; a read one is simply a message. Duration and
+   play state come from the element's own `style`, written by the component from
+   the seen clock's constant and its visibility signal. */
+/* The arrival wash is an overlay, not the message's own background.
+   Animating `background` meant the message sat at `transparent` while unread
+   and jumped to its resting colour the instant it was marked seen and this
+   class was dropped — a visible step at exactly the moment somebody was
+   looking. An overlay fading to nothing leaves the message's own colour
+   untouched throughout, so dropping the class changes nothing on screen.
+
+   It also stops the two resting colours needing two sets of keyframes: own
+   messages are terracotta and everyone else's are white, and one `to` colour
+   cannot land on both. */
+.chat-message-unread::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: rgba(212, 162, 58, 0.55);
+    box-shadow: inset 0 0 0 2px var(--gold);
+    animation-name: chat-message-arriving;
+    animation-timing-function: ease-out;
+    animation-iteration-count: 1;
+    animation-fill-mode: forwards;
+    /* Both set inline per message — the seen clock's duration, and paused
+       whenever the chat is not actually visible. */
+    animation-duration: var(--chat-fade-duration, 10000ms);
+    animation-play-state: var(--chat-fade-state, running);
+    /* Negative, so the fade starts partway through: how far depends on how long
+       this message has already been watched, which is what makes a rebuilt
+       element resume rather than restart. */
+    animation-delay: var(--chat-fade-delay, 0ms);
+}
+
+/* No animation, but the marking still has to work: without the fade an unread
+   message keeps its highlight until the watermark advances, which is the state
+   the fade was expressing anyway. */
+@media (prefers-reduced-motion: reduce) {
+    .chat-message-unread::after {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+.chat-message-own {
+    align-self: flex-end;
+    background: rgba(199, 104, 72, 0.18);
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.chat-message-sender {
+    font-weight: 600;
+}
+
+.chat-message-body {
+    flex: 1;
+    word-break: break-word;
+}
+
+.chat-message-time {
+    font-size: 0.72rem;
+    color: rgba(35, 25, 15, 0.5);
+}
+
+/* Two colours, one meaning: gold is "the game you are in", clay is "a game you
+   are not". The rack indicator wears the same pair, so glancing at it tells you
+   which row to look for rather than only that something happened. */
+.game-row-unread-mail {
+    /* A button now, and it has to look like the label it replaced. */
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font-size: 1.3rem;
+    color: var(--gold, #d4a23a);
+    filter: drop-shadow(0 0 2px rgba(212, 162, 58, 0.6));
+    animation: unread-mail-pulse 1.8s ease-in-out infinite;
+}
+
+.game-row-unread-mail-elsewhere,
+.rack-scores-unread-elsewhere {
+    color: var(--sky-deep, #3f7d9c);
+    filter: drop-shadow(0 0 2px rgba(63, 125, 156, 0.55));
+}
+
+.rack-scores-unread-here {
+    color: var(--gold, #d4a23a);
+}
+
+@keyframes unread-mail-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.chat-composer {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-input {
+    flex: 1;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: inset 0 0 0 1px rgba(35, 25, 15, 0.1);
+    font-size: 0.85rem;
+}
+
+.panel-tag {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.board-grid {
+    display: grid;
+    grid-template-columns: repeat(15, minmax(0, 1fr));
+    /* Without this, rows are sized purely by `.board-cell`'s `min-height`
+       (the only sizing hint Grid has for them, since nothing else sets
+       `grid-auto-rows`), completely independent of column width — so
+       `aspect-ratio: 1` below only keeps the *overall* grid square, not
+       each individual cell. At any viewport narrow enough that 15 columns
+       divide down below the cell's `min-height`, cells become tall,
+       narrow rectangles instead of squares (confirmed measuring an actual
+       mobile-width render: 16px wide × 28px tall) — the oversized letter
+       glyph then has nowhere to go but the cell's full width, leaving the
+       point-value's corner offset with no real corner to sit in, so it
+       reads as overlapping the letter instead of tucked beside it.
+       Matching `grid-template-rows` to the columns makes both dimensions
+       divide the (square, by `aspect-ratio`) grid identically, so every
+       cell is a true square at any viewport width — `.board-cell`'s own
+       `min-height` becomes a rarely-binding safety floor rather than the
+       primary row-sizing mechanism. */
+    grid-template-rows: repeat(15, minmax(0, 1fr));
+    gap: 6px;
+    aspect-ratio: 1;
+}
+
+.board-cell {
+    border: none;
+    /* Percentage, not a fixed px value: a board-cell's own size isn't
+       fixed either (it's whatever 1/15th of the square board computes to
+       at the current viewport width, per the grid-template-rows/-columns
+       note below) — a fixed border-radius that looked right against a
+       ~49px desktop cell (14px, ~29% of the box) is wildly oversized
+       against a ~13-16px mobile one, rounding the corners into a full
+       circle instead of a subtly-rounded square. `.rack-tile` doesn't
+       have this problem and stays on a fixed px radius deliberately —
+       its own size *is* fixed (52px/44px via the mobile media query),
+       just at two discrete values, not a continuously shrinking one.
+    */
+    border-radius: 28%;
+    /* Anchors `::before`/`::after` on `.board-cell-last-move`. */
+    position: relative;
+    /* Lets `.tile-face` below size its font off *this* element's actual
+       rendered width (cqw) instead of viewport width -- a cell's own
+       size already varies continuously with viewport (see below), and
+       vw doesn't track that at all once other layout (side panels,
+       padding, gaps) eats into how much of the viewport the board
+       itself actually gets. */
+    container-type: inline-size;
+    /* Deliberately no min-height: `.board-grid`'s matching
+       grid-template-rows/-columns (both `repeat(15, minmax(0, 1fr))`)
+       plus its aspect-ratio already guarantee every cell is a true square
+       at any viewport width. An explicit min-height here would still win
+       over that — minmax(0, 1fr) only suppresses the row track's own
+       *automatic* content-based minimum, not an item's own explicit
+       min-height — forcing rows taller than columns are wide the moment
+       the viewport got narrow enough for 1fr to compute below the old
+       fixed value, which is exactly the non-square-cell bug this
+       comment's neighbors describe. */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: inset 0 0 0 1px rgba(111, 75, 44, 0.08);
+}
+
+.board-cell-staged {
+    background: linear-gradient(160deg, rgba(212, 162, 58, 0.62), rgba(244, 228, 188, 0.92));
+    box-shadow:
+        inset 0 0 0 1px rgba(77, 50, 26, 0.18),
+        0 6px 14px rgba(77, 50, 26, 0.08);
+    cursor: grab;
+}
+
+.board-cell-staged:active {
+    cursor: grabbing;
+}
+
+.board-cell-clickable {
+    cursor: pointer;
+}
+
+.board-cell-clickable:hover {
+    transform: translateY(-1px);
+    box-shadow:
+        inset 0 0 0 1px rgba(77, 50, 26, 0.18),
+        0 10px 18px rgba(77, 50, 26, 0.08);
+}
+
+.board-cell-selected {
+    box-shadow:
+        inset 0 0 0 2px var(--clay, rgba(199, 104, 72, 0.9)),
+        0 6px 14px rgba(77, 50, 26, 0.14);
+}
+
+/* `.board-cell-clickable:hover` alone (two selectors) outranks
+   `.board-cell-selected` (one selector) on specificity, so hovering a
+   selected-and-still-selectable cell was silently swapping the selection
+   ring out for the plain hover shadow. This needs to win over both. */
+.board-cell-clickable.board-cell-selected:hover {
+    box-shadow:
+        inset 0 0 0 2px var(--clay, rgba(199, 104, 72, 0.9)),
+        0 10px 18px rgba(77, 50, 26, 0.08);
+}
+
+.board-cell-filled {
+    background: linear-gradient(160deg, #f6dca4, #ddb771);
+    box-shadow:
+        inset 0 0 0 1px rgba(77, 50, 26, 0.24),
+        0 6px 14px rgba(77, 50, 26, 0.12);
+}
+
+/* Marks the squares the most recent move placed a tile on — cleared the
+   moment a pass/exchange happens (see `last_move_board_indices` in
+   home.rs), since nothing changed on the board that turn.
+
+   The job is to tell a just-played tile from the *played tiles around it*,
+   not from the square underneath: a played square reports `PremiumDto::Blank`
+   (`board_to_dto`), so a highlighted tile is never on a premium colour. The
+   old gold wash failed at that job by being the same warm gold as an ordinary
+   tile — `#f6dca4 → #ddb771` against `rgba(212,162,58,…)` — leaving a 2px ring
+   to carry the whole difference.
+
+   So: no background of its own, and contrast by *value* instead. `--mark` is
+   the one dark that is deliberately outside the board's warm range. */
+
+/* Both marks are pseudo-elements rather than the cell's own `box-shadow`, and
+   that is load-bearing: `cqw` resolves against the nearest *ancestor*
+   container, and an element is never its own container. A `cqw` ring set on
+   `.board-cell` would size itself off the viewport while the cell sized itself
+   off the grid — right on a desktop, wrong everywhere else. A pseudo-element
+   is a descendant, so it measures the cell exactly as `.tile-face` does. */
+.board-cell-last-move::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    /* Thins with the board rather than staying stubbornly heavy on a phone,
+       where a cell is ~15px and a fixed 3px ring would eat the letter. The
+       floor stops it aliasing away entirely; the cap is for a board larger
+       than any we render today. */
+    border: clamp(1px, 4cqw, 4px) solid var(--mark);
+    pointer-events: none;
+}
+
+/* The cue that survives greyscale, colour blindness, and a phone in sunlight —
+   colour alone is a poor carrier for "this is what just changed". */
+.board-cell-last-move::after {
+    content: "";
+    position: absolute;
+    top: 6cqw;
+    right: 6cqw;
+    width: 30cqw;
+    height: 30cqw;
+    border-radius: 50%;
+    background: var(--mark);
+}
+
+/* Selection wins the ring, and the marker is why it can. The rule below gives
+   a selected cell the clay ring as a `box-shadow`; without this the dark
+   border would paint on top of it and swallow the selection. The corner marker
+   stays, so the cell still says "just played" while selected — which the old
+   treatment could not do, having only its background left. */
+.board-cell-last-move.board-cell-selected::before {
+    display: none;
+}
+
+/* The selection ring must stay visible even when the selected cell is filled /
+   staged / a last-move square — now reachable via Ctrl/Shift/Alt+arrow. Those
+   states also set `box-shadow` at equal (one-class) specificity and later in
+   source, so they were silently overriding the single-class
+   `.board-cell-selected` ring. Two classes here outrank them; the cell keeps
+   its own background, just shows the clay selection ring on top. */
+.board-cell-filled.board-cell-selected,
+.board-cell-staged.board-cell-selected,
+.board-cell-last-move.board-cell-selected {
+    box-shadow:
+        inset 0 0 0 2px var(--clay, rgba(199, 104, 72, 0.9)),
+        0 6px 14px rgba(77, 50, 26, 0.14);
+}
+
+.premium-double-letter {
+    background: rgba(157, 198, 216, 0.6);
+}
+
+.premium-triple-letter {
+    background: rgba(111, 164, 191, 0.7);
+}
+
+.premium-double-word {
+    background: rgba(217, 143, 139, 0.55);
+}
+
+.premium-triple-word {
+    background: rgba(199, 104, 72, 0.75);
+    color: white;
+}
+
+.premium-label,
+.tile-face,
+.rack-tile,
+.seat-name,
+.history-type {
+    font-weight: 700;
+}
+
+.premium-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+}
+
+.tile-face,
+.rack-tile {
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.tile-face {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* `cqw` (of `.board-cell`'s own inline-size, via its container-type
+       above), not `vw`: on essentially every phone width, `2vw` computes
+       well under 1rem, so the *floor* of the old clamp(1rem, 2vw, 1.45rem)
+       was what actually rendered nearly everywhere on mobile -- a fixed
+       16px letter regardless of how small the cell really was. Against a
+       realistic ~20px mobile cell that's 80% of the box on the letter
+       alone, leaving `.tile-value` nowhere real to sit. cqw tracks the
+       cell's *actual* rendered size directly, so the letter now
+       genuinely shrinks on a small cell instead of floor-clamping. */
+    font-size: clamp(0.5rem, 70cqw, 1.45rem);
+}
+
+/* The rack's `.tile-face` exists purely to give `.tile-value` the same
+   padding-respecting containing block the board's has (see `rack_view.rs`)
+   — not to pull in the board's clamped font size, which would otherwise
+   override `.rack-tile`'s own `font-size` the moment it became the nearer
+   ancestor. */
+.rack-tile .tile-face {
+    font-size: inherit;
+}
+
+.tile-value {
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 0.55em;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+/* Queries `.board-cell`'s own inline-size (its nearest `container-type`
+   ancestor, unqualified so this doesn't need to name it) — below this,
+   even a proportionally scaled value has nowhere legible left to sit
+   next to the letter, so it's better dropped than crammed in illegibly.
+   The rack's tiles are unaffected: `.rack-tile` isn't a query container,
+   so this can't match a `.tile-value` there regardless of rack size. */
+@container (max-width: 20px) {
+    .tile-value {
+        display: none;
+    }
+}
+
+.rack-strip {
+    display: flex;
+    flex-wrap: wrap;
+    /* Tightens on a narrow screen so seven tiles keep a usable size rather
+       than the gaps eating the width. Inherited by `.rack-tile`, which
+       subtracts the six of them to work out what is left for a tile. */
+    --rack-gap: clamp(4px, 2vw, 10px);
+    gap: var(--rack-gap);
+}
+
+.rack-tile {
+    position: relative;
+    border: none;
+    /* A full rack is seven tiles, and at a fixed 52px they need
+       7 x 52 + 6 x 10 = 424px. A phone viewport is 360-412px, so the row broke
+       after six and the seventh took a whole second row to carry one tile —
+       the most expensive vertical space on the screen (#12).
+       `min()` keeps 52px wherever it fits, so desktop is untouched, and
+       otherwise divides what is actually there, so one rule governs at every
+       width — the mobile media query used to pin 44px, which is what made the
+       row break at six. `flex: 0 0 auto` keeps the computed width exact
+       instead of letting flex shrink it further. */
+    width: min(52px, calc((100% - 6 * var(--rack-gap, 10px)) / 7));
+    aspect-ratio: 1;
+    height: auto;
+    flex: 0 0 auto;
+    border-radius: 14px;
+    /* Matches `.board-cell`'s padding so `.tile-value`'s absolute
+       `right`/`bottom` offset (measured from this element's padding box,
+       since it's the nearest positioned ancestor here) lands in the same
+       place relative to the rounded corner as it does on the board, where
+       `.tile-face` sits inside that padding instead. Without this, the
+       value sat right at the unpadded corner and the curve clipped it. */
+    padding: 4px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(160deg, #f6dca4, #ddb771);
+    box-shadow:
+        inset 0 0 0 1px rgba(77, 50, 26, 0.22),
+        0 10px 18px rgba(77, 50, 26, 0.12);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.rack-tile-selected {
+    outline: 3px solid rgba(111, 75, 44, 0.7);
+    transform: translateY(-2px);
+}
+
+.rack-tile-used {
+    opacity: 0.4;
+    transform: none;
+}
+
+.composer-toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.composer-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.direction-button {
+    border: none;
+    border-radius: 999px;
+    padding: 10px 14px;
+    background: rgba(111, 75, 44, 0.1);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.direction-button-active {
+    background: linear-gradient(135deg, var(--oak), var(--clay));
+    color: white;
+}
+
+.direction-button-muted {
+    background: rgba(255, 255, 255, 0.66);
+    box-shadow: inset 0 0 0 1px rgba(35, 25, 15, 0.08);
+}
+
+.composer-copy {
+    margin-bottom: 10px;
+    color: rgba(35, 25, 15, 0.72);
+}
+
+.blank-picker,
+.staged-list {
+    margin-bottom: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.58);
+    border: 1px solid rgba(111, 75, 44, 0.1);
+}
+
+/* The single message slot above the rack (live preview, submit error, or a
+   plain turn-status line) — a fixed height, not just a reserved minimum, so
+   it never grows and shifts the tiles below it no matter which of those is
+   showing or how long the text runs. Tall enough for the two-line case
+   (headline+score, plus a cross-words detail line). */
+/* A fixed reserve, not `min-height`: this sits directly above the rack, and a
+   slot that grew when a preview appeared would shift the tiles out from under
+   a thumb mid-move. The cost is that the height must suit the *tallest* state
+   and is therefore slack in every other one.
+
+   The tallest state is a legal-move banner: 8px of padding either side, a
+   title line, and a detail line — a little over 50px. 80px left roughly 20px
+   of air above the rack in every state, which on a phone is the scarce
+   direction. */
+.preview-slot {
+    height: 60px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.preview-banner {
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(138, 160, 123, 0.16);
+    line-height: 1.3;
+}
+
+.preview-banner-error {
+    background: rgba(199, 104, 72, 0.14);
+}
+
+.preview-title {
+    font-size: 0.92rem;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.preview-banner-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.preview-score {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: rgba(74, 103, 55, 0.9);
+    white-space: nowrap;
+}
+
+.blank-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.blank-letter-button {
+    border: none;
+    border-radius: 12px;
+    padding: 10px 0;
+    background: rgba(111, 75, 44, 0.1);
+    cursor: pointer;
+}
+
+.blank-letter-button-active {
+    background: linear-gradient(135deg, var(--oak), var(--clay));
+    color: white;
+}
+
+.staged-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(111, 75, 44, 0.08);
+}
+
+.staged-item:first-of-type {
+    border-top: none;
+}
+
+.staged-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    margin-right: 10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(111, 75, 44, 0.1);
+    font-size: 0.85rem;
+}
+
+.staged-letter {
+    font-weight: 700;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.staged-remove-button {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 12px;
+    background: rgba(199, 104, 72, 0.16);
+    color: #8a2d1e;
+    cursor: pointer;
+}
+
+.games-panel {
+    padding: 22px;
+}
+
+.games-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.games-panel-header .toggle-button-muted {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+}
+
+.games-panel-new-game {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.games-panel-hint {
+    font-size: 0.8rem;
+    color: rgba(35, 25, 15, 0.55);
+    align-self: center;
+}
+
+.games-panel-new-game .toggle-button {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+}
+
+.games-list {
+    display: grid;
+    gap: 10px;
+}
+
+.game-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(111, 75, 44, 0.1);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+}
+
+.game-row-active {
+    background: rgba(212, 162, 58, 0.22);
+    border-color: rgba(212, 162, 58, 0.4);
+}
+
+.game-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.game-row-time {
+    font-size: 0.78rem;
+    color: rgba(35, 25, 15, 0.6);
+}
+
+.game-row-participants {
+    margin-top: 8px;
+    font-size: 0.88rem;
+    color: rgba(35, 25, 15, 0.78);
+}
+
+.game-status-badge {
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.game-status-waiting {
+    background: rgba(157, 198, 216, 0.4);
+}
+
+.game-status-ready {
+    background: rgba(138, 160, 123, 0.5);
+}
+
+.game-status-active {
+    background: rgba(138, 160, 123, 0.35);
+}
+
+.game-status-finished {
+    background: rgba(111, 75, 44, 0.14);
+}
+
+.game-status-aborted {
+    background: rgba(150, 90, 78, 0.22);
+}
+
+.game-status-new {
+    background: rgba(212, 162, 58, 0.3);
+}
+
+.games-list-section {
+    margin-bottom: 18px;
+}
+
+.games-list-section-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(35, 25, 15, 0.55);
+    margin: 0 0 8px;
+}
+
+.game-row-wrapper {
+    display: grid;
+    gap: 2px;
+}
+
+.game-row-invite-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.game-row-invite-actions .toggle-button,
+.game-row-invite-actions .toggle-button-muted {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+}
+
+.game-builder {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(111, 75, 44, 0.14);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.seat-draft-name-input {
+    padding: 6px 10px;
+    border: 1px solid rgba(111, 75, 44, 0.2);
+    border-radius: 10px;
+    font-size: 0.85rem;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.seat-draft-remove {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+}
+
+/* Wraps a "Named" seat's display-name input — positioned relative so the
+   suggestions dropdown below can be positioned absolute against it rather
+   than the page, and sized to match the input it wraps (both draft-builder
+   locations use the same flex-wrap row as every other seat-kind control,
+   so this needs to participate in that layout the same way the bare
+   `input` it replaced did). */
+.name-autocomplete {
+    position: relative;
+    /* Lifts the whole field, dropdown included, above whatever the page draws
+       after it. `z-index` on the dropdown alone was not enough: it only orders
+       against siblings inside its own stacking context, and the suggestion list
+       ended up painted *behind* the "+ Invite by name" buttons that follow it
+       in the document — present, unclipped, correctly sized, and invisible.
+       Positioning this wrapper gives the list a stacking context that starts
+       above that later content. */
+    z-index: 30;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.name-autocomplete .seat-draft-name-input {
+    width: 100%;
+    min-width: 0;
+}
+
+.name-autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--panel);
+    border: 1px solid rgba(111, 75, 44, 0.25);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.name-autocomplete-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    border: none;
+    background: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.name-autocomplete-item:hover {
+    background: rgba(212, 162, 58, 0.18);
+}
+
+.name-autocomplete-empty {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.75rem;
+    color: rgba(35, 25, 15, 0.5);
+}
+
+.game-builder-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.game-builder-time-limit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.game-builder-time-limit .seat-draft-name-input {
+    max-width: 90px;
+}
+
+.games-panel-detail {
+    display: grid;
+    gap: 10px;
+    padding: 14px 14px 14px 16px;
+    margin: 0 0 4px 16px;
+    border-left: 3px solid rgba(212, 162, 58, 0.6);
+    border-radius: 0 14px 14px 0;
+    background: rgba(111, 75, 44, 0.055);
+    box-shadow: inset 0 1px 5px rgba(77, 50, 26, 0.1);
+    overflow-x: auto;
+}
+
+.player-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    table-layout: fixed;
+}
+
+.player-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The one cell that must not clip its own contents.
+   `.player-table td`'s `overflow: hidden` is there so a long display name
+   ends in an ellipsis rather than pushing the column wide — right for a
+   roster of names, and fatal for this cell, which holds the name-autocomplete
+   whose suggestion list is absolutely positioned and therefore *outside* the
+   cell's box. The list rendered, sized and positioned correctly, and was
+   clipped to nothing: the search ran, the matches arrived, and the user saw
+   an empty box.
+   That is why invite-by-name worked when adding a seat to an existing game —
+   a plain div row, nothing clipping — and not in the pre-creation builder,
+   which lays its seats out in a table. */
+.player-table td.seat-draft-name-cell {
+    overflow: visible;
+}
+
+.player-table th {
+    white-space: normal;
+    line-height: 1.2;
+}
+
+.player-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(35, 25, 15, 0.55);
+    padding: 4px 6px;
+}
+
+.player-table td {
+    padding: 6px;
+    border-top: 1px solid rgba(111, 75, 44, 0.1);
+    vertical-align: middle;
+}
+
+.player-table th:first-child,
+.player-table td:first-child {
+    width: 24%;
+    white-space: normal;
+}
+
+/* These column-position rules describe the real in-game roster table
+   (Player/Kind/Score/Last move[/Manage]) — the pre-creation draft
+   builder reuses the base `.player-table` class for its own, structurally
+   different 3-column table (Player/Kind/[Remove button]) via the extra
+   `.player-table-draft` class below, so it's deliberately excluded here:
+   applying a Score-column's width/alignment to a Remove *button*'s column
+   squeezed it down to an 11%-wide cell and clipped its own label. */
+
+/* Kind ("Human"/"Bot") and Score (up to 3 digits, bold) both need more
+   room than an even split gives them — narrower than this and the base
+   `.player-table td` rule's `nowrap`/`ellipsis` silently clips real
+   digits/letters off the end instead of just looking a little cramped.
+   Fixed `em` widths rather than `%`, same reasoning as the draft table's
+   own columns below: this table's real container is the ~280-290px-wide
+   in-game roster card (measured live), not the full board-panel width —
+   a `%` tuned by eye against a wider mockup silently clips "Human" to
+   "H…" the moment it renders inside its actual, narrower card. */
+.player-table:not(.player-table-draft) th:nth-child(2),
+.player-table:not(.player-table-draft) td:nth-child(2) {
+    width: 4.2em;
+}
+
+.player-table:not(.player-table-draft) th:nth-child(3),
+.player-table:not(.player-table-draft) td:nth-child(3) {
+    width: 2.8em;
+    text-align: right;
+}
+
+/* Right-aligned to match `.player-table-score`/the word+score spans
+   `render_last_move` actually renders — a plain `td:last-child` rule
+   used to cover this, but that only worked by accident (right-aligning
+   whichever column happened to be last), and silently stopped matching
+   Last Move at all once the optional Manage column made it 5th instead
+   of 4th. Targeting the column by position keeps header and values
+   aligned regardless of whether Manage is present. */
+.player-table:not(.player-table-draft) th:nth-child(4),
+.player-table:not(.player-table-draft) td:nth-child(4) {
+    width: 22%;
+    text-align: right;
+}
+
+.player-table:not(.player-table-draft) td:nth-child(4) {
+    white-space: normal;
+}
+
+/* Draft builder's own 3rd column (a Remove button, no header text) — needs
+   room for the button's real rendered width, not a fraction tuned for a
+   Score digit. Leaving it unconstrained (table-layout: fixed gives an
+   unspecified column whatever's left after the other two) is enough,
+   but overflow/white-space are relaxed too so a button never gets clipped
+   again if a future label runs longer than "Remove". */
+/* A fixed `em` width rather than a `%` — this table lives inside the
+   narrow, left-bordered `.game-builder` card, not the full panel width
+   the roster table's percentages were tuned against (measured ~266px vs
+   the roster table's ~390px), so the same 13%/20% that fit "Human" there
+   clipped it to "Hu…" here. `em` sizes off "Human"/"Bot"'s own text
+   directly, so it stays correct regardless of the surrounding card's width. */
+.player-table-draft th:nth-child(2),
+.player-table-draft td:nth-child(2) {
+    width: 5em;
+}
+
+.player-table-draft td:nth-child(3) {
+    overflow: visible;
+    white-space: normal;
+    text-align: right;
+}
+
+/* The optional 5th column (seat status + Send/Remove/Withdraw/Force-resign
+   buttons) — only present for a Waiting or Active game (see
+   `player_table`'s `show_manage_column`). Given how much can stack up in
+   here (a status label plus up to two buttons), this overrides the base
+   `.player-table td` rule's `nowrap`/`hidden` — clipping a button's label
+   mid-word is worse than the row growing a little taller. */
+.player-table th.player-table-manage,
+.player-table td.player-table-manage {
+    width: 20%;
+    white-space: normal;
+    overflow: visible;
+    text-align: left;
+}
+
+.player-table-invitation-status {
+    display: block;
+    font-size: 0.72rem;
+    color: rgba(35, 25, 15, 0.6);
+    margin-bottom: 3px;
+}
+
+.player-table-manage .toggle-button {
+    font-size: 0.72rem;
+    padding: 3px 7px;
+    margin: 0 4px 3px 0;
+}
+
+.player-table-you {
+    background: rgba(212, 162, 58, 0.14);
+}
+
+.player-table-you-tag {
+    font-size: 0.78rem;
+    color: rgba(35, 25, 15, 0.55);
+}
+
+.player-table-rating {
+    font-size: 0.78rem;
+    color: rgba(35, 25, 15, 0.55);
+    font-weight: 400;
+}
+
+/* A resigned/force-resigned/timed-out seat, still shown in the roster
+   (never removed mid-game — see GameSession::handle_seat_exit) but done
+   playing. Dimmed rather than hidden, so it's clearly distinguishable
+   from the still-active rows around it without losing the row entirely. */
+.player-table-exited {
+    opacity: 0.55;
+}
+
+.player-table-exited .player-table-score {
+    font-weight: 400;
+}
+
+.player-table-reorder {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.player-table-reorder-button {
+    border: none;
+    border-radius: 6px;
+    width: 26px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(111, 75, 44, 0.14);
+    color: var(--ink);
+    font-size: 0.75rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.player-table-reorder-button:hover:not(:disabled) {
+    background: rgba(111, 75, 44, 0.26);
+}
+
+.player-table-reorder-button:disabled {
+    cursor: default;
+    opacity: 0.3;
+}
+
+.player-table-score {
+    font-weight: 700;
+    text-align: right;
+}
+
+.player-table-last-move-empty {
+    color: rgba(35, 25, 15, 0.45);
+}
+
+.player-table-last-move-note {
+    font-size: 0.85rem;
+    font-style: italic;
+    color: rgba(35, 25, 15, 0.7);
+}
+
+.player-table-last-move-word {
+    font-weight: 600;
+    color: rgba(35, 25, 15, 0.85);
+    text-decoration: underline;
+    text-decoration-color: rgba(212, 162, 58, 0.7);
+    text-underline-offset: 2px;
+}
+
+.player-table-last-move-word:hover {
+    color: rgba(160, 90, 10, 1);
+    text-decoration-color: rgba(160, 90, 10, 0.8);
+}
+
+.player-table-last-move-score {
+    font-weight: 700;
+    color: rgba(35, 25, 15, 0.75);
+}
+
+/* Seat kind is shown by an icon + name colour instead of a Kind column. */
+.player-seat-icon {
+    margin-right: 6px;
+}
+
+.player-seat-name-human {
+    color: rgba(35, 25, 15, 0.9);
+    font-weight: 600;
+}
+
+.player-seat-name-bot {
+    /* A cooler, distinct hue so bots read differently from humans at a glance. */
+    color: rgba(70, 110, 140, 0.95);
+    font-weight: 600;
+}
+
+/* Total time, grouped with the total-score column. */
+.player-table-time {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: rgba(35, 25, 15, 0.7);
+}
+
+/* Per-move time, shown right after the move score. */
+.player-table-move-time {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(35, 25, 15, 0.55);
+}
+
+.auth-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.auth-widget-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    /* Without wrap, a narrow viewport has nowhere to put the overflow
+       except into the buttons themselves — flexbox shrinks each button's
+       own width to fit the row, and its label wraps to two lines inside
+       a still fully-rounded (border-radius: 999px) pill, which reads as
+       a distorted blob rather than a normal button. Wrapping the row lets
+       "Log out" drop to its own line instead, each button keeping its
+       natural one-line shape. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.auth-status {
+    font-size: 0.88rem;
+    color: rgba(35, 25, 15, 0.75);
+}
+
+.auth-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid rgba(111, 75, 44, 0.12);
+    border-radius: 999px;
+    padding: 8px 14px;
+    box-shadow: var(--shadow);
+}
+
+.auth-panel-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.auth-tab {
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: transparent;
+    color: rgba(35, 25, 15, 0.6);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.auth-tab-active {
+    background: rgba(111, 75, 44, 0.1);
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.auth-input {
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: inset 0 0 0 1px rgba(35, 25, 15, 0.1);
+    font-size: 0.85rem;
+    width: 140px;
+}
+
+.auth-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: rgba(35, 25, 15, 0.72);
+    white-space: nowrap;
+}
+
+.auth-panel-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* The logged-in "Edit user details" dialog — a single form with two
+   visually separated sections (display name/email, then password
+   change) rather than the pill-shaped `.auth-panel` used for the
+   compact login/register widgets, since this one is taller and has
+   two independently-submittable parts. */
+.edit-details-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid rgba(111, 75, 44, 0.12);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    width: 100%;
+    /* Matches `.modal-card`'s max-width and left/right padding so this
+       form's fields end up the same physical size as the login/register
+       dialog's, per the user's request to use those as the sizing guide. */
+    max-width: 380px;
+    padding: 20px 32px;
+}
+
+.edit-details-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.edit-details-section .auth-input {
+    width: 100%;
+    border-radius: 12px;
+}
+
+.edit-details-divider {
+    border: none;
+    border-top: 1px solid rgba(111, 75, 44, 0.15);
+    margin: 0;
+}
+
+.edit-details-section-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: rgba(35, 25, 15, 0.6);
+}
+
+/* Generic blocking-modal shell — used both for the auth gate (nothing in
+   the app works signed out, so that one covers the whole viewport rather
+   than being a dismissable widget; see `AuthPanel`) and for smaller
+   confirmations like resigning (see `Home`). */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(35, 25, 15, 0.6);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+}
+
+.modal-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 14px;
+    width: 100%;
+    max-width: 380px;
+    border-radius: 24px;
+    padding: 32px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.modal-title {
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    font-size: 1.6rem;
+}
+
+.modal-copy {
+    color: rgba(35, 25, 15, 0.72);
+    margin-bottom: 4px;
+}
+
+.invite-banner {
+    font-weight: 600;
+    color: rgba(35, 25, 15, 0.9);
+    background: rgba(212, 162, 58, 0.15);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.modal-actions button {
+    flex: 1;
+}
+
+.modal-card .auth-panel-tabs {
+    justify-content: center;
+}
+
+.modal-card .auth-input {
+    width: 100%;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+}
+
+/* The login/register inputs now live inside a real <form> (native Enter
+   submit + autofill). The form is a single direct child of `.modal-card`,
+   so it must reproduce that column's flex+gap itself — otherwise its inner
+   fields collapse together with no vertical spacing. */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+@media (max-width: 1080px) {
+    .workspace-shell {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .workspace-main,
+    .games-panel {
+        overflow-y: visible;
+    }
+
+    .topbar {
+        flex-direction: column;
+        align-items: start;
+    }
+}
+
+.stats-card {
+    max-width: 480px;
+}
+
+.stats-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin: 4px 0 14px;
+}
+
+.stats-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(111, 75, 44, 0.08);
+}
+
+.stats-tile-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(35, 25, 15, 0.55);
+}
+
+.stats-tile-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.rating-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rating-chart svg {
+    width: 100%;
+    height: auto;
+    border-radius: 14px;
+    background: rgba(111, 75, 44, 0.06);
+}
+
+.rating-chart-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: rgba(35, 25, 15, 0.55);
+}
+
+.stats-chart-empty {
+    color: rgba(35, 25, 15, 0.6);
+    font-style: italic;
+}
+
+/* Shown on the game-over banner for whichever seat's own rating this
+   game actually moved (see `ParticipantDto.rating_before`/`rating_after`
+   — `None`/`None` for an ending that skips rating, like a timeout or a
+   creator-forced resignation). */
+.rating-delta {
+    display: block;
+    margin-top: 6px;
+    font-weight: 700;
+}
+
+.rating-delta-up {
+    color: #4a6b2e;
+}
+
+.rating-delta-down {
+    color: #8a2d1e;
+}
+
+@media (max-width: 720px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .app-shell {
+        /* Every horizontal pixel here is one the rack does not get. At 320px
+           the app shell and the panel between them took 60 of 320 before the
+           tiles saw any of it, and the tile is a seventh of what is left —
+           so 24px recovered here is ~3.5px on every tile (#12). */
+        padding: 8px;
+    }
+
+    .rack-panel {
+        padding: 10px;
+    }
+
+    .board-grid {
+        gap: 4px;
+    }
+
+    .premium-label {
+        font-size: 0.52rem;
+    }
+
+    /* `.turn-actions`'s desktop layout is a single row of three flex
+       groups (Shuffle/Clear/direction-toggle, then Pass/Exchange/Play,
+       then Resign) that only wraps *within* each group, never between
+       them — there's room for that on desktop, but on a narrow phone the
+       three groups still fight for the same row, each wrapping its own
+       buttons independently. The result reads as one scrambled cluster:
+       e.g. Pass stranded alone above Shuffle/Exchange/Resign sharing a
+       row, with Play on a third line — buttons that belong together end
+       up on different lines and buttons from different groups share one.
+       Stacking the three groups as their own full-width rows keeps each
+       one's buttons together and wrapping only within itself. */
+    .turn-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .turn-actions-buttons {
+        justify-content: flex-start;
+    }
+}
+
+/* A glance-able score line inside the rack panel.
+
+   On a phone the seats table is scrolled far above the board — the owner
+   plays positioned so the board and rack are both visible, which puts the
+   scores out of sight entirely. This is the same on desktop rather than
+   behind a media query: one layout is easier to reason about than two, and
+   the duplication on a wide screen is mild.
+
+   Wraps rather than scrolls, so six seats become two lines instead of
+   something you have to swipe. */
+.rack-scores {
+    display: flex;
+    flex-wrap: wrap;
+    /* Tight on purpose. Four seats at three digits each, plus a move score
+       apiece and the bag, is close to a phone's width — and a wrapped row
+       costs the vertical line that moving the bag off the rack row was
+       meant to save. Every few px here is headroom for a longer game. */
+    gap: 6px 12px;
+    align-items: baseline;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}
+
+/* Two dimensions, kept independent:
+
+     hue       — whose turn it is
+     intensity — the total, or the score just taken
+
+   Each says one thing. An earlier version had the move score green for
+   "gain", which collided with the turn colour and left the active row
+   two-tone; and "gain" is redundant anyway, since a move score is only ever
+   negative in the end-game rack adjustment, where the sign already says so.
+
+   Contrast matters more than usual here: the move score is 0.8em of an
+   0.85rem row, so around 11px. The faint tones are chosen to clear 4.5:1 on
+   the cream panel rather than being the base colour at reduced opacity,
+   which is how small text ends up unreadable. */
+.rack-score {
+    display: inline-flex;
+    /* Between the label and the total only; the move score is pulled tight
+       against the total below, so it reads as "106+35" rather than three
+       separate figures. */
+    gap: 5px;
+    align-items: baseline;
+    color: #6f6659;
+}
+
+/* Whose turn it is, said twice.
+   
+   The bullet marker is gone at the owner's suggestion, but colour cannot
+   carry this alone: rust against muted brown is a red/brown distinction,
+   which is the hardest axis for the common forms of colour blindness — the
+   two could read as identical. Weight is the second channel, and it works
+   regardless of how the hues are perceived.
+   
+   Weight rather than a background chip or an underline because the row is
+   already dense, and this reuses an axis the row uses anyway (the total is
+   bolder than its move score). */
+.rack-score-name {
+    font-weight: 400;
+}
+
+.rack-score-active {
+    color: #8a2d1e;
+}
+
+.rack-score-active .rack-score-name {
+    font-weight: 700;
+}
+
+/* The total: the primary number in either scheme. */
+.rack-score-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The score just taken: same hue, lighter and unbolded, so it reads as a
+   detail of the seat rather than a competing figure. */
+.rack-score-delta {
+    font-size: 0.8em;
+    font-weight: 400;
+    color: #857a6a;
+    font-variant-numeric: tabular-nums;
+    /* Cancels the flex gap so the move score sits against its total. */
+    margin-left: -3px;
+}
+
+.rack-score-active .rack-score-delta {
+    color: #9c4633;
+}
+
+/* The bag count, alongside the scores rather than beside the tiles.
+
+   It used to sit in `.rack-row` as a `flex-shrink: 0` item, which cost the
+   rack about 94px of width — enough that a seven-tile rack wrapped to two
+   rows on a phone, where vertical space is the scarce thing. Pushed to the
+   end of the scores row so the tiles get the full width.
+
+   A chip, so it is findable — but no louder than that. It should be
+   available when someone looks for it, not competing with the scores for
+   attention. Moving it here first made it muted text that wrapped to its own
+   line, which was too quiet; making it bold and dark was then too loud. The
+   chip shape is enough to locate it.
+
+   `margin-left: auto` pushes it clear of the seats, so it reads as a
+   different kind of fact rather than a fifth player. */
+.rack-scores-bag {
+    margin-left: auto;
+    border-radius: 999px;
+    padding: 3px 10px;
+    background: rgba(111, 75, 44, 0.08);
+    color: #6f6659;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}

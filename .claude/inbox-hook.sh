@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# inbox-hook.sh — SessionStart summary of GitHub activity, for Claude's context.
+#
+# Wraps scripts/board-inbox.py. Lives in .claude/ (gitignored) rather than scripts/,
+# because it is about how Claude is driven, not about the project.
+#
+# **A summary, not a replay.** The full seven-day output is ~25KB, most of it
+# Claude's own comments being read back to itself. This emits which issues have
+# comments from Steve and what opened or closed; `./scripts/board-inbox.py` gives the
+# detail on demand.
+#
+# Note the counts are only reliable from 2026-08-16, when Claude started
+# footering everything it posts (#169). Before that, an unmarked comment may be
+# either party's, so older entries over-count Steve.
+#
+# Never fails a session: every error path exits 0 with no output, because a
+# broken inbox must not stop work starting.
+set -uo pipefail
+
+cd "$(dirname "$0")/.." || exit 0
+command -v gh > /dev/null 2>&1 || exit 0
+
+RAW="$(./scripts/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
+[[ -z "$RAW" ]] && exit 0
+
+SUMMARY="$(printf '%s\n' "$RAW" | awk '
+  /^#[0-9]+ / { issue = $0; next }
+  /^  > /     { if (!(issue in count)) order[++k] = issue; count[issue]++; next }
+  /^OPENED OR CLOSED/ { tail = 1; next }
+  tail && /^  #/ { events[++e] = $0 }
+  END {
+    # Capped. A release week closes thirty issues at once, and an unbounded
+    # summary of a busy week is the same wall of text this was meant to avoid.
+    if (k) {
+      print "Issues with comments from Steve (newest last):"
+      start = k > 12 ? k - 11 : 1
+      if (start > 1) printf "  ...%d earlier\n", start - 1
+      for (i = start; i <= k; i++) printf "  %s  [%d]\n", order[i], count[order[i]]
+    }
+    if (e) {
+      if (k) print ""
+      printf "Opened or closed (%d; newest last):\n", e
+      start = e > 10 ? e - 9 : 1
+      if (start > 1) printf "  ...%d earlier\n", start - 1
+      for (i = start; i <= e; i++) print events[i]
+    }
+  }
+')"
+
+# **What is waiting on Claude, and what does not add up** — #347 R2. The two
+# tools that answer this were wired to nothing: the actions report was in no
+# hook at all, and the transition check was reachable only by hand or through
+# `verify.sh`, where it is a `note` and `CLAUDE.md`:82 says to trust the exit
+# status rather than read the output. Following the process exactly meant never
+# seeing either.
+#
+# **Both moved to the board model on 2026-09-19** — `board-actions.py --claude`
+# (R1's mirror) and `board-check.py` (R4). This hook kept calling the retired
+# `check-transitions.sh` for the length of one commit, and because every path
+# here is guarded it lost that half **silently**: exactly the failure the
+# guards exist to prevent at session start, arriving as a missing signal rather
+# than an error.
+#
+# **In parallel**, because three sequential calls measured 16s against a 30s
+# timeout and a slow GitHub would eat the margin. Each is separately guarded:
+# one failing leaves the others, and all of them failing leaves the inbox
+# summary, which is what this hook did before.
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+( timeout 25 ./scripts/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
+( timeout 25 ./scripts/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
+( timeout 10 ./scripts/board-practices.py 2>/dev/null > "$TMP/practices" ) &
+wait
+
+# Only the findings. A clean run says nothing is missing, which is worth
+# nothing in context and would be repeated into every later turn of the
+# session. R4 prints a finding's issue at column 0, where check-transitions.sh
+# indented it — a difference that silently matched nothing for one commit.
+TRANS="$(grep -E '^#[0-9]+' "$TMP/trans" 2>/dev/null | head -20 || true)"
+ACTIONS="$(grep -E '^  #[0-9]+' "$TMP/actions" 2>/dev/null | head -40 || true)"
+# #407 R3: read every session, since a session start is not a repetition of
+# the previous one — there is nothing to debounce, unlike the weekly digest
+# `programme-activities.yml` sends the owner during an absence.
+PRACTICES="$(grep -E 'OVERDUE|never logged' "$TMP/practices" 2>/dev/null || true)"
+
+# **Reports from the scheduled workflows.** Owner, 2026-09-27: "can you add a
+# hook so you notice a new report?" The workflows report by writing an issue
+# as the github-actions bot and editing it on later runs, which leaves no
+# comment for the summary above to count. board-inbox.py lists them in their
+# own section; this passes that section on, and nothing when it is empty.
+REPORTS="$(printf '%s\n' "$RAW" | sed -n '/^REPORTS FROM THE SCHEDULED WORKFLOWS/,/^$/p' \
+  | grep -E '^  #[0-9]+' || true)"
+
+EXTRA=""
+[[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"Reports from the scheduled workflows, opened, updated or closed (./scripts/board-inbox.py):"$'\n'"$REPORTS"
+[[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on you (./scripts/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
+[[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"Incomplete for their type and step (./scripts/board-check.py):"$'\n'"$TRANS"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue (./scripts/board-practices.py, docs/3.8):"$'\n'"$PRACTICES"
+
+[[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
+
+printf '%s' "$SUMMARY$EXTRA" | python3 -c '
+import sys, json
+t = sys.stdin.read().strip()
+if t:
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "SessionStart",
+        "additionalContext":
+            "GitHub activity in the last 7 days. Run ./scripts/board-inbox.py for the detail.\n\n" + t,
+    }}))
+' 2>/dev/null || exit 0

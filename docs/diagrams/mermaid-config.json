@@ -1,0 +1,10 @@
+{
+  "htmlLabels": false,
+  "flowchart": {
+    "htmlLabels": false,
+    "wrappingWidth": 320
+  },
+  "themeVariables": {
+    "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+  }
+}
