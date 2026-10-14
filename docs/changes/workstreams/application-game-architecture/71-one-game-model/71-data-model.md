@@ -701,6 +701,9 @@ but never acquired. Once the task holds nothing, N bot games on turn are N
 parallel searches, so the spawned task acquires `engine_limit` before
 searching, and the hint does the same [^d62]. The permit moves into the
 blocking thread and drops when the engine returns, not when the time runs out.
+`ENGINE_TURN_TIMEOUT` is counted from the permit, not from the spawn.
+`EngineRequest` gains a `stop: &AtomicBool`, set when the time runs out, which
+the engine checks as it searches; one that ignores it keeps its permit.
 
 **A search that fails, panics or runs out of time** leaves the seat on turn,
 exactly as a silent human is, and the move time limit retires it. It is logged
