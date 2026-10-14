@@ -120,13 +120,16 @@ exchange or placement leaves the racks and the bag as they were.
 **A change has happened only once it is in the database** [^d69]. Under the
 game's own lock the handler sets the game's *unsaved* flag, applies the change
 in memory, saves it, and clears the flag; only then does it broadcast. The lock
-keeps every other reader out until the flag clears. If the save fails, the
-change did not happen: the player is told to try again, and the game is
-reloaded from the database, which clears the flag. Any reader that finds the
-flag set reloads first. A failed save is never retried behind the player's
-back, because a retry that succeeded later would make a move happen after the
-player was told it had not. The rules stay in Rust; the database records the
-outcome and does not apply it.
+keeps every other reader out until the flag clears. A save that fails with a
+transient error is retried while the player waits, as the error's class
+allows. If it still fails, the change did not happen: the player is told to
+try again, and the game is reloaded from the database, which clears the flag.
+If the reload fails too, the flag stays set and the game refuses every message
+until a reload succeeds. Nothing is retried after the player has been
+answered, because a save that succeeded later would make a move happen after
+the player was told it had not. How many retries, how far apart, and what a
+failing database raises beyond this game are #402's. The rules stay in Rust;
+the database records the outcome and does not apply it.
 
 That is the whole of the fix for the freshness problem. There is no obligation
 to remember, because there is nowhere else to write. The current stopgap,
@@ -1050,9 +1053,10 @@ the credentials to do so.[^d66]
 
 [^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
-[^d69]: Decision #469 (D69): the database holds what has happened. A save
-    fails into a reload, under the game's lock, with an unsaved flag for any
-    reader the failure leaves behind (owner, 2026-10-14).
+[^d69]: Decision #469 (D69): the database holds what has happened. A failed
+    save is retried by its error's class, then fails into a reload, under the
+    game's lock, with an unsaved flag for any reader the failure leaves behind
+    (owner, 2026-10-14). Database failure in general is #402's.
 
 [^d70]: Decision #470 (D70): #71 Core owns the games map; #408 builds on it.
 
@@ -1075,8 +1079,9 @@ today, one lock each. The whole-state-per-update wire costs a few kilobytes per
 message per connection, which is what is sent today.
 
 **Failure.** A refused message changes nothing. An engine that errors, panics
-or overruns leaves its seat on turn for the move time limit. A failed save
-reloads the game from the database and the change did not happen [^d69]. A
+or overruns leaves its seat on turn for the move time limit. A failed save is
+retried if transient, then reloads the game, and the change did not happen
+[^d69]; a game that cannot be reloaded refuses messages until it can. A
 client that misses a broadcast catches up on reconnect, because every message
 carries the whole state and its version.
 

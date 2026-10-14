@@ -320,10 +320,12 @@ cannot reach a state the handler could not produce.
 
 **What a failed save leaves** is nothing [^d69]. `GameSession` carries an
 `unsaved: bool`, which `apply` sets. `events::publish`, under the game's write lock, saves the
-change `apply` made and clears the flag, then broadcasts. On a failed save it
-answers 503 with `Retry-After`, replaces the session with
-`GameSession::from_snapshot` of the stored row, and broadcasts nothing; a reader
-that finds `unsaved` set does the same reload before it reads. The database is
+change `apply` made and clears the flag, then broadcasts. A save error that
+`ApiProblem::from_sqlx` classes as transient is retried in place, within #402's
+bounds. One that still fails answers 503 with `Retry-After`, replaces the
+session with `GameSession::from_snapshot` of the stored row, and broadcasts
+nothing; a reader that finds `unsaved` set does the same reload before it
+reads, and a game whose reload fails answers 503 to every message. The database is
 the source of truth for #408.
 
 ## 2 · The wire
