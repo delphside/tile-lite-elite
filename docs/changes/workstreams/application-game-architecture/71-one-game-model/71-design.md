@@ -26,7 +26,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
-| 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
 | 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
 | 3 | [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | technical | whether this project or #408 owns the games map | *Locking is per game* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
@@ -609,10 +608,11 @@ driven by a loop inside somebody else's request.
   only to submit its chosen move.
 - **How many searches run at once is bounded.** Today they are serialised by
   accident, because each holds the games write lock; once they hold nothing,
-  that accident goes. The bound is
-  [Decision #462](https://github.com/delphside/tile-lite-elite/issues/462)
-  (D62), recommended as the existing `engine_limit`, acquired by the search
-  task.
+  that accident goes, and the existing `engine_limit` replaces it [^d62].
+  Every search and every hint takes a permit before it starts. The permit
+  moves into the blocking thread and is released only when the engine
+  returns, so a search that overran its time and cannot be cancelled still
+  counts. Waiting for a permit counts against the search's time.
 - **A search that fails stays the bot's problem.** An engine error, a panic or
   a search past its budget leaves the seat on turn, as a silent human's would,
   and the move time limit deals with it. It is logged, and never returned to
@@ -1028,6 +1028,9 @@ the credentials to do so.[^d66]
 
 [^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
+[^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints;
+    the default stays 2, the VM's core count.
+
 **Pending:** whether #10's harness is built as a work package of this project,
 or stays separate with #268 building only the test client it grows from, is
 [Decision #463](https://github.com/delphside/tile-lite-elite/issues/463) (D63).
@@ -1037,8 +1040,8 @@ or stays separate with #268 building only the test client it grows from, is
 **Capacity.** One process on a two-core VM. Engine searches are the largest CPU
 cost the server carries, and moving them off the request path removes the
 accidental bound on them, so a bound replaces it: `engine_limit`, default 2
-because the VM has two cores ([D62](https://github.com/delphside/tile-lite-elite/issues/462),
-pending). Memory is unchanged in kind: every live game is held in the map as
+because the VM has two cores [^d62], taken by every search and every hint.
+Memory is unchanged in kind: every live game is held in the map as
 today, one lock each. The whole-state-per-update wire costs a few kilobytes per
 message per connection, which is what is sent today.
 
@@ -1048,7 +1051,8 @@ or overruns leaves its seat on turn for the move time limit. A failed save is
 client that misses a broadcast catches up on reconnect, because every message
 carries the whole state and its version.
 
-**Limits and timeouts.** `ENGINE_TURN_TIMEOUT` (5 s) bounds a search, as today;
+**Limits and timeouts.** `ENGINE_TURN_TIMEOUT` (5 s) bounds a search, as today,
+and covers the wait for an `engine_limit` permit (2, from the core count);
 `MAX_ENGINE_TURNS_PER_TRIGGER` goes with the loop it bounded. The move time
 limit is the game's own setting. Request throttling is unchanged
 (`app/throttle.rs`).
@@ -1076,7 +1080,7 @@ the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D62, D69 and D70, and D63 for how far the test client
+**Waits on**: D69 and D70, and D63 for how far the test client
 goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
