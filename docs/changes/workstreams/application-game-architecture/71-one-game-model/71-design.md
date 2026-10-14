@@ -313,7 +313,9 @@ sees "an invitation that hasn't been sent", and pressing Send changed the
 status without the game's version moving, so the screen did not update.
 
 **Who may accept is settled by the address, then by the link.**[^d72] The
-rules are INV-1 to INV-7 in `docs/1.0`; this is how the seat carries them.
+rules are INV-1 to INV-7 in `docs/1.0`, and the address's two state machines,
+with a table of how each drives the other, are in `71-functional.md`, *An
+address and its invitations*. This is how the seat carries them.
 
 - **At send.** When the address is one an account has verified and still
   holds, the seat is invited to that player, `Invited { addressee:

@@ -189,7 +189,8 @@ Functional, so answered before the technical decisions:
 
 ## Lifecycles
 
-The state machines for the game and its seats. Each journey step above is
+The state machines for the game and its seats, and for an address and its
+invitations. Each journey step above is
 checked against them: a step that changes something with no matching
 transition is a missing transition, and a transition no step reaches is
 internal, like a sweep, or not needed. The types behind the states are in
@@ -265,6 +266,72 @@ their own. Which seats are `Playing` and which are `Departed` when the game
 ends is exactly what RATE-2 and RATE-3 turn on — who played to the end, and
 who left early — so the final seat states are the game's result, not
 bookkeeping to be cleared away.
+
+### An address and its invitations
+
+An email address has two uses that change independently, so they are drawn as
+two parallel regions.[^d72f] **Its use by an account** has one state at a time;
+the states and their rules are #439's (R3, R7). **Its use by emailed
+invitations** has one state per invitation, and there may be several. A
+`Passed` invitation is the seat's `Invited` with an addressee
+([`71-design.md`](71-design.md), *Who may accept*).
+
+```mermaid
+stateDiagram-v2
+    state "An email address" as EA {
+        state "Use by an account" as AU {
+            [*] --> None
+            None: None, never seen, released or lapsed
+            Pending: Pending, one account, at most a day
+            Live: Live, verified by one active account
+            None --> Pending: register, or change to it
+            Pending --> None: a day lapses, or the account picks another
+            Pending --> Live: verified
+            Live --> None: changed away, or account closed
+        }
+        --
+        state "Each emailed invitation to it" as IU {
+            [*] --> Open: invited, account use not Live
+            Open: Open, the link is the credential
+            Passed: Passed, waiting for its addressee
+            Open --> Passed: link claimed, or address verified
+            Open --> Closed: withdrawn, or the game goes
+            Passed --> Closed: accepted, declined, withdrawn, or the game goes
+            Closed --> [*]
+        }
+    }
+```
+
+An invitation to a Live address never enters the second region: it is made
+in-game for the holder with an addressee from the start (INV-1).
+
+**What each invitation event does, by the address's account use.** No
+invitation event ever changes the account use.
+
+| invitation event | account use None | account use Pending | account use Live |
+| --- | --- | --- | --- |
+| creator invites the address | an Open invitation, emailed with a link (INV-2) | the same: a pending address passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
+| link claimed | Passed to the account that signs in or activates (INV-2, INV-3) | the same, even when that account is not the pending one (INV-4) | cannot happen: no invitation is Open once the address is Live |
+| withdrawn, or the game goes | Closed, seat removed, link dead (INV-7) | the same | the same |
+| a Passed invitation accepted or declined | nothing for the address; the seat moves on | the same | the same |
+
+**What each account event does, by the invitation's state.** Verification is
+the only account event that reaches an invitation.
+
+| account event | invitation Open | invitation Passed | invitation Closed |
+| --- | --- | --- | --- |
+| registered, or changed to (None to Pending) | stays Open | unchanged | nothing |
+| registering or changing to a Pending or Live address | refused (#439 R7, R3), so no event | | |
+| verified (Pending to Live) | Passed to the verifier, link dead (INV-4) | unchanged: a claimed link won | nothing |
+| a day lapses, or the account picks another (Pending to None) | stays Open | unchanged | nothing |
+| changed away, or account closed (Live to None) | cannot exist while Live | unchanged: the addressee keeps it | nothing |
+
+Two consequences. Open invitations and a Live address never coexist, because
+going Live passes every Open one. And an address lapsing or being released
+never touches an invitation: only a claimed link, a verification, a withdrawal
+or the game going does.
+
+[^d72f]: Decision #479 (D72), the owner's design of 2026-10-04 and 2026-10-11.
 
 ### Do the arrows match the messages?
 
