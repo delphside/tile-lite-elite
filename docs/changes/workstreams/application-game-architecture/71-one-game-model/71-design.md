@@ -612,7 +612,14 @@ driven by a loop inside somebody else's request.
   Every search and every hint takes a permit before it starts. The permit
   moves into the blocking thread and is released only when the engine
   returns, so a search that overran its time and cannot be cancelled still
-  counts. Waiting for a permit counts against the search's time.
+  counts. The search's time starts once the permit is held, so a queued bot
+  loses none of it; the queue itself is bounded by the move time limit.
+- **An engine is asked to stop, and a broken one keeps its permit.** The
+  request carries a stop signal, set when the time runs out, and an engine
+  checks it as it searches. One that ignores it, or has hung, holds its permit
+  until it returns: the bound stays true at the cost of capacity, and a permit
+  held well past its time is logged as an alert. Only a restart frees it in
+  process; a harness bot (#10) runs in its own process, which can be killed.
 - **A search that fails stays the bot's problem.** An engine error, a panic or
   a search past its budget leaves the seat on turn, as a silent human's would,
   and the move time limit deals with it. It is logged, and never returned to
@@ -1029,7 +1036,8 @@ the credentials to do so.[^d66]
 [^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
 [^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints;
-    the default stays 2, the VM's core count.
+    the default stays 2, the VM's core count. The search's time starts once
+    the permit is held, and the engine is sent a stop signal (owner, 2026-10-14).
 
 **Pending:** whether #10's harness is built as a work package of this project,
 or stays separate with #268 building only the test client it grows from, is
@@ -1052,7 +1060,7 @@ client that misses a broadcast catches up on reconnect, because every message
 carries the whole state and its version.
 
 **Limits and timeouts.** `ENGINE_TURN_TIMEOUT` (5 s) bounds a search, as today,
-and covers the wait for an `engine_limit` permit (2, from the core count);
+counted from when its `engine_limit` permit (2, from the core count) is held;
 `MAX_ENGINE_TURNS_PER_TRIGGER` goes with the loop it bounded. The move time
 limit is the game's own setting. Request throttling is unchanged
 (`app/throttle.rs`).
