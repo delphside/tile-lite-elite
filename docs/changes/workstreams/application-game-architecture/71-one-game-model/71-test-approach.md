@@ -37,7 +37,7 @@ guarantee with a fiction.
 **It is #10 minus an engine.** A binary that logs in over the public API,
 subscribes, and records what arrives is the bot harness's skeleton — so building
 it here makes #10 *"attach `engine-core` and submit moves"* rather than *"build
-a client"*.
+a client"*. #10 stays its own project and builds on it (D63, #463).
 
 ## One test file per work package
 
