@@ -18,9 +18,8 @@ argues what must be true; that one says what gets written. Where they differ,
 this one is right.
 
 **Pending decisions.** Where the text below is not final it says so and names
-the Decision issue that will settle it. They are answered in this order: the
-documents' structure, then functional requirements, then technical decisions,
-with delivery planning last (owner, 2026-10-02). None is open as of
+the Decision issue that will settle it. They are answered in the order
+[docs/5.1](../../../../5.1-change-lifecycle.md#decisions) sets. None is open as of
 2026-10-14; the functional questions the journeys raise are in
 [`71-functional.md`](71-functional.md).
 

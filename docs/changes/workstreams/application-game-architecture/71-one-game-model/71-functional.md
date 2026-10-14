@@ -71,7 +71,6 @@ flowchart LR
   creator --- start
   creator --- abort
   creator --- forceresign
-  admin --- forceresign
   admin --- forceend
   admin --- delete
   time --- retire
@@ -132,9 +131,9 @@ flowchart TD
 flowchart TD
   s0((start)) --> d0{"how"}
   d0 -- "player resigns" --> a1["Playing → Departed, resigned<br/>RATE-2"]
-  d0 -- "creator or administrator force-resigns" --> a2["Playing → Departed, force-resigned<br/>RATE-3"]
-  d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, RATE-3"]
-  a1 --> b1["tiles back to the bag"]
+  d0 -- "creator force-resigns" --> a2["Playing → Departed, force-resigned<br/>GAME-6, RATE-3"]
+  d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
+  a1 --> b1["tiles back to the bag<br/>GAME-7"]
   a2 --> b1
   b1 --> v1{"service: at most one seat still playing?<br/>GAME-2"}
   a3 --> v1
@@ -151,7 +150,7 @@ flowchart TD
   s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
   c1 --> t1["service: pending invitations cancelled"]
   t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
-  t2 --> t3["no rating changes"]
+  t2 --> t3["no rating changes<br/>GAME-5"]
   t3 --> e0((end))
 ```
 
@@ -401,24 +400,13 @@ flowchart TD
 
 Functional, so answered before the technical decisions:
 
-1. **Aborting changes nobody's rating**, which is what the code does, but
-   docs/1.0 does not say so. RATE-1 covers only an administrator's force-end.
-   Proposed: a rule beside GAME-1.
-2. **Who may force-resign a seat.** Only the creator can today:
-   `force_resign_seat` (roster.rs) tests `caller_may_manage_game` (common.rs),
-   and no administrator route force-resigns (the admin routes are force-end,
-   delete a game, delete an account, sign out and reset a password). For a game
-   with no creator the test admits any holder of a claimed seat, or any
-   signed-in caller when no seat is claimed, as in an all-engine game. RATE-3
-   says how a forced resignation is rated but not who may do it. Options: the
-   creator alone, as the code does, or the creator and an administrator, which
-   is new work. Proposed: a rule naming whoever is chosen. The use case diagram
-   and *Leave a game in play* draw the administrator force-resigning, and change
-   to match the answer.
-3. **A departing seat's tiles go back to the bag.** The code does this for
-   every departure (`finish_via_resignation`, `apply_move_timeout`), but
-   docs/1.0 states it only for a timeout (TIME-3). Proposed: one rule for
-   every departure.
+1. **Aborting changes nobody's rating.** Answered: GAME-5 (owner,
+   2026-10-14).
+2. **Who may force-resign a seat.** Answered: the creator alone, GAME-6
+   (owner, 2026-10-14), as the code does (`caller_may_manage_game`,
+   common.rs). An administrator ends a stuck game with force-end instead.
+3. **A departing seat's tiles go back to the bag.** Answered: one rule for
+   every departure, GAME-7 (owner, 2026-10-14).
 4. **A suggested move is played, not suggested.** `suggest_move` (games.rs)
    enumerates the legal moves, applies the best-scoring one with
    `apply_place_move` (or `apply_pass` when there is none), runs any bot turns
