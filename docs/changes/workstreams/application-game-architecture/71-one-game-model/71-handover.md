@@ -37,7 +37,6 @@ decision backlog was cleared.
 
 | item | waits on |
 | --- | --- |
-| PR #471, INV-1 to INV-8 in `docs/1.0`; then close #479 (D72) as Actioned | owner: review and tick |
 | #442 to #444 and #446 (D56 to D58, D60): applied, every action ticked | owner: agree they close |
 | the fifteen functional questions in `71-functional.md`, *Questions the journeys raise*; 1 to 3 are on decision cards in the thread | owner |
 | whether *functional before technical* becomes a docs/5.1 rule | owner |
