@@ -26,7 +26,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; decided 2026-10-14; the rules in `docs/1.0` wait on PR #471 | *Who may accept is settled by the address, then by the link* |
-| 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 
 [^d71]: Decision #472 (D71): one file per stage, functional views before the
     technical design; work packages scoped as sections of this note, and a test
