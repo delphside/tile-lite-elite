@@ -25,7 +25,7 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
-| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
+| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design and his answers on its five points are applied (2026-10-14); the ten principles await his confirmation | *Who may accept is settled by the address, then by the link* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
@@ -348,9 +348,9 @@ case. They are proposed for the owner to confirm under D72.[^d72]
 10. **The server decides.** Every rule holds at the REST API; a client only
     presents what the API allows.
 
-What they settle among the points still open:
+What they settle. The owner answered the invitation rows on 2026-10-14; the two #439 rows and the DEL-2 row are still open.
 
-| open point | principle | answer |
+| point | principle | answer |
 | --- | --- | --- |
 | a link's invitation, once passed: accepted or held | 7 | held for acceptance |
 | what a closed link's page shows | 1 | the inviter and that it is closed, never who took it |
@@ -358,13 +358,15 @@ What they settle among the points still open:
 | inviting your own address, or a seated player's | 1 | no special case, since a different answer would reveal the holder |
 | recovery answering the same whether or not the address is known (#439) | 1 | the same answer |
 | registering a held address says "not available" (#439) | 1 | an exception as it stands: it reveals that an address is held, though not by whom. The usual cure is to answer "check your email" every time and tell the holder by email instead |
+| a spent link followed by the account it passed to | 6 | it opens the invitation, since that account is already the named player |
+| who can see which account claimed a link | 1 | support, to answer someone surprised that their address's invitation was taken; never the creator or other players |
 | closing an account while a passed invitation names it, refused by DEL-2 | 9 | acceptable: RET-3 ends it, and the player can decline |
-| how the verifier hears of a passed invitation | 3 | by email, the inbox they have just proved |
+| how the verifier hears of a passed invitation | 3 | by email with no link, the inbox they have just proved |
 
 ### How the seat carries them
 
 **Who may accept is settled by the address, then by the link.**[^d72] The
-rules are INV-1 to INV-7 in `docs/1.0`, and the address's two state machines,
+rules are INV-1 to INV-8 in `docs/1.0`, and the address's two state machines,
 with a table of how each drives the other, are in `71-functional.md`, *An
 address and its invitations*. This is how the seat carries them.
 
@@ -389,7 +391,15 @@ address and its invitations*. This is how the seat carries them.
 **The addressee is the creator's blind spot until it accepts.** The creator
 sees the address they typed; other players see an invited seat; the event for
 `InvitationPassed` names the seat and nobody else. Inviting answers the same
-whether the address matched a player or not (INV-6).
+whether the address matched a player or not, the creator's own address and a
+seated player's included (INV-6). Support can see the addressee, so someone
+surprised that an invitation to their address was taken can raise it with the
+creator and then with support.
+
+**A spent link says so, and nothing more** (INV-8). Its page shows who sent the
+invitation and that it is no longer available. Followed by the account it
+passed to, signed in, it opens the invitation instead, which covers the player
+whose verification passed it before they used the link.
 
 **Withdrawing an invitation is removing its seat** with `SeatRemoved`, which
 takes the link with it, and RET-3 does the same for a whole game (INV-7).
