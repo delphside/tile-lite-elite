@@ -58,6 +58,7 @@ node_modules/
 !.claude/turn-check.sh
 !.claude/inbox-hook.sh
 !.claude/comment-check.sh
+!.claude/cloud-setup.sh
 # settings.json wires those hooks up, so without it they are versioned and
 # never run: a worktree or a rebuilt machine had the scripts and no hooks
 # (owner, 2026-09-24). It holds the hooks and nothing else. One machine's

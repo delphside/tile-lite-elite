@@ -52,6 +52,9 @@ start_server() {
     
     echo "Starting backend server..."
     cd "$REPO_DIR"
+    # The default database is data/tile-lite-elite.sqlite3, and a fresh clone
+    # has no data/ (only its contents are ignored), so the server cannot open it.
+    mkdir -p "$REPO_DIR/data"
     # Rate limits raised, as preview does (docker-compose.preview.yml). The
     # defaults are sized for the production VM, and the e2e suite comes from one
     # address registering a player per test — so three tests in, the rest are

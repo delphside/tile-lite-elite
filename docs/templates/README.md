@@ -30,6 +30,10 @@ inlines a form is one nobody can copy.
 | [capacity-plan.md](capacity-plan.md) | [5.1](../5.1-change-lifecycle.md), *Which document goes where* — reports |
 | [agent-handover.md](agent-handover.md) | [5.0](../5.0-programme-tooling.md), the agents' register (#441) |
 | [triage-comment.md](triage-comment.md) | [5.1](../5.1-change-lifecycle.md), *What triage asks* |
+| [workstream-register.md](workstream-register.md) | [5.2](../5.2-workstreams.md), *Generic workstreams* |
+| [artefact-register.md](artefact-register.md) | [5.1](../5.1-change-lifecycle.md) §2.13 and §2.15 |
+| [role-assignment.md](role-assignment.md) | [5.7](../5.7-roles-and-responsibilities.md), *The roles* |
+| [delivery-log.md](delivery-log.md) | [5.1](../5.1-change-lifecycle.md) §2.14, *The delivery log row* |
 
 **A new template owes that row.** Until a numbered document links to it, it is a
 form nobody will find at the moment they need it.
@@ -39,6 +43,7 @@ form nobody will find at the moment they need it.
 | [test-design-specification.md](test-design-specification.md) | the project's folder — `docs/changes/projects/<name>/` — else the issue's | [user deletion](../changes/41-user-deletion-test-design.md) (#41, functional) · [rate limiting](../changes/25-rate-limiting-test-design.md) (#25, non-functional) |
 | [post-deployment-review.md](post-deployment-review.md) | the project's folder, once its last release has been live and used | none yet — the first project to finish writes it |
 | [capacity-plan.md](capacity-plan.md) | `docs/reports/capacity_plan/TLE_CP_<yyyy>_<mm>.md`, monthly | [TLE_CP_2026_09](../reports/capacity_plan/TLE_CP_2026_09.md) (#291 R1, the first) |
+| [workstream-register.md](workstream-register.md) · [artefact-register.md](artefact-register.md) · [role-assignment.md](role-assignment.md) · [delivery-log.md](delivery-log.md) | a new application's programme records, once each, when the programme takes it on | this application's: [5.2's workstreams](../5.2-workstreams.md#this-applications-workstreams) · [4.8](../4.8-artefacts.md) · [5.7's role holders](../5.7-roles-and-responsibilities.md#who-holds-each-role-here) · [5.6](../5.6-delivery-log.md) |
 
 ## The other half, and why it is not here
 

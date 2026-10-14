@@ -57,8 +57,8 @@ it works through.
   board to find work waiting on him. So anything genuinely needing him is
   brought to him, and everything else is Claude's to find and move.
 - Triage is done jointly with the owner, never alone, and Claude leads it:
-  bring the reading and the proposal, then agree it. **Except in Delivery
-  Tooling and Process Definition, and for type `tooling` or `documentation` in
+  bring the reading and the proposal, then agree it. **Except in Process
+  Definition, Programme Tooling and Delivery Tooling, and for type `tooling` or `documentation` in
   any workstream, where Claude triages alone** — D54, 2026-09-17. Anything
   reaching production, the product and game rules, and anything irreversible
   outside git still come to the owner whatever their workstream. Minimum: clear short
@@ -142,9 +142,9 @@ it works through.
   to main, which is what pre-approved means. A document-only change never takes a
   branch: they live too long, main moves, and the review does not happen. Approval is
   the `pre-approved` milestone; anything else, including none, means not pre-approved. One branch per project, and everything
-  the project touches goes on it, its technical documentation included. Process
-  documents (the list is `scripts/programme/board/documents.py`'s) belong to no project and
-  change on main; `docs/1.6` is generated and is regenerated on the branch after its
+  the project touches goes on it, its technical documentation included. Programme
+  documents, generic assets and records alike (docs/5.2; the list is
+  `scripts/programme/board/documents.py`'s), belong to no project and change on main; `docs/1.6` is generated and is regenerated on the branch after its
   rebase.
 - A pull request is what gives a review mechanics: a diff, a place to comment,
   a recorded approval, a merge that waits for a tick. Pre-approved does not mean
@@ -168,7 +168,7 @@ it works through.
   `Activity: <id>` from docs/5.3's register, and `Initiative: <id>` where there
   is one. BAU is its own triage, so a change above its budget
   or to an asset it does not own becomes a project, never a requirement
-  (docs/5.3). Every subject starts `app X.Y.Z api M.N:` and a space.
+  (docs/5.3). Every subject starts with this application's stamp, `app X.Y.Z api M.N:`, and a space.
 - Push immediately after committing. Until pushed, a change does not exist.
   Run an unpushed script to test it, never to use it.
 
@@ -382,7 +382,8 @@ it works through.
 | --- | --- |
 | what to type: release, rollback, emergency | docs/3.3 |
 | the lifecycle in full, and why | docs/5.1 |
-| workstreams and what each owns | docs/5.2 |
+| programme and application, and the workstreams and what each owns | docs/5.2 |
+| roles, who decides, and each role's reading list | docs/5.7 |
 | every field a change is classified by, and each artefact's route | docs/5.1 §2.15 |
 | artefacts outside git | docs/4.8, and docs/5.5 for GitHub's |
 | the fields each issue carries, and the strings tooling matches | docs/5.5 |

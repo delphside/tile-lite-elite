@@ -75,6 +75,12 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
     storageState: gateState(),
+    // A cloud session cannot download Playwright's browser, so
+    // .claude/cloud-setup.sh points this at the one its image already has.
+    // Unset everywhere else, where Playwright uses its own.
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : {},
   },
   // Two form factors. Layout regressions are invisible to the desktop run —
   // the board, the games panel and the top bar all reflow at phone width —

@@ -2,7 +2,8 @@
 name: test-designer
 description: Derives test conditions and scenarios for a requirement or project from the stated rules and requirements, WITHOUT reading the implementation, so the tests cannot inherit the code's behaviour. Reports conditions, coverage both ways, and gaps in the rules. Changes nothing. Give it a handover (docs/templates/agent-handover.md).
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
+effort: medium
 ---
 
 # Test designer

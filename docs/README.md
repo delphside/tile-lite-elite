@@ -77,11 +77,12 @@ history in the issue or the commit.
 
 - [5.0 Programme tooling](5.0-programme-tooling.md) — the two kinds of tooling, and every script that acts on the programme's records
 - [5.1 The Change Lifecycle](5.1-change-lifecycle.md) — from an issue raised to production: triage, projects, branches, releases and deliveries, and the rules that govern each. Its sibling 3.3 holds the machinery those rules run on
-- [5.2 Workstreams](5.2-workstreams.md) — the ten workstreams work is filed against, what each owns, and the boundaries between them
+- [5.2 Workstreams](5.2-workstreams.md) — programme and application, the generic workstreams, and this application's eleven: what each owns, and the boundaries between them
 - [5.3 Programme activities](5.3-programme-activities.md) — the recurring activities, their cadence and who does them
 - [5.4 Writing documents](5.4-writing-documents.md) — what each document holds, and how it is written
 - [5.5 GitHub Project Board](5.5-github-project-board.md) — the issue types, fields, board and accounts in GitHub, and the strings the tooling reads from them
 - [5.6 Delivery log](5.6-delivery-log.md) — one row per delivery: what changed in production and when. Starts at #174; earlier deliveries are recoverable from the `prod-*` tags.
+- [5.7 Roles and responsibilities](5.7-roles-and-responsibilities.md) — each role's purpose, decisions and reading list, who decides what, and who holds each role here
 
 ## Outside the numbered set
 
