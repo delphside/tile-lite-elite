@@ -518,7 +518,8 @@ player holding two has one of their own racks hidden from them.
 | `game_participants` | drop `display_name`. Add `state text not null`, `invitation_id text`, `hidden_by_player integer not null default 0`. Keep `outcome`, `bingo_count`, `score` — stats read them without loading a snapshot |
 | `game_invitations` | gains `addressee_id text`: the player who may accept, set at send when the address is one an account has verified, or later when a link is claimed or the address is verified; null while the link is still the credential, so a set addressee also means the link is spent (see *Who may accept* in `71-design.md`).[^d72] An index on the invited address over open rows with no addressee serves the pass on verification. It stays the record of who was asked and what they said, which DEL-2 reads |
 | `player_ratings`, `rating_history` | the key becomes `(player_id, edition)` and `subject_kind` goes, in one migration with the rest of Core.[^d58] An edition is the game's `variant` (`games.variant`, 4.2), so a game is rated in the edition it was played in, bot against bot included. A bot's rows move to the id of its account, and every existing row becomes English (International)'s; other editions start at 1500 |
-| `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured. Whether `game_moves` stays a table rewritten on every save or becomes an append-only event log is Decision #461 (D61) |
+| `game_events` | new: `game_id`, `version`, `event` (the serialised `GameEventDto`), `created_at`; primary key (`game_id`, `version`). Appended once per `Applied`, never updated or deleted except with its game (RET-1).[^d61] |
+| `game_moves`, `game_messages` | drop `display_name` from messages; descriptions become structured. `game_moves` is no longer rewritten on every save: it is read from `game_events`, or dropped where nothing needs it as a table |
 
 **Foreign keys arrive with this migration (#253).** Every table is rewritten
 anyway, so the constraints 4.2 says are missing are declared now, matching the
@@ -764,3 +765,4 @@ is used, and `moves.len()` was only ever a coincidence.
     once, in Core.
 [^d72]: Decision #479 (D72): how an emailed invitation behaves once an address
     identifies one account. It supersedes D59 (#445).
+[^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
