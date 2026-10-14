@@ -94,15 +94,14 @@ flowchart TD
   s0((start)) --> c1["Creator: chooses edition, time limit and seats<br/>GAME-3, TIME-1, TIME-2"]
   c1 --> v1{"service: at least two seats,<br/>every named seat a registered player?"}
   v1 -- no --> r1["refused, nothing created"]
-  v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed, invited seats Unsent"]
-  t1 --> c2["Creator: sends the invitations<br/>Unsent → Invited"]
-  c2 --> i1["Invitee: sees the invitation (reads)"]
+  v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
+  t1 --> i1["Invitee: sees the invitation (reads)"]
   i1 --> d1{"Invitee: accepts?"}
   d1 -- yes --> t2["Invited → Claimed"]
   d1 -- no --> t3["Invited → Declined<br/>DEL-3"]
   t2 --> c3["Creator: starts the game"]
   t3 --> c3
-  c3 --> v2{"service: no seat Unsent or Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
+  c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
   t4 --> e0((end))
@@ -230,7 +229,8 @@ flowchart TD
 
 ### Arrange the seats
 
-Sending the invitations is drawn in *Set up a game and fill its seats*.
+An invited seat's invitation is sent as the seat is added, as in *Set up a game
+and fill its seats*.
 
 ```mermaid
 flowchart TD
@@ -241,8 +241,8 @@ flowchart TD
   d0 -- add --> c2["Creator: names a bot, a player, an email address or an open seat<br/>GAME-4"]
   c2 --> v2{"service: a named player exists?"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed, any other Unsent<br/>the same player or bot may hold several seats<br/>GAME-4"]
-  d0 -- remove --> c3["Creator: removes a seat<br/>Unsent, Invited, Declined, Claimed or Withdrawn"]
+  v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
+  d0 -- remove --> c3["Creator: removes a seat<br/>Invited, Declined, Claimed or Withdrawn"]
   c3 --> v3{"service: not the creator's own seat?<br/>question 9"}
   v3 -- no --> r3["refused, nothing changes"]
   v3 -- yes --> t2["service: pending invitation cancelled, seat removed,<br/>later seats renumbered, the seat ceases to exist<br/>INV-7"]
@@ -531,8 +531,7 @@ stateDiagram-v2
 
     state "Game: Not Started" as NotStarted {
         [*] --> Claimed: the creator's seat, or a bot
-        [*] --> Unsent: a seat with an invitation
-        Unsent --> Invited: send
+        [*] --> Invited: a seat with an invitation, sent as it is added
         Invited --> Invited: send the link again, or pass it<br/>to a claimant or a verifier (INV-2, INV-4)
         Invited --> Claimed: accept
         Invited --> Declined: decline
@@ -561,7 +560,7 @@ than reaching a state.
 
 Aborting gives up every seat (GAME-1) by making the game `Aborted`, not by
 moving any seat: every seat freezes as it stands, whether `Playing`,
-`Departed`, `Claimed`, `Unsent` or `Invited`, and no seat can act in an aborted
+`Departed`, `Claimed` or `Invited`, and no seat can act in an aborted
 game.[^d68] An aborted game settles nothing, so nothing is lost by leaving its
 seats where they were. Aborting also cancels every invitation still pending, so
 nobody can accept a seat in a game that is over. A game also finishes when only

@@ -222,7 +222,6 @@ pub enum Invitation {
 }
 
 pub enum SeatState {
-    Unsent,                                                     // staged, nothing sent
     Invited   { id: InvitationId, addressee: Option<PlayerId> }, // None until a link or a verified address names one
     Claimed   { player: PlayerId },
     Declined  { player: PlayerId },                             // terminal
@@ -239,10 +238,10 @@ pub enum SeatRack {
 }
 ```
 
-**One lifecycle, three ways of filling a seat.** Send, accept, decline are the
-same three transitions whether the seat was aimed at a player, at an address,
-or at anyone. Only the mechanics differ — what "send" does, and who is allowed
-to accept — so the difference is a field the states are read against, not a
+**One lifecycle, three ways of filling a seat.** Accept and decline are the
+same transitions whether the seat was aimed at a player, at an address, or at
+anyone. Only the mechanics differ — what adding the seat sends, and who is
+allowed to accept — so the difference is a field the states are read against, not a
 set of states.
 
 An earlier draft of this note split them: `UnsentToName → InvitedByName`,
@@ -284,13 +283,11 @@ name has to be refused wherever it comes from. The list is currently not
 appearing, which is its own defect rather than a reason to soften this.
 
 **`None` starts at `Claimed`.** The creator's own seat and a bot's are filled
-on the spot, so they have no invitation and never pass through `Unsent`. The
+on the spot, so they have no invitation and never pass through `Invited`. The
 `Option` says so once, instead of every caller checking for a seat kind.
 
 ### What each state carries, and what it cannot
 
-- `Unsent` has no invitation id, because no invitation exists yet — it is the
-  one state before there is anything to address an acceptance to.
 - `Departed` has no rack, because TIME-3 returns the tiles to the bag.
 - `Claimed` has neither rack nor score, because the deal has not happened.
 
@@ -299,15 +296,13 @@ creator's own, a bot, by name, by email, or open — and a human seat without
 one is refused outright: *"A human seat needs a claim: named, open, or
 email."*
 
-**But adding a seat does not send anything.** That is deliberate — the creator
-can stage several additions and send them together — and it means a seat spends
-real time knowing exactly who it is for while nothing has gone out. `Unsent`
-is that state. It is not "not invited": the name or the address is already on
-the seat.
-
-This was visible before it was modelled. A creator looking at a staged seat
-sees "an invitation that hasn't been sent", and pressing Send changed the
-status without the game's version moving, so the screen did not update.
+**Adding an invited seat sends its invitation** (owner, 2026-10-14). The
+client asks for a seat of a kind — by name, by email or open — and the server
+creates the invitation, sends it, and returns the game with the seat already
+`Invited`, carrying its invitation id. No seat waits unsent, so there is no
+state for it and no separate Send. A creator who adds the wrong seat withdraws
+it, as with any invitation. Today's staged seat, whose Send changed its status
+without moving the game's version, goes with it.
 
 ### Principles for addresses and invitations
 
@@ -429,7 +424,7 @@ question was wrong. Nothing goes back, so nothing has to be remembered, and
 **the pre-start lifecycle is acyclic**: a seat only ever moves forward.
 
 It also keeps what a creator wants to see. A seat reading "Bob declined" or
-"Carol withdrew" says what happened; one that quietly reverted to unsent does
+"Carol withdrew" says what happened; one that quietly reverted does
 not.
 
 **Starting clears the spent seats.** A game begins with only the seats that
@@ -439,7 +434,7 @@ replacement stays optional: a creator short of a player can add a seat and
 invite somebody, or start with fewer.
 
 That makes `can_start` a statement about what is still *pending* rather than
-about every seat: no seat may be `Unsent` or `Invited`, because those might
+about every seat: no seat may be `Invited`, because it might
 still be filled, and everything that is not spent must be `Claimed`. Spent and
 pending stop being the same thing — one is never coming, the other might.
 
@@ -479,7 +474,7 @@ ask are answered from it:
 
 ```rust
 game.seats()                                   // Iterator<Item = &Seat>
-game.any_seat_is(Unsent)                       // → offer Send
+game.any_seat_is(Invited)                      // → still waiting on someone
 game.count_of(Declined)
 game.can_start()                               // nothing pending, a seat left
 ```
@@ -1312,7 +1307,7 @@ And [1.0 Rules](../../../../1.0-rules.md) gains what this settles:
   game data, and changing them bumps and republishes every game that player is
   in
 - a seat invited by name must name a registered account, checked when the seat
-  is added rather than when the invitation is sent
+  is added, which is also when its invitation is sent
 - declining and withdrawing are final for that seat, and starting the game
   clears them
 - bots hold accounts, and a client authenticates as a person before assuming
