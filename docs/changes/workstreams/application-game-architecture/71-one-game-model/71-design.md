@@ -26,7 +26,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; decided 2026-10-14; the rules in `docs/1.0` wait on PR #471 | *Who may accept is settled by the address, then by the link* |
-| 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
 
@@ -1074,9 +1073,11 @@ the credentials to do so.[^d66]
     the default stays 2, the VM's core count. The search's time starts once
     the permit is held, and the engine is sent a stop signal (owner, 2026-10-14).
 
-**Pending:** whether #10's harness is built as a work package of this project,
-or stays separate with #268 building only the test client it grows from, is
-[Decision #463](https://github.com/delphside/tile-lite-elite/issues/463) (D63).
+**The harness is #10's, and follows Core** [^d63]. #268 builds `game-wire` and
+the test client, which make any client possible; #10 then attaches
+`engine-core`, signs in as a bot account and submits moves.
+
+[^d63]: Decision #463 (D63): #10 stays its own project and waits on #268 only.
 
 ## Non-functional design
 
@@ -1124,8 +1125,8 @@ the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D63 for how far the test client
-goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
+**Waits on**: nothing still open. It builds the test client and stops short
+of the harness, which is #10's (D63). Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
 
