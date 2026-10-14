@@ -25,7 +25,7 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
-| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design and his answers on its five points are applied (2026-10-14); the ten principles await his confirmation | *Who may accept is settled by the address, then by the link* |
+| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; decided 2026-10-14; the rules in `docs/1.0` wait on PR #471 | *Who may accept is settled by the address, then by the link* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
@@ -320,7 +320,7 @@ status without the game's version moving, so the screen did not update.
 
 There are many journeys through addresses and invitations, so each one, and
 each rule, is checked against these principles rather than argued case by
-case. They are proposed for the owner to confirm under D72.[^d72]
+case. The owner confirmed them on 2026-10-14 under D72.[^d72]
 
 1. **No address to account, nor account to address.** Nothing anyone can do
    turns an address into a user id, or a user id into an address. The creator
