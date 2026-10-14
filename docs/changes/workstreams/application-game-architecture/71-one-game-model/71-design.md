@@ -431,7 +431,10 @@ not.
 are going to play, so `Declined` and `Withdrawn` are dropped rather than
 blocking the start or waiting for the creator to tidy them away. Adding a
 replacement stays optional: a creator short of a player can add a seat and
-invite somebody, or start with fewer.
+invite somebody, or start with fewer. Before the start the client lets the
+creator hide spent seats, so only the seats still in play show; that is a view
+choice, and the service keeps them until the start drops them (owner,
+2026-10-14).
 
 That makes `can_start` a statement about what is still *pending* rather than
 about every seat: no seat may be `Invited`, because it might

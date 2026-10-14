@@ -230,7 +230,9 @@ flowchart TD
 ### Arrange the seats
 
 An invited seat's invitation is sent as the seat is added, as in *Set up a game
-and fill its seats*.
+and fill its seats*. The creator can also hide `Declined` and `Withdrawn` seats
+so the list shows only the seats still in play. Hiding is the client's alone:
+the service keeps those seats until the start drops them.
 
 ```mermaid
 flowchart TD
@@ -242,7 +244,9 @@ flowchart TD
   c2 --> v2{"service: a named player exists?"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
-  d0 -- remove --> c3["Creator: removes a seat<br/>Invited, Declined, Claimed or Withdrawn"]
+  c1 -. "hide a Declined or Withdrawn seat<br/>(client only, no service call)" .-> h1["the seat leaves the creator's view"]
+  h1 --> e0
+  d0 -- remove --> c3["Creator: removes a seat<br/>Invited or Claimed"]
   c3 --> v3{"service: not the creator's own seat?<br/>question 9"}
   v3 -- no --> r3["refused, nothing changes"]
   v3 -- yes --> t2["service: pending invitation cancelled, seat removed,<br/>later seats renumbered, the seat ceases to exist<br/>INV-7"]
