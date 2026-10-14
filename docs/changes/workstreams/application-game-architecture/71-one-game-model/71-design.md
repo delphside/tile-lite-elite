@@ -27,7 +27,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; decided 2026-10-14; the rules in `docs/1.0` wait on PR #471 | *Who may accept is settled by the address, then by the link* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
-| 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
 
 [^d71]: Decision #472 (D71): one file per stage, functional views before the
     technical design; work packages scoped as sections of this note, and a test
@@ -1067,6 +1066,9 @@ the credentials to do so.[^d66]
     game's lock, with an unsaved flag for any reader the failure leaves behind
     (owner, 2026-10-14). Database failure in general is #402's.
 
+[^d67]: Decision #467 (D67): each requirement folded before the packages existed
+    goes to the package whose design makes it true.
+
 [^d70]: Decision #470 (D70): #71 Core owns the games map; #408 builds on it.
 
 [^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints;
@@ -1122,7 +1124,8 @@ lifecycle; *DTOs are invisible*, including the opponent tile count and the
 shared error body (D65); *The engine is a client*; the append-only game log
 (D61); *Migration*, with the schema version, foreign keys and
 the rating key; the user-details lookup rule; and the code-review findings
-routed from #460 to it. It also builds the `game-wire` crate and the test
+routed from #460 to it. It takes #142, #80, #106, #105, #429 and the invitation
+that outlives its game, each true by construction here [^d67]. It also builds the `game-wire` crate and the test
 client.
 
 **Waits on**: nothing still open. It builds the test client and stops short
@@ -1132,7 +1135,8 @@ of the harness, which is #10's (D63). Its tests: [`71-test-wp-a.md`](71-test-wp-
 
 **Takes**: *The client has the same defect* — one writer of the server cache,
 matching rather than clearing, the composition keyed by game and seat — and
-whatever client change WP A's wire change forces. Ships with WP A.
+whatever client change WP A's wire change forces, with #152 and #88, both
+composition behaviour [^d67]. Ships with WP A.
 
 **Waits on**: WP A's wire shapes. Its tests: [`71-test-wp-b.md`](71-test-wp-b.md).
 
