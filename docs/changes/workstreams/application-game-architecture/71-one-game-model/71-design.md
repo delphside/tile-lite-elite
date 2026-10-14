@@ -27,7 +27,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
 | 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
-| 3 | [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | technical | whether this project or #408 owns the games map | *Locking is per game* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
@@ -138,9 +137,8 @@ version whose content is an earlier state.
 and removal and each game has its own. One game's work stops blocking every
 other game, which is what makes an engine search off the request path
 affordable. No lock is held across an await on anything slow — an engine
-search, a database write of another game. #408 rewrites the same map, and which
-project owns it is
-[Decision #470](https://github.com/delphside/tile-lite-elite/issues/470) (D70).
+search, a database write of another game. This project owns the map's shape;
+#408 designs its deadline index, loading and eviction on top of it [^d70].
 
 **Ordering does not need more than that**, and the reason is not that
 out-of-turn messages commute. It is that there is no order to preserve.
@@ -1044,6 +1042,8 @@ the credentials to do so.[^d66]
 
 [^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
+[^d70]: Decision #470 (D70): #71 Core owns the games map; #408 builds on it.
+
 [^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints;
     the default stays 2, the VM's core count. The search's time starts once
     the permit is held, and the engine is sent a stop signal (owner, 2026-10-14).
@@ -1097,7 +1097,7 @@ the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D69 and D70, and D63 for how far the test client
+**Waits on**: D69, and D63 for how far the test client
 goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
