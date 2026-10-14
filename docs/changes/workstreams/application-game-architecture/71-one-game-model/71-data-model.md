@@ -698,9 +698,9 @@ that seat is an engine seat:
 games write lock, so searches run one at a time by accident and `engine_limit`
 (`TILE_LITE_ELITE_ENGINE_CONCURRENCY`, default 2, the VM's core count) is read
 but never acquired. Once the task holds nothing, N bot games on turn are N
-parallel searches. Where the bound lives is Decision #462 (D62); the
-recommendation is that the spawned task acquires `engine_limit` before
-searching.
+parallel searches, so the spawned task acquires `engine_limit` before
+searching, and the hint does the same [^d62]. The permit moves into the
+blocking thread and drops when the engine returns, not when the time runs out.
 
 **A search that fails, panics or runs out of time** leaves the seat on turn,
 exactly as a silent human is, and the move time limit retires it. It is logged
@@ -786,3 +786,4 @@ is used, and `moves.len()` was only ever a coincidence.
     identifies one account. It supersedes D59 (#445).
 [^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
 [^d65]: Decision #465 (D65): #71 Core designs the shared error body and response header.
+[^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints.
