@@ -7,10 +7,12 @@ one of them has a defect: fix it, don't work around it.
 **A Claude Code session on the web** (claude.ai/code) works without the local
 session's memory and outside its git hooks. It answers questions and comments
 on issues freely, makes changes only on a branch with a pull request, never by
-pushing to `main`, and before it finishes leaves a note for the local session:
-a comment on the issue the work concerns, or on #441 if there is none. The
-local session reads new comments at its next start. docs/5.5 records the app
-it works through.
+pushing to `main`. Programme records and change documents go through a pull
+request it merges itself once the required checks pass; everything else waits
+for the owner's review (docs/5.1 §2.2). Before it finishes it leaves a note for
+the local session: a comment on the issue the work concerns, or on #441 if
+there is none. The local session reads new comments at its next start.
+docs/5.5 records the app it works through.
 
 ## The work
 
