@@ -315,6 +315,9 @@ docs/5.5 records the app it works through.
   box is waiting on nobody, and `board-check.py` reports it.
 - A decision is applied in the same commit that marks it answered, or an
   issue is raised and named in the decision.
+- **A project answers its decisions in order**: document structure, then
+  functional requirements, then technical decisions, delivery planning last.
+  docs/5.1 *Decisions* has why.
 - **A project's decisions are logged by link**: closed once applied, cited in a
   footnote where the design states the conclusion, and listed in a Decisions
   table in the project's body (owner, 2026-09-29). docs/5.1 has the detail.
