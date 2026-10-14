@@ -33,51 +33,34 @@ documents:
 | **how it changes** | a host change is its delivery. Afterwards each hosted application runs its own `verify.sh` |
 | **how it coordinates** | a project that affects a hosted application, by a change or only by its regression testing, raises a requirement in that application's repository and coordinates the work. One team runs every board, so a requirement and its dependency link are enough |
 
+## Decisions
+
+### How the second application is reached: privately
+
+The WoW analysis tool has one user, the owner, so it is not public (owner,
+2026-10-14). Its server listens on the host's loopback only and is reached
+through an SSH tunnel from the owner's machine. So no second application holds
+or shares ports 80 and 443, nothing needs a certificate, the security list is
+unchanged and Tile Lite Elite is untouched.
+
+A WoW add-on runs inside the game client and has no network access of its own,
+so publishing one would not make the server public either. If a public need
+appears, the route is a small front proxy owned by the infrastructure
+application, holding 80 and 443 and passing each connection by name to its
+application's Caddy. That is designed then, not now.
+
+### How infrastructure deliveries are numbered: by date
+
+The infrastructure application keeps its own delivery log, and numbers each
+delivery by date and the day's sequence, `YYYY.MM.DD-n` (owner, 2026-10-14).
+Its deliveries change packages and configuration, not a build, so a semver's
+parts would measure nothing. To apply to docs/5.1's letter-milestone rule and
+§2.2.1's routine-update table, which assume host work rides an application's
+version.
+
 ## Options
 
-### 1. How two applications share ports 80 and 443
-
-Only one process on a host can listen on 80 and 443. Each application has its
-own subdomain and its own Caddy.
-
-1. **The second application's Caddy listens on other ports and obtains
-   certificates by DNS challenge.** This is the route agreed in principle on
-   D73. *Constrains:* the second application's URLs carry a port number
-   (`https://wow.tileliteelite.com:8443`); a DNS provider API token becomes a
-   secret on the host; Caddy is built with that provider's module. GoDaddy's
-   API access for small accounts has been restricted in the past, so this
-   must be checked before it is relied on. The fallback is to move DNS hosting
-   to a provider with an open API, keeping the registration where it is.
-2. **A small front proxy owned by the infrastructure application holds 80 and
-   443, and routes each connection by name to the right application's
-   Caddy**: on 443 by the TLS server name, passing TLS through untouched, and
-   on 80 by the HTTP host. Each Caddy keeps its own certificates, still
-   obtained by the challenges it uses today, because the proxy forwards those
-   by name too. *Constrains:* Tile Lite Elite's Caddy moves
-   off 80 and 443, which is a production release of TLE and so a requirement
-   raised on it; the proxy is a single component every hosted application
-   passes through, so its failure is every application's outage; it costs
-   some memory, to be measured. No DNS secret is needed and every URL keeps
-   its standard port. An application that later moves to a host of its own
-   takes 80 and 443 back and no longer needs the proxy.
-
-Claude's recommendation: 2. Standard ports matter for anything players or
-other tools reach, and it avoids putting a DNS credential on the host. It is
-also the only option where the two applications are symmetrical.
-
-### 2. How the infrastructure application's deliveries are versioned
-
-Its deliveries change hosts, not images, so it has no build to version.
-
-1. **Its own semver**, bumped per delivery, with its own delivery log.
-2. **Letter milestones on its own last version**, as `Other` deliveries are
-   numbered today, but against the infrastructure application rather than
-   TLE.
-
-To settle with docs/5.1's letter-milestone rule and §2.2.1's routine-update
-table, which both assume host work rides an application's version.
-
-### 3. What happens if the second application does not fit
+### What happens if the second application does not fit
 
 Measured first, against the combined plan's ceiling.
 
@@ -94,10 +77,10 @@ open.
 
 | question | answer |
 | --- | --- |
-| capacity | the combined capacity plan carries every hosted application against each host's 954 MB ceiling. The front proxy (option 1.2) and the second application are measured on rehearsal before production |
-| failure | with option 1.2, the front proxy is shared: its failure takes every hosted application down, so it is monitored and verified like an application, and `verify.sh` for each application exercises the path through it |
-| limits and timeouts | none new, because the proxy passes connections through and adds no timeout of its own; to confirm against the chosen proxy's defaults |
-| secrets and access | option 1.1 adds a DNS provider API token on the host; option 1.2 adds none. Production access stays the owner's to run |
+| capacity | the combined capacity plan carries every hosted application against each host's 954 MB ceiling. The second application is measured on rehearsal before production |
+| failure | none shared, because no component sits in front of both applications; each fails alone |
+| limits and timeouts | none new, because nothing is added between a user and an application |
+| secrets and access | the second application's deploy and tunnel use SSH, as Tile Lite Elite's do; whether each application gets its own Linux user is still to design. Production access stays the owner's to run |
 
 ## Still to design
 
@@ -105,4 +88,8 @@ open.
   `delphside/infrastructure`: docs/3.4's host sections, `check-hosts.sh`, the
   host rows of docs/4.8, the capacity plan;
 - how `verify.sh` in each application is triggered after a host delivery;
-- the test approach for a host delivery that two applications sit on.
+- the test approach for a host delivery that two applications sit on;
+- whether each application gets its own Linux user and deploy key, with an
+  admin user for host changes. Membership of the `docker` group is equivalent
+  to root, so separate users separate keys and files, not privileges, unless
+  Docker runs rootless, one daemon per user, at a memory cost.
