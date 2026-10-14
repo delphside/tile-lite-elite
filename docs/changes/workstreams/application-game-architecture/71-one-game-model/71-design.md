@@ -2,13 +2,45 @@
 
 Design note for issues #9, #10, #26, #71 and #75, and the undo work in #73
 that depends on them. **Not yet implemented** — this records the shape agreed
-before code, per docs/3.3's rule for a `major-function` change.
+before code.
+
+**The documents run top-down, one file per stage.**[^d71]
+[`71-functional.md`](71-functional.md) is the functional set: the use case
+diagram, the journeys and the lifecycles. This note is the technical design,
+overall first and then a section scoping each work package. How it is proved is
+[`71-test-approach.md`](71-test-approach.md), with one test file per package
+written to fit it.
 
 **The concrete shapes are in [`71-data-model.md`](71-data-model.md)** — the
 types as they would be written, the DTOs, the schema, which module changes, the
 message flows, the client's state and how the engine is invoked. This note
 argues what must be true; that one says what gets written. Where they differ,
 this one is right.
+
+**Pending decisions.** Where the text below is not final it says so and names
+the Decision issue that will settle it. They are answered in this order: the
+documents' structure, then functional requirements, then technical decisions,
+with delivery planning last (owner, 2026-10-02). The open ones, as of
+2026-10-14:
+
+| order | decision | kind | what it settles | where it bites |
+| --- | --- | --- | --- | --- |
+| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
+| 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
+| 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
+| 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
+| 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
+| 3 | [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | technical | whether this project or #408 owns the games map | *Locking is per game* |
+| 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
+| 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
+| 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
+
+[^d71]: Decision #472 (D71): one file per stage, functional views before the
+    technical design; work packages scoped as sections of this note, and a test
+    file per package fitted to the overall test approach.
+
+The design map this project starts from, in the format #406 is agreeing, is
+not drawn yet; it waits on #406's open questions.
 
 One goal, from which everything here follows:
 
@@ -65,16 +97,32 @@ pub enum GameMessage {
     SeatAdded { .. },
     SeatRemoved { seat: u8 },
     SeatInvited { seat: u8, .. },
+    InvitationPassed { seat: u8, to: PlayerId },
     InvitationAccepted { seat: u8, .. },
     InvitationDeclined { seat: u8 },
     SeatWithdrawn { seat: u8 },
     KeepRequested,
     UpdateUserDetails { player: PlayerId },
+    Start,
+    SeatsSwapped { a: u8, b: u8 },
+    ChatPosted { player: PlayerId, body: String },
+    Hide { seat: u8 },
+    ReminderSent { seat: u8 },
 }
 ```
 
+`Start` deals the racks and drops the spent seats in one step. Undo and redo
+join the enum with #272. Anything that changes what a client of the game could
+be shown is a variant; there is no other way in.
+
 The handler applies the change, advances the version, records the event and
 broadcasts — in that order, in one place. Nothing else writes to a game.
+
+**A rejected message changes nothing.** The handler validates against the game
+as it stands and applies only a message that will succeed, so a refused
+exchange or placement leaves the racks and the bag as they were. What happens
+when the change is applied in memory and the save then fails is
+[Decision #469](https://github.com/delphside/tile-lite-elite/issues/469) (D69).
 
 That is the whole of the fix for the freshness problem. There is no obligation
 to remember, because there is nowhere else to write. The current stopgap,
@@ -92,7 +140,10 @@ version whose content is an earlier state.
 `HashMap<String, Arc<RwLock<GameSession>>>`, so the map lock guards insertion
 and removal and each game has its own. One game's work stops blocking every
 other game, which is what makes an engine search off the request path
-affordable.
+affordable. No lock is held across an await on anything slow — an engine
+search, a database write of another game. #408 rewrites the same map, and which
+project owns it is
+[Decision #470](https://github.com/delphside/tile-lite-elite/issues/470) (D70).
 
 **Ordering does not need more than that**, and the reason is not that
 out-of-turn messages commute. It is that there is no order to preserve.
@@ -158,7 +209,7 @@ assume a game is in a single "invitation phase".
 ```rust
 pub struct Seat {
     pub number: u8,
-    pub name: String,                    // a label until claimed, the player's name after
+    pub player: Option<PlayerId>,        // resolved when the seat is created; a name is looked up, never stored
     pub invitation: Option<Invitation>,  // fixed when the seat is created
     pub state: SeatState,
 }
@@ -173,7 +224,7 @@ pub enum Invitation {
 
 pub enum SeatState {
     Unsent,                                                     // staged, nothing sent
-    Invited   { id: InvitationId },
+    Invited   { id: InvitationId, addressee: Option<PlayerId> }, // None until a link or a verified address names one
     Claimed   { player: PlayerId },
     Declined  { player: PlayerId },                             // terminal
     Withdrawn { player: PlayerId },                             // terminal
@@ -222,9 +273,9 @@ rather than when the invitation is sent. Better feedback anyway: staging a
 seat for somebody who does not exist should fail there, not two clicks later.
 `create_game` already does this — it resolves every named invitee up front,
 *"so a typo'd name fails cleanly instead of leaving a half-built game
-behind"* — so the change is to make `add_seat_to_game` agree with it rather
-than to introduce a check. That the two disagree today is the sort of gap this
-note exists to close.
+behind"* — and `add_seat_to_game` now refuses an unknown name the same way.
+What changes is that the resolved player is kept on the seat, rather than
+resolved again when the invitation is sent.
 
 The client picking the name from a list of registered players is what stops
 anybody meeting that error in normal use, and it is where a typo should be
@@ -259,43 +310,104 @@ This was visible before it was modelled. A creator looking at a staged seat
 sees "an invitation that hasn't been sent", and pressing Send changed the
 status without the game's version moving, so the screen did not update.
 
-**An emailed invitation binds to an account when it is accepted, and not
-before.** The email route exists to reach somebody who has no account, or
-whose name the creator does not know; accepting is the first moment an account
-is known for certain. From then on the seat is about a player and the address
-is finished with.
+### Principles for addresses and invitations
 
-**The address invited need not be the address the account uses.** Somebody
-invited at a work address may already have an account under a personal one, so
-the address alone never decides who may accept. The link does.
+There are many journeys through addresses and invitations, so each one, and
+each rule, is checked against these principles rather than argued case by
+case. They are proposed for the owner to confirm under D72.[^d72]
 
-**Binding earlier, when they follow the link and sign in, is not done.** It
-would trade a recoverable mistake for an unrecoverable one: signing in as the
-wrong account is fixed today by signing in properly and clicking again, because
-the **link is the credential, not the address**. Bind at sign-in and the same
-slip fixes the seat to an account that cannot then accept it.
+1. **No address to account, nor account to address.** Nothing anyone can do
+   turns an address into a user id, or a user id into an address. The creator
+   sees an id only once the invitation is accepted, and inviting, recovering
+   an account and a closed link all answer the same whether or not the address
+   belongs to anybody. This is what OWASP calls preventing account
+   enumeration.
+2. **One holder at a time, and no past.** An address belongs to at most one
+   account at a time, and nothing records who held it before.
+3. **The inbox is the proof.** Only verifying an address, which proves you
+   read its inbox, grants anything tied to it. A pending address grants
+   nothing, and blocks anyone else for at most a day.
+4. **A link is a bearer credential.** It works once, the first claim wins, and
+   following it never verifies an address.
+5. **One crossing.** Verification is the only event that carries the account
+   side into the invitation side.
+6. **Once named, an invitation stays with its player.** Nothing that happens to
+   an address moves it afterwards.
+7. **Nothing is accepted on a player's behalf.**
+8. **Every race has one winner, decided in one place.** Every change to an
+   invitation goes through its game's handler, under the game's lock.
+9. **Nothing waits for ever.** An invitation never outlives its waiting game
+   (RET-3) and a pending address lapses in a day, so nothing one person holds
+   open can block another indefinitely.
+10. **The server decides.** Every rule holds at the REST API; a client only
+    presents what the API allows.
 
-**Binding by address.** The invitation records the address it was sent to. When
-that address is a *verified* address of an account at the moment of sending,
-the invitation also records that player as its addressee, which lists it for
-them without restricting who may accept.[^d59] An unverified address never
-matches, so until verification exists (#439) nothing binds by address and an
-emailed invitation binds on acceptance alone.
+What they settle among the points still open:
 
-**An address change rebinds nothing.** The match is made once, at send time, and
-stored on the invitation as `addressee_id`. If the addressee later changes
-their address, the invitation stays theirs; if somebody else later takes the old
-address, the invitation does not move to them. So one address can name
-different players on different invitations, each unambiguous, because which
-player an address named is a fact about the moment it was sent.
+| open point | principle | answer |
+| --- | --- | --- |
+| a link's invitation, once passed: accepted or held | 7 | held for acceptance |
+| what a closed link's page shows | 1 | the inviter and that it is closed, never who took it |
+| who sees the invited address | 1 | the creator only |
+| inviting your own address, or a seated player's | 1 | no special case, since a different answer would reveal the holder |
+| recovery answering the same whether or not the address is known (#439) | 1 | the same answer |
+| registering a held address says "not available" (#439) | 1 | an exception as it stands: it reveals that an address is held, though not by whom. The usual cure is to answer "check your email" every time and tell the holder by email instead |
+| closing an account while a passed invitation names it, refused by DEL-2 | 9 | acceptable: RET-3 ends it, and the player can decline |
+| how the verifier hears of a passed invitation | 3 | by email, the inbox they have just proved |
 
-**What waits on #439.** The `addressee_id` column is in Core's migration. Unique
-and verified addresses, and login by email, are #439's, and they decide only
-whether a match is ever made. #71 does not wait for them, and #439 builds on
-this rule rather than redefining it.
+### How the seat carries them
 
-[^d59]: Decision #445 (D59): the core design settles how an emailed invitation
-    binds, including by address.
+**Who may accept is settled by the address, then by the link.**[^d72] The
+rules are INV-1 to INV-7 in `docs/1.0`, and the address's two state machines,
+with a table of how each drives the other, are in `71-functional.md`, *An
+address and its invitations*. This is how the seat carries them.
+
+- **At send.** When the address is one an account has verified and still
+  holds, the seat is invited to that player, `Invited { addressee:
+  Some(player) }`, and the email is a notification with no link (INV-1).
+  Otherwise the addressee is `None` and the email carries the link (INV-2).
+- **A link followed.** The person signs in, or registers and activates, and
+  only then does the server apply `InvitationPassed { seat, to }` for that
+  account. The seat stays `Invited`, now with an addressee, and the link is
+  spent, because a link can only claim a seat whose addressee is `None`
+  (INV-3). The game's own lock makes the claim atomic: of two at once, the
+  second finds an addressee and is refused with `InvitationNotAvailable`.
+- **An address verified.** The account service finds the open invitations to
+  that address with no addressee and applies `InvitationPassed` to each game in
+  turn, through the same handler, so a link claimed a moment earlier wins and
+  the pass is a no-op for that seat (INV-4).
+- **Accepting.** A seat with an addressee can be accepted or declined only by
+  that player, and passing never accepts for them (INV-5). `Open` seats are
+  unchanged: anyone may claim one.
+
+**The addressee is the creator's blind spot until it accepts.** The creator
+sees the address they typed; other players see an invited seat; the event for
+`InvitationPassed` names the seat and nobody else. Inviting answers the same
+whether the address matched a player or not (INV-6).
+
+**Withdrawing an invitation is removing its seat** with `SeatRemoved`, which
+takes the link with it, and RET-3 does the same for a whole game (INV-7).
+
+**An address change rebinds nothing.** Once a seat has an addressee it is
+about a player, not an address. If the addressee later changes address the
+invitation stays theirs, and whoever takes the old address gets nothing.
+
+**Signing in as the wrong one of your own accounts passes the invitation to
+that account.** That is the price of INV-2 passing at sign-in rather than at
+acceptance, and it is accepted: the account is still the person's, and they
+can decline there.
+
+**Every rule holds at the API.** Third-party clients are allowed, so nothing
+here lives in a client; a client can only offer what the API permits.
+
+**What #439 owns.** Verifying, uniqueness, pending addresses and their lapse,
+and the migration that takes existing addresses as verified are #439's. #71
+needs one query from it, the account that has verified an address and still
+holds it, and one event, an address verified. Until #439 delivers no address is
+verified, so every emailed invitation is a link and the design works unchanged.
+
+[^d72]: Decision #479 (D72): how an emailed invitation behaves once an address
+    identifies one account. It supersedes D59 (#445).
 
 **A spent seat is spent.** Declining and withdrawing are both terminal: the
 seat keeps the name of whoever said no or walked away, and nothing re-invites
@@ -327,17 +439,11 @@ ones that remain, and seat numbers are the turn order. Before the start no
 move has been recorded against a seat number, so nothing refers to the old
 ones; a moment later the log does, and the same tidy-up would be a rewrite.
 
-It follows that **a game must still have a seat left**. One is enough — a
-game may have a single seat, and `create_game` refuses only an empty roster —
-so the check at start is the same one: something to play with. A roster whose
-every seat turned out to be spent has nothing.
-
-That a one-seat game is legal matters for the finish condition too. Today a
-game ends as soon as one seat or fewer is unresigned, which is true of a solo
-game from its first turn — it finishes after one pass, and records that seat
-as the winner. The rule is about a seat *departing* and leaving one behind,
-not about one merely being there. Raised separately as it is current
-behaviour, not something this change introduces.
+It follows that **a game must still have two seats left** (GAME-3), checked
+when it is created and again at start, after the spent seats are dropped. A
+roster whose seats turned out to be spent, down to one or none, cannot start.
+GAME-3 is what lets GAME-2's finish condition — at most one seat still playing —
+read one remaining seat as everybody else having left.
 
 Who declined is not lost. `game_invitations` keeps the record of who was asked
 and what they said, which is what DEL-2 reads: an account that turned down a
@@ -385,117 +491,11 @@ same shape as a person doing it, per GAME-4, rather than a case of its own.
 Without that, every caller writes `kind == Human && player_id.is_none()` and
 remembers that engines are exempt.
 
-### The two lifecycles together
+### The lifecycles are in the functional views
 
-Seat states are not free of the game's. Each one belongs inside a particular
-game state, which is why they are drawn nested rather than side by side.
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> NotStarted: create
-
-    state "Game: Not Started" as NotStarted {
-        [*] --> Claimed: the creator's seat, or a bot
-        [*] --> Unsent: a seat with an invitation
-        Unsent --> Invited: send
-        Invited --> Invited: send the link again
-        Invited --> Claimed: accept
-        Invited --> Declined: decline
-        Claimed --> Withdrawn: withdraw
-    }
-
-    state "Game: Active" as Active {
-        Playing --> Departed: resign, force-resign, time out
-    }
-
-    state "Game: Finished or Aborted<br/>seats frozen as they stand" as Over
-
-    Claimed --> Playing: start, deal racks
-    NotStarted --> Over: creator aborts
-    Active --> Over: a seat goes out, or creator aborts
-    NotStarted --> [*]: RET-3, 30 days
-    Over --> [*]: RET-1, 7 days
-```
-
-Two simplifications, both deliberate. **Finished and Aborted share a box**
-because they do not differ in seat terms — either way the seats stop where
-they are, and this diagram is about seats. Where they differ is rating, which
-is below. And **seats leaving the roster are not drawn** — removed by the
-creator, or dropped as spent when the game starts. They cease to exist rather
-than reaching a state.
-
-Aborting gives up every seat, so an aborted game's seats all end `Departed`;
-a game also finishes when only one seat is left `Playing`.
-
-Three things are worth reading off it.
-
-**One arrow crosses the boundary.** Starting refuses while any seat is still
-pending and drops the spent ones, so at the moment a game begins every seat
-left is `Claimed` and there is nothing else to carry across. Starting deals
-the racks, which is the same event as `Claimed → Playing`, and that is why the
-two are one arrow rather than two facts that have to agree.
-
-**The invitation states exist only before the start**, and `Playing` and
-`Departed` only after it. A seat cannot be invited into a game in progress:
-adding a player mid-game is not a small extension of this model but a
-different one, and the diagram is where that shows up.
-
-**Finished and Aborted freeze the seats** rather than giving them states of
-their own. Which seats are `Playing` and which are `Departed` when the game
-ends is exactly what RATE-2 and RATE-3 turn on — who played to the end, and
-who left early — so the final seat states are the game's result, not
-bookkeeping to be cleared away.
-
-### Do the arrows match the messages?
-
-No, and it is worth being precise about how they fail to, because two of the
-four mismatches are the reason this note exists.
-
-**One command, several arrows.** Creating a game sets up every seat at once,
-and each may land in a different state depending on its invitation. Starting
-moves every `Claimed` seat to `Playing`. Aborting departs every seat. A
-command is not an arrow; it is a set of them.
-
-**Several commands, one arrow.** Resigning through `/actions`, being
-force-resigned through its own route, and timing out through no command at all
-are one arrow, `Playing → Departed`. They differ only in `how`, which is
-exactly why `Departure` is a field rather than three states.
-
-**Commands with no arrow at all.** Placing, passing, exchanging, reordering
-seats, chatting. These change the game — the board, the racks, the scores —
-without moving any seat between states. **This is the class of change that was
-invisible to clients**, because change was tied to writing a seat or
-invitation row. It is the defect the whole note is about, and the diagram is
-where it becomes obvious: most of what happens in a game is not on it.
-
-**Arrows with no command.** Timing out and being swept away are the clock, not
-a caller. Any design built on "state changes because somebody asked" gets
-these wrong — which is why the sweeps have to bump the version and broadcast
-through the same path a request does, rather than quietly writing a row.
-
-So the alignment worth having is not arrow-to-message. It is one level up, and
-it is the only invariant that covers all four cases:
-
-> Everything that changes a game — command, sweep or clock — bumps the one
-> version and publishes the result.
-
-**One arrow does align exactly, and it is the one to watch.** `Invited →
-Claimed` is a single command changing a single seat, and it is the case that
-has been wrong in production twice: the seat changed, the game's version did
-not, and nobody heard.
-
-**State is derived from what is there, never from the history.** The log
-exists for undo and audit; behaviour reads the current state. This is the rule
-that keeps the seat enum honest: a seat's state is a field, not a fold over
-rows.
-
-It also disposes of a habit worth naming, because two documents currently
-encode it. Both this note's predecessor in 2.4 and the user-deletion test plan
-classify an unstarted game into one of four roster situations, ordered so that
-exactly one applies. That was a convenience for arguing about retention and
-for making a test partition clean. It is not a description of the system, and
-nothing should be written against it.
+The state machine for the game and its seats, and how its arrows line up with
+the messages above, are in [`71-functional.md`](71-functional.md),
+*Lifecycles*, where the journeys are checked against them.[^d71]
 
 ## DTOs are invisible
 
@@ -609,6 +609,19 @@ driven by a loop inside somebody else's request.
   by the move time limit, exactly as a silent human is.
 - The search runs without holding anything. The engine takes the per-game lock
   only to submit its chosen move.
+- **How many searches run at once is bounded.** Today they are serialised by
+  accident, because each holds the games write lock; once they hold nothing,
+  that accident goes. The bound is
+  [Decision #462](https://github.com/delphside/tile-lite-elite/issues/462)
+  (D62), recommended as the existing `engine_limit`, acquired by the search
+  task.
+- **A search that fails stays the bot's problem.** An engine error, a panic or
+  a search past its budget leaves the seat on turn, as a silent human's would,
+  and the move time limit deals with it. It is logged, and never returned to
+  the human whose move set it off.
+- **Every change can put a bot on turn**, not only a move: a timeout, a
+  force-resign or a seat leaving each hand the turn on, and `apply` reports the
+  seat now on turn whichever it was.
 - **The submitted move is re-validated on arrival**, because the game may have
   moved while the engine was thinking — aborted, or its seat retired. A human
   gets that check today; a bot searching off the lock needs the same one. That
@@ -746,33 +759,28 @@ ignored, not destroyed — so leaving a game mid-turn to check another and comin
 back restores the half-typed word. That is better behaviour than clearing it,
 and it costs nothing. The bug fix and the small feature are the same change.
 
-### This needs the turn back
+### What the composition is keyed on
 
-The key must move **when and only when the move being composed stops being
-submittable** — same game, still this player's turn, same board underneath.
+The key is **the game and the seat**, and nothing else. A composition stays
+live while its cells are still empty and its tiles are still in the seat's
+rack; it is discarded when a tile is played in one of its cells or a tile it
+uses leaves the rack (owner, 2026-08-29). Both are comparisons against the
+state the client already holds, so nothing is stored or bumped to maintain
+them. `71-data-model.md` §1 has the code.
 
-`game_version` cannot serve. One counter moved by any change (see *Open
-questions*) is moved by an opponent's chat message, and keying on it would wipe
-a half-typed word every time somebody typed in the panel. That is the same
-failure as clearing, arrived at from the other direction.
+`version` cannot serve. It moves for any change, including an opponent's chat
+message, and keying on it would wipe a half-typed word every time somebody
+typed in the panel. That is the same failure as clearing, arrived at from the
+other direction. `turn` cannot serve either: undo takes it back, so a
+composition keyed on turn 8 would match again after an undo and redo, against a
+board that has moved on.
 
-Two candidates:
+**Composing does not need the turn; submitting does.** A player can arrange a
+word while waiting (#88), and the client offers Submit only on that seat's
+turn. The server refuses a move out of turn whatever the client does.
 
-- **A turn number carried in the state.** The open questions already say
-  tracking the turn "is likely useful for undo, and waits with it". This is a
-  second reason and a present one, so it should not wait: the client needs the
-  turn as soon as the version stops being one.
-- **`moves.len()`**, which the DTO already carries. Any board change appends a
-  move; chat does not. It needs no new field.
-
-**Take the first.** `moves.len()` works, and it works by coincidence — the same
-kind of coincidence as the three invitation writers that move the version only
-because a session mutation happens to ride along in the same handler. Removing
-those is what this note is for; adding one on the client would be a poor trade
-for one saved field.
-
-This is a finding from the client work package that changes the server design,
-which is what splitting into work packages is supposed to produce.
+`turn` still comes back as game state, separate from `version`: undo walks it,
+the scoreless rule reads it and the player is shown it.
 
 ### How we will know the client is right
 
@@ -867,21 +875,18 @@ one with a field omitted.
 ## Open questions
 
 **The log is for undo, and undo is parked.** Current state stays
-authoritative; behaviour never reads the log. When it arrives it holds the
+authoritative; behaviour never reads the log. Whether Core already writes the
+log, as an append-only table replacing the `game_moves` rewrite on every save,
+is [Decision #461](https://github.com/delphside/tile-lite-elite/issues/461)
+(D61). When it arrives it holds the
 same serialised messages that go over the wire, so there is one serialisation
 rather than a second format to keep in step.
 
-**`move_number` becomes `game_version`.** It began as a turn count and has
-already become a version moved by any change — a resignation, an abort and a
-timeout each take one, and none is a move. There is one counter, and records
-carry the version they happened at. Tracking the turn as well is likely useful
-for undo, and waits with it.
-
-**Except that the client needs the turn now**, not with undo — see *This needs
-the turn back*. A composition is void when the turn ends, and a single counter
-that an opponent's chat message also moves cannot say when that is. So the turn
-comes back as a state field, separate from the version, and undo inherits it
-rather than introducing it.
+**The freshness counter is `version`**, on `GameSession`, moved by any change —
+a resignation, an abort and a timeout each take one, and none is a move. Records
+carry the version they happened at. `move_number` stays what it is, the
+sequence number of a move record, and `turn` is game state alongside them (see
+*What the composition is keyed on*).
 
 **State fields and message fields are different things**, which resolves the
 ratings. `rating_before` and `rating_after` describe what *this game did* to a
@@ -1005,17 +1010,108 @@ with. Shutting out an account is its own piece of work and this feeds it: a
 bot has an owner, and the owner is who you stop.
 
 Rate limiting is a separate concern and answers a different question. It
-protects the service from load, not from anybody in particular, and there is
-none in place today.
+protects the service from load, not from anybody in particular. It exists
+(`app/throttle.rs`, 4.1), and a harness meets it like any client: its retry
+policy against 429 and `Retry-After` is #10's.
 
 **Anybody may register a bot** and run it through the harness or their own
 client. A bot account is an ordinary account with an owner and an engine, so
 "my own bot with its own rating" needs no new concept — and the owner is who
 you revoke.
 
-Open: a session lasts ten days at most and ends after forty-eight hours unused
-(ACC-1), so a long-running harness logs in again as routine, or bot accounts
-are exempt. Worth deciding rather than discovering when the bots go quiet.
+**A bot's session follows ACC-1 like anybody's.** A session lasts ten days at
+most and ends after forty-eight hours unused, so a long-running harness logs in
+again as routine: it answers a 401 by logging in and retrying once, and holds
+the credentials to do so.[^d66]
+
+[^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
+
+**Pending:** whether #10's harness is built as a work package of this project,
+or stays separate with #268 building only the test client it grows from, is
+[Decision #463](https://github.com/delphside/tile-lite-elite/issues/463) (D63).
+
+## Non-functional design
+
+**Capacity.** One process on a two-core VM. Engine searches are the largest CPU
+cost the server carries, and moving them off the request path removes the
+accidental bound on them, so a bound replaces it: `engine_limit`, default 2
+because the VM has two cores ([D62](https://github.com/delphside/tile-lite-elite/issues/462),
+pending). Memory is unchanged in kind: every live game is held in the map as
+today, one lock each. The whole-state-per-update wire costs a few kilobytes per
+message per connection, which is what is sent today.
+
+**Failure.** A refused message changes nothing. An engine that errors, panics
+or overruns leaves its seat on turn for the move time limit. A failed save is
+[D69](https://github.com/delphside/tile-lite-elite/issues/469), pending. A
+client that misses a broadcast catches up on reconnect, because every message
+carries the whole state and its version.
+
+**Limits and timeouts.** `ENGINE_TURN_TIMEOUT` (5 s) bounds a search, as today;
+`MAX_ENGINE_TURNS_PER_TRIGGER` goes with the loop it bounded. The move time
+limit is the game's own setting. Request throttling is unchanged
+(`app/throttle.rs`).
+
+**Secrets and access.** No new secret. A bot is an account with an owner and
+authenticates as one, so a harness holds a session token like any client; how
+long that session lives is ACC-1's, with no exemption for bots (D66). What a
+connection may see is the union over the seats its account holds; a broadcast
+event never names who acted on a seat beyond the seat itself.
+
+## Work packages
+
+The overall design above is delivered in six packages (D56, #442). Each section
+says what the package takes from the design, and what it waits on. A package's
+requirements are on its issue; its tests are in its own test file.
+
+### WP A, #268 Core Game Lifecycle
+
+**Takes**: *One version, moved in one place*, with every `GameMessage`
+variant except undo and redo; per-game locking; the seat model and its
+lifecycle; *DTOs are invisible*, including the opponent tile count; *The
+engine is a client*; *Migration*, with the schema version, foreign keys and
+the rating key; the user-details lookup rule; and the code-review findings
+routed from #460 to it. It also builds the `game-wire` crate and the test
+client.
+
+**Waits on**: D61, D62, D65, D69 and D70, and D63 for how far the test client
+goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
+
+### WP B, #269 Core Client UI
+
+**Takes**: *The client has the same defect* — one writer of the server cache,
+matching rather than clearing, the composition keyed by game and seat — and
+whatever client change WP A's wire change forces. Ships with WP A.
+
+**Waits on**: WP A's wire shapes. Its tests: [`71-test-wp-b.md`](71-test-wp-b.md).
+
+### WP C, #270 Additional Game Lifecycle
+
+**Takes**: the scheduled jobs that are not yet built — RET-3's countdown and a
+message reaching a player who is not looking — each through the one handler,
+as *Arrows with no command* requires.
+
+**Waits on**: WP A. Its tests: [`71-test-wp-c.md`](71-test-wp-c.md).
+
+### WP D, #271 Additional Client UI
+
+**Takes**: the client work WP C implies, and #84, #146 and #239.
+
+**Waits on**: WP B and WP C. Its tests: [`71-test-wp-d.md`](71-test-wp-d.md).
+
+### WP E, #272 Undo and Redo
+
+**Takes**: *What this makes possible*, undo — a new, higher version whose
+content is an earlier state, with `turn` walking back.
+
+**Waits on**: WP A, and D61 for where the history is kept. Its tests:
+[`71-test-wp-e.md`](71-test-wp-e.md).
+
+### WP F, #290 dioxus 0.7
+
+**Takes**: nothing from this design; it is the framework upgrade WP B and WP D
+are written against.
+
+**Waits on**: nothing in #71. Its tests: [`71-test-wp-f.md`](71-test-wp-f.md).
 
 ## Documents this changes
 
@@ -1118,8 +1214,8 @@ from the in-process bot rather than sitting between the game and the engines.
 
 | Document | What changes |
 | --- | --- |
-| [4.2 Database Schema](../../../../4.2-database-schema.md) | seat state columns; `game_invitations` reduced to the record of who was asked; `player_ratings.subject_kind` removed; `game_moves` |
-| [4.3 API Schema](../../../../4.3-api-schema.md) | the seat and rack DTOs, `ViewerAccess`, the api major version |
+| [4.2 Database Schema](../../../../4.2-database-schema.md) | seat state columns; `game_invitations` reduced to the record of who was asked; `player_ratings.subject_kind` removed; `game_moves`; foreign keys and the delete behaviour they enforce, with `rating_history.game_id` set null when its game goes |
+| [4.3 API Schema](../../../../4.3-api-schema.md) | the seat and rack DTOs, `ViewerAccess`, structured events, `RatingPointDto.game_id` optional, the api major version |
 | [4.4 snapshot_json](../../../../4.4-snapshot-json-schema.md) | the schema version field, seat shape, the event log |
 | [4.5 Data Dictionary](../../../../4.5-data-dictionary.md) | every game field that moves between snapshot, DB and DTO |
 
@@ -1127,10 +1223,14 @@ Each carries a freshness stamp, so each needs re-verifying against the code
 rather than editing from this note — the note says what was agreed, and the
 stamp claims what was checked.
 
-Two design documents describe the current arrangement and will contradict this
-one until they are revised: [2.4 Persistence](../../../../2.4-persistence.md) on how
-game state is written, and
-[2.7 Authentication and Invitations](../../../../2.7-authentication-and-invitations.md)
+Four documents describe the current arrangement and will contradict this one
+until they are revised: [1.1 Architecture](../../../../1.1-architecture.md)'s
+*Engines*, which says engines run only on the server, in-process;
+[2.3 Engine Interface](../../../../2.3-engine-interface.md), which already
+points to this change for taking the engine out of the server;
+[2.4 Persistence](../../../../2.4-persistence.md) on how game state is written,
+and foreign keys and the snapshot's schema version; and
+[2.7 Seats And Invitations](../../../../2.7-authentication-and-invitations.md)
 on invitations as their own lifecycle.
 
 And [1.0 Rules](../../../../1.0-rules.md) gains what this settles:
@@ -1145,6 +1245,8 @@ And [1.0 Rules](../../../../1.0-rules.md) gains what this settles:
 - bots hold accounts, and a client authenticates as a person before assuming
   a bot
 - how many tiles each opponent holds is public
+- aborting cancels every pending invitation, and nothing about a seat can be
+  invited, accepted or claimed once the game has started
 
 Undo's rules wait for the undo work itself.
 

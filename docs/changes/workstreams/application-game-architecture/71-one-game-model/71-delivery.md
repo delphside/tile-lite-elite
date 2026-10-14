@@ -12,6 +12,12 @@ delivery, because the server and client must agree on the API: a server ahead of
 its client moves the version pair and breaks the contract that exists to prevent
 exactly that.[^d56] The other packages decide their own deliveries.
 
+**Pending:** the branch and milestone each delivery takes is
+[Decision #464](https://github.com/delphside/tile-lite-elite/issues/464) (D64).
+The recommendation is a branch and a milestone per delivery, #268 and #269
+sharing one branch and `1.0.0`, and the later packages left without a milestone
+until each is scheduled.
+
 **#268 can be exercised in full on its own**, with the test client as the second
 observer, while still not being shippable alone. That gives the project a test
 gate in the middle rather than only at the end.
