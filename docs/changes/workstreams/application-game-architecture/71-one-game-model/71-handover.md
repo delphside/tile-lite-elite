@@ -37,9 +37,8 @@ decision backlog was cleared.
 
 | item | waits on |
 | --- | --- |
-| #442 to #444 and #446 (D56 to D58, D60): applied, every action ticked | owner: agree they close |
 | the fifteen functional questions in `71-functional.md`, *Questions the journeys raise*; 1 to 3 are on decision cards in the thread | owner |
-| whether *functional before technical* becomes a docs/5.1 rule | owner |
+| *functional before technical* as a docs/5.1 rule (owner agreed 2026-10-14): applied by the programme authority thread; then 71-design.md's *Pending decisions* links to it | programme authority, then Claude |
 | #406's four diagram-format questions, and #428 | owner |
 | DEL-2 refusing to close an account while a passed invitation names it: principle 9 calls it acceptable | owner, on #439 |
 | #439's open rows: registering a held address reveals it is held; recovery answering the same; a password to change an address; sign-in by name or address | owner, on #439 |
