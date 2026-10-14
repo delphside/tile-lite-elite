@@ -210,7 +210,7 @@ stateDiagram-v2
         [*] --> Claimed: the creator's seat, or a bot
         [*] --> Unsent: a seat with an invitation
         Unsent --> Invited: send
-        Invited --> Invited: send the link again
+        Invited --> Invited: send the link again, or pass it<br/>to a claimant or a verifier (INV-2, INV-4)
         Invited --> Claimed: accept
         Invited --> Declined: decline
         Claimed --> Withdrawn: withdraw

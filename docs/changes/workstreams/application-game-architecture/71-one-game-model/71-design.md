@@ -27,7 +27,7 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | --- | --- | --- | --- | --- |
 | 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | `71-functional.md`, *The game and its seats* |
 | 2 | [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | functional requirement | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
-| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account | *Binding by address* |
+| 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
 | 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
 | 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
@@ -99,6 +99,7 @@ pub enum GameMessage {
     SeatAdded { .. },
     SeatRemoved { seat: u8 },
     SeatInvited { seat: u8, .. },
+    InvitationPassed { seat: u8, to: PlayerId },
     InvitationAccepted { seat: u8, .. },
     InvitationDeclined { seat: u8 },
     SeatWithdrawn { seat: u8 },
@@ -225,7 +226,7 @@ pub enum Invitation {
 
 pub enum SeatState {
     Unsent,                                                     // staged, nothing sent
-    Invited   { id: InvitationId },
+    Invited   { id: InvitationId, addressee: Option<PlayerId> }, // None until a link or a verified address names one
     Claimed   { player: PlayerId },
     Declined  { player: PlayerId },                             // terminal
     Withdrawn { player: PlayerId },                             // terminal
@@ -311,51 +312,55 @@ This was visible before it was modelled. A creator looking at a staged seat
 sees "an invitation that hasn't been sent", and pressing Send changed the
 status without the game's version moving, so the screen did not update.
 
-**An emailed invitation binds to an account when it is accepted, and not
-before.** The email route exists to reach somebody who has no account, or
-whose name the creator does not know; accepting is the first moment an account
-is known for certain. From then on the seat is about a player and the address
-is finished with.
+**Who may accept is settled by the address, then by the link.**[^d72] The
+rules are INV-1 to INV-7 in `docs/1.0`; this is how the seat carries them.
 
-**The address invited need not be the address the account uses.** Somebody
-invited at a work address may already have an account under a personal one, so
-the address alone never decides who may accept. The link does.
+- **At send.** When the address is one an account has verified and still
+  holds, the seat is invited to that player, `Invited { addressee:
+  Some(player) }`, and the email is a notification with no link (INV-1).
+  Otherwise the addressee is `None` and the email carries the link (INV-2).
+- **A link followed.** The person signs in, or registers and activates, and
+  only then does the server apply `InvitationPassed { seat, to }` for that
+  account. The seat stays `Invited`, now with an addressee, and the link is
+  spent, because a link can only claim a seat whose addressee is `None`
+  (INV-3). The game's own lock makes the claim atomic: of two at once, the
+  second finds an addressee and is refused with `InvitationNotAvailable`.
+- **An address verified.** The account service finds the open invitations to
+  that address with no addressee and applies `InvitationPassed` to each game in
+  turn, through the same handler, so a link claimed a moment earlier wins and
+  the pass is a no-op for that seat (INV-4).
+- **Accepting.** A seat with an addressee can be accepted or declined only by
+  that player, and passing never accepts for them (INV-5). `Open` seats are
+  unchanged: anyone may claim one.
 
-**Binding earlier, when they follow the link and sign in, is not done.** It
-would trade a recoverable mistake for an unrecoverable one: signing in as the
-wrong account is fixed today by signing in properly and clicking again, because
-the **link is the credential, not the address**. Bind at sign-in and the same
-slip fixes the seat to an account that cannot then accept it.
+**The addressee is the creator's blind spot until it accepts.** The creator
+sees the address they typed; other players see an invited seat; the event for
+`InvitationPassed` names the seat and nobody else. Inviting answers the same
+whether the address matched a player or not (INV-6).
 
-> **Pending [D72](https://github.com/delphside/tile-lite-elite/issues/479).** The
-> owner has ruled that an email address is unique, identifies one account, and
-> can be changed (#439 R2, R6). That removes the premise of *The address invited
-> need not be the address the account uses*; it and the rules below stand until
-> D72 is decided. Its recommendation
-> keeps them but makes `addressee_id` restrict who may accept, rather than only
-> list the invitation.
+**Withdrawing an invitation is removing its seat** with `SeatRemoved`, which
+takes the link with it, and RET-3 does the same for a whole game (INV-7).
 
-**Binding by address.** The invitation records the address it was sent to. When
-that address is a *verified* address of an account at the moment of sending,
-the invitation also records that player as its addressee, which lists it for
-them without restricting who may accept.[^d59] An unverified address never
-matches, so until verification exists (#439) nothing binds by address and an
-emailed invitation binds on acceptance alone.
+**An address change rebinds nothing.** Once a seat has an addressee it is
+about a player, not an address. If the addressee later changes address the
+invitation stays theirs, and whoever takes the old address gets nothing.
 
-**An address change rebinds nothing.** The match is made once, at send time, and
-stored on the invitation as `addressee_id`. If the addressee later changes
-their address, the invitation stays theirs; if somebody else later takes the old
-address, the invitation does not move to them. So one address can name
-different players on different invitations, each unambiguous, because which
-player an address named is a fact about the moment it was sent.
+**Signing in as the wrong one of your own accounts passes the invitation to
+that account.** That is the price of INV-2 passing at sign-in rather than at
+acceptance, and it is accepted: the account is still the person's, and they
+can decline there.
 
-**What waits on #439.** The `addressee_id` column is in Core's migration. Unique
-and verified addresses, and login by email, are #439's, and they decide only
-whether a match is ever made. #71 does not wait for them, and #439 builds on
-this rule rather than redefining it.
+**Every rule holds at the API.** Third-party clients are allowed, so nothing
+here lives in a client; a client can only offer what the API permits.
 
-[^d59]: Decision #445 (D59): the core design settles how an emailed invitation
-    binds, including by address.
+**What #439 owns.** Verifying, uniqueness, pending addresses and their lapse,
+and the migration that takes existing addresses as verified are #439's. #71
+needs one query from it, the account that has verified an address and still
+holds it, and one event, an address verified. Until #439 delivers no address is
+verified, so every emailed invitation is a link and the design works unchanged.
+
+[^d72]: Decision #479 (D72): how an emailed invitation behaves once an address
+    identifies one account. It supersedes D59 (#445).
 
 **A spent seat is spent.** Declining and withdrawing are both terminal: the
 seat keeps the name of whoever said no or walked away, and nothing re-invites
