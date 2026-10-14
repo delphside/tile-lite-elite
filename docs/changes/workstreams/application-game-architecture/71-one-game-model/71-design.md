@@ -620,6 +620,11 @@ driven by a loop inside somebody else's request.
   until it returns: the bound stays true at the cost of capacity, and a permit
   held well past its time is logged as an alert. Only a restart frees it in
   process; a harness bot (#10) runs in its own process, which can be killed.
+- **Searching in the server is interim.** Once the harness exists, every bot
+  runs there, the server's own engines included (owner, 2026-10-14), so no
+  search runs in the server. The harness then bounds its own searches and
+  stops a hung one by ending its process; `engine_limit` is left bounding the
+  hint, for as long as the hint is computed in the server.
 - **A search that fails stays the bot's problem.** An engine error, a panic or
   a search past its budget leaves the seat on turn, as a silent human's would,
   and the move time limit deals with it. It is logged, and never returned to
