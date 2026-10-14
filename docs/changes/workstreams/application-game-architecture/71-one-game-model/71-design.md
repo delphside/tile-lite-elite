@@ -27,7 +27,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
-| 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
 | 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
 | 3 | [#470](https://github.com/delphside/tile-lite-elite/issues/470) D70 | technical | whether this project or #408 owns the games map | *Locking is per game* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
@@ -1070,13 +1069,14 @@ requirements are on its issue; its tests are in its own test file.
 
 **Takes**: *One version, moved in one place*, with every `GameMessage`
 variant except undo and redo; per-game locking; the seat model and its
-lifecycle; *DTOs are invisible*, including the opponent tile count; *The
-engine is a client*; *Migration*, with the schema version, foreign keys and
+lifecycle; *DTOs are invisible*, including the opponent tile count and the
+shared error body (D65); *The engine is a client*; the append-only game log
+(D61); *Migration*, with the schema version, foreign keys and
 the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D62, D65, D69 and D70, and D63 for how far the test client
+**Waits on**: D62, D69 and D70, and D63 for how far the test client
 goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
