@@ -1,0 +1,53 @@
+# Keeps the board's PR State current whenever a pull request or its review
+# changes, so it no longer depends on which session opened the pull request.
+#
+# `PR State` is derived, never typed (docs/5.5): `board-pr-state.py` reads
+# GitHub's own state and writes the field. Until now it ran only from local
+# scripts (`create-pr.sh`, `verify.sh`, `.githooks/post-merge`), so a pull
+# request opened from a web session sat with no PR State and the owner could
+# not see it was waiting for him. Owner, 2026-10-14: "At least the Awaiting
+# Review state should be set so I can see what is for me."
+#
+# **It needs `BOARD_TOKEN`.** The automatic workflow token cannot write a
+# Projects v2 field, the same refusal `requirement-stage.yml` meets on issue
+# fields (#383). The token is the owner's to create: a fine-grained token
+# with read and write on the organisation's projects and read on this
+# repository's pull requests, stored as the repository secret `BOARD_TOKEN`.
+# Without it this run warns and changes nothing, rather than failing every
+# pull request.
+name: PR State
+
+on:
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft,
+            review_requested, review_request_removed]
+  pull_request_review:
+    types: [submitted, dismissed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One sync at a time: each run reads every pull request, so a later run
+# supersedes an earlier one that has not finished.
+concurrency:
+  group: pr-state
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: set the board's PR State
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Sync
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::warning::BOARD_TOKEN is not set, so PR State was not synced. See this file's header."
+            exit 0
+          fi
+          python3 scripts/programme/board/board-pr-state.py
