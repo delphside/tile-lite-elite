@@ -454,6 +454,25 @@ and `should_apply_update`'s version comparison already discards what a client
 has. `because` is what the log records and what a client shows in the move
 list — it is not applied.
 
+### The error body, shared by every endpoint
+
+One shape for every error any endpoint returns, designed here in Core because
+Core rewrites the contract anyway, so it changes once (#380 R8).[^d65] Today's
+`ApiError` body, `{ message, blocking_games }`, becomes one case of it.
+
+```rust
+pub struct ErrorDto {
+    pub code: ErrorCode,                 // stable and machine-readable; the message may change
+    pub message: String,                 // for a person, never parsed
+    pub correlation_id: Option<String>,  // #402 fills it; Core only reserves the field
+    pub detail: Option<ErrorDetail>,     // e.g. the games blocking a deletion
+}
+```
+
+`ApplyError` maps onto `code`, so a client tells a stale submission from an
+illegal move without reading prose. Every response carries the same headers,
+the API version among them, and #402 adds the correlation id to them.
+
 ## 3 · The interface layer
 
 A new crate. `api` keeps depending on `serde` alone; `rules-shared` keeps
@@ -766,3 +785,4 @@ is used, and `moves.len()` was only ever a coincidence.
 [^d72]: Decision #479 (D72): how an emailed invitation behaves once an address
     identifies one account. It supersedes D59 (#445).
 [^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
+[^d65]: Decision #465 (D65): #71 Core designs the shared error body and response header.
