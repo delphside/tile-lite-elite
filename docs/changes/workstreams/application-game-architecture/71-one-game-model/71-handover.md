@@ -39,8 +39,7 @@ decision backlog was cleared.
 | --- | --- |
 | PR #471, INV-1 to INV-8 in `docs/1.0`; then close #479 (D72) as Actioned | owner: review and tick |
 | #442 to #444 and #446 (D56 to D58, D60): applied, every action ticked | owner: agree they close |
-| #472 (D71): the activity diagrams for *Still to draw* in `71-functional.md` | Claude |
-| the three functional questions in `71-functional.md` (abort and ratings, who may force-resign, tiles back to the bag) | owner |
+| the fifteen functional questions in `71-functional.md`, *Questions the journeys raise*; 1 to 3 are on decision cards in the thread | owner |
 | whether *functional before technical* becomes a docs/5.1 rule | owner |
 | #406's four diagram-format questions, and #428 | owner |
 | DEL-2 refusing to close an account while a passed invitation names it: principle 9 calls it acceptable | owner, on #439 |
