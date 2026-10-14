@@ -517,8 +517,9 @@ Functional, so answered before the technical decisions:
     removes only Finished and Aborted games, seven days after `ended_at`;
     `last_activity_by_game` is the latest move, or the creation time when there
     is none, so editing the roster is not activity. RET-3 says it is not built.
-    Proposed: define last activity as any change to the game, including roster
-    edits, when RET-3 is built.
+    Proposed: define last activity as any change to the game, roster edits and
+    a keep included, except a chat, a hide or a reminder, which #460 found should
+    not count. `games.last_activity_at` records it (`71-design.md`).
 
 ## Lifecycles
 
