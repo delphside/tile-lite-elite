@@ -137,8 +137,8 @@ version whose content is an earlier state.
 and removal and each game has its own. One game's work stops blocking every
 other game, which is what makes an engine search off the request path
 affordable. No lock is held across an await on anything slow — an engine
-search, a database write of another game. This project owns the map's shape;
-#408 designs its deadline index, loading and eviction on top of it [^d70].
+search, a database write of another game. This project owns the map's
+shape; #408 designs its deadline index, loading and eviction on top of it [^d70].
 
 **Ordering does not need more than that**, and the reason is not that
 out-of-turn messages commute. It is that there is no order to preserve.
