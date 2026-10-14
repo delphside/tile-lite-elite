@@ -618,13 +618,17 @@ driven by a loop inside somebody else's request.
   request carries a stop signal, set when the time runs out, and an engine
   checks it as it searches. One that ignores it, or has hung, holds its permit
   until it returns: the bound stays true at the cost of capacity, and a permit
-  held well past its time is logged as an alert. Only a restart frees it in
-  process; a harness bot (#10) runs in its own process, which can be killed.
-- **Searching in the server is interim.** Once the harness exists, every bot
-  runs there, the server's own engines included (owner, 2026-10-14), so no
-  search runs in the server. The harness then bounds its own searches and
-  stops a hung one by ending its process; `engine_limit` is left bounding the
-  hint, for as long as the hint is computed in the server.
+  held well past its time is logged as an alert. Only a restart frees it:
+  Rust cannot kill a thread, and an async task is cancelled only where it
+  yields. Forcing a stop needs a separate process or a sandbox such as a
+  WebAssembly runtime with deadline interruption, which is the reason to
+  adopt either, for an engine not trusted to honour the signal.
+- **Searching beside the game logic is interim.** Once the harness exists,
+  every bot is a client of it, the server's own engines included (owner,
+  2026-10-14). It need not be a separate process, but each engine runs
+  asynchronously, as a client, never inside a request. The harness bounds its
+  own searches; `engine_limit` is left bounding the hint, for as long as the
+  hint is computed in the server.
 - **A search that fails stays the bot's problem.** An engine error, a panic or
   a search past its budget leaves the seat on turn, as a silent human's would,
   and the move time limit deals with it. It is logged, and never returned to
