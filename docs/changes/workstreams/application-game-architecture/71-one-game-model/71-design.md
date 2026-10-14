@@ -26,7 +26,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
-| 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
 | 3 | [#465](https://github.com/delphside/tile-lite-elite/issues/465) D65 | technical | the standard response header and error body (#380 R8) | `ApplyError` on the wire |
 | 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
@@ -874,13 +873,17 @@ one with a field omitted.
 
 ## Open questions
 
-**The log is for undo, and undo is parked.** Current state stays
-authoritative; behaviour never reads the log. Whether Core already writes the
-log, as an append-only table replacing the `game_moves` rewrite on every save,
-is [Decision #461](https://github.com/delphside/tile-lite-elite/issues/461)
-(D61). When it arrives it holds the
-same serialised messages that go over the wire, so there is one serialisation
-rather than a second format to keep in step.
+**Core writes the log; undo reads it later.**[^d61] Every `Applied` appends one
+row to `game_events (game_id, version, event, created_at)`, written by `publish`
+and never rewritten, and `game_moves` becomes what is read from it. The row holds
+the same serialised event that goes over the wire, so there is one
+serialisation rather than a second format to keep in step. Current state stays
+authoritative and behaviour never reads the log; undo (WP E) is its first
+reader. Because nothing is rewritten, `created_at` is when a change happened,
+which fixes #460's finding that a chat or a hide counted as game activity, and
+gives RET-3's countdown a true last activity.
+
+[^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
 
 **The freshness counter is `version`**, on `GameSession`, moved by any change —
 a resignation, an abort and a timeout each take one, and none is a move. Records
@@ -1073,7 +1076,7 @@ the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D61, D62, D65, D69 and D70, and D63 for how far the test client
+**Waits on**: D62, D65, D69 and D70, and D63 for how far the test client
 goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
@@ -1103,7 +1106,7 @@ as *Arrows with no command* requires.
 **Takes**: *What this makes possible*, undo — a new, higher version whose
 content is an earlier state, with `turn` walking back.
 
-**Waits on**: WP A, and D61 for where the history is kept. Its tests:
+**Waits on**: WP A, which writes the history it reads (D61). Its tests:
 [`71-test-wp-e.md`](71-test-wp-e.md).
 
 ### WP F, #290 dioxus 0.7
