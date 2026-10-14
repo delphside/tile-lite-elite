@@ -2,7 +2,8 @@
 name: design-reviewer
 description: Reviews a project's design documents against the project's issue body and the code as it stands now, and reports what has drifted, what is missing and what contradicts. Changes nothing. Give it a handover (docs/templates/agent-handover.md) naming the project.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
+effort: medium
 ---
 
 # Design reviewer

@@ -2,7 +2,7 @@
 name: change-maker
 description: Makes one bounded change for a work package in its own git worktree, and hands back the diff with what it ran. The change is one of design, code, documentation or tests, named in the handover. Never commits, pushes or touches the board. Launch with isolation "worktree" and a handover (docs/templates/agent-handover.md) whose "Done when" says what finishes it. Its companion, change-reviewer, reviews the result.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: inherit
+model: sonnet
 ---
 
 # Change maker

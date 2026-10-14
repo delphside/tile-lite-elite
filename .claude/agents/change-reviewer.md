@@ -2,7 +2,8 @@
 name: change-reviewer
 description: Reviews one change made by change-maker (or by Claude) against its handover, the rules and the design map, without reading the maker's report, and reports what is wrong or missing. May run tests; changes nothing. Give it a handover (docs/templates/agent-handover.md) naming the worktree or branch, and the maker's original handover.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
+effort: medium
 ---
 
 # Change reviewer

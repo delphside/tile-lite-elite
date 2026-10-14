@@ -2,7 +2,8 @@
 name: reference-reviewer
 description: Re-verifies one or more of the stamped 4.x reference documents (4.1 to 4.6) against the code, and reports findings without changing anything. Used by the weekly reference-review activity (docs/5.3). Give it the document numbers to check, and optionally the commit its stamp names.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: opus
+effort: medium
 ---
 
 # Reference reviewer
