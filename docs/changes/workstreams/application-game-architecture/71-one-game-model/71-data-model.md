@@ -318,10 +318,13 @@ persistence loads one; it validates the snapshot and changes nothing. Tests
 build games through `GameSession::new` and `apply`, the public path, so a test
 cannot reach a state the handler could not produce.
 
-**What a failed save leaves** is open: the handler mutates in memory and the
-caller persists, so a failed write can leave memory ahead of the database.
-Decision #469 (D69) chooses between applying to a copy and swapping it in after
-the save, or reloading on failure.
+**What a failed save leaves** is nothing [^d69]. `GameSession` carries an
+`unsaved: bool`, which `apply` sets. `events::publish`, under the game's write lock, saves the
+change `apply` made and clears the flag, then broadcasts. On a failed save it
+answers 503 with `Retry-After`, replaces the session with
+`GameSession::from_snapshot` of the stored row, and broadcasts nothing; a reader
+that finds `unsaved` set does the same reload before it reads. The database is
+the source of truth for #408.
 
 ## 2 · The wire
 
@@ -789,4 +792,5 @@ is used, and `moves.len()` was only ever a coincidence.
     identifies one account. It supersedes D59 (#445).
 [^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
 [^d65]: Decision #465 (D65): #71 Core designs the shared error body and response header.
+[^d69]: Decision #469 (D69): a change exists once saved; a failed save reloads the game.
 [^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints.
