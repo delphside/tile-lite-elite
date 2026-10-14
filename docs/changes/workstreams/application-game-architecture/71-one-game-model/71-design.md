@@ -910,9 +910,13 @@ and never rewritten, and `game_moves` becomes what is read from it. The row hold
 the same serialised event that goes over the wire, so there is one
 serialisation rather than a second format to keep in step. Current state stays
 authoritative and behaviour never reads the log; undo (WP E) is its first
-reader. Because nothing is rewritten, `created_at` is when a change happened,
-which fixes #460's finding that a chat or a hide counted as game activity, and
-gives RET-3's countdown a true last activity.
+reader. Because nothing is rewritten, `created_at` is when a change happened.
+That alone does not give RET-3 a true last activity, because a chat and a hide
+are logged too, and #460 found they should not count. So `games` carries
+`last_activity_at`, set by the one handler for the events that count and left
+alone by the rest; which events count is question 15 in
+[`71-functional.md`](71-functional.md). A keep (`KeepRequested`) sets it, as
+RET-3's "keep" requires.
 
 [^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
 
@@ -1145,11 +1149,23 @@ composition behaviour [^d67]. Ships with WP A.
 message reaching a player who is not looking — each through the one handler,
 as *Arrows with no command* requires.
 
+**Schema needs**, which ship in WP A's migration (D64): `games.last_activity_at`,
+already in WP A's schema. The rest depends on how a message reaches a player who
+is not looking (#87). Web Push would need a table of each player's device
+subscriptions and a per-player choice of which events notify; sound or the
+browser's Notifications API need nothing. If RET-3's question to the creator is
+also sent rather than only shown in the games list, it needs a once-only marker
+on the game. Both are settled before WP A's migration is written.
+
 **Waits on**: WP A. Its tests: [`71-test-wp-c.md`](71-test-wp-c.md).
 
 ### WP D, #271 Additional Client UI
 
 **Takes**: the client work WP C implies, and #84, #146 and #239.
+
+**Schema needs**: none of its own. #84's groups and counts derive from the games
+list and its "remove all" uses `hidden_by_player`; #146 is layout; #239 reads
+the move records already sent.
 
 **Waits on**: WP B and WP C. Its tests: [`71-test-wp-d.md`](71-test-wp-d.md).
 
@@ -1158,6 +1174,10 @@ as *Arrows with no command* requires.
 **Takes**: *What this makes possible*, undo — a new, higher version whose
 content is an earlier state, with `turn` walking back.
 
+**Schema needs**: none of its own. It reads `games.version`, `turn` and
+`last_scoring_turn`, `game_events` and the snapshot's schema version, all WP
+A's; undo and redo are new messages and events in columns that hold JSON.
+
 **Waits on**: WP A, which writes the history it reads (D61). Its tests:
 [`71-test-wp-e.md`](71-test-wp-e.md).
 
@@ -1165,6 +1185,8 @@ content is an earlier state, with `turn` walking back.
 
 **Takes**: nothing from this design; it is the framework upgrade WP B and WP D
 are written against.
+
+**Schema needs**: none; it changes the client framework only.
 
 **Waits on**: nothing in #71. Its tests: [`71-test-wp-f.md`](71-test-wp-f.md).
 

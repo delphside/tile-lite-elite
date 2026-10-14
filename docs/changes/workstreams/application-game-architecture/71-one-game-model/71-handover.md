@@ -44,7 +44,7 @@ decision backlog was cleared.
 | #406's four diagram-format questions, and #428 | owner |
 | DEL-2 refusing to close an account while a passed invitation names it: principle 9 calls it acceptable | owner, on #439 |
 | #439's open rows: registering a held address reveals it is held; recovery answering the same; a password to change an address; sign-in by name or address | owner, on #439 |
-| each later package's schema needs, listed before #268's migration is written (D64) | Claude, in #270 to #272 and #290's design sections |
+| WP C's schema, which waits on how #87 reaches a player who is not looking (Web Push or not), and whether RET-3's question is sent; settle before #268's migration is written (D64) | owner |
 
 ## A tooling defect met on the way
 
