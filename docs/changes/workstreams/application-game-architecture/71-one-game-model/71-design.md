@@ -358,7 +358,7 @@ What they settle. The owner answered the invitation rows on 2026-10-14; the two 
 | a spent link followed by the account it passed to | 6 | it opens the invitation, since that account is already the named player |
 | who can see which account claimed a link | 1 | support, to answer someone surprised that their address's invitation was taken; never the creator or other players |
 | closing an account while a passed invitation names it, refused by DEL-2 | 9 | acceptable: RET-3 ends it, and the player can decline |
-| how the verifier hears of a passed invitation | 3 | by email with no link, the inbox they have just proved |
+| how the verifier hears of a passed invitation | 3 | by email linking to the application, not the invitation, to the inbox they have just proved |
 
 ### How the seat carries them
 
@@ -369,7 +369,7 @@ address and its invitations*. This is how the seat carries them.
 
 - **At send.** When the address is one an account has verified and still
   holds, the seat is invited to that player, `Invited { addressee:
-  Some(player) }`, and the email is a notification with no link (INV-1).
+  Some(player) }`, and the email is a notification linking to the application, not the invitation (INV-1).
   Otherwise the addressee is `None` and the email carries the link (INV-2).
 - **A link followed.** The person signs in, or registers and activates, and
   only then does the server apply `InvitationPassed { seat, to }` for that
