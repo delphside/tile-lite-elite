@@ -1130,7 +1130,12 @@ of the harness, which is #10's (D63). Its tests: [`71-test-wp-a.md`](71-test-wp-
 **Takes**: *The client has the same defect* — one writer of the server cache,
 matching rather than clearing, the composition keyed by game and seat — and
 whatever client change WP A's wire change forces, with #152 and #88, both
-composition behaviour [^d67]. Ships with WP A.
+composition behaviour [^d67]. It also changes how a creator fills the seats
+(owner, 2026-10-14). Today the client adds seats, then sends the invitations,
+then starts. Instead each seat goes its own way: added and invited at once,
+then declined, sent again, withdrawn or replaced, independently of the others,
+until the creator has a set of claimed seats and starts the game. Ships with
+WP A.
 
 **Waits on**: WP A's wire shapes. Its tests: [`71-test-wp-b.md`](71-test-wp-b.md).
 
