@@ -21,12 +21,10 @@ this one is right.
 the Decision issue that will settle it. They are answered in this order: the
 documents' structure, then functional requirements, then technical decisions,
 with delivery planning last (owner, 2026-10-02). The open ones, as of
-2026-10-02:
+2026-10-14:
 
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
-| 2 | [#468](https://github.com/delphside/tile-lite-elite/issues/468) D68 | functional requirement | what aborting does to seats that have no player | `71-functional.md`, *The game and its seats* |
-| 2 | [#466](https://github.com/delphside/tile-lite-elite/issues/466) D66 | functional requirement | whether bot sessions are exempt from ACC-1 | *A client authenticates as a person* |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
 | 3 | [#461](https://github.com/delphside/tile-lite-elite/issues/461) D61 | technical | whether Core writes an append-only event log | *Open questions*, the log; `game_moves` in the data model §5 |
 | 3 | [#462](https://github.com/delphside/tile-lite-elite/issues/462) D62 | technical | what bounds engine searches running in parallel | *The engine is a client*; *Non-functional design* |
@@ -1021,11 +1019,12 @@ client. A bot account is an ordinary account with an owner and an engine, so
 "my own bot with its own rating" needs no new concept — and the owner is who
 you revoke.
 
-**Pending:** a session lasts ten days at most and ends after forty-eight hours
-unused (ACC-1), so a long-running harness logs in again as routine, or bot
-accounts are exempt.
-[Decision #466](https://github.com/delphside/tile-lite-elite/issues/466) (D66)
-settles it; the recommendation is no exemption.
+**A bot's session follows ACC-1 like anybody's.** A session lasts ten days at
+most and ends after forty-eight hours unused, so a long-running harness logs in
+again as routine: it answers a 401 by logging in and retrying once, and holds
+the credentials to do so.[^d66]
+
+[^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
 **Pending:** whether #10's harness is built as a work package of this project,
 or stays separate with #268 building only the test client it grows from, is
@@ -1054,8 +1053,7 @@ limit is the game's own setting. Request throttling is unchanged
 
 **Secrets and access.** No new secret. A bot is an account with an owner and
 authenticates as one, so a harness holds a session token like any client; how
-long that session lives is
-[D66](https://github.com/delphside/tile-lite-elite/issues/466), pending. What a
+long that session lives is ACC-1's, with no exemption for bots (D66). What a
 connection may see is the union over the seats its account holds; a broadcast
 event never names who acted on a seat beyond the seat itself.
 

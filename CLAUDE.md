@@ -296,6 +296,12 @@ it works through.
 
 ## Tests, checks and decisions
 
+- **Reading jobs with a defined file set, and a work package's change, go to
+  an agent; triage, decisions and anything touching production stay with
+  Claude.** Each agent runs on the model its file sets, and a review runs in
+  rounds until one finds no material issue — owner, 2026-10-14, from #441's
+  trials. docs/5.0 has which model, how a round runs and what makes a good
+  agent task.
 - Test conditions derive from stated rules, not from the code. The game rules
   are docs/1.0.
 - A gate refuses and work stops; a check reports and a person decides. A new
@@ -387,6 +393,7 @@ it works through.
 | every field a change is classified by, and each artefact's route | docs/5.1 §2.15 |
 | artefacts outside git | docs/4.8, and docs/5.5 for GitHub's |
 | the fields each issue carries, and the strings tooling matches | docs/5.5 |
+| agents: which work, which model, how a review runs | docs/5.0 *Claude's tooling* |
 | daily state | scripts/programme/board/board-inbox.py, scripts/programme/board/board-status.py, scripts/programme/board/board-actions.py |
 | where a fact belongs, before writing it | docs/1.6, and the change-a-document skill |
 | how a document is written, and what it may hold | docs/5.4 |

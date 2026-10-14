@@ -149,7 +149,7 @@ flowchart TD
 flowchart TD
   s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
   c1 --> t1["service: pending invitations cancelled"]
-  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>pending D68"]
+  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
   t2 --> t3["no rating changes"]
   t3 --> e0((end))
 ```
@@ -237,13 +237,13 @@ they are, and this diagram is about seats. Where they differ is rating, which
 creator, or dropped as spent when the game starts. They cease to exist rather
 than reaching a state.
 
-Aborting gives up every seat (GAME-1): every `Playing` seat ends `Departed`,
-and a game also finishes when only one seat is left `Playing`. **Pending:**
-what abort does to a seat that has no player yet, `Unsent` or `Invited`, is
-[Decision #468](https://github.com/delphside/tile-lite-elite/issues/468) (D68);
-the recommendation is that they freeze as they stand, which is what the
-diagram's *seats frozen* already draws. Either way, aborting cancels every
-invitation still pending, so nobody can accept a seat in a game that is over.
+Aborting gives up every seat (GAME-1) by making the game `Aborted`, not by
+moving any seat: every seat freezes as it stands, whether `Playing`,
+`Departed`, `Claimed`, `Unsent` or `Invited`, and no seat can act in an aborted
+game.[^d68] An aborted game settles nothing, so nothing is lost by leaving its
+seats where they were. Aborting also cancels every invitation still pending, so
+nobody can accept a seat in a game that is over. A game also finishes when only
+one seat is left `Playing`.
 
 Three things are worth reading off it.
 
@@ -340,7 +340,7 @@ four mismatches are the reason this note exists.
 
 **One command, several arrows.** Creating a game sets up every seat at once,
 and each may land in a different state depending on its invitation. Starting
-moves every `Claimed` seat to `Playing`. Aborting departs every seat. A
+moves every `Claimed` seat to `Playing`. A
 command is not an arrow; it is a set of them.
 
 **Several commands, one arrow.** Resigning through `/actions`, being
@@ -383,3 +383,4 @@ classify an unstarted game into one of four roster situations, ordered so that
 exactly one applies. That was a convenience for arguing about retention and
 for making a test partition clean. It is not a description of the system, and
 nothing should be written against it.
+[^d68]: Decision #468 (D68): aborting freezes the seats as they stand.
