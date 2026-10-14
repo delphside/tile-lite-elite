@@ -312,6 +312,53 @@ This was visible before it was modelled. A creator looking at a staged seat
 sees "an invitation that hasn't been sent", and pressing Send changed the
 status without the game's version moving, so the screen did not update.
 
+### Principles for addresses and invitations
+
+There are many journeys through addresses and invitations, so each one, and
+each rule, is checked against these principles rather than argued case by
+case. They are proposed for the owner to confirm under D72.[^d72]
+
+1. **No address to account, nor account to address.** Nothing anyone can do
+   turns an address into a user id, or a user id into an address. The creator
+   sees an id only once the invitation is accepted, and inviting, recovering
+   an account and a closed link all answer the same whether or not the address
+   belongs to anybody. This is what OWASP calls preventing account
+   enumeration.
+2. **One holder at a time, and no past.** An address belongs to at most one
+   account at a time, and nothing records who held it before.
+3. **The inbox is the proof.** Only verifying an address, which proves you
+   read its inbox, grants anything tied to it. A pending address grants
+   nothing, and blocks anyone else for at most a day.
+4. **A link is a bearer credential.** It works once, the first claim wins, and
+   following it never verifies an address.
+5. **One crossing.** Verification is the only event that carries the account
+   side into the invitation side.
+6. **Once named, an invitation stays with its player.** Nothing that happens to
+   an address moves it afterwards.
+7. **Nothing is accepted on a player's behalf.**
+8. **Every race has one winner, decided in one place.** Every change to an
+   invitation goes through its game's handler, under the game's lock.
+9. **Nothing waits for ever.** An invitation never outlives its waiting game
+   (RET-3) and a pending address lapses in a day, so nothing one person holds
+   open can block another indefinitely.
+10. **The server decides.** Every rule holds at the REST API; a client only
+    presents what the API allows.
+
+What they settle among the points still open:
+
+| open point | principle | answer |
+| --- | --- | --- |
+| a link's invitation, once passed: accepted or held | 7 | held for acceptance |
+| what a closed link's page shows | 1 | the inviter and that it is closed, never who took it |
+| who sees the invited address | 1 | the creator only |
+| inviting your own address, or a seated player's | 1 | no special case, since a different answer would reveal the holder |
+| recovery answering the same whether or not the address is known (#439) | 1 | the same answer |
+| registering a held address says "not available" (#439) | 1 | an exception as it stands: it reveals that an address is held, though not by whom. The usual cure is to answer "check your email" every time and tell the holder by email instead |
+| closing an account while a passed invitation names it, refused by DEL-2 | 9 | acceptable: RET-3 ends it, and the player can decline |
+| how the verifier hears of a passed invitation | 3 | by email, the inbox they have just proved |
+
+### How the seat carries them
+
 **Who may accept is settled by the address, then by the link.**[^d72] The
 rules are INV-1 to INV-7 in `docs/1.0`, and the address's two state machines,
 with a table of how each drives the other, are in `71-functional.md`, *An
