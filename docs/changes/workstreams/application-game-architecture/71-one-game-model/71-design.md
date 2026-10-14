@@ -26,7 +26,6 @@ with delivery planning last (owner, 2026-10-02). The open ones, as of
 | order | decision | kind | what it settles | where it bites |
 | --- | --- | --- | --- | --- |
 | 2 | [#479](https://github.com/delphside/tile-lite-elite/issues/479) D72 | functional requirement | how an emailed invitation behaves once an address identifies one account; the owner's design is applied, awaiting his confirmation and five small points | *Who may accept is settled by the address, then by the link* |
-| 3 | [#469](https://github.com/delphside/tile-lite-elite/issues/469) D69 | technical | what a failed save leaves in memory | *One version, moved in one place* |
 | 4 | [#463](https://github.com/delphside/tile-lite-elite/issues/463) D63 | technical, delivery planning | whether #10's harness is a work package of this project | *The harness runs the bots* |
 | 4 | [#464](https://github.com/delphside/tile-lite-elite/issues/464) D64 | technical, delivery planning | branches and milestones per delivery | `71-delivery.md` |
 | 4 | [#467](https://github.com/delphside/tile-lite-elite/issues/467) D67 | technical, delivery planning | which package carries the requirements not yet allocated | #71's body |
@@ -116,9 +115,18 @@ broadcasts — in that order, in one place. Nothing else writes to a game.
 
 **A rejected message changes nothing.** The handler validates against the game
 as it stands and applies only a message that will succeed, so a refused
-exchange or placement leaves the racks and the bag as they were. What happens
-when the change is applied in memory and the save then fails is
-[Decision #469](https://github.com/delphside/tile-lite-elite/issues/469) (D69).
+exchange or placement leaves the racks and the bag as they were.
+
+**A change has happened only once it is in the database** [^d69]. Under the
+game's own lock the handler sets the game's *unsaved* flag, applies the change
+in memory, saves it, and clears the flag; only then does it broadcast. The lock
+keeps every other reader out until the flag clears. If the save fails, the
+change did not happen: the player is told to try again, and the game is
+reloaded from the database, which clears the flag. Any reader that finds the
+flag set reloads first. A failed save is never retried behind the player's
+back, because a retry that succeeded later would make a move happen after the
+player was told it had not. The rules stay in Rust; the database records the
+outcome and does not apply it.
 
 That is the whole of the fix for the freshness problem. There is no obligation
 to remember, because there is nowhere else to write. The current stopgap,
@@ -1042,6 +1050,10 @@ the credentials to do so.[^d66]
 
 [^d66]: Decision #466 (D66): bot sessions are not exempt from ACC-1.
 
+[^d69]: Decision #469 (D69): the database holds what has happened. A save
+    fails into a reload, under the game's lock, with an unsaved flag for any
+    reader the failure leaves behind (owner, 2026-10-14).
+
 [^d70]: Decision #470 (D70): #71 Core owns the games map; #408 builds on it.
 
 [^d62]: Decision #462 (D62): `engine_limit` bounds parallel searches and hints;
@@ -1063,8 +1075,8 @@ today, one lock each. The whole-state-per-update wire costs a few kilobytes per
 message per connection, which is what is sent today.
 
 **Failure.** A refused message changes nothing. An engine that errors, panics
-or overruns leaves its seat on turn for the move time limit. A failed save is
-[D69](https://github.com/delphside/tile-lite-elite/issues/469), pending. A
+or overruns leaves its seat on turn for the move time limit. A failed save
+reloads the game from the database and the change did not happen [^d69]. A
 client that misses a broadcast catches up on reconnect, because every message
 carries the whole state and its version.
 
@@ -1097,7 +1109,7 @@ the rating key; the user-details lookup rule; and the code-review findings
 routed from #460 to it. It also builds the `game-wire` crate and the test
 client.
 
-**Waits on**: D69, and D63 for how far the test client
+**Waits on**: D63 for how far the test client
 goes towards #10. Its tests: [`71-test-wp-a.md`](71-test-wp-a.md).
 
 ### WP B, #269 Core Client UI
