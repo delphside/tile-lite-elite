@@ -286,12 +286,9 @@ flowchart TD
   p1 --> v1{"service: the game Active, and this human seat on turn?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> v2["service: finds the best-scoring legal move for the rack,<br/>or a pass when there is none (reads)"]
-  v2 --> t1["service: plays it as the seat's own move (no transition)<br/>version and turn move, tiles drawn, every client told<br/>question 4"]
-  t1 --> v3{"service: does the game end?<br/>GAME-2, as in Take a turn"}
-  v3 -- no --> p2["next seat told it is their turn; a bot's turn runs"]
-  v3 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
+  v2 --> t1["service: the game becomes unrated, version bumps,<br/>every client told; the move is returned, not played<br/>RATE-4"]
+  t1 --> p2["Player: plays it, or another, as in Take a turn"]
   p2 --> e0((end))
-  t2 --> e0
   r1 --> e0
 ```
 
@@ -411,7 +408,9 @@ Functional, so answered before the technical decisions:
    common.rs). An administrator ends a stuck game with force-end instead.
 3. **A departing seat's tiles go back to the bag.** Answered: one rule for
    every departure, GAME-7 (owner, 2026-10-14).
-4. **A suggested move is played, not suggested.** `suggest_move` (games.rs)
+4. **A suggested move is played, not suggested.** Answered: the service shows
+   it and does not play it, and asking makes the game unrated, RATE-4 (owner,
+   2026-10-15). What follows is the question as raised. `suggest_move` (games.rs)
    enumerates the legal moves, applies the best-scoring one with
    `apply_place_move` (or `apply_pass` when there is none), runs any bot turns
    and returns the new state. docs/1.0 has no rule for it, and `preview_move`,
