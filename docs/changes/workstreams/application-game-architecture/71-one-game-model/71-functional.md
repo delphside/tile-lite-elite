@@ -35,6 +35,7 @@ flowchart LR
     register(["Register and sign in"])
     details(["Change my details"])
     reset(["Reset my password"])
+    password(["Change my password"])
     create(["Create a game"])
     roster(["Arrange the seats: add, remove, swap, invite"])
     start(["Start a game"])
@@ -58,6 +59,7 @@ flowchart LR
   player --- register
   player --- details
   player --- reset
+  player --- password
   player --- create
   player --- answer
   player --- open
@@ -175,7 +177,7 @@ flowchart TD
   r4 --> e1
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
-  p2 --> v3{"service: within the allowance, and the credentials right?<br/>LIMIT-1, LIMIT-2, question 7"}
+  p2 --> v3{"service: within the allowance, and the credentials right?<br/>LIMIT-1, LIMIT-2, ACC-4"}
   v3 -- no --> r3["refused, with one answer for an unknown User ID<br/>and a wrong password"]
   v3 -- yes --> t4["service: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
   t4 --> d2{"Player: an existing account, arrived by an invitation link?"}
@@ -206,6 +208,19 @@ flowchart TD
   r2 --> e0
 ```
 
+### Change my password
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player: signed in, gives the current password and a new one"]
+  p1 --> v1{"service: within the allowance, and the current password right?<br/>LIMIT-1, LIMIT-2, ACC-6"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v1 -- yes --> t1["service: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
+  t1 --> p2["Player: signs in again, as in Register and sign in"]
+  p2 --> e0((end))
+  r1 --> e0
+```
+
 ### Reset my password
 
 ```mermaid
@@ -214,13 +229,13 @@ flowchart TD
   p1 --> v1{"service: within the caller's allowance?<br/>LIMIT-1, LIMIT-2"}
   v1 -- no --> r1["refused, not queued"]
   v1 -- yes --> v2{"service: a Live address of an account? (reads)<br/>#439 R3"}
-  v2 -- no --> a1["the same answer is given, and nothing is sent<br/>question 7"]
-  v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>question 7"]
+  v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
+  v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
   a1 --> e0((end))
   t1 --> p2["Player: follows the link and gives a new password"]
-  p2 --> v3{"service: link unused and within its hour?<br/>question 7"}
+  p2 --> v3{"service: link unused and within its hour?<br/>ACC-5"}
   v3 -- no --> r2["refused, one answer for unknown, used and expired"]
-  v3 -- yes --> t2["service: password changed, link used,<br/>every session ended (no transition)<br/>ACC-1, question 7"]
+  v3 -- yes --> t2["service: password changed, link used,<br/>every session ended (no transition)<br/>ACC-6"]
   t2 --> p3["Player: signs in again, as in Register and sign in<br/>ACC-1"]
   r1 --> e0
   r2 --> e0
@@ -439,9 +454,9 @@ Functional, so answered before the technical decisions:
    `get_player_by_name` on the folded name. docs/1.0 does not say so. Proposed:
    a rule beside ACC-1.
 7. **Sign-in and reset reveal nothing about who has an account, and a reset
-   ends every session.** Withdrawn as a rule question: docs/2.5 already states all
-   of it. What remains is the journey, so "Change my password" joins the use
-   cases as this document's own gap. `login_player` gives one answer for an unknown User ID
+   ends every session.** Answered: ACC-4 to ACC-6, and "Change my password"
+   joins the use cases (owner, 2026-10-15). docs/2.5 already described it; the
+   rules make it testable. What follows is the question as raised. `login_player` gives one answer for an unknown User ID
    and a wrong password; `request_password_reset` answers the same for an
    unknown address; the link works once, within an hour
    (`PASSWORD_RESET_TOKEN_TTL_SECS`), a new request voids older links, and
