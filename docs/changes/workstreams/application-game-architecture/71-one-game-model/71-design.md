@@ -319,7 +319,8 @@ case. The owner confirmed them on 2026-10-14 under D72.[^d72]
    account at a time, and nothing records who held it before.
 3. **The inbox is the proof.** Only verifying an address, which proves you
    read its inbox, grants anything tied to it. A pending address grants
-   nothing, and blocks anyone else for at most a day.
+   nothing and blocks nobody: several accounts may hold it pending, and the
+   first to verify keeps it.
 4. **A link is a bearer credential.** It works once, the first claim wins, and
    following it never verifies an address.
 5. **One crossing.** Verification is the only event that carries the account
@@ -330,7 +331,7 @@ case. The owner confirmed them on 2026-10-14 under D72.[^d72]
 8. **Every race has one winner, decided in one place.** Every change to an
    invitation goes through its game's handler, under the game's lock.
 9. **Nothing waits for ever.** An invitation never outlives its waiting game
-   (RET-3) and a pending address lapses in a day, so nothing one person holds
+   (RET-3) and a pending address blocks nobody, so nothing one person holds
    open can block another indefinitely.
 10. **The server decides.** Every rule holds at the REST API; a client only
     presents what the API allows.
@@ -404,7 +405,7 @@ can decline there.
 **Every rule holds at the API.** Third-party clients are allowed, so nothing
 here lives in a client; a client can only offer what the API permits.
 
-**What #439 owns.** Verifying, uniqueness, pending addresses and their lapse,
+**What #439 owns.** Verifying, uniqueness, pending addresses,
 and the migration that takes existing addresses as verified are #439's. #71
 needs one query from it, the account that has verified an address and still
 holds it, and one event, an address verified. Until #439 delivers no address is
