@@ -253,12 +253,12 @@ the service keeps those seats until the start drops them.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> c1["Creator: chooses add, remove or swap"]
+  s0((start)) --> c1["Creator: chooses add, withdraw or swap"]
   c1 --> v1{"service: the creator's game, still Not Started?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> d0{"which?"}
   d0 -- add --> c2["Creator: names a bot, a player, an email address or an open seat<br/>GAME-4"]
-  c2 --> v2{"service: a named player exists?"}
+  c2 --> v2{"service: a named player exists?<br/>GAME-9"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
   c1 -. "hide a Declined or Withdrawn seat<br/>(client only, no service call)" .-> h1["the seat leaves the creator's view"]
@@ -266,9 +266,7 @@ flowchart TD
   d0 -- withdraw --> c3["Creator: withdraws a seat, their own included<br/>Invited or Claimed<br/>GAME-8, GAME-9"]
   c3 --> t2["service: seat Withdrawn, any invitation closed and its link dead;<br/>the seat stays, spent, until the start drops it<br/>GAME-9, INV-7"]
   d0 -- swap --> c4["Creator: swaps two seats"]
-  c4 --> v4{"service: every human seat Claimed?<br/>question 9"}
-  v4 -- no --> r4["refused, nothing changes"]
-  v4 -- yes --> t3["service: the two seats exchange places, and with them turn order<br/>(no transition)"]
+  c4 --> t3["service: the two seats exchange places, whatever their states,<br/>and with them turn order (no transition)<br/>GAME-9"]
   t1 --> t4["service: version bumps, everyone watching is told<br/>(no transition)"]
   t2 --> t4
   t3 --> t4
@@ -276,7 +274,6 @@ flowchart TD
   n0 --> e0((end))
   r1 --> e0
   r2 --> e0
-  r4 --> e0
 ```
 
 ### Withdraw from a seat
@@ -487,7 +484,9 @@ Functional, so answered before the technical decisions:
    seat.
 9. **Roster limits that only the code states.** In part answered: the
    creator's own seat is withdrawn like any other, GAME-8 (owner, 2026-10-15).
-   The swap and unknown-player limits remain open. The creator's own seat cannot
+   The rest by GAME-9: a named seat must name an existing account, and the
+   creator may reorder seats in any state until the start (owner, 2026-10-15,
+   designed for the new lifecycle rather than read from the code). The creator's own seat cannot
    be removed, withdrawn or force-resigned (`remove_seat`, `withdraw_seat`,
    `force_resign`, game_state.rs); seats can be swapped only once every human
    seat is claimed (`swap_seats`); a named seat for an unknown player is refused
