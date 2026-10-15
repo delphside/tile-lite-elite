@@ -77,8 +77,6 @@ flowchart TD
   a2 --> a1
   a1 --> a3["Change my details"]
   a1 --> a4["Change my password"]
-  a3 --> e0((end))
-  a4 --> e0
 ```
 
 #### Register and sign in
@@ -99,8 +97,6 @@ flowchart TD
   t1 --> d1{"Player: verifies the address within a day?<br/>question 5"}
   d1 -- no --> t2["time: the day lapses<br/>address Pending → None, the account is never active<br/>#439 R3, question 5"]
   d1 -- yes --> t3["service: address Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
-  t2 --> e1((end))
-  r4 --> e1
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
   p2 --> v3{"service: within the allowance, and the credentials right?<br/>LIMIT-1, LIMIT-2, ACC-4"}
@@ -108,8 +104,6 @@ flowchart TD
   v3 -- yes --> t4["service: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
   t4 --> d2{"Player: an existing account, arrived by an invitation link?"}
   d2 -- yes --> t5["service: invitation Open → Passed to this account<br/>INV-2, INV-3"]
-  d2 -- no --> e0((end))
-  t5 --> e0
 ```
 
 #### Change my details
@@ -127,11 +121,6 @@ flowchart TD
   t2 --> d1{"Player: verifies the new address within a day?<br/>question 5"}
   d1 -- no --> t3["time: the day lapses<br/>new address Pending → None, the old one stays<br/>#439 R3, question 5"]
   d1 -- yes --> t4["service: new address Pending → Live,<br/>old address Live → None<br/>open invitations to the new one Open → Passed<br/>#439 R3, INV-4"]
-  t1 --> e0((end))
-  t3 --> e0
-  t4 --> e0
-  r1 --> e0
-  r2 --> e0
 ```
 
 #### Change my password
@@ -143,8 +132,6 @@ flowchart TD
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
   t1 --> p2["Player: signs in again, as in Register and sign in"]
-  p2 --> e0((end))
-  r1 --> e0
 ```
 
 #### Reset my password
@@ -157,15 +144,11 @@ flowchart TD
   v1 -- yes --> v2{"service: a Live address of an account? (reads)<br/>#439 R3"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
   v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
-  a1 --> e0((end))
   t1 --> p2["Player: follows the link and gives a new password"]
   p2 --> v3{"service: link unused and within its hour?<br/>ACC-5"}
   v3 -- no --> r2["refused, one answer for unknown, used and expired"]
   v3 -- yes --> t2["service: password changed, link used,<br/>every session ended (no transition)<br/>ACC-6"]
   t2 --> p3["Player: signs in again, as in Register and sign in<br/>ACC-1"]
-  r1 --> e0
-  r2 --> e0
-  p3 --> e0
 ```
 
 ### Set up a game
@@ -180,9 +163,7 @@ flowchart TD
   s0((start)) --> a1["Create and start a game"]
   a1 -. "while seats fill" .-> a2["Arrange the seats"]
   a2 -.-> a1
-  a1 --> e0((end: Play a game))
   a1 -- "gives up" --> a4["Abort a game"]
-  a4 --> e1((end))
 ```
 
 #### Create and start a game
@@ -198,7 +179,6 @@ flowchart TD
   c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
-  t4 --> e0((end))
 ```
 
 #### Arrange the seats
@@ -219,7 +199,6 @@ flowchart TD
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
   c1 -. "hide a Declined or Withdrawn seat<br/>(client only, no service call)" .-> h1["the seat leaves the creator's view"]
-  h1 --> e0
   d0 -- withdraw --> c3["Creator: withdraws a seat, their own included<br/>Invited or Claimed<br/>GAME-8, GAME-9"]
   c3 --> t2["service: seat Withdrawn, any invitation closed and its link dead;<br/>the seat stays, spent, until the start drops it<br/>GAME-9, INV-7"]
   d0 -- swap --> c4["Creator: swaps two seats"]
@@ -228,9 +207,6 @@ flowchart TD
   t2 --> t4
   t3 --> t4
   t4 --> n0["a game left below two seats waits: it is checked again at the start<br/>GAME-3"]
-  n0 --> e0((end))
-  r1 --> e0
-  r2 --> e0
 ```
 
 ### Join a game
@@ -245,9 +221,6 @@ flowchart TD
   s0 --> a2["Take an open seat"]
   a1 --> a3["Withdraw from my seat"]
   a2 --> a3
-  a1 --> e0((end))
-  a2 --> e0
-  a3 --> e0
 ```
 
 #### Accept or decline an invitation
@@ -262,9 +235,6 @@ flowchart TD
   v2 -- no --> r1
   v1 -- yes --> t1["service: seat Invited → Claimed<br/>version bumps, everyone watching is told"]
   v2 -- yes --> t2["service: seat Invited → Declined, dead for good<br/>version bumps, everyone watching is told<br/>GAME-9, DEL-3"]
-  t1 --> e0((end))
-  t2 --> e0
-  r1 --> e0
 ```
 
 #### Take an open seat
@@ -276,8 +246,6 @@ flowchart TD
   p2 --> v1{"service: the game still Not Started,<br/>and the seat still unclaimed?<br/>INV-3, INV-7"}
   v1 -- no --> r1["refused: no longer available, nothing changes"]
   v1 -- yes --> t1["service: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>INV-3"]
-  t1 --> e0((end))
-  r1 --> e0
 ```
 
 #### Withdraw from my seat
@@ -288,8 +256,6 @@ flowchart TD
   p1 --> v1{"service: the game still Not Started,<br/>and the seat Claimed by this player?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
-  t1 --> e0((end))
-  r1 --> e0
 ```
 
 ### Play a game
@@ -307,11 +273,6 @@ flowchart TD
   s0 --> a4["Remind the player on turn"]
   s0 --> a5["Leave a game in play"]
   s0 --> a6["Abort a game"]
-  a1 --> e0((end))
-  a3 --> e0
-  a4 --> e0
-  a5 --> e0
-  a6 --> e0
 ```
 
 #### Take a turn
@@ -327,8 +288,6 @@ flowchart TD
   t1 --> v2{"service: does the game end?<br/>GAME-2, the scoreless limit, out of tiles"}
   v2 -- no --> p4["next seat told it is their turn"]
   v2 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
-  p4 --> e0((end))
-  t2 --> e0
 ```
 
 #### Ask for a suggested move
@@ -341,8 +300,6 @@ flowchart TD
   v1 -- yes --> v2["service: finds the best-scoring legal move for the rack,<br/>or a pass when there is none (reads)"]
   v2 --> t1["service: the game becomes unrated, version bumps,<br/>every client told; the move is returned, not played<br/>RATE-4"]
   t1 --> p2["Player: plays it, or another, as in Take a turn"]
-  p2 --> e0((end))
-  r1 --> e0
 ```
 
 #### Chat in a game
@@ -353,8 +310,6 @@ flowchart TD
   p1 --> v1{"service: the caller holds a seat in the game,<br/>and the message is not blank or too long?<br/>question 13"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: message recorded, on or off turn, in any game state<br/>version bumps, every client told (no transition)<br/>RET-1"]
-  t1 --> e0((end))
-  r1 --> e0
 ```
 
 #### Leave a game in play
@@ -371,8 +326,6 @@ flowchart TD
   a3 --> v1
   v1 -- yes --> t1["game Finished, ratings settled"]
   v1 -- no --> t2["if it was their turn, the next seat is told;<br/>a bot's turn runs"]
-  t1 --> e0((end))
-  t2 --> e0
 ```
 
 #### Abort a game
@@ -383,7 +336,6 @@ flowchart TD
   c1 --> t1["service: pending invitations cancelled"]
   t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
   t2 --> t3["no rating changes<br/>GAME-5"]
-  t3 --> e0((end))
 ```
 
 #### Remind the player on turn
@@ -392,10 +344,8 @@ flowchart TD
 flowchart TD
   s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
   t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
-  v1 -- no --> e0((end))
   v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
   t1 --> t2["service: emails the player on turn, once, at their Live address<br/>TIME-4"]
-  t2 --> e0
 ```
 
 ### Follow my games
@@ -407,8 +357,6 @@ ratings and their history, and to clear what they no longer want listed.
 flowchart TD
   s0((start)) --> a1["See my games, ratings and history"]
   a1 --> a2["Remove a game from my list"]
-  a1 --> e0((end))
-  a2 --> e0
 ```
 
 #### See my games, ratings and history
@@ -422,8 +370,6 @@ flowchart TD
   t1 --> v2["service: lists the games the player is seated in, was invited to<br/>or created, less those they hid, newest activity first (reads)<br/>DEL-5"]
   v2 --> p2["Player: opens a rating or a rating history, their own or another's (reads)<br/>ACC-3, DEL-10, RET-2, question 14"]
   p2 --> p3["Player: reads times in local time (reads)<br/>CLOCK-4"]
-  p3 --> e0((end))
-  r1 --> e0
 ```
 
 #### Remove a game from my list
@@ -434,8 +380,6 @@ flowchart TD
   p1 --> v1{"service: the game Finished or Aborted,<br/>and the player seated in it or its creator?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, question 13"]
-  t1 --> e0((end))
-  r1 --> e0
 ```
 
 ### Look after the service
@@ -448,9 +392,6 @@ flowchart TD
   s0((start)) --> a1["Force-end a game"]
   s0 --> a2["Delete an account"]
   s0 --> a3["Remove expired games"]
-  a1 --> e0((end))
-  a2 --> e0
-  a3 --> e0
 ```
 
 #### Force-end a game
@@ -463,8 +404,6 @@ flowchart TD
   v1 -- yes --> t1["service: game Not Started or Active → Finished<br/>seats frozen as they stand, a record of the force-end kept<br/>question 11"]
   t1 --> t2["service: no rating changes<br/>RATE-1"]
   t2 --> t3["service: version bumps, every client told (no transition)"]
-  t3 --> e0((end))
-  r1 --> e0
 ```
 
 #### Delete an account
@@ -485,8 +424,6 @@ flowchart TD
   v3 -- yes --> r3["refused until the session ends or the administrator signs it out"]
   r3 --> w1
   v3 -- no --> t1["service: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>address Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
-  t1 --> e0((end))
-  r1 --> e0
 ```
 
 #### Remove expired games
@@ -501,10 +438,6 @@ flowchart TD
   d1 -- delete --> t3["service: Not Started → removed, the game goes at once<br/>RET-3"]
   d1 -- keep --> t4["service: counts as activity, thirty days start again (no transition)<br/>RET-3"]
   d1 -- nothing --> t5["time: the countdown carries on, and thirty days after the last activity<br/>Not Started → removed<br/>RET-3"]
-  t1 --> e0((end))
-  t3 --> e0
-  t4 --> e0
-  t5 --> e0
 ```
 
 ### Questions the journeys raise
