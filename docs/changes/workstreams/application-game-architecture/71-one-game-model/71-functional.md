@@ -34,7 +34,7 @@ flowchart LR
   creator -. "is a" .-> player
   bot -. "is a" .-> player
 
-  subgraph service["Tile Lite Elite"]
+  subgraph service["Tile Lite Elite Server"]
     account(["U1 Manage my account"])
     setup(["U2 Set up a game"])
     join(["U3 Join a game"])
@@ -68,7 +68,7 @@ fit together, and each action, or a few that share a path, expands again into
 its own journey beneath it. In a journey each step either causes a transition in a
 lifecycle below or only reads state, and cites the rules it exercises, so the
 end-to-end scenarios come from the journeys and coverage is read against them.
-A step's swimlane is its actor; *service* is the server acting on a request.
+A step's swimlane is its actor; *server* is the server acting on a request.
 Every action is drawn. Steps cite the rules in docs/1.0, the living documents these diagrams will
 move into; a design document that covers a whole journey is named above it,
 and a question still open is cited by its number below. Technical refusals,
@@ -96,48 +96,48 @@ Journeys: [U1.1 Register and sign in](#u11-register-and-sign-in), [U1.2 Change m
 A new account is active once its email is verified, and every email is
 unique. Registering and signing in share the end of the journey.
 
-References: User IDs, [docs/2.5](../../../../2.5-authentication.md). Emails,
-question 5: their rules are not yet in docs/1.0.
+References: User IDs, [docs/2.5](../../../../2.5-authentication.md). Emails:
+their rules are not yet in docs/1.0, #71 Q5.
 
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"Player: has an active account?"}
   d0 -- no --> p1["Player: gives a User ID, an email and a password"]
-  p1 --> v2{"service: User ID free, and the email neither<br/>Pending nor Live for another account?<br/>question 5"}
-  v2 -- "email Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>question 5"]
+  p1 --> v2{"server: are the User ID and email address available?<br/>an email address is not while another account<br/>has it pending or verified<br/>#71 Q5"}
+  v2 -- "email Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>#71 Q5"]
   v2 -- "otherwise no" --> r2["refused, nothing created"]
-  v2 -- yes --> t1["service: account created, not yet active<br/>email None → Pending, verification email sent<br/>question 5"]
-  t1 --> d1{"Player: verifies the email within a day?<br/>question 5"}
-  d1 -- no --> t2["time: the day lapses<br/>email Pending → None, the account is never active<br/>question 5"]
-  d1 -- yes --> t3["service: email Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
+  v2 -- yes --> t1["server: account created, not yet active<br/>email None → Pending, verification email sent<br/>#71 Q5"]
+  t1 --> d1{"Player: verifies the email within a day?<br/>#71 Q5"}
+  d1 -- no --> t2["time: the day lapses<br/>email Pending → None, the account is never active<br/>#71 Q5"]
+  d1 -- yes --> t3["server: email Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
-  p2 --> v3{"service: the credentials right?<br/>ACC-4"}
+  p2 --> v3{"server: the credentials right?<br/>ACC-4"}
   v3 -- no --> r3["refused, with one answer for an unknown User ID<br/>and a wrong password"]
-  v3 -- yes --> t4["service: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
+  v3 -- yes --> t4["server: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
   t4 --> d2{"Player: an existing account, arrived by an invitation link?"}
-  d2 -- yes --> t5["service: invitation Open → Passed to this account<br/>INV-2, INV-3"]
+  d2 -- yes --> t5["server: invitation Open → Passed to this account<br/>INV-2, INV-3"]
 ```
 
 #### U1.2 Change my details
 
 References: User IDs, [docs/2.5](../../../../2.5-authentication.md). A game
 holds no copy of a player's details, [71-design.md](71-design.md#open-questions)
-*User details are always a lookup*. Emails, question 5.
+*User details are always a lookup*. Emails, #71 Q5.
 
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: signed in, changes the User ID, the email or both<br/>ACC-1"]
-  p1 --> d0{"service: which?"}
-  d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?"}
+  p1 --> d0{"server: which?"}
+  d0 -- "User ID" --> v1{"server: not blank, and not another account's<br/>ignoring case?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name"]
-  d0 -- "email" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>question 5"}
+  v1 -- yes --> t1["server: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name"]
+  d0 -- "email" --> v2{"server: is the new email address available?<br/>it is not while another account<br/>has it pending or verified<br/>#71 Q5"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t2["service: new email None → Pending,<br/>verification email sent<br/>question 5"]
-  t2 --> d1{"Player: verifies the new email within a day?<br/>question 5"}
-  d1 -- no --> t3["time: the day lapses<br/>new email Pending → None, the old one stays<br/>question 5"]
-  d1 -- yes --> t4["service: new email Pending → Live,<br/>old email Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, question 5"]
+  v2 -- yes --> t2["server: new email None → Pending,<br/>verification email sent<br/>#71 Q5"]
+  t2 --> d1{"Player: verifies the new email within a day?<br/>#71 Q5"}
+  d1 -- no --> t3["time: the day lapses<br/>new email Pending → None, the old one stays<br/>#71 Q5"]
+  d1 -- yes --> t4["server: new email Pending → Live,<br/>old email Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, #71 Q5"]
 ```
 
 #### U1.3 Change my password
@@ -145,9 +145,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: signed in, gives the current password and a new one"]
-  p1 --> v1{"service: the current password right?<br/>ACC-6"}
+  p1 --> v1{"server: the current password right?<br/>ACC-6"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
+  v1 -- yes --> t1["server: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
   t1 --> p2["Player: signs in again, as in Register and sign in"]
 ```
 
@@ -156,13 +156,13 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: gives the email address of the account"]
-  p1 --> v2{"service: a Live email of an account? (reads)<br/>question 5"}
+  p1 --> v2{"server: a Live email of an account? (reads)<br/>#71 Q5"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
-  v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
+  v2 -- yes --> t1["server: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
   t1 --> p2["Player: follows the link and gives a new password"]
-  p2 --> v3{"service: link unused and within its hour?<br/>ACC-5"}
+  p2 --> v3{"server: link unused and within its hour?<br/>ACC-5"}
   v3 -- no --> r2["refused, one answer for unknown, used and expired"]
-  v3 -- yes --> t2["service: password changed, link used,<br/>every session ended (no transition)<br/>ACC-6"]
+  v3 -- yes --> t2["server: password changed, link used,<br/>every session ended (no transition)<br/>ACC-6"]
   t2 --> p3["Player: signs in again, as in Register and sign in<br/>ACC-1"]
 ```
 
@@ -188,14 +188,14 @@ Journeys: [U2.1 Create and start a game](#u21-create-and-start-a-game), [U2.2 Ar
 ```mermaid
 flowchart TD
   s0((start)) --> c1["Creator: chooses edition, time limit and seats<br/>GAME-3, TIME-1, TIME-2"]
-  c1 --> v1{"service: at least two seats,<br/>every named seat a registered player?"}
+  c1 --> v1{"server: at least two seats,<br/>every named seat a registered player?"}
   v1 -- no --> r1["refused, nothing created"]
-  v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
+  v1 -- yes --> t1["server: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
   t1 --> i1["invitees answer, as in Accept or decline an invitation;<br/>the creator may arrange the seats meanwhile"]
   i1 --> c3["Creator: starts the game"]
-  c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
+  c3 --> v2{"server: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
+  v2 -- yes --> t4["server: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
 ```
 
 #### U2.2 Arrange the seats
@@ -207,19 +207,19 @@ the service keeps those seats until the start drops them.
 ```mermaid
 flowchart TD
   s0((start)) --> c1["Creator: chooses add, withdraw or swap"]
-  c1 --> v1{"service: the creator's game, still Not Started?"}
+  c1 --> v1{"server: the creator's game, still Not Started?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> d0{"which?"}
   d0 -- add --> c2["Creator: names a bot, a player, an email or an open seat<br/>GAME-4"]
-  c2 --> v2{"service: a named player exists?<br/>GAME-9"}
+  c2 --> v2{"server: a named player exists?<br/>GAME-9"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
+  v2 -- yes --> t1["server: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
   c1 -. "hide a Declined or Withdrawn seat<br/>(client only, no service call)" .-> h1["the seat leaves the creator's view"]
   d0 -- withdraw --> c3["Creator: withdraws a seat, their own included<br/>Invited or Claimed<br/>GAME-8, GAME-9"]
-  c3 --> t2["service: seat Withdrawn, any invitation closed and its link dead;<br/>the seat stays, spent, until the start drops it<br/>GAME-9, INV-7"]
+  c3 --> t2["server: seat Withdrawn, any invitation closed and its link dead;<br/>the seat stays, spent, until the start drops it<br/>GAME-9, INV-7"]
   d0 -- swap --> c4["Creator: swaps two seats"]
-  c4 --> t3["service: the two seats exchange places, whatever their states,<br/>and with them turn order (no transition)<br/>GAME-9"]
-  t1 --> t4["service: version bumps, everyone watching is told<br/>(no transition)"]
+  c4 --> t3["server: the two seats exchange places, whatever their states,<br/>and with them turn order (no transition)<br/>GAME-9"]
+  t1 --> t4["server: version bumps, everyone watching is told<br/>(no transition)"]
   t2 --> t4
   t3 --> t4
   t4 --> n0["a game left below two seats waits: it is checked again at the start<br/>GAME-3"]
@@ -247,23 +247,23 @@ Journeys: [U3.1 Accept or decline an invitation](#u31-accept-or-decline-an-invit
 flowchart TD
   s0((start)) --> p1["Player: sees an invitation addressed to them (reads)<br/>INV-1, INV-2, INV-5"]
   p1 --> d1{"Player: accepts?"}
-  d1 -- yes --> v1{"service: the game still Not Started,<br/>and the invitation associated with this player?<br/>INV-5, INV-7"}
-  d1 -- no --> v2{"service: the same checks"}
+  d1 -- yes --> v1{"server: the game still Not Started,<br/>and the invitation associated with this player?<br/>INV-5, INV-7"}
+  d1 -- no --> v2{"server: the same checks"}
   v1 -- no --> r1["refused, nothing changes"]
   v2 -- no --> r1
-  v1 -- yes --> t1["service: seat Invited → Claimed<br/>version bumps, everyone watching is told"]
-  v2 -- yes --> t2["service: seat Invited → Declined, dead for good<br/>version bumps, everyone watching is told<br/>GAME-9, DEL-3"]
+  v1 -- yes --> t1["server: seat Invited → Claimed<br/>version bumps, everyone watching is told"]
+  v2 -- yes --> t2["server: seat Invited → Declined, dead for good<br/>version bumps, everyone watching is told<br/>GAME-9, DEL-3"]
 ```
 
 #### U3.2 Take an open seat
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: sees games with a seat open to anyone (reads)<br/>question 10"]
+  s0((start)) --> p1["Player: sees games with a seat open to anyone (reads)<br/>#71 Q10"]
   p1 --> p2["Player: accepts the seat, whether or not already seated in that game<br/>GAME-4"]
-  p2 --> v1{"service: the game still Not Started,<br/>and the seat still unclaimed?<br/>INV-3, INV-7"}
+  p2 --> v1{"server: the game still Not Started,<br/>and the seat still unclaimed?<br/>INV-3, INV-7"}
   v1 -- no --> r1["refused: no longer available, nothing changes"]
-  v1 -- yes --> t1["service: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>INV-3"]
+  v1 -- yes --> t1["server: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>INV-3"]
 ```
 
 #### U3.3 Withdraw from my seat
@@ -271,9 +271,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: withdraws from a seat they hold"]
-  p1 --> v1{"service: the game still Not Started,<br/>and the seat Claimed by this player?"}
+  p1 --> v1{"server: the game still Not Started,<br/>and the seat Claimed by this player?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
+  v1 -- yes --> t1["server: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
 ```
 
 ### U4 Play a game
@@ -302,12 +302,12 @@ flowchart TD
   s0((start)) --> p1["Player or bot: told it is their turn (reads)"]
   p1 --> p2["Player: composes a word, which survives other turns<br/>until a tile lands in its cells (client only)"]
   p2 --> p3["Player or bot: places, passes or exchanges"]
-  p3 --> v1{"service: this seat's turn, and the move legal?"}
+  p3 --> v1{"server: this seat's turn, and the move legal?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: applied (no transition), version and turn move,<br/>tiles drawn, every client told"]
-  t1 --> v2{"service: does the game end?<br/>GAME-2, the scoreless limit, out of tiles"}
+  v1 -- yes --> t1["server: applied (no transition), version and turn move,<br/>tiles drawn, every client told"]
+  t1 --> v2{"server: does the game end?<br/>GAME-2, the scoreless limit, out of tiles"}
   v2 -- no --> p4["next seat told it is their turn"]
-  v2 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
+  v2 -- yes --> t2["server: game Finished, ratings settled<br/>RATE-2, RATE-3"]
 ```
 
 #### U4.2 Ask for a suggested move
@@ -315,10 +315,10 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: asks for a suggestion on their turn"]
-  p1 --> v1{"service: the game Active, and this human seat on turn?"}
+  p1 --> v1{"server: the game Active, and this human seat on turn?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> v2["service: finds the best-scoring legal move for the rack,<br/>or a pass when there is none (reads)"]
-  v2 --> t1["service: the game becomes unrated, version bumps,<br/>every client told; the move is returned, not played<br/>RATE-4"]
+  v1 -- yes --> v2["server: finds the best-scoring legal move for the rack,<br/>or a pass when there is none (reads)"]
+  v2 --> t1["server: the game becomes unrated, version bumps,<br/>every client told; the move is returned, not played<br/>RATE-4"]
   t1 --> p2["Player: plays it, or another, as in Take a turn"]
 ```
 
@@ -327,9 +327,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: writes a message"]
-  p1 --> v1{"service: the caller holds a seat in the game,<br/>and the message is not blank or too long?<br/>question 13"}
+  p1 --> v1{"server: the caller holds a seat in the game,<br/>and the message is not blank or too long?<br/>#71 Q13"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: message recorded, on or off turn, in any game state<br/>version bumps, every client told (no transition)<br/>RET-1"]
+  v1 -- yes --> t1["server: message recorded, on or off turn, in any game state<br/>version bumps, every client told (no transition)<br/>RET-1"]
 ```
 
 #### U4.4 Leave a game in play
@@ -342,7 +342,7 @@ flowchart TD
   d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
   a1 --> b1["tiles back to the bag<br/>GAME-7"]
   a2 --> b1
-  b1 --> v1{"service: at most one seat still playing?<br/>GAME-2"}
+  b1 --> v1{"server: at most one seat still playing?<br/>GAME-2"}
   a3 --> v1
   v1 -- yes --> t1["game Finished, ratings settled"]
   v1 -- no --> t2["if it was their turn, the next seat is told;<br/>a bot's turn runs"]
@@ -353,8 +353,8 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
-  c1 --> t1["service: pending invitations cancelled"]
-  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>GAME-1"]
+  c1 --> t1["server: pending invitations cancelled"]
+  t1 --> t2["server: game Aborted, seats frozen as they stand<br/>GAME-1"]
   t2 --> t3["no rating changes<br/>GAME-5"]
 ```
 
@@ -363,9 +363,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
-  t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
-  v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
-  t1 --> t2["service: emails the player on turn, once, at their Live email address<br/>TIME-4"]
+  t0 --> v1{"server: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
+  v1 -- yes --> t1["server: records that this turn was reminded (no transition)<br/>#71 Q13"]
+  t1 --> t2["server: emails the player on turn, once, at their Live email address<br/>TIME-4"]
 ```
 
 ### U5 Follow my games
@@ -386,11 +386,11 @@ Journeys: [U5.1 See my games, ratings and history](#u51-see-my-games-ratings-and
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: opens their list"]
-  p1 --> v1{"service: signed in?<br/>ACC-1"}
+  p1 --> v1{"server: signed in?<br/>ACC-1"}
   v1 -- no --> r1["refused, asked to sign in"]
-  v1 -- yes --> t1["service: finished and aborted games over 7 days old<br/>Over → removed, with their invitations<br/>RET-1, RET-4"]
-  t1 --> v2["service: lists the games the player is seated in, was invited to<br/>or created, less those they hid, newest activity first (reads)<br/>DEL-5"]
-  v2 --> p2["Player: opens a rating or a rating history, their own or another's (reads)<br/>ACC-3, DEL-10, RET-2, question 14"]
+  v1 -- yes --> t1["server: finished and aborted games over 7 days old<br/>Over → removed, with their invitations<br/>RET-1, RET-4"]
+  t1 --> v2["server: lists the games the player is seated in, was invited to<br/>or created, less those they hid, newest activity first (reads)<br/>DEL-5"]
+  v2 --> p2["Player: opens a rating or a rating history, their own or another's (reads)<br/>ACC-3, DEL-10, RET-2, #71 Q14"]
   p2 --> p3["Player: reads times in local time (reads)<br/>CLOCK-4"]
 ```
 
@@ -399,9 +399,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: removes a game from their list<br/>DEL-5"]
-  p1 --> v1{"service: the game Finished or Aborted,<br/>and the player seated in it or its creator?"}
+  p1 --> v1{"server: the game Finished or Aborted,<br/>and the player seated in it or its creator?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, question 13"]
+  v1 -- yes --> t1["server: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, #71 Q13"]
 ```
 
 ### U6 Look after the service
@@ -422,12 +422,12 @@ Journeys: [U6.1 Force-end a game](#u61-force-end-a-game), [U6.2 Delete an accoun
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Administrator: names a game, on the machine hosting the service<br/>question 11"]
-  a1 --> v1{"service: the game exists, and is not already<br/>Finished or Aborted?"}
+  s0((start)) --> a1["Administrator: names a game, on the machine hosting the service<br/>#71 Q11"]
+  a1 --> v1{"server: the game exists, and is not already<br/>Finished or Aborted?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: game Not Started or Active → Finished<br/>seats frozen as they stand, a record of the force-end kept<br/>question 11"]
-  t1 --> t2["service: no rating changes<br/>RATE-1"]
-  t2 --> t3["service: version bumps, every client told (no transition)"]
+  v1 -- yes --> t1["server: game Not Started or Active → Finished<br/>seats frozen as they stand, a record of the force-end kept<br/>#71 Q11"]
+  t1 --> t2["server: no rating changes<br/>RATE-1"]
+  t2 --> t3["server: version bumps, every client told (no transition)"]
 ```
 
 #### U6.2 Delete an account
@@ -435,19 +435,19 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> a1["Administrator: names an account or gives its id, in the admin CLI<br/>on the machine hosting the service<br/>DEL-1, DEL-9"]
-  a1 --> v1{"service: the account exists? (reads)<br/>DEL-8"}
+  a1 --> v1{"server: the account exists? (reads)<br/>DEL-8"}
   v1 -- no --> r1["reported as not found"]
-  v1 -- yes --> v2{"service: does any game refer to it: created, seated or invited,<br/>in any state, hidden by the player or not? (reads)<br/>DEL-2, DEL-3, DEL-5"}
+  v1 -- yes --> v2{"server: does any game refer to it: created, seated or invited,<br/>in any state, hidden by the player or not? (reads)<br/>DEL-2, DEL-3, DEL-5"}
   v2 -- yes --> r2["refused, naming the games<br/>DEL-6"]
   r2 --> d3{"Administrator: waits, or deletes the blocking games?"}
   d3 -- waits --> w1["Administrator: waits, because every game goes eventually<br/>DEL-4, RET-1, RET-3, TIME-2"]
-  d3 -- deletes --> g1["service: each blocking game removed, with its chat,<br/>moves and invitations<br/>any state → removed, question 12"]
+  d3 -- deletes --> g1["server: each blocking game removed, with its chat,<br/>moves and invitations<br/>any state → removed, #71 Q12"]
   g1 --> a1
   w1 --> a1
-  v2 -- no --> v3{"service: a live session? (reads)<br/>question 12"}
+  v2 -- no --> v3{"server: a live session? (reads)<br/>#71 Q12"}
   v3 -- yes --> r3["refused until the session ends or the administrator signs it out"]
   r3 --> w1
-  v3 -- no --> t1["service: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>email Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
+  v3 -- no --> t1["server: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>email Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
 ```
 
 #### U6.3 Remove expired games
@@ -455,12 +455,12 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"time: which game?"}
-  d0 -- "ended over 7 days ago" --> t1["service: Over → removed: game, seats, chat, moves and invitations go,<br/>found while the service is in use; rating history stays<br/>RET-1, RET-2, RET-4, ACC-3, DEL-10"]
-  d0 -- "not started, idle 7 days" --> t2["time: the creator is asked what to do (not built)<br/>RET-3, question 15"]
+  d0 -- "ended over 7 days ago" --> t1["server: Over → removed: game, seats, chat, moves and invitations go,<br/>found while the service is in use; rating history stays<br/>RET-1, RET-2, RET-4, ACC-3, DEL-10"]
+  d0 -- "not started, idle 7 days" --> t2["time: the creator is asked what to do (not built)<br/>RET-3, #71 Q15"]
   t2 --> c1["Creator: answers delete, keep or nothing<br/>RET-3"]
   c1 --> d1{"answer"}
-  d1 -- delete --> t3["service: Not Started → removed, the game goes at once<br/>RET-3"]
-  d1 -- keep --> t4["service: counts as activity, thirty days start again (no transition)<br/>RET-3"]
+  d1 -- delete --> t3["server: Not Started → removed, the game goes at once<br/>RET-3"]
+  d1 -- keep --> t4["server: counts as activity, thirty days start again (no transition)<br/>RET-3"]
   d1 -- nothing --> t5["time: the countdown carries on, and thirty days after the last activity<br/>Not Started → removed<br/>RET-3"]
 ```
 
@@ -725,7 +725,7 @@ the only account event that reaches an invitation.
 | account event | invitation Open | invitation Passed | invitation Closed |
 | --- | --- | --- | --- |
 | registered, or changed to (None to Pending) | stays Open | unchanged | nothing |
-| registering or changing to a Pending or Live email | refused (question 5), so no event | | |
+| registering or changing to a Pending or Live email | refused (#71 Q5), so no event | | |
 | verified (Pending to Live) | Passed to the verifier, link dead (INV-4) | unchanged: a claimed link won | nothing |
 | a day lapses, or the account picks another (Pending to None) | stays Open | unchanged | nothing |
 | changed away, or account closed (Live to None) | cannot exist while Live | unchanged: the addressee keeps it | nothing |
