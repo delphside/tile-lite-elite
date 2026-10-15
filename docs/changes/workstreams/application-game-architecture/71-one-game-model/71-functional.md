@@ -110,14 +110,15 @@ flowchart TD
   t1 --> d1{"Player: follows the link within its day?<br/>Q5"}
   d1 -- no --> p3["Player: signs in to the account, not yet active,<br/>and asks for a new link<br/>Q5"]
   p3 --> d1
+  d1 -- "no, and nothing for 30 days" --> t6["Time: 30 days with no activity, never verified<br/>account removed, its User ID and email freed<br/>Q5"]
   d1 -- yes --> v4{"Server: still not verified by another account?<br/>the first to verify keeps it<br/>Q5"}
   v4 -- no --> t2["Server: email Pending → None for this account,<br/>which stays not yet active<br/>Q5"]
   t2 --> p4["Player: signs in and gives another email,<br/>as in Change my details<br/>Q5"]
   v4 -- yes --> t3["Server: email Pending → Live, account active<br/>other accounts lose it as pending<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
-  d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
+  d0 -- yes --> p2["Player: signs in with User ID or verified email,<br/>and password, and chooses whether<br/>the device stays logged in<br/>ACC-2, ACC-4"]
   t3 --> p2
   p2 --> v3{"Server: the credentials right?<br/>ACC-4"}
-  v3 -- no --> r3["refused, with one answer for an unknown User ID<br/>and a wrong password"]
+  v3 -- no --> r3["refused, with one answer for an unknown<br/>User ID or email and a wrong password"]
   v3 -- yes --> t4["Server: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
   t4 --> d2{"Player: an existing account, arrived by an invitation link?"}
   d2 -- yes --> t5["Server: invitation Open → Passed to this account<br/>INV-2, INV-3"]
@@ -138,13 +139,13 @@ flowchart TD
   v1 -- yes --> t1["Server: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name"]
   d0 -- "email" --> v2{"Server: is the new email address<br/>not verified by another account?<br/>a pending email blocks nobody<br/>Q5"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t2["Server: new email None → Pending for this account,<br/>verification link emailed, good for a day<br/>Q5"]
+  v2 -- yes --> t2["Server: new email None → Pending for this account,<br/>old email Live → None at once,<br/>verification link emailed, good for a day<br/>Q5"]
   t2 --> d1{"Player: follows the link within its day?<br/>Q5"}
   d1 -- no --> p3["Player: asks for a new link<br/>Q5"]
   p3 --> d1
   d1 -- yes --> v3{"Server: still not verified by another account?<br/>the first to verify keeps it<br/>Q5"}
-  v3 -- no --> t3["Server: new email Pending → None<br/>for this account, the old one stays<br/>Q5"]
-  v3 -- yes --> t4["Server: new email Pending → Live,<br/>other accounts lose it as pending,<br/>old email Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, Q5"]
+  v3 -- no --> t3["Server: new email Pending → None<br/>for this account, which has no email<br/>until it gives another<br/>Q5"]
+  v3 -- yes --> t4["Server: new email Pending → Live,<br/>other accounts lose it as pending<br/>open invitations to the new one Open → Passed<br/>INV-4, Q5"]
 ```
 
 #### U1.3 Change my password
@@ -515,18 +516,23 @@ and not yet on main. The code differs: `register_player` (auth.rs) creates an
 active account and a session at once and takes any email;
 `update_player_details` (auth.rs:301-303) and `get_player_by_email`
 (persistence.rs:856) say duplicates are allowed, and the former changes the
-email with no check. Settled by the owner on 2026-10-15, superseding #439 R7 and R3's short code:
-a pending email blocks nobody, so several accounts may hold it pending, and
-the first to verify keeps it while the others lose it; verification is by a
-link good for a day, and an account not yet active can sign in to ask for a
-new one; a password reset link also verifies a pending email if no other
-account has verified it; and a reset is asked for by User ID or by a verified
-email, since only a verified email is unique. Unsettled: whether an account
-never verified is ever removed; when a changed-from email is released, at the
-change or when the new one is verified; what an account not yet active may do
-once signed in, beyond asking for a link and changing its email; and whether
-sign-in is by User ID or by email, which is open on #439. Proposed: email
-rules in docs/1.0 when #439 lands, settling all of these.
+email with no check. Settled by the owner on 2026-10-15, superseding #439 R7
+and R3's short code:
+
+- a pending email blocks nobody, so several accounts may hold it pending, and
+  the first to verify keeps it while the others lose it;
+- verification is by a link good for a day;
+- an account not yet active may, signed in, ask for a new link or give
+  another email, and may reset its password; nothing else;
+- a password reset link also verifies a pending email if no other account has
+  verified it;
+- a reset is asked for, and sign-in made, by User ID or by a verified email,
+  since only a verified email is unique (ACC-4, ACC-5);
+- an account never verified is removed after 30 days with no activity;
+- a changed-from email is released at the change, not when the new one is
+  verified.
+
+Proposed: these rules go to docs/1.0 when #439 lands.
 
 #### Q6 A User ID is unique, ignoring case
 
@@ -744,9 +750,9 @@ stateDiagram-v2
             Pending: Pending, on one or more accounts, blocking none
             Live: Live, verified by one active account
             None --> Pending: register, or change to it
-            Pending --> None: every account holding it picks another
+            Pending --> None: every account holding it picks another, or is removed
             Pending --> Live: verified first by one of them, the rest lose it
-            Live --> None: changed away, or account closed
+            Live --> None: changed away (at once), or account closed
         }
         --
         state "Each emailed invitation to it" as IU {
@@ -782,7 +788,7 @@ the only account event that reaches an invitation.
 | registered, or changed to (None to Pending, or another account joins Pending) | stays Open | unchanged | nothing |
 | registering or changing to a Live email | refused ([Q5](#q5-the-email-rules-are-not-in-docs10)), so no event | | |
 | verified first (Pending to Live), by its link or a reset link | Passed to the verifier, link dead (INV-4) | unchanged: a claimed link won | nothing |
-| every account holding it picks another (Pending to None) | stays Open | unchanged | nothing |
+| every account holding it picks another, or is removed unverified (Pending to None) | stays Open | unchanged | nothing |
 | changed away, or account closed (Live to None) | cannot exist while Live | unchanged: the addressee keeps it | nothing |
 
 Two consequences. Open invitations and a Live email never coexist, because
