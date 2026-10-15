@@ -69,7 +69,7 @@ its own journey beneath it. In a journey each step either causes a transition in
 lifecycle below or only reads state, and cites the rules it exercises, so the
 end-to-end scenarios come from the journeys and coverage is read against them.
 A step's swimlane is its actor; *service* is the server acting on a request.
-Every action is drawn. A step that changes something no lifecycle
+Every action is drawn. Technical refusals, such as rate limits, are left out. A step that changes something no lifecycle
 covers, such as a session or a version, is marked *(no transition)*.
 
 ### U1 Manage my account
@@ -97,9 +97,7 @@ unique (D72, #439). Registering and signing in share the end of the journey.
 flowchart TD
   s0((start)) --> d0{"Player: has an active account?"}
   d0 -- no --> p1["Player: gives a User ID, an email address and a password"]
-  p1 --> v1{"service: within the caller's allowance?<br/>LIMIT-1, LIMIT-2, LIMIT-5"}
-  v1 -- no --> r1["refused, not queued"]
-  v1 -- yes --> v2{"service: User ID free, and the address neither<br/>Pending nor Live for another account?<br/>#439 R2, R3, R7, questions 5 and 6"}
+  p1 --> v2{"service: User ID free, and the address neither<br/>Pending nor Live for another account?<br/>#439 R2, R3, R7, #301, question 5"}
   v2 -- "address Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>#439 R7"]
   v2 -- "otherwise no" --> r2["refused, nothing created"]
   v2 -- yes --> t1["service: account created, not yet active<br/>address None → Pending, verification email sent<br/>#439 R3"]
@@ -108,7 +106,7 @@ flowchart TD
   d1 -- yes --> t3["service: address Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
-  p2 --> v3{"service: within the allowance, and the credentials right?<br/>LIMIT-1, LIMIT-2, ACC-4"}
+  p2 --> v3{"service: the credentials right?<br/>ACC-4"}
   v3 -- no --> r3["refused, with one answer for an unknown User ID<br/>and a wrong password"]
   v3 -- yes --> t4["service: session starts, to end at 10 days<br/>or after 48 hours unused (no transition)<br/>ACC-1"]
   t4 --> d2{"Player: an existing account, arrived by an invitation link?"}
@@ -121,7 +119,7 @@ flowchart TD
 flowchart TD
   s0((start)) --> p1["Player: signed in, changes the User ID, the email address or both<br/>ACC-1"]
   p1 --> d0{"service: which?"}
-  d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?<br/>question 6"}
+  d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?<br/>#301"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name<br/>71-design.md, the lookup rule"]
   d0 -- "email address" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>#439 R3, R7"}
@@ -137,7 +135,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: signed in, gives the current password and a new one"]
-  p1 --> v1{"service: within the allowance, and the current password right?<br/>LIMIT-1, LIMIT-2, ACC-6"}
+  p1 --> v1{"service: the current password right?<br/>ACC-6"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
   t1 --> p2["Player: signs in again, as in Register and sign in"]
@@ -148,9 +146,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: gives the email address of the account"]
-  p1 --> v1{"service: within the caller's allowance?<br/>LIMIT-1, LIMIT-2"}
-  v1 -- no --> r1["refused, not queued"]
-  v1 -- yes --> v2{"service: a Live address of an account? (reads)<br/>#439 R3"}
+  p1 --> v2{"service: a Live address of an account? (reads)<br/>#439 R3"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
   v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
   t1 --> p2["Player: follows the link and gives a new password"]
