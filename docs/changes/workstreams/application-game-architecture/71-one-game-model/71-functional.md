@@ -109,7 +109,7 @@ flowchart TD
   v2 -- "otherwise no" --> r2["refused, nothing created"]
   v2 -- yes --> t1["Server: account created, not yet active<br/>email None → Pending, verification email sent<br/>Q5"]
   t1 --> d1{"Player: verifies the email within a day?<br/>Q5"}
-  d1 -- no --> t2["time: the day lapses<br/>email Pending → None, the account is never active<br/>Q5"]
+  d1 -- no --> t2["Time: the day lapses<br/>email Pending → None, the account is never active<br/>Q5"]
   d1 -- yes --> t3["Server: email Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
@@ -137,7 +137,7 @@ flowchart TD
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t2["Server: new email None → Pending,<br/>verification email sent<br/>Q5"]
   t2 --> d1{"Player: verifies the new email within a day?<br/>Q5"}
-  d1 -- no --> t3["time: the day lapses<br/>new email Pending → None, the old one stays<br/>Q5"]
+  d1 -- no --> t3["Time: the day lapses<br/>new email Pending → None, the old one stays<br/>Q5"]
   d1 -- yes --> t4["Server: new email Pending → Live,<br/>old email Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, Q5"]
 ```
 
@@ -340,7 +340,7 @@ flowchart TD
   s0((start)) --> d0{"how"}
   d0 -- "player resigns" --> a1["Playing → Departed, resigned<br/>RATE-2"]
   d0 -- "creator force-resigns" --> a2["Playing → Departed, force-resigned<br/>GAME-6, RATE-3"]
-  d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
+  d0 -- "Time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
   a1 --> b1["tiles back to the bag<br/>GAME-7"]
   a2 --> b1
   b1 --> v1{"Server: at most one seat still playing?<br/>GAME-2"}
@@ -363,7 +363,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
+  s0((start)) --> t0["Time: the hourly pass looks at each Active game (reads)"]
   t0 --> v1{"Server: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
   v1 -- yes --> t1["Server: records that this turn was reminded (no transition)<br/>Q13"]
   t1 --> t2["Server: emails the player on turn, once, at their Live email address<br/>TIME-4"]
@@ -455,14 +455,14 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> d0{"time: which game?"}
+  s0((start)) --> d0{"Time: which game?"}
   d0 -- "ended over 7 days ago" --> t1["Server: Over → removed: game, seats, chat, moves and invitations go,<br/>found while the service is in use; rating history stays<br/>RET-1, RET-2, RET-4, ACC-3, DEL-10"]
-  d0 -- "not started, idle 7 days" --> t2["time: the creator is asked what to do (not built)<br/>RET-3, Q15"]
+  d0 -- "not started, idle 7 days" --> t2["Time: the creator is asked what to do (not built)<br/>RET-3, Q15"]
   t2 --> c1["Creator: answers delete, keep or nothing<br/>RET-3"]
   c1 --> d1{"answer"}
   d1 -- delete --> t3["Server: Not Started → removed, the game goes at once<br/>RET-3"]
   d1 -- keep --> t4["Server: counts as activity, thirty days start again (no transition)<br/>RET-3"]
-  d1 -- nothing --> t5["time: the countdown carries on, and thirty days after the last activity<br/>Not Started → removed<br/>RET-3"]
+  d1 -- nothing --> t5["Time: the countdown carries on, and thirty days after the last activity<br/>Not Started → removed<br/>RET-3"]
 ```
 
 ### Questions the journeys raise
