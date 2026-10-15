@@ -37,7 +37,8 @@ flowchart LR
     reset(["Reset my password"])
     password(["Change my password"])
     create(["Create a game"])
-    roster(["Arrange the seats: add, remove, swap, invite"])
+    roster(["Arrange the seats: add, withdraw, swap"])
+    withdraw(["Withdraw from a seat"])
     start(["Start a game"])
     abort(["Abort a game"])
     forceresign(["Force-resign a seat"])
@@ -62,6 +63,7 @@ flowchart LR
   player --- password
   player --- create
   player --- answer
+  player --- withdraw
   player --- open
   player --- turn
   player --- suggest
@@ -261,10 +263,8 @@ flowchart TD
   v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
   c1 -. "hide a Declined or Withdrawn seat<br/>(client only, no service call)" .-> h1["the seat leaves the creator's view"]
   h1 --> e0
-  d0 -- remove --> c3["Creator: removes a seat<br/>Invited or Claimed"]
-  c3 --> v3{"service: not the creator's own seat?<br/>question 9"}
-  v3 -- no --> r3["refused, nothing changes"]
-  v3 -- yes --> t2["service: pending invitation cancelled, seat removed,<br/>later seats renumbered, the seat ceases to exist<br/>INV-7"]
+  d0 -- withdraw --> c3["Creator: withdraws a seat, their own included<br/>Invited or Claimed<br/>GAME-8, GAME-9"]
+  c3 --> t2["service: seat Withdrawn, any invitation closed and its link dead;<br/>the seat stays, spent, until the start drops it<br/>GAME-9, INV-7"]
   d0 -- swap --> c4["Creator: swaps two seats"]
   c4 --> v4{"service: every human seat Claimed?<br/>question 9"}
   v4 -- no --> r4["refused, nothing changes"]
@@ -276,8 +276,19 @@ flowchart TD
   n0 --> e0((end))
   r1 --> e0
   r2 --> e0
-  r3 --> e0
   r4 --> e0
+```
+
+### Withdraw from a seat
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player: withdraws from a seat they hold"]
+  p1 --> v1{"service: the game still Not Started,<br/>and the seat Claimed by this player?"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
+  t1 --> e0((end))
+  r1 --> e0
 ```
 
 ### Take an open seat
@@ -464,14 +475,19 @@ Functional, so answered before the technical decisions:
    that signing in starts a new one, and changing a password is in no use case.
    Proposed: rules beside ACC-1, and "Change my password" added to the use
    cases.
-8. **Withdrawing from a seat has a lifecycle arrow and no use case.**
+8. **Withdrawing from a seat has a lifecycle arrow and no use case.** Answered:
+   a withdrawn seat is spent, an invitation is never sent again, and a new seat
+   re-invites, GAME-9; "Withdraw from a seat" joins the use cases (owner,
+   2026-10-15). What follows is the question as raised.
    `withdraw_from_seat` (roster.rs) lets the holder of a claimed seat other than
    the creator's give it up before the start. The lifecycle makes `Withdrawn`
    terminal, but the code unclaims the seat and sets its invitation to
    `rejected`, so the creator can send it again. Proposed: a use case, "Withdraw
    from a seat", with its own journey, and the code made to match the spent
    seat.
-9. **Roster limits that only the code states.** The creator's own seat cannot
+9. **Roster limits that only the code states.** In part answered: the
+   creator's own seat is withdrawn like any other, GAME-8 (owner, 2026-10-15).
+   The swap and unknown-player limits remain open. The creator's own seat cannot
    be removed, withdrawn or force-resigned (`remove_seat`, `withdraw_seat`,
    `force_resign`, game_state.rs); seats can be swapped only once every human
    seat is claimed (`swap_seats`); a named seat for an unknown player is refused
@@ -555,10 +571,11 @@ stateDiagram-v2
     state "Game: Not Started" as NotStarted {
         [*] --> Claimed: the creator's seat, or a bot
         [*] --> Invited: a seat with an invitation, sent as it is added
-        Invited --> Invited: send the link again, or pass it<br/>to a claimant or a verifier (INV-2, INV-4)
+        Invited --> Invited: pass it to a claimant<br/>or a verifier (INV-2, INV-4)
+        Invited --> Withdrawn: the creator withdraws
         Invited --> Claimed: accept
         Invited --> Declined: decline
-        Claimed --> Withdrawn: withdraw
+        Claimed --> Withdrawn: the holder or the creator withdraws
     }
 
     state "Game: Active" as Active {
@@ -656,7 +673,7 @@ invitation event ever changes the account use.
 | --- | --- | --- | --- |
 | creator invites the address | an Open invitation, emailed with a link (INV-2) | the same: a pending address passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
 | link claimed | Passed to the account that signs in or activates (INV-2, INV-3) | the same, even when that account is not the pending one (INV-4) | cannot happen: no invitation is Open once the address is Live |
-| withdrawn, or the game goes | Closed, seat removed, link dead (INV-7) | the same | the same |
+| withdrawn, or the game goes | Closed, seat spent, link dead (INV-7, GAME-9) | the same | the same |
 | a Passed invitation accepted or declined | nothing for the address; the seat moves on | the same | the same |
 
 **What each account event does, by the invitation's state.** Verification is

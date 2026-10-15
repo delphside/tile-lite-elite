@@ -404,7 +404,6 @@ pub enum GameEventDto {
     InvitationDeclined { seat: u8 },
     SeatWithdrawn { seat: u8 },
     SeatAdded     { seat: u8 },
-    SeatRemoved   { seat: u8 },
     SeatsSwapped  { a: u8, b: u8 },
     SeatHidden    { seat: u8 },
     ReminderSent  { seat: u8 },

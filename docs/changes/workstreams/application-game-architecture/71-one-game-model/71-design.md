@@ -83,7 +83,6 @@ pub enum GameMessage {
     Abort,
     AdminForceEnd,
     SeatAdded { .. },
-    SeatRemoved { seat: u8 },
     SeatInvited { seat: u8, .. },
     InvitationPassed { seat: u8, to: PlayerId },
     InvitationAccepted { seat: u8, .. },
@@ -130,7 +129,7 @@ to remember, because there is nowhere else to write. The current stopgap,
 conventions of that kind have already been forgotten twice.
 
 **The version is a counter, not a description.** A game can return to a state
-it already held — a seat invited, declined, and invited again — so anything
+it already held — two seats swapped and swapped back — so anything
 derived from state repeats and a client comparing with `>` silently ignores
 the update. A timestamp is the same counter with worse properties. This also
 constrains undo: undo cannot set the version back, it produces a *new, higher*
@@ -225,7 +224,7 @@ pub enum SeatState {
     Invited   { id: InvitationId, addressee: Option<PlayerId> }, // None until a link or a verified address names one
     Claimed   { player: PlayerId },
     Declined  { player: PlayerId },                             // terminal
-    Withdrawn { player: PlayerId },                             // terminal
+    Withdrawn { player: Option<PlayerId> },                     // terminal; None if withdrawn before anyone was named
     Playing   { player: PlayerId, rack: SeatRack, score: i32 },
     Departed  { player: PlayerId, score: i32, how: Departure },
 }
@@ -389,8 +388,9 @@ invitation and that it is no longer available. Followed by the account it
 passed to, signed in, it opens the invitation instead, which covers the player
 whose verification passed it before they used the link.
 
-**Withdrawing an invitation is removing its seat** with `SeatRemoved`, which
-takes the link with it, and RET-3 does the same for a whole game (INV-7).
+**Withdrawing an invitation spends its seat** with `SeatWithdrawn`, which
+closes the invitation and kills its link; RET-3 does the same for a whole game
+(INV-7). No seat is removed before the start, which drops the spent ones.
 
 **An address change rebinds nothing.** Once a seat has an addressee it is
 about a player, not an address. If the addressee later changes address the
@@ -413,9 +413,12 @@ verified, so every emailed invitation is a link and the design works unchanged.
 [^d72]: Decision #479 (D72): how an emailed invitation behaves once an address
     identifies one account. It supersedes D59 (#445).
 
-**A spent seat is spent.** Declining and withdrawing are both terminal: the
-seat keeps the name of whoever said no or walked away, and nothing re-invites
-it. A creator who wants somebody else adds a seat for them.
+**A spent seat is spent** (GAME-9, owner, 2026-10-15). Declining and
+withdrawing are both terminal, whoever withdraws: the creator, any seat
+including their own (GAME-8), or the player holding it. The seat keeps the
+name of whoever said no or walked away, if anybody had, and its invitation is
+never sent again. A creator who wants to invite anybody, the same person
+included, adds a new seat.
 
 That is what lets `Claimed` carry nothing but the player. Three earlier
 attempts at this section were answers to "where does a withdrawn seat go back
@@ -1136,7 +1139,7 @@ whatever client change WP A's wire change forces, with #152 and #88, both
 composition behaviour [^d67]. It also changes how a creator fills the seats
 (owner, 2026-10-14). Today the client adds seats, then sends the invitations,
 then starts. Instead each seat goes its own way: added and invited at once,
-then declined, sent again, withdrawn or replaced, independently of the others,
+then declined or withdrawn, and replaced by a new seat, independently of the others,
 until the creator has a set of claimed seats and starts the game. Ships with
 WP A.
 
