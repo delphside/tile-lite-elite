@@ -510,9 +510,8 @@ for scoring and rating; if it only shows, the code changes.
 
 #### Q5 The email rules are not in docs/1.0
 
-Uniqueness (#439 R2),
-verification and activating an account are #439's (R3); INV-1 to INV-8 are on `origin/claude/project-thread-hlyj4i`
-and not yet on main. The code differs: `register_player` (auth.rs) creates an
+Uniqueness (#439 R2), verification and activating an account are #439's
+(R3); how they meet invitations is INV-1 to INV-8. The code differs: `register_player` (auth.rs) creates an
 active account and a session at once and takes any email;
 `update_player_details` (auth.rs:301-303) and `get_player_by_email`
 (persistence.rs:856) say duplicates are allowed, and the former changes the
