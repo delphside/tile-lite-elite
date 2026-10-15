@@ -93,23 +93,23 @@ Journeys: [U1.1 Register and sign in](#u11-register-and-sign-in), [U1.2 Change m
 
 #### U1.1 Register and sign in
 
-A new account is active once its address is verified, and every address is
+A new account is active once its email is verified, and every email is
 unique. Registering and signing in share the end of the journey.
 
-References: User IDs, [docs/2.5](../../../../2.5-authentication.md). Addresses,
+References: User IDs, [docs/2.5](../../../../2.5-authentication.md). Emails,
 question 5: their rules are not yet in docs/1.0.
 
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"Player: has an active account?"}
-  d0 -- no --> p1["Player: gives a User ID, an email address and a password"]
-  p1 --> v2{"service: User ID free, and the address neither<br/>Pending nor Live for another account?<br/>question 5"}
-  v2 -- "address Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>question 5"]
+  d0 -- no --> p1["Player: gives a User ID, an email and a password"]
+  p1 --> v2{"service: User ID free, and the email neither<br/>Pending nor Live for another account?<br/>question 5"}
+  v2 -- "email Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>question 5"]
   v2 -- "otherwise no" --> r2["refused, nothing created"]
-  v2 -- yes --> t1["service: account created, not yet active<br/>address None → Pending, verification email sent<br/>question 5"]
-  t1 --> d1{"Player: verifies the address within a day?<br/>question 5"}
-  d1 -- no --> t2["time: the day lapses<br/>address Pending → None, the account is never active<br/>question 5"]
-  d1 -- yes --> t3["service: address Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
+  v2 -- yes --> t1["service: account created, not yet active<br/>email None → Pending, verification email sent<br/>question 5"]
+  t1 --> d1{"Player: verifies the email within a day?<br/>question 5"}
+  d1 -- no --> t2["time: the day lapses<br/>email Pending → None, the account is never active<br/>question 5"]
+  d1 -- yes --> t3["service: email Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
   p2 --> v3{"service: the credentials right?<br/>ACC-4"}
@@ -123,21 +123,21 @@ flowchart TD
 
 References: User IDs, [docs/2.5](../../../../2.5-authentication.md). A game
 holds no copy of a player's details, [71-design.md](71-design.md#open-questions)
-*User details are always a lookup*. Addresses, question 5.
+*User details are always a lookup*. Emails, question 5.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: signed in, changes the User ID, the email address or both<br/>ACC-1"]
+  s0((start)) --> p1["Player: signed in, changes the User ID, the email or both<br/>ACC-1"]
   p1 --> d0{"service: which?"}
   d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name"]
-  d0 -- "email address" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>question 5"}
+  d0 -- "email" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>question 5"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t2["service: new address None → Pending,<br/>verification email sent<br/>question 5"]
-  t2 --> d1{"Player: verifies the new address within a day?<br/>question 5"}
-  d1 -- no --> t3["time: the day lapses<br/>new address Pending → None, the old one stays<br/>question 5"]
-  d1 -- yes --> t4["service: new address Pending → Live,<br/>old address Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, question 5"]
+  v2 -- yes --> t2["service: new email None → Pending,<br/>verification email sent<br/>question 5"]
+  t2 --> d1{"Player: verifies the new email within a day?<br/>question 5"}
+  d1 -- no --> t3["time: the day lapses<br/>new email Pending → None, the old one stays<br/>question 5"]
+  d1 -- yes --> t4["service: new email Pending → Live,<br/>old email Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, question 5"]
 ```
 
 #### U1.3 Change my password
@@ -155,8 +155,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: gives the email address of the account"]
-  p1 --> v2{"service: a Live address of an account? (reads)<br/>question 5"}
+  s0((start)) --> p1["Player: gives the email of the account"]
+  p1 --> v2{"service: a Live email of an account? (reads)<br/>question 5"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
   v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
   t1 --> p2["Player: follows the link and gives a new password"]
@@ -210,7 +210,7 @@ flowchart TD
   c1 --> v1{"service: the creator's game, still Not Started?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> d0{"which?"}
-  d0 -- add --> c2["Creator: names a bot, a player, an email address or an open seat<br/>GAME-4"]
+  d0 -- add --> c2["Creator: names a bot, a player, an email or an open seat<br/>GAME-4"]
   c2 --> v2{"service: a named player exists?<br/>GAME-9"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t1["service: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
@@ -365,7 +365,7 @@ flowchart TD
   s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
   t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
   v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
-  t1 --> t2["service: emails the player on turn, once, at their Live address<br/>TIME-4"]
+  t1 --> t2["service: emails the player on turn, once, at their Live email<br/>TIME-4"]
 ```
 
 ### U5 Follow my games
@@ -447,7 +447,7 @@ flowchart TD
   v2 -- no --> v3{"service: a live session? (reads)<br/>question 12"}
   v3 -- yes --> r3["refused until the session ends or the administrator signs it out"]
   r3 --> w1
-  v3 -- no --> t1["service: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>address Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
+  v3 -- no --> t1["service: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>email Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
 ```
 
 #### U6.3 Remove expired games
@@ -485,19 +485,19 @@ Functional, so answered before the technical decisions:
    Proposed: decide whether the use case is "play the best move for me" or
    "show me a suggestion". If it plays, a rule says the move is the seat's own
    for scoring and rating; if it only shows, the code changes.
-5. **The address rules are not in docs/1.0.** Uniqueness (#439 R2),
-   verification, a pending address and its lapse, and activating an account are
+5. **The email rules are not in docs/1.0.** Uniqueness (#439 R2),
+   verification, a pending email and its lapse, and activating an account are
    #439's (R3, R7); INV-1 to INV-8 are on `origin/claude/project-thread-hlyj4i`
    and not yet on main. The code differs: `register_player` (auth.rs) creates an
-   active account and a session at once and takes any address;
+   active account and a session at once and takes any email;
    `update_player_details` (auth.rs:301-303) and `get_player_by_email`
    (persistence.rs:856) say duplicates are allowed, and the former changes the
-   address with no check. Unsettled: whether an address is verified by a link or
+   email with no check. Unsettled: whether an email is verified by a link or
    a short code (R3 says a short code, and the journeys say only "verifies");
-   what becomes of an account whose address lapses unverified; when a
-   changed-from address is released, at the change or when the new one is
-   verified; and whether sign-in is by User ID or by address, which is open on
-   #439. Proposed: address rules in docs/1.0 when #439 lands, settling all four.
+   what becomes of an account whose email lapses unverified; when a
+   changed-from email is released, at the change or when the new one is
+   verified; and whether sign-in is by User ID or by email, which is open on
+   #439. Proposed: email rules in docs/1.0 when #439 lands, settling all four.
 6. **A User ID is unique, ignoring case.** Withdrawn: docs/2.5 already says a
    display name is unique after folding, and #301 owns the fuller User ID rules
    (mapping, 2 to 30 characters, permitted characters, reserved names, the NFKC
@@ -510,7 +510,7 @@ Functional, so answered before the technical decisions:
    joins Manage my account (owner, 2026-10-15). docs/2.5 already described it; the
    rules make it testable. What follows is the question as raised. `login_player` gives one answer for an unknown User ID
    and a wrong password; `request_password_reset` answers the same for an
-   unknown address; the link works once, within an hour
+   unknown email; the link works once, within an hour
    (`PASSWORD_RESET_TOKEN_TTL_SECS`), a new request voids older links, and
    `reset_password` and `change_password` end every session. ACC-1 says only
    that signing in starts a new one, and changing a password is in no use case.
@@ -537,7 +537,7 @@ Functional, so answered before the technical decisions:
    (`add_seat_to_game`). GAME-3 and GAME-4 are silent. Proposed: one rule for
    the three limits.
 10. **A seat open to anyone.** `create_game` and `add_seat_to_game` accept an
-    open claim, an invitation with neither a name nor an address has no invitee,
+    open claim, an invitation with neither a name nor an email has no invitee,
     `list_games` shows every such invitation to every signed-in player
     (`get_open_invitations`, relationship `InvitedOpen`), and
     `claim_invitation` lets the first accepter win. docs/1.0 has INV-2 for a
@@ -593,7 +593,7 @@ Functional, so answered before the technical decisions:
 
 ## Lifecycles
 
-The state machines for the game and its seats, and for an address and its
+The state machines for the game and its seats, and for an email and its
 invitations. Each journey step above is
 checked against them: a step that changes something with no matching
 transition is a missing transition, and a transition no step reaches is
@@ -671,9 +671,9 @@ ends is exactly what RATE-2 and RATE-3 turn on — who played to the end, and
 who left early — so the final seat states are the game's result, not
 bookkeeping to be cleared away.
 
-### An address and its invitations
+### An email and its invitations
 
-An email address has two uses that change independently, so they are drawn as
+An email has two uses that change independently, so they are drawn as
 two parallel regions.[^d72f] **Its use by an account** has one state at a time;
 the states and their rules are #439's (R3, R7). **Its use by emailed
 invitations** has one state per invitation, and there may be several. A
@@ -682,7 +682,7 @@ invitations** has one state per invitation, and there may be several. A
 
 ```mermaid
 stateDiagram-v2
-    state "An email address" as EA {
+    state "An email" as EA {
         state "Use by an account" as AU {
             [*] --> None
             None: None, never seen, released or lapsed
@@ -698,7 +698,7 @@ stateDiagram-v2
             [*] --> Open: invited, account use not Live
             Open: Open, the link is the credential
             Passed: Passed, waiting for its addressee
-            Open --> Passed: link claimed, or address verified
+            Open --> Passed: link claimed, or email verified
             Open --> Closed: withdrawn, or the game goes
             Passed --> Closed: accepted, declined, withdrawn, or the game goes
             Closed --> [*]
@@ -706,18 +706,18 @@ stateDiagram-v2
     }
 ```
 
-An invitation to a Live address never enters the second region: it is made
+An invitation to a Live email never enters the second region: it is made
 in-game for the holder with an addressee from the start (INV-1).
 
-**What each invitation event does, by the address's account use.** No
+**What each invitation event does, by the email's account use.** No
 invitation event ever changes the account use.
 
 | invitation event | account use None | account use Pending | account use Live |
 | --- | --- | --- | --- |
-| creator invites the address | an Open invitation, emailed with a link (INV-2) | the same: a pending address passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
-| link claimed | Passed to the account that signs in or activates (INV-2, INV-3) | the same, even when that account is not the pending one (INV-4) | cannot happen: no invitation is Open once the address is Live |
+| creator invites the email | an Open invitation, emailed with a link (INV-2) | the same: a pending email passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
+| link claimed | Passed to the account that signs in or activates (INV-2, INV-3) | the same, even when that account is not the pending one (INV-4) | cannot happen: no invitation is Open once the email is Live |
 | withdrawn, or the game goes | Closed, seat spent, link dead (INV-7, GAME-9) | the same | the same |
-| a Passed invitation accepted or declined | nothing for the address; the seat moves on | the same | the same |
+| a Passed invitation accepted or declined | nothing for the email; the seat moves on | the same | the same |
 
 **What each account event does, by the invitation's state.** Verification is
 the only account event that reaches an invitation.
@@ -725,13 +725,13 @@ the only account event that reaches an invitation.
 | account event | invitation Open | invitation Passed | invitation Closed |
 | --- | --- | --- | --- |
 | registered, or changed to (None to Pending) | stays Open | unchanged | nothing |
-| registering or changing to a Pending or Live address | refused (question 5), so no event | | |
+| registering or changing to a Pending or Live email | refused (question 5), so no event | | |
 | verified (Pending to Live) | Passed to the verifier, link dead (INV-4) | unchanged: a claimed link won | nothing |
 | a day lapses, or the account picks another (Pending to None) | stays Open | unchanged | nothing |
 | changed away, or account closed (Live to None) | cannot exist while Live | unchanged: the addressee keeps it | nothing |
 
-Two consequences. Open invitations and a Live address never coexist, because
-going Live passes every Open one. And an address lapsing or being released
+Two consequences. Open invitations and a Live email never coexist, because
+going Live passes every Open one. And an email lapsing or being released
 never touches an invitation: only a claimed link, a verification, a withdrawal
 or the game going does.
 
