@@ -22,8 +22,8 @@ is an identity over what a viewer may see, and an engine is a client.
 
 ## The journeys and rules it covers
 
-*Create and start a game*, *Accept or decline an invitation*, *Take a turn*, *Leave a game in play* and
-*Abort a game*, from [`71-functional.md`](71-functional.md): GAME-1 to GAME-4,
+[U2.1 Create and start a game](71-functional.md#u21-create-and-start-a-game), [U3.1 Accept or decline an invitation](71-functional.md#u31-accept-or-decline-an-invitation), [U4.1 Take a turn](71-functional.md#u41-take-a-turn), [U4.4 Leave a game in play](71-functional.md#u44-leave-a-game-in-play) and
+[U4.5 Abort a game](71-functional.md#u45-abort-a-game), from [`71-functional.md`](71-functional.md): GAME-1 to GAME-4,
 RATE-1 to RATE-3, TIME-3, DEL-2, DEL-3, and the tests the code review found
 missing (`71-test-approach.md`).
 

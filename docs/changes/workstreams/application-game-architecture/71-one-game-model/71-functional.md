@@ -35,24 +35,31 @@ flowchart LR
   bot -. "is a" .-> player
 
   subgraph service["Tile Lite Elite"]
-    account(["Manage my account"])
-    setup(["Set up a game"])
-    join(["Join a game"])
-    play(["Play a game"])
-    follow(["Follow my games"])
-    administer(["Look after the service"])
+    account(["U1 Manage my account"])
+    setup(["U2 Set up a game"])
+    join(["U3 Join a game"])
+    play(["U4 Play a game"])
+    follow(["U5 Follow my games"])
+    administer(["U6 Look after the service"])
   end
 
-  player -- "register and sign in, change my details,<br/>change my password, reset my password" --- account
-  creator -- "create and start a game,<br/>arrange the seats" --- setup
-  player -- "accept or decline an invitation,<br/>take an open seat, withdraw from my seat" --- join
-  player -- "take a turn, ask for a suggested move,<br/>chat in a game, leave a game in play (resign)" --- play
-  creator -- "leave a game in play (force-resign a seat),<br/>abort a game" --- play
-  time -- "leave a game in play (time out),<br/>remind the player on turn" --- play
-  player -- "see my games, ratings and history,<br/>remove a game from my list" --- follow
-  admin -- "force-end a game, delete an account" --- administer
-  time -- "remove expired games" --- administer
+  player -- "U1.1 register and sign in, U1.2 change my details,<br/>U1.3 change my password, U1.4 reset my password" --- account
+  creator -- "U2.1 create and start a game,<br/>U2.2 arrange the seats" --- setup
+  player -- "U3.1 accept or decline an invitation,<br/>U3.2 take an open seat, U3.3 withdraw from my seat" --- join
+  player -- "U4.1 take a turn, U4.2 ask for a suggested move,<br/>U4.3 chat in a game, U4.4 leave a game in play (resign)" --- play
+  creator -- "U4.4 leave a game in play (force-resign a seat),<br/>U4.5 abort a game" --- play
+  time -- "U4.4 leave a game in play (time out),<br/>U4.6 remind the player on turn" --- play
+  player -- "U5.1 see my games, ratings and history,<br/>U5.2 remove a game from my list" --- follow
+  admin -- "U6.1 force-end a game, U6.2 delete an account" --- administer
+  time -- "U6.3 remove expired games" --- administer
 ```
+
+- [U1 Manage my account](#u1-manage-my-account): [U1.1](#u11-register-and-sign-in) Register and sign in, [U1.2](#u12-change-my-details) Change my details, [U1.3](#u13-change-my-password) Change my password, [U1.4](#u14-reset-my-password) Reset my password
+- [U2 Set up a game](#u2-set-up-a-game): [U2.1](#u21-create-and-start-a-game) Create and start a game, [U2.2](#u22-arrange-the-seats) Arrange the seats
+- [U3 Join a game](#u3-join-a-game): [U3.1](#u31-accept-or-decline-an-invitation) Accept or decline an invitation, [U3.2](#u32-take-an-open-seat) Take an open seat, [U3.3](#u33-withdraw-from-my-seat) Withdraw from my seat
+- [U4 Play a game](#u4-play-a-game): [U4.1](#u41-take-a-turn) Take a turn, [U4.2](#u42-ask-for-a-suggested-move) Ask for a suggested move, [U4.3](#u43-chat-in-a-game) Chat in a game, [U4.4](#u44-leave-a-game-in-play) Leave a game in play, [U4.5](#u45-abort-a-game) Abort a game, [U4.6](#u46-remind-the-player-on-turn) Remind the player on turn
+- [U5 Follow my games](#u5-follow-my-games): [U5.1](#u51-see-my-games-ratings-and-history) See my games, ratings and history, [U5.2](#u52-remove-a-game-from-my-list) Remove a game from my list
+- [U6 Look after the service](#u6-look-after-the-service): [U6.1](#u61-force-end-a-game) Force-end a game, [U6.2](#u62-delete-an-account) Delete an account, [U6.3](#u63-remove-expired-games) Remove expired games
 
 ## Journeys
 
@@ -65,21 +72,23 @@ A step's swimlane is its actor; *service* is the server acting on a request.
 Every action is drawn. A step that changes something no lifecycle
 covers, such as a session or a version, is marked *(no transition)*.
 
-### Manage my account
+### U1 Manage my account
 
 A player comes to the service to have an account and keep it theirs. Every
 action here is one sitting; none depends on a game.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Register and sign in"]
-  s0 --> a2["Reset my password"]
+  s0((start)) --> a1["U1.1 Register and sign in"]
+  s0 --> a2["U1.4 Reset my password"]
   a2 --> a1
-  a1 --> a3["Change my details"]
-  a1 --> a4["Change my password"]
+  a1 --> a3["U1.2 Change my details"]
+  a1 --> a4["U1.3 Change my password"]
 ```
 
-#### Register and sign in
+Journeys: [U1.1 Register and sign in](#u11-register-and-sign-in), [U1.2 Change my details](#u12-change-my-details), [U1.3 Change my password](#u13-change-my-password), [U1.4 Reset my password](#u14-reset-my-password).
+
+#### U1.1 Register and sign in
 
 A new account is active once its address is verified, and every address is
 unique (D72, #439). Registering and signing in share the end of the journey.
@@ -106,7 +115,7 @@ flowchart TD
   d2 -- yes --> t5["service: invitation Open → Passed to this account<br/>INV-2, INV-3"]
 ```
 
-#### Change my details
+#### U1.2 Change my details
 
 ```mermaid
 flowchart TD
@@ -123,7 +132,7 @@ flowchart TD
   d1 -- yes --> t4["service: new address Pending → Live,<br/>old address Live → None<br/>open invitations to the new one Open → Passed<br/>#439 R3, INV-4"]
 ```
 
-#### Change my password
+#### U1.3 Change my password
 
 ```mermaid
 flowchart TD
@@ -134,7 +143,7 @@ flowchart TD
   t1 --> p2["Player: signs in again, as in Register and sign in"]
 ```
 
-#### Reset my password
+#### U1.4 Reset my password
 
 ```mermaid
 flowchart TD
@@ -151,22 +160,24 @@ flowchart TD
   t2 --> p3["Player: signs in again, as in Register and sign in<br/>ACC-1"]
 ```
 
-### Set up a game
+### U2 Set up a game
 
 The creator comes to the service to get a game under way with the people they
 want. Seats fill independently until the creator starts with the claimed ones
-(GAME-9); the invitees' side of it is *Join a game*, and aborting is in
-*Play a game*, since it can happen before or after the start.
+(GAME-9); the invitees' side of it is [U3 Join a game](#u3-join-a-game), and aborting is in
+[U4 Play a game](#u4-play-a-game), since it can happen before or after the start.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Create and start a game"]
-  a1 -. "while seats fill" .-> a2["Arrange the seats"]
+  s0((start)) --> a1["U2.1 Create and start a game"]
+  a1 -. "while seats fill" .-> a2["U2.2 Arrange the seats"]
   a2 -.-> a1
-  a1 -- "gives up" --> a4["Abort a game"]
+  a1 -- "gives up" --> a4["U4.5 Abort a game"]
 ```
 
-#### Create and start a game
+Journeys: [U2.1 Create and start a game](#u21-create-and-start-a-game), [U2.2 Arrange the seats](#u22-arrange-the-seats), and [U4.5 Abort a game](#u45-abort-a-game) under Play a game.
+
+#### U2.1 Create and start a game
 
 ```mermaid
 flowchart TD
@@ -181,10 +192,9 @@ flowchart TD
   v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
 ```
 
-#### Arrange the seats
+#### U2.2 Arrange the seats
 
-An invited seat's invitation is sent as the seat is added, as in *Create and
-start a game*. The creator can also hide `Declined` and `Withdrawn` seats
+An invited seat's invitation is sent as the seat is added, as in [U2.1 Create and start a game](#u21-create-and-start-a-game). The creator can also hide `Declined` and `Withdrawn` seats
 so the list shows only the seats still in play. Hiding is the client's alone:
 the service keeps those seats until the start drops them.
 
@@ -209,7 +219,7 @@ flowchart TD
   t4 --> n0["a game left below two seats waits: it is checked again at the start<br/>GAME-3"]
 ```
 
-### Join a game
+### U3 Join a game
 
 A player comes to the service to take part in somebody else's game. They
 answer an invitation, or take a seat open to anyone, and may leave a claimed
@@ -217,13 +227,15 @@ seat before the start.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Accept or decline an invitation"]
-  s0 --> a2["Take an open seat"]
-  a1 --> a3["Withdraw from my seat"]
+  s0((start)) --> a1["U3.1 Accept or decline an invitation"]
+  s0 --> a2["U3.2 Take an open seat"]
+  a1 --> a3["U3.3 Withdraw from my seat"]
   a2 --> a3
 ```
 
-#### Accept or decline an invitation
+Journeys: [U3.1 Accept or decline an invitation](#u31-accept-or-decline-an-invitation), [U3.2 Take an open seat](#u32-take-an-open-seat), [U3.3 Withdraw from my seat](#u33-withdraw-from-my-seat).
+
+#### U3.1 Accept or decline an invitation
 
 ```mermaid
 flowchart TD
@@ -237,7 +249,7 @@ flowchart TD
   v2 -- yes --> t2["service: seat Invited → Declined, dead for good<br/>version bumps, everyone watching is told<br/>GAME-9, DEL-3"]
 ```
 
-#### Take an open seat
+#### U3.2 Take an open seat
 
 ```mermaid
 flowchart TD
@@ -248,7 +260,7 @@ flowchart TD
   v1 -- yes --> t1["service: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>INV-3"]
 ```
 
-#### Withdraw from my seat
+#### U3.3 Withdraw from my seat
 
 ```mermaid
 flowchart TD
@@ -258,7 +270,7 @@ flowchart TD
   v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
 ```
 
-### Play a game
+### U4 Play a game
 
 Every seated player comes to the service to play the game through. Turns go
 round until at most one seat is still playing (GAME-2); the creator and the
@@ -266,16 +278,18 @@ clock can each end a seat's part early.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Take a turn"]
-  s0 --> a2["Ask for a suggested move"]
+  s0((start)) --> a1["U4.1 Take a turn"]
+  s0 --> a2["U4.2 Ask for a suggested move"]
   a2 --> a1
-  s0 --> a3["Chat in a game"]
-  s0 --> a4["Remind the player on turn"]
-  s0 --> a5["Leave a game in play"]
-  s0 --> a6["Abort a game"]
+  s0 --> a3["U4.3 Chat in a game"]
+  s0 --> a4["U4.6 Remind the player on turn"]
+  s0 --> a5["U4.4 Leave a game in play"]
+  s0 --> a6["U4.5 Abort a game"]
 ```
 
-#### Take a turn
+Journeys: [U4.1 Take a turn](#u41-take-a-turn), [U4.2 Ask for a suggested move](#u42-ask-for-a-suggested-move), [U4.3 Chat in a game](#u43-chat-in-a-game), [U4.4 Leave a game in play](#u44-leave-a-game-in-play), [U4.5 Abort a game](#u45-abort-a-game), [U4.6 Remind the player on turn](#u46-remind-the-player-on-turn).
+
+#### U4.1 Take a turn
 
 ```mermaid
 flowchart TD
@@ -290,7 +304,7 @@ flowchart TD
   v2 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
 ```
 
-#### Ask for a suggested move
+#### U4.2 Ask for a suggested move
 
 ```mermaid
 flowchart TD
@@ -302,7 +316,7 @@ flowchart TD
   t1 --> p2["Player: plays it, or another, as in Take a turn"]
 ```
 
-#### Chat in a game
+#### U4.3 Chat in a game
 
 ```mermaid
 flowchart TD
@@ -312,7 +326,7 @@ flowchart TD
   v1 -- yes --> t1["service: message recorded, on or off turn, in any game state<br/>version bumps, every client told (no transition)<br/>RET-1"]
 ```
 
-#### Leave a game in play
+#### U4.4 Leave a game in play
 
 ```mermaid
 flowchart TD
@@ -328,7 +342,7 @@ flowchart TD
   v1 -- no --> t2["if it was their turn, the next seat is told;<br/>a bot's turn runs"]
 ```
 
-#### Abort a game
+#### U4.5 Abort a game
 
 ```mermaid
 flowchart TD
@@ -338,7 +352,7 @@ flowchart TD
   t2 --> t3["no rating changes<br/>GAME-5"]
 ```
 
-#### Remind the player on turn
+#### U4.6 Remind the player on turn
 
 ```mermaid
 flowchart TD
@@ -348,18 +362,20 @@ flowchart TD
   t1 --> t2["service: emails the player on turn, once, at their Live address<br/>TIME-4"]
 ```
 
-### Follow my games
+### U5 Follow my games
 
 A player comes to the service to see where they stand: their games, their
 ratings and their history, and to clear what they no longer want listed.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["See my games, ratings and history"]
-  a1 --> a2["Remove a game from my list"]
+  s0((start)) --> a1["U5.1 See my games, ratings and history"]
+  a1 --> a2["U5.2 Remove a game from my list"]
 ```
 
-#### See my games, ratings and history
+Journeys: [U5.1 See my games, ratings and history](#u51-see-my-games-ratings-and-history), [U5.2 Remove a game from my list](#u52-remove-a-game-from-my-list).
+
+#### U5.1 See my games, ratings and history
 
 ```mermaid
 flowchart TD
@@ -372,7 +388,7 @@ flowchart TD
   p2 --> p3["Player: reads times in local time (reads)<br/>CLOCK-4"]
 ```
 
-#### Remove a game from my list
+#### U5.2 Remove a game from my list
 
 ```mermaid
 flowchart TD
@@ -382,19 +398,21 @@ flowchart TD
   v1 -- yes --> t1["service: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, question 13"]
 ```
 
-### Look after the service
+### U6 Look after the service
 
 The administrator and the clock keep the service in order: ending games
 that cannot end, removing old games, and deleting accounts.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Force-end a game"]
-  s0 --> a2["Delete an account"]
-  s0 --> a3["Remove expired games"]
+  s0((start)) --> a1["U6.1 Force-end a game"]
+  s0 --> a2["U6.2 Delete an account"]
+  s0 --> a3["U6.3 Remove expired games"]
 ```
 
-#### Force-end a game
+Journeys: [U6.1 Force-end a game](#u61-force-end-a-game), [U6.2 Delete an account](#u62-delete-an-account), [U6.3 Remove expired games](#u63-remove-expired-games).
+
+#### U6.1 Force-end a game
 
 ```mermaid
 flowchart TD
@@ -406,7 +424,7 @@ flowchart TD
   t2 --> t3["service: version bumps, every client told (no transition)"]
 ```
 
-#### Delete an account
+#### U6.2 Delete an account
 
 ```mermaid
 flowchart TD
@@ -426,7 +444,7 @@ flowchart TD
   v3 -- no --> t1["service: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>address Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
 ```
 
-#### Remove expired games
+#### U6.3 Remove expired games
 
 ```mermaid
 flowchart TD
