@@ -56,81 +56,38 @@ flowchart LR
 
 ## Journeys
 
-One activity diagram per action, or per few actions that share a path,
-under the use cases above. Each step either causes a transition in a
+Each use case above expands into an activity diagram showing how its actions
+fit together, and each action, or a few that share a path, expands again into
+its own journey beneath it. In a journey each step either causes a transition in a
 lifecycle below or only reads state, and cites the rules it exercises, so the
 end-to-end scenarios come from the journeys and coverage is read against them.
 A step's swimlane is its actor; *service* is the server acting on a request.
 Every action is drawn. A step that changes something no lifecycle
 covers, such as a session or a version, is marked *(no transition)*.
 
-### Set up a game and fill its seats
+### Manage my account
+
+A player comes to the service to have an account and keep it theirs. Every
+action here is one sitting; none depends on a game.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> c1["Creator: chooses edition, time limit and seats<br/>GAME-3, TIME-1, TIME-2"]
-  c1 --> v1{"service: at least two seats,<br/>every named seat a registered player?"}
-  v1 -- no --> r1["refused, nothing created"]
-  v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
-  t1 --> i1["Invitee: sees the invitation (reads)"]
-  i1 --> d1{"Invitee: accepts?"}
-  d1 -- yes --> t2["Invited → Claimed"]
-  d1 -- no --> t3["Invited → Declined<br/>DEL-3"]
-  t2 --> c3["Creator: starts the game"]
-  t3 --> c3
-  c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
-  v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
-  t4 --> e0((end))
+  s0((start)) --> d0{"Player: has an account?"}
+  d0 -- no --> a1["register, and verify the address"]
+  d0 -- yes --> d1{"Player: knows the password?"}
+  d1 -- no --> a2["reset my password, by emailed link<br/>ACC-5, ACC-6"]
+  d1 -- yes --> a3["sign in<br/>ACC-1, ACC-4"]
+  a1 --> a3
+  a2 --> a3
+  a3 --> d2{"Player: anything to change?"}
+  d2 -- details --> a4["change my details"]
+  d2 -- password --> a5["change my password, giving the current one<br/>ACC-6"]
+  d2 -- no --> e0((end))
+  a4 --> e0
+  a5 --> a3
 ```
 
-### Take a turn
-
-```mermaid
-flowchart TD
-  s0((start)) --> p1["Player or bot: told it is their turn (reads)"]
-  p1 --> p2["Player: composes a word, which survives other turns<br/>until a tile lands in its cells (client only)"]
-  p2 --> p3["Player or bot: places, passes or exchanges"]
-  p3 --> v1{"service: this seat's turn, and the move legal?"}
-  v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: applied (no transition), version and turn move,<br/>tiles drawn, every client told"]
-  t1 --> v2{"service: does the game end?<br/>GAME-2, the scoreless limit, out of tiles"}
-  v2 -- no --> p4["next seat told it is their turn"]
-  v2 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
-  p4 --> e0((end))
-  t2 --> e0
-```
-
-### Leave a game in play
-
-```mermaid
-flowchart TD
-  s0((start)) --> d0{"how"}
-  d0 -- "player resigns" --> a1["Playing → Departed, resigned<br/>RATE-2"]
-  d0 -- "creator force-resigns" --> a2["Playing → Departed, force-resigned<br/>GAME-6, RATE-3"]
-  d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
-  a1 --> b1["tiles back to the bag<br/>GAME-7"]
-  a2 --> b1
-  b1 --> v1{"service: at most one seat still playing?<br/>GAME-2"}
-  a3 --> v1
-  v1 -- yes --> t1["game Finished, ratings settled"]
-  v1 -- no --> t2["if it was their turn, the next seat is told;<br/>a bot's turn runs"]
-  t1 --> e0((end))
-  t2 --> e0
-```
-
-### Abort a game
-
-```mermaid
-flowchart TD
-  s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
-  c1 --> t1["service: pending invitations cancelled"]
-  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
-  t2 --> t3["no rating changes<br/>GAME-5"]
-  t3 --> e0((end))
-```
-
-### Register and sign in
+#### Register and sign in
 
 A new account is active once its address is verified, and every address is
 unique (D72, #439). Registering and signing in share the end of the journey.
@@ -161,7 +118,7 @@ flowchart TD
   t5 --> e0
 ```
 
-### Change my details
+#### Change my details
 
 ```mermaid
 flowchart TD
@@ -183,7 +140,7 @@ flowchart TD
   r2 --> e0
 ```
 
-### Change my password
+#### Change my password
 
 ```mermaid
 flowchart TD
@@ -196,7 +153,7 @@ flowchart TD
   r1 --> e0
 ```
 
-### Reset my password
+#### Reset my password
 
 ```mermaid
 flowchart TD
@@ -217,7 +174,51 @@ flowchart TD
   p3 --> e0
 ```
 
-### Arrange the seats
+### Set up a game
+
+The creator comes to the service to get a game under way with the people they
+want. Seats fill independently until the creator starts with the claimed ones
+(GAME-9); the invitees' side of it is *Join a game*.
+
+```mermaid
+flowchart TD
+  s0((start)) --> a1["create the game, with its first seats<br/>GAME-3"]
+  a1 --> d1{"Creator: the claimed seats are the game wanted?"}
+  d1 -- "not yet" --> d2{"Creator: what to change?"}
+  d2 -- more players --> a2["add a seat, its invitation sent<br/>GAME-9"]
+  d2 -- "wrong seat, or a dead one" --> a3["withdraw a seat, or hide a dead one<br/>GAME-8, GAME-9"]
+  d2 -- order --> a4["reorder seats<br/>GAME-9"]
+  a2 --> w1["wait for invitees to answer, as in Join a game"]
+  a3 --> d1
+  a4 --> d1
+  w1 --> d1
+  d1 -- yes --> a5["start: spent seats dropped, racks dealt<br/>GAME-3"]
+  d1 -- "give up" --> a6["abort<br/>GAME-1, GAME-5"]
+  a5 --> e0((end: Play a game))
+  a6 --> e1((end))
+```
+
+#### Set up a game and fill its seats
+
+```mermaid
+flowchart TD
+  s0((start)) --> c1["Creator: chooses edition, time limit and seats<br/>GAME-3, TIME-1, TIME-2"]
+  c1 --> v1{"service: at least two seats,<br/>every named seat a registered player?"}
+  v1 -- no --> r1["refused, nothing created"]
+  v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
+  t1 --> i1["Invitee: sees the invitation (reads)"]
+  i1 --> d1{"Invitee: accepts?"}
+  d1 -- yes --> t2["Invited → Claimed"]
+  d1 -- no --> t3["Invited → Declined<br/>DEL-3"]
+  t2 --> c3["Creator: starts the game"]
+  t3 --> c3
+  c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
+  v2 -- no --> r2["refused, nothing changes"]
+  v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
+  t4 --> e0((end))
+```
+
+#### Arrange the seats
 
 An invited seat's invitation is sent as the seat is added, as in *Set up a game
 and fill its seats*. The creator can also hide `Declined` and `Withdrawn` seats
@@ -249,19 +250,29 @@ flowchart TD
   r2 --> e0
 ```
 
-### Withdraw from a seat
+### Join a game
+
+A player comes to the service to take part in somebody else's game. They
+answer an invitation, or take a seat open to anyone, and may leave a claimed
+seat before the start.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: withdraws from a seat they hold"]
-  p1 --> v1{"service: the game still Not Started,<br/>and the seat Claimed by this player?"}
-  v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
-  t1 --> e0((end))
-  r1 --> e0
+  s0((start)) --> d0{"Player: how did the game reach me?"}
+  d0 -- "invitation in my list or an email" --> a1["accept or decline<br/>INV-1, INV-5"]
+  d0 -- "a link" --> a2["follow it and sign in or register:<br/>the invitation is associated with me<br/>INV-2, INV-3"]
+  d0 -- "an open seat in the list" --> a3["take the open seat<br/>INV-3"]
+  a2 --> a1
+  a1 -- declined --> e0((end: the seat is dead))
+  a1 -- accepted --> c1["seat Claimed"]
+  a3 --> c1
+  c1 --> d1{"Player: still want to play?"}
+  d1 -- no --> a4["withdraw from my seat<br/>GAME-9"]
+  d1 -- yes --> e1((end: wait for the start))
+  a4 --> e0
 ```
 
-### Take an open seat
+#### Take an open seat
 
 ```mermaid
 flowchart TD
@@ -274,7 +285,57 @@ flowchart TD
   r1 --> e0
 ```
 
-### Ask for a suggested move
+#### Withdraw from a seat
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player: withdraws from a seat they hold"]
+  p1 --> v1{"service: the game still Not Started,<br/>and the seat Claimed by this player?"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v1 -- yes --> t1["service: seat Claimed → Withdrawn, spent for good<br/>version bumps, everyone watching is told<br/>GAME-9"]
+  t1 --> e0((end))
+  r1 --> e0
+```
+
+### Play a game
+
+Every seated player comes to the service to play the game through. Turns go
+round until at most one seat is still playing (GAME-2); the creator and the
+clock can each end a seat's part early.
+
+```mermaid
+flowchart TD
+  s0((start: game Active)) --> d0{"whose move?"}
+  d0 -- "player on turn" --> a1["take a turn: place, pass or exchange,<br/>having asked for a suggestion if wanted<br/>RATE-4"]
+  d0 -- "any player, any time" --> a2["chat, or resign<br/>GAME-7, RATE-2"]
+  d0 -- creator --> a3["force-resign a seat, or abort<br/>GAME-1, GAME-6"]
+  d0 -- time --> a4["remind the player on turn, then retire<br/>the seat past its time limit<br/>TIME-3, TIME-4"]
+  a1 --> v1{"service: game over?<br/>GAME-2"}
+  a2 --> v1
+  a3 --> v1
+  a4 --> v1
+  v1 -- no --> d0
+  v1 -- yes --> e0((end: Finished or Aborted, ratings settled))
+```
+
+#### Take a turn
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player or bot: told it is their turn (reads)"]
+  p1 --> p2["Player: composes a word, which survives other turns<br/>until a tile lands in its cells (client only)"]
+  p2 --> p3["Player or bot: places, passes or exchanges"]
+  p3 --> v1{"service: this seat's turn, and the move legal?"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v1 -- yes --> t1["service: applied (no transition), version and turn move,<br/>tiles drawn, every client told"]
+  t1 --> v2{"service: does the game end?<br/>GAME-2, the scoreless limit, out of tiles"}
+  v2 -- no --> p4["next seat told it is their turn"]
+  v2 -- yes --> t2["service: game Finished, ratings settled<br/>RATE-2, RATE-3"]
+  p4 --> e0((end))
+  t2 --> e0
+```
+
+#### Ask for a suggested move
 
 ```mermaid
 flowchart TD
@@ -288,7 +349,7 @@ flowchart TD
   r1 --> e0
 ```
 
-### Chat in a game
+#### Chat in a game
 
 ```mermaid
 flowchart TD
@@ -300,19 +361,62 @@ flowchart TD
   r1 --> e0
 ```
 
-### Remove a game from my list
+#### Leave a game in play
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: removes a game from their list<br/>DEL-5"]
-  p1 --> v1{"service: the game Finished or Aborted,<br/>and the player seated in it or its creator?"}
-  v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, question 13"]
+  s0((start)) --> d0{"how"}
+  d0 -- "player resigns" --> a1["Playing → Departed, resigned<br/>RATE-2"]
+  d0 -- "creator force-resigns" --> a2["Playing → Departed, force-resigned<br/>GAME-6, RATE-3"]
+  d0 -- "time: the move limit passes" --> a3["Playing → Departed, timed out,<br/>tiles back to the bag<br/>TIME-3, GAME-7, RATE-3"]
+  a1 --> b1["tiles back to the bag<br/>GAME-7"]
+  a2 --> b1
+  b1 --> v1{"service: at most one seat still playing?<br/>GAME-2"}
+  a3 --> v1
+  v1 -- yes --> t1["game Finished, ratings settled"]
+  v1 -- no --> t2["if it was their turn, the next seat is told;<br/>a bot's turn runs"]
   t1 --> e0((end))
-  r1 --> e0
+  t2 --> e0
 ```
 
-### See my games, ratings and history
+#### Abort a game
+
+```mermaid
+flowchart TD
+  s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
+  c1 --> t1["service: pending invitations cancelled"]
+  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
+  t2 --> t3["no rating changes<br/>GAME-5"]
+  t3 --> e0((end))
+```
+
+#### Remind the player on turn
+
+```mermaid
+flowchart TD
+  s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
+  t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
+  v1 -- no --> e0((end))
+  v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
+  t1 --> t2["service: emails the player on turn, once, at their Live address<br/>TIME-4"]
+  t2 --> e0
+```
+
+### Follow my games
+
+A player comes to the service to see where they stand: their games, their
+ratings and their history, and to clear what they no longer want listed.
+
+```mermaid
+flowchart TD
+  s0((start)) --> a1["see my games, ratings and history (reads)"]
+  a1 --> d1{"Player: a game I no longer want listed?"}
+  d1 -- yes --> a2["remove it from my list<br/>DEL-5"]
+  d1 -- no --> e0((end))
+  a2 --> e0
+```
+
+#### See my games, ratings and history
 
 ```mermaid
 flowchart TD
@@ -327,7 +431,36 @@ flowchart TD
   r1 --> e0
 ```
 
-### Force-end a game
+#### Remove a game from my list
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player: removes a game from their list<br/>DEL-5"]
+  p1 --> v1{"service: the game Finished or Aborted,<br/>and the player seated in it or its creator?"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v1 -- yes --> t1["service: the game is marked hidden for this player alone<br/>(no transition); the game, its seats and every other<br/>player's list are untouched, and it still refers to the player<br/>DEL-5, DEL-2, question 13"]
+  t1 --> e0((end))
+  r1 --> e0
+```
+
+### Look after the service
+
+The administrator and the clock keep the service in order: ending games
+that cannot end, removing old games, and deleting accounts.
+
+```mermaid
+flowchart TD
+  s0((start)) --> d0{"who?"}
+  d0 -- administrator --> d1{"what is needed?"}
+  d1 -- "a stuck game" --> a1["force-end the game<br/>RATE-1"]
+  d1 -- "an account to go" --> a2["delete the account<br/>DEL-1, DEL-2"]
+  d0 -- time --> a3["remove expired games<br/>RET-1, RET-3"]
+  a1 --> e0((end))
+  a2 --> e0
+  a3 --> e0
+```
+
+#### Force-end a game
 
 ```mermaid
 flowchart TD
@@ -341,7 +474,7 @@ flowchart TD
   r1 --> e0
 ```
 
-### Delete an account
+#### Delete an account
 
 ```mermaid
 flowchart TD
@@ -363,19 +496,7 @@ flowchart TD
   r1 --> e0
 ```
 
-### Remind the player on turn
-
-```mermaid
-flowchart TD
-  s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
-  t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
-  v1 -- no --> e0((end))
-  v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
-  t1 --> t2["service: emails the player on turn, once, at their Live address<br/>TIME-4"]
-  t2 --> e0
-```
-
-### Remove expired games
+#### Remove expired games
 
 ```mermaid
 flowchart TD
