@@ -72,19 +72,13 @@ action here is one sitting; none depends on a game.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> d0{"Player: has an account?"}
-  d0 -- no --> a1["register and sign in: register,<br/>and verify the address"]
-  d0 -- yes --> d1{"Player: knows the password?"}
-  d1 -- no --> a2["reset my password, by emailed link<br/>ACC-5, ACC-6"]
-  d1 -- yes --> a3["register and sign in: sign in<br/>ACC-1, ACC-4"]
-  a1 --> a3
-  a2 --> a3
-  a3 --> d2{"Player: anything to change?"}
-  d2 -- details --> a4["change my details"]
-  d2 -- password --> a5["change my password, giving the current one<br/>ACC-6"]
-  d2 -- no --> e0((end))
+  s0((start)) --> a1["Register and sign in"]
+  s0 --> a2["Reset my password"]
+  a2 --> a1
+  a1 --> a3["Change my details"]
+  a1 --> a4["Change my password"]
+  a3 --> e0((end))
   a4 --> e0
-  a5 --> a3
 ```
 
 #### Register and sign in
@@ -183,20 +177,12 @@ want. Seats fill independently until the creator starts with the claimed ones
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["create and start a game: create it,<br/>with its first seats<br/>GAME-3"]
-  a1 --> d1{"Creator: the claimed seats are the game wanted?"}
-  d1 -- "not yet" --> d2{"Creator: what to change?"}
-  d2 -- more players --> a2["arrange the seats: add one,<br/>its invitation sent<br/>GAME-9"]
-  d2 -- "wrong seat, or a dead one" --> a3["arrange the seats: withdraw one,<br/>or hide a dead one<br/>GAME-8, GAME-9"]
-  d2 -- order --> a4["arrange the seats: reorder<br/>GAME-9"]
-  a2 --> w1["invitees answer, as in Join a game"]
-  a3 --> d1
-  a4 --> d1
-  w1 --> d1
-  d1 -- yes --> a5["create and start a game: start,<br/>spent seats dropped, racks dealt<br/>GAME-3"]
-  d1 -- "give up" --> a6["abort a game, as in Play a game<br/>GAME-1, GAME-5"]
-  a5 --> e0((end: Play a game))
-  a6 --> e1((end))
+  s0((start)) --> a1["Create and start a game"]
+  a1 -. "while seats fill" .-> a2["Arrange the seats"]
+  a2 -.-> a1
+  a1 --> e0((end: Play a game))
+  a1 -- "gives up" --> a4["Abort a game"]
+  a4 --> e1((end))
 ```
 
 #### Create and start a game
@@ -255,18 +241,13 @@ seat before the start.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> d0{"Player: how did the game reach me?"}
-  d0 -- "invitation in my list or an email" --> a1["accept or decline an invitation<br/>INV-1, INV-5"]
-  d0 -- "a link" --> a2["follow it and register and sign in:<br/>the invitation is associated with me<br/>INV-2, INV-3"]
-  d0 -- "an open seat in the list" --> a3["take the open seat<br/>INV-3"]
-  a2 --> a1
-  a1 -- declined --> e0((end: the seat is dead))
-  a1 -- accepted --> c1["seat Claimed"]
-  a3 --> c1
-  c1 --> d1{"Player: still want to play?"}
-  d1 -- no --> a4["withdraw from my seat<br/>GAME-9"]
-  d1 -- yes --> e1((end: wait for the start))
-  a4 --> e0
+  s0((start)) --> a1["Accept or decline an invitation"]
+  s0 --> a2["Take an open seat"]
+  a1 --> a3["Withdraw from my seat"]
+  a2 --> a3
+  a1 --> e0((end))
+  a2 --> e0
+  a3 --> e0
 ```
 
 #### Accept or decline an invitation
@@ -319,17 +300,18 @@ clock can each end a seat's part early.
 
 ```mermaid
 flowchart TD
-  s0((start: game Active)) --> d0{"whose move?"}
-  d0 -- "player on turn" --> a1["take a turn, having asked for<br/>a suggested move if wanted<br/>RATE-4"]
-  d0 -- "any player, any time" --> a2["chat in a game, or<br/>leave a game in play: resign<br/>GAME-7, RATE-2"]
-  d0 -- creator --> a3["leave a game in play: force-resign a seat,<br/>or abort a game<br/>GAME-1, GAME-6"]
-  d0 -- time --> a4["remind the player on turn, then<br/>leave a game in play: time out<br/>TIME-3, TIME-4"]
-  a1 --> v1{"service: game over?<br/>GAME-2"}
-  a2 --> v1
-  a3 --> v1
-  a4 --> v1
-  v1 -- no --> d0
-  v1 -- yes --> e0((end: Finished or Aborted, ratings settled))
+  s0((start)) --> a1["Take a turn"]
+  s0 --> a2["Ask for a suggested move"]
+  a2 --> a1
+  s0 --> a3["Chat in a game"]
+  s0 --> a4["Remind the player on turn"]
+  s0 --> a5["Leave a game in play"]
+  s0 --> a6["Abort a game"]
+  a1 --> e0((end))
+  a3 --> e0
+  a4 --> e0
+  a5 --> e0
+  a6 --> e0
 ```
 
 #### Take a turn
@@ -423,10 +405,9 @@ ratings and their history, and to clear what they no longer want listed.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["see my games, ratings and history (reads)"]
-  a1 --> d1{"Player: a game I no longer want listed?"}
-  d1 -- yes --> a2["remove it from my list<br/>DEL-5"]
-  d1 -- no --> e0((end))
+  s0((start)) --> a1["See my games, ratings and history"]
+  a1 --> a2["Remove a game from my list"]
+  a1 --> e0((end))
   a2 --> e0
 ```
 
@@ -464,11 +445,9 @@ that cannot end, removing old games, and deleting accounts.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> d0{"who?"}
-  d0 -- administrator --> d1{"what is needed?"}
-  d1 -- "a stuck game" --> a1["force-end the game<br/>RATE-1"]
-  d1 -- "an account to go" --> a2["delete the account<br/>DEL-1, DEL-2"]
-  d0 -- time --> a3["remove expired games<br/>RET-1, RET-3"]
+  s0((start)) --> a1["Force-end a game"]
+  s0 --> a2["Delete an account"]
+  s0 --> a3["Remove expired games"]
   a1 --> e0((end))
   a2 --> e0
   a3 --> e0
