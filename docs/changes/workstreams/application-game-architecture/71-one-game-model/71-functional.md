@@ -431,12 +431,17 @@ Functional, so answered before the technical decisions:
    changed-from address is released, at the change or when the new one is
    verified; and whether sign-in is by User ID or by address, which is open on
    #439. Proposed: address rules in docs/1.0 when #439 lands, settling all four.
-6. **A User ID is unique, ignoring case.** `register_player` and
+6. **A User ID is unique, ignoring case.** Withdrawn: docs/2.5 already says a
+   display name is unique after folding, and #301 owns the fuller User ID rules
+   (mapping, 2 to 30 characters, permitted characters, reserved names, the NFKC
+   fold), which #363 builds. This question missed both. `register_player` and
    `update_player_details` refuse a name another account holds, through
    `get_player_by_name` on the folded name. docs/1.0 does not say so. Proposed:
    a rule beside ACC-1.
 7. **Sign-in and reset reveal nothing about who has an account, and a reset
-   ends every session.** `login_player` gives one answer for an unknown User ID
+   ends every session.** Withdrawn as a rule question: docs/2.5 already states all
+   of it. What remains is the journey, so "Change my password" joins the use
+   cases as this document's own gap. `login_player` gives one answer for an unknown User ID
    and a wrong password; `request_password_reset` answers the same for an
    unknown address; the link works once, within an hour
    (`PASSWORD_RESET_TOKEN_TTL_SECS`), a new request voids older links, and
