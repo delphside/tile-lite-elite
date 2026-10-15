@@ -214,24 +214,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: signed in, asks to change the password"]
-  p1 --> v0{"service: within the allowance?<br/>LIMIT-1, LIMIT-2"}
-  v0 -- no --> r0["refused, not queued"]
-  v0 -- yes --> d1{"service: the account's address verified? (reads)<br/>#439 R3"}
-  d1 -- yes --> t0["service: a link is emailed to that address<br/>(no transition)<br/>ACC-6"]
-  t0 --> p3["Player: follows the link and gives a new password"]
-  p3 --> v2{"service: link unused and within its hour?<br/>ACC-5"}
-  v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t1
-  d1 -- no --> p4["Player: gives the current password and a new one"]
-  p4 --> v1{"service: the current password right?<br/>ACC-6"}
+  s0((start)) --> p1["Player: signed in, gives the current password and a new one"]
+  p1 --> v1{"service: within the allowance, and the current password right?<br/>LIMIT-1, LIMIT-2, ACC-6"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["service: password changed, every session ended,<br/>this one included (no transition)<br/>ACC-6"]
   t1 --> p2["Player: signs in again, as in Register and sign in"]
   p2 --> e0((end))
-  r0 --> e0
   r1 --> e0
-  r2 --> e0
 ```
 
 ### Reset my password
