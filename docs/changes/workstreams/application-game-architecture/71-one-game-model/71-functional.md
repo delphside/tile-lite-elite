@@ -155,7 +155,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: gives the email of the account"]
+  s0((start)) --> p1["Player: gives the email address of the account"]
   p1 --> v2{"service: a Live email of an account? (reads)<br/>question 5"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
   v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
@@ -365,7 +365,7 @@ flowchart TD
   s0((start)) --> t0["time: the hourly pass looks at each Active game (reads)"]
   t0 --> v1{"service: limit longer than a day, a third of it or less remaining,<br/>and the seat on turn a claimed player not yet reminded this turn?<br/>TIME-4"}
   v1 -- yes --> t1["service: records that this turn was reminded (no transition)<br/>question 13"]
-  t1 --> t2["service: emails the player on turn, once, at their Live email<br/>TIME-4"]
+  t1 --> t2["service: emails the player on turn, once, at their Live email address<br/>TIME-4"]
 ```
 
 ### U5 Follow my games
@@ -714,7 +714,7 @@ invitation event ever changes the account use.
 
 | invitation event | account use None | account use Pending | account use Live |
 | --- | --- | --- | --- |
-| creator invites the email | an Open invitation, emailed with a link (INV-2) | the same: a pending email passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
+| creator invites the email | an Open invitation, sent to the email address with a link (INV-2) | the same: a pending email passes nothing (INV-4) | an in-game invitation to the holder, notified with no link (INV-1) |
 | link claimed | Passed to the account that signs in or activates (INV-2, INV-3) | the same, even when that account is not the pending one (INV-4) | cannot happen: no invitation is Open once the email is Live |
 | withdrawn, or the game goes | Closed, seat spent, link dead (INV-7, GAME-9) | the same | the same |
 | a Passed invitation accepted or declined | nothing for the email; the seat moves on | the same | the same |
