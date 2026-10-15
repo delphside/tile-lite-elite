@@ -108,12 +108,15 @@ flowchart TD
   v2 -- no --> r2["refused, nothing created"]
   v2 -- yes --> t1["Server: account created, not yet active<br/>email None → Pending for this account,<br/>verification link emailed, good for a day<br/>Q5"]
   t1 --> d1{"Player: follows the link within its day?<br/>Q5"}
-  d1 -- no --> p3["Player: signs in to the account, not yet active,<br/>and asks for a new link<br/>Q5"]
-  p3 --> d1
+  d1 -- no --> p3["Player: signs in to the account, not yet active,<br/>and asks for a new link, giving an email,<br/>the same one or another<br/>Q5"]
+  p3 --> v5{"Server: is that email not verified by another account?<br/>Q5"}
+  v5 -- no --> r5["refused, nothing changes"]
+  v5 -- yes --> t7["Server: that email Pending for this account,<br/>any other it held released, earlier links stop,<br/>a new link emailed, good for a day<br/>Q5"]
+  t7 --> d1
   d1 -- "no, and nothing for 30 days" --> t6["Time: 30 days with no activity, never verified<br/>account removed, its User ID and email freed<br/>Q5"]
   d1 -- yes --> v4{"Server: still not verified by another account?<br/>the first to verify keeps it<br/>Q5"}
   v4 -- no --> t2["Server: email Pending → None for this account,<br/>which stays not yet active<br/>Q5"]
-  t2 --> p4["Player: signs in and gives another email,<br/>as in Change my details<br/>Q5"]
+  t2 --> p3
   v4 -- yes --> t3["Server: email Pending → Live, account active<br/>other accounts lose it as pending<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID or verified email,<br/>and password, and chooses whether<br/>the device stays logged in<br/>ACC-2, ACC-4"]
   t3 --> p2
@@ -141,8 +144,8 @@ flowchart TD
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t2["Server: new email None → Pending for this account,<br/>old email Live → None at once,<br/>verification link emailed, good for a day<br/>Q5"]
   t2 --> d1{"Player: follows the link within its day?<br/>Q5"}
-  d1 -- no --> p3["Player: asks for a new link<br/>Q5"]
-  p3 --> d1
+  d1 -- no --> p3["Player: asks for a new link, giving an email,<br/>the same one or another<br/>Q5"]
+  p3 --> v2
   d1 -- yes --> v3{"Server: still not verified by another account?<br/>the first to verify keeps it<br/>Q5"}
   v3 -- no --> t3["Server: new email Pending → None<br/>for this account, which has no email<br/>until it gives another<br/>Q5"]
   v3 -- yes --> t4["Server: new email Pending → Live,<br/>other accounts lose it as pending<br/>open invitations to the new one Open → Passed<br/>INV-4, Q5"]
@@ -521,8 +524,10 @@ and R3's short code:
 - a pending email blocks nobody, so several accounts may hold it pending, and
   the first to verify keeps it while the others lose it;
 - verification is by a link good for a day;
-- an account not yet active may, signed in, ask for a new link or give
-  another email, and may reset its password; nothing else;
+- asking for a new verification link always gives an email, the same one
+  or another, so it is also how an email is changed before verification;
+- an account not yet active may, signed in, ask for a new link, and may
+  reset its password; nothing else;
 - a password reset link also verifies a pending email if no other account has
   verified it;
 - a reset is asked for, and sign-in made, by User ID or by a verified email,
