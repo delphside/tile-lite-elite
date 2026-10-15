@@ -22,7 +22,7 @@ is an identity over what a viewer may see, and an engine is a client.
 
 ## The journeys and rules it covers
 
-*Set up a game and fill its seats*, *Take a turn*, *Leave a game in play* and
+*Create and start a game*, *Accept or decline an invitation*, *Take a turn*, *Leave a game in play* and
 *Abort a game*, from [`71-functional.md`](71-functional.md): GAME-1 to GAME-4,
 RATE-1 to RATE-3, TIME-3, DEL-2, DEL-3, and the tests the code review found
 missing (`71-test-approach.md`).
