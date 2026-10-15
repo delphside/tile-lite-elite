@@ -69,7 +69,10 @@ its own journey beneath it. In a journey each step either causes a transition in
 lifecycle below or only reads state, and cites the rules it exercises, so the
 end-to-end scenarios come from the journeys and coverage is read against them.
 A step's swimlane is its actor; *service* is the server acting on a request.
-Every action is drawn. Technical refusals, such as rate limits, are left out. A step that changes something no lifecycle
+Every action is drawn. Steps cite the rules in docs/1.0, the living documents these diagrams will
+move into; a design document that covers a whole journey is named above it,
+and a question still open is cited by its number below. Technical refusals,
+such as rate limits, are left out. A step that changes something no lifecycle
 covers, such as a session or a version, is marked *(no transition)*.
 
 ### U1 Manage my account
@@ -91,18 +94,21 @@ Journeys: [U1.1 Register and sign in](#u11-register-and-sign-in), [U1.2 Change m
 #### U1.1 Register and sign in
 
 A new account is active once its address is verified, and every address is
-unique (D72, #439). Registering and signing in share the end of the journey.
+unique. Registering and signing in share the end of the journey.
+
+References: User IDs, [docs/2.5](../../../../2.5-authentication.md). Addresses,
+question 5: their rules are not yet in docs/1.0.
 
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"Player: has an active account?"}
   d0 -- no --> p1["Player: gives a User ID, an email address and a password"]
-  p1 --> v2{"service: User ID free, and the address neither<br/>Pending nor Live for another account?<br/>#439 R2, R3, R7, #301, question 5"}
-  v2 -- "address Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>#439 R7"]
+  p1 --> v2{"service: User ID free, and the address neither<br/>Pending nor Live for another account?<br/>question 5"}
+  v2 -- "address Pending on another account" --> r4["told a verification was already sent, and offered a resend<br/>question 5"]
   v2 -- "otherwise no" --> r2["refused, nothing created"]
-  v2 -- yes --> t1["service: account created, not yet active<br/>address None → Pending, verification email sent<br/>#439 R3"]
+  v2 -- yes --> t1["service: account created, not yet active<br/>address None → Pending, verification email sent<br/>question 5"]
   t1 --> d1{"Player: verifies the address within a day?<br/>question 5"}
-  d1 -- no --> t2["time: the day lapses<br/>address Pending → None, the account is never active<br/>#439 R3, question 5"]
+  d1 -- no --> t2["time: the day lapses<br/>address Pending → None, the account is never active<br/>question 5"]
   d1 -- yes --> t3["service: address Pending → Live, account active<br/>open invitations to it Open → Passed, including one<br/>whose link was followed before registering<br/>INV-2, INV-4"]
   d0 -- yes --> p2["Player: signs in with User ID and password,<br/>and chooses whether the device stays logged in<br/>ACC-2"]
   t3 --> p2
@@ -115,19 +121,23 @@ flowchart TD
 
 #### U1.2 Change my details
 
+References: User IDs, [docs/2.5](../../../../2.5-authentication.md). A game
+holds no copy of a player's details, [71-design.md](71-design.md#open-questions)
+*User details are always a lookup*. Addresses, question 5.
+
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: signed in, changes the User ID, the email address or both<br/>ACC-1"]
   p1 --> d0{"service: which?"}
-  d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?<br/>#301"}
+  d0 -- "User ID" --> v1{"service: not blank, and not another account's<br/>ignoring case?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["service: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name<br/>71-design.md, the lookup rule"]
-  d0 -- "email address" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>#439 R3, R7"}
+  v1 -- yes --> t1["service: User ID changed (no transition)<br/>each game the player is in bumps its version<br/>and is announced; the game holds no copy of the name"]
+  d0 -- "email address" --> v2{"service: not blank, and neither Pending nor Live<br/>for another account?<br/>question 5"}
   v2 -- no --> r2["refused, nothing changes"]
-  v2 -- yes --> t2["service: new address None → Pending,<br/>verification email sent<br/>#439 R3"]
+  v2 -- yes --> t2["service: new address None → Pending,<br/>verification email sent<br/>question 5"]
   t2 --> d1{"Player: verifies the new address within a day?<br/>question 5"}
-  d1 -- no --> t3["time: the day lapses<br/>new address Pending → None, the old one stays<br/>#439 R3, question 5"]
-  d1 -- yes --> t4["service: new address Pending → Live,<br/>old address Live → None<br/>open invitations to the new one Open → Passed<br/>#439 R3, INV-4"]
+  d1 -- no --> t3["time: the day lapses<br/>new address Pending → None, the old one stays<br/>question 5"]
+  d1 -- yes --> t4["service: new address Pending → Live,<br/>old address Live → None<br/>open invitations to the new one Open → Passed<br/>INV-4, question 5"]
 ```
 
 #### U1.3 Change my password
@@ -146,7 +156,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: gives the email address of the account"]
-  p1 --> v2{"service: a Live address of an account? (reads)<br/>#439 R3"}
+  p1 --> v2{"service: a Live address of an account? (reads)<br/>question 5"}
   v2 -- no --> a1["the same answer is given, and nothing is sent<br/>ACC-5"]
   v2 -- yes --> t1["service: earlier links stop working, a new link is emailed<br/>(no transition)<br/>ACC-5"]
   t1 --> p2["Player: follows the link and gives a new password"]
@@ -344,7 +354,7 @@ flowchart TD
 flowchart TD
   s0((start)) --> c1["Creator: aborts, before or after the start<br/>GAME-1"]
   c1 --> t1["service: pending invitations cancelled"]
-  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>D68"]
+  t1 --> t2["service: game Aborted, seats frozen as they stand<br/>GAME-1"]
   t2 --> t3["no rating changes<br/>GAME-5"]
 ```
 
@@ -715,7 +725,7 @@ the only account event that reaches an invitation.
 | account event | invitation Open | invitation Passed | invitation Closed |
 | --- | --- | --- | --- |
 | registered, or changed to (None to Pending) | stays Open | unchanged | nothing |
-| registering or changing to a Pending or Live address | refused (#439 R7, R3), so no event | | |
+| registering or changing to a Pending or Live address | refused (question 5), so no event | | |
 | verified (Pending to Live) | Passed to the verifier, link dead (INV-4) | unchanged: a claimed link won | nothing |
 | a day lapses, or the account picks another (Pending to None) | stays Open | unchanged | nothing |
 | changed away, or account closed (Live to None) | cannot exist while Live | unchanged: the addressee keeps it | nothing |
