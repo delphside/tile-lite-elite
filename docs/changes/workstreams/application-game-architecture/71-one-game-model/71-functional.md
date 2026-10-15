@@ -15,10 +15,13 @@ It is the **to-be**: the service as #71 leaves it. The views follow
 
 ## Use case
 
-One diagram for the service. Each line is a permission: auth (2.5) and seats
-and invitations (2.7) enforce it. A game's creator is a role one player holds
-in one game, so it is drawn as a kind of player. A bot is an account, and plays
-through the same use cases a player does. Time stands for what nobody asks for.
+One diagram for the service. Each oval is a use case, a goal an actor comes to
+the service for; each labelled line is an action the actor takes towards it,
+and a permission: auth (2.5) and seats and invitations (2.7) enforce it. A
+game's creator is a role one player holds in one game, separate from any seat
+they hold (GAME-8), so it is drawn as a kind of player. A bot is an account,
+and plays through the same use cases a player does. Time stands for what
+nobody asks for.
 
 ```mermaid
 flowchart LR
@@ -32,63 +35,33 @@ flowchart LR
   bot -. "is a" .-> player
 
   subgraph service["Tile Lite Elite"]
-    register(["Register and sign in"])
-    details(["Change my details"])
-    reset(["Reset my password"])
-    password(["Change my password"])
-    create(["Create a game"])
-    roster(["Arrange the seats: add, withdraw, swap"])
-    withdraw(["Withdraw from a seat"])
-    start(["Start a game"])
-    abort(["Abort a game"])
-    forceresign(["Force-resign a seat"])
-    answer(["Accept or decline an invitation"])
-    open(["Take an open seat"])
-    turn(["Take a turn: place, pass or exchange"])
-    suggest(["Ask for a suggested move"])
-    resign(["Resign"])
-    chat(["Chat in a game"])
-    hide(["Remove a game from my list"])
-    history(["See my games, ratings and history"])
-    forceend(["Force-end a game"])
-    delete(["Delete an account"])
-    retire(["Retire a seat past its time limit"])
-    remind(["Remind the player on turn"])
-    expire(["Remove expired games"])
+    account(["Manage my account"])
+    setup(["Set up a game"])
+    join(["Join a game"])
+    play(["Play a game"])
+    follow(["Follow my games"])
+    administer(["Look after the service"])
   end
 
-  player --- register
-  player --- details
-  player --- reset
-  player --- password
-  player --- create
-  player --- answer
-  player --- withdraw
-  player --- open
-  player --- turn
-  player --- suggest
-  player --- resign
-  player --- chat
-  player --- hide
-  player --- history
-  creator --- roster
-  creator --- start
-  creator --- abort
-  creator --- forceresign
-  admin --- forceend
-  admin --- delete
-  time --- retire
-  time --- remind
-  time --- expire
+  player -- "register, sign in, change my details,<br/>change or reset my password" --- account
+  creator -- "create, add a seat, withdraw a seat,<br/>reorder seats, start, abort" --- setup
+  player -- "accept or decline an invitation,<br/>take an open seat, withdraw from my seat" --- join
+  player -- "take a turn: place, pass or exchange,<br/>ask for a suggested move, chat, resign" --- play
+  creator -- "force-resign a seat, abort" --- play
+  time -- "retire a seat past its time limit,<br/>remind the player on turn" --- play
+  player -- "see my games, ratings and history,<br/>remove a game from my list" --- follow
+  admin -- "force-end a game, delete an account" --- administer
+  time -- "remove expired games" --- administer
 ```
 
 ## Journeys
 
-One activity diagram per use case. Each step either causes a transition in a
+One activity diagram per action, or per few actions that share a path,
+under the use cases above. Each step either causes a transition in a
 lifecycle below or only reads state, and cites the rules it exercises, so the
 end-to-end scenarios come from the journeys and coverage is read against them.
 A step's swimlane is its actor; *service* is the server acting on a request.
-All seventeen are drawn. A step that changes something no lifecycle
+Every action is drawn. A step that changes something no lifecycle
 covers, such as a session or a version, is marked *(no transition)*.
 
 ### Set up a game and fill its seats
@@ -463,7 +436,7 @@ Functional, so answered before the technical decisions:
    a rule beside ACC-1.
 7. **Sign-in and reset reveal nothing about who has an account, and a reset
    ends every session.** Answered: ACC-4 to ACC-6, and "Change my password"
-   joins the use cases (owner, 2026-10-15). docs/2.5 already described it; the
+   joins Manage my account (owner, 2026-10-15). docs/2.5 already described it; the
    rules make it testable. What follows is the question as raised. `login_player` gives one answer for an unknown User ID
    and a wrong password; `request_password_reset` answers the same for an
    unknown address; the link works once, within an hour
@@ -474,7 +447,7 @@ Functional, so answered before the technical decisions:
    cases.
 8. **Withdrawing from a seat has a lifecycle arrow and no use case.** Answered:
    a withdrawn seat is spent, an invitation is never sent again, and a new seat
-   re-invites, GAME-9; "Withdraw from a seat" joins the use cases (owner,
+   re-invites, GAME-9; "withdraw from my seat" joins Join a game (owner,
    2026-10-15). What follows is the question as raised.
    `withdraw_from_seat` (roster.rs) lets the holder of a claimed seat other than
    the creator's give it up before the start. The lifecycle makes `Withdrawn`
