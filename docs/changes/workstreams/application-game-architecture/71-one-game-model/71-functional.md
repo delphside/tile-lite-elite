@@ -16,8 +16,8 @@ It is the **to-be**: the service as #71 leaves it. The views follow
 ## Use case
 
 One diagram for the service. Each oval is a use case, a goal an actor comes to
-the service for; each labelled line is an action the actor takes towards it,
-and a permission: auth (2.5) and seats and invitations (2.7) enforce it. A
+the service for; each labelled line names the journeys below by which the
+actor pursues it, and is a permission: auth (2.5) and seats and invitations (2.7) enforce it. A
 game's creator is a role one player holds in one game, separate from any seat
 they hold (GAME-8), so it is drawn as a kind of player. A bot is an account,
 and plays through the same use cases a player does. Time stands for what
@@ -43,12 +43,12 @@ flowchart LR
     administer(["Look after the service"])
   end
 
-  player -- "register, sign in, change my details,<br/>change or reset my password" --- account
-  creator -- "create, add a seat, withdraw a seat,<br/>reorder seats, start, abort" --- setup
+  player -- "register and sign in, change my details,<br/>change my password, reset my password" --- account
+  creator -- "create and start a game,<br/>arrange the seats" --- setup
   player -- "accept or decline an invitation,<br/>take an open seat, withdraw from my seat" --- join
-  player -- "take a turn: place, pass or exchange,<br/>ask for a suggested move, chat, resign" --- play
-  creator -- "force-resign a seat, abort" --- play
-  time -- "retire a seat past its time limit,<br/>remind the player on turn" --- play
+  player -- "take a turn, ask for a suggested move,<br/>chat in a game, leave a game in play (resign)" --- play
+  creator -- "leave a game in play (force-resign a seat),<br/>abort a game" --- play
+  time -- "leave a game in play (time out),<br/>remind the player on turn" --- play
   player -- "see my games, ratings and history,<br/>remove a game from my list" --- follow
   admin -- "force-end a game, delete an account" --- administer
   time -- "remove expired games" --- administer
@@ -73,10 +73,10 @@ action here is one sitting; none depends on a game.
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"Player: has an account?"}
-  d0 -- no --> a1["register, and verify the address"]
+  d0 -- no --> a1["register and sign in: register,<br/>and verify the address"]
   d0 -- yes --> d1{"Player: knows the password?"}
   d1 -- no --> a2["reset my password, by emailed link<br/>ACC-5, ACC-6"]
-  d1 -- yes --> a3["sign in<br/>ACC-1, ACC-4"]
+  d1 -- yes --> a3["register and sign in: sign in<br/>ACC-1, ACC-4"]
   a1 --> a3
   a2 --> a3
   a3 --> d2{"Player: anything to change?"}
@@ -178,27 +178,28 @@ flowchart TD
 
 The creator comes to the service to get a game under way with the people they
 want. Seats fill independently until the creator starts with the claimed ones
-(GAME-9); the invitees' side of it is *Join a game*.
+(GAME-9); the invitees' side of it is *Join a game*, and aborting is in
+*Play a game*, since it can happen before or after the start.
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["create the game, with its first seats<br/>GAME-3"]
+  s0((start)) --> a1["create and start a game: create it,<br/>with its first seats<br/>GAME-3"]
   a1 --> d1{"Creator: the claimed seats are the game wanted?"}
   d1 -- "not yet" --> d2{"Creator: what to change?"}
-  d2 -- more players --> a2["add a seat, its invitation sent<br/>GAME-9"]
-  d2 -- "wrong seat, or a dead one" --> a3["withdraw a seat, or hide a dead one<br/>GAME-8, GAME-9"]
-  d2 -- order --> a4["reorder seats<br/>GAME-9"]
-  a2 --> w1["wait for invitees to answer, as in Join a game"]
+  d2 -- more players --> a2["arrange the seats: add one,<br/>its invitation sent<br/>GAME-9"]
+  d2 -- "wrong seat, or a dead one" --> a3["arrange the seats: withdraw one,<br/>or hide a dead one<br/>GAME-8, GAME-9"]
+  d2 -- order --> a4["arrange the seats: reorder<br/>GAME-9"]
+  a2 --> w1["invitees answer, as in Join a game"]
   a3 --> d1
   a4 --> d1
   w1 --> d1
-  d1 -- yes --> a5["start: spent seats dropped, racks dealt<br/>GAME-3"]
-  d1 -- "give up" --> a6["abort<br/>GAME-1, GAME-5"]
+  d1 -- yes --> a5["create and start a game: start,<br/>spent seats dropped, racks dealt<br/>GAME-3"]
+  d1 -- "give up" --> a6["abort a game, as in Play a game<br/>GAME-1, GAME-5"]
   a5 --> e0((end: Play a game))
   a6 --> e1((end))
 ```
 
-#### Set up a game and fill its seats
+#### Create and start a game
 
 ```mermaid
 flowchart TD
@@ -206,12 +207,8 @@ flowchart TD
   c1 --> v1{"service: at least two seats,<br/>every named seat a registered player?"}
   v1 -- no --> r1["refused, nothing created"]
   v1 -- yes --> t1["service: game Not Started<br/>own and bot seats Claimed;<br/>invited seats Invited, their invitations sent"]
-  t1 --> i1["Invitee: sees the invitation (reads)"]
-  i1 --> d1{"Invitee: accepts?"}
-  d1 -- yes --> t2["Invited → Claimed"]
-  d1 -- no --> t3["Invited → Declined<br/>DEL-3"]
-  t2 --> c3["Creator: starts the game"]
-  t3 --> c3
+  t1 --> i1["invitees answer, as in Accept or decline an invitation;<br/>the creator may arrange the seats meanwhile"]
+  i1 --> c3["Creator: starts the game"]
   c3 --> v2{"service: no seat Invited,<br/>two or more left once spent seats drop?<br/>GAME-3"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t4["service: spent seats dropped, seats renumbered<br/>Claimed → Playing, racks dealt, game Active"]
@@ -220,8 +217,8 @@ flowchart TD
 
 #### Arrange the seats
 
-An invited seat's invitation is sent as the seat is added, as in *Set up a game
-and fill its seats*. The creator can also hide `Declined` and `Withdrawn` seats
+An invited seat's invitation is sent as the seat is added, as in *Create and
+start a game*. The creator can also hide `Declined` and `Withdrawn` seats
 so the list shows only the seats still in play. Hiding is the client's alone:
 the service keeps those seats until the start drops them.
 
@@ -259,8 +256,8 @@ seat before the start.
 ```mermaid
 flowchart TD
   s0((start)) --> d0{"Player: how did the game reach me?"}
-  d0 -- "invitation in my list or an email" --> a1["accept or decline<br/>INV-1, INV-5"]
-  d0 -- "a link" --> a2["follow it and sign in or register:<br/>the invitation is associated with me<br/>INV-2, INV-3"]
+  d0 -- "invitation in my list or an email" --> a1["accept or decline an invitation<br/>INV-1, INV-5"]
+  d0 -- "a link" --> a2["follow it and register and sign in:<br/>the invitation is associated with me<br/>INV-2, INV-3"]
   d0 -- "an open seat in the list" --> a3["take the open seat<br/>INV-3"]
   a2 --> a1
   a1 -- declined --> e0((end: the seat is dead))
@@ -270,6 +267,23 @@ flowchart TD
   d1 -- no --> a4["withdraw from my seat<br/>GAME-9"]
   d1 -- yes --> e1((end: wait for the start))
   a4 --> e0
+```
+
+#### Accept or decline an invitation
+
+```mermaid
+flowchart TD
+  s0((start)) --> p1["Player: sees an invitation addressed to them (reads)<br/>INV-1, INV-2, INV-5"]
+  p1 --> d1{"Player: accepts?"}
+  d1 -- yes --> v1{"service: the game still Not Started,<br/>and the invitation associated with this player?<br/>INV-5, INV-7"}
+  d1 -- no --> v2{"service: the same checks"}
+  v1 -- no --> r1["refused, nothing changes"]
+  v2 -- no --> r1
+  v1 -- yes --> t1["service: seat Invited → Claimed<br/>version bumps, everyone watching is told"]
+  v2 -- yes --> t2["service: seat Invited → Declined, dead for good<br/>version bumps, everyone watching is told<br/>GAME-9, DEL-3"]
+  t1 --> e0((end))
+  t2 --> e0
+  r1 --> e0
 ```
 
 #### Take an open seat
@@ -285,7 +299,7 @@ flowchart TD
   r1 --> e0
 ```
 
-#### Withdraw from a seat
+#### Withdraw from my seat
 
 ```mermaid
 flowchart TD
@@ -306,10 +320,10 @@ clock can each end a seat's part early.
 ```mermaid
 flowchart TD
   s0((start: game Active)) --> d0{"whose move?"}
-  d0 -- "player on turn" --> a1["take a turn: place, pass or exchange,<br/>having asked for a suggestion if wanted<br/>RATE-4"]
-  d0 -- "any player, any time" --> a2["chat, or resign<br/>GAME-7, RATE-2"]
-  d0 -- creator --> a3["force-resign a seat, or abort<br/>GAME-1, GAME-6"]
-  d0 -- time --> a4["remind the player on turn, then retire<br/>the seat past its time limit<br/>TIME-3, TIME-4"]
+  d0 -- "player on turn" --> a1["take a turn, having asked for<br/>a suggested move if wanted<br/>RATE-4"]
+  d0 -- "any player, any time" --> a2["chat in a game, or<br/>leave a game in play: resign<br/>GAME-7, RATE-2"]
+  d0 -- creator --> a3["leave a game in play: force-resign a seat,<br/>or abort a game<br/>GAME-1, GAME-6"]
+  d0 -- time --> a4["remind the player on turn, then<br/>leave a game in play: time out<br/>TIME-3, TIME-4"]
   a1 --> v1{"service: game over?<br/>GAME-2"}
   a2 --> v1
   a3 --> v1
