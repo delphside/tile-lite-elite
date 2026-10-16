@@ -23,7 +23,7 @@ from Claude on the same issue, of any age. It reads every comment, so it does no
 use the window. With `--issue` it reads that one issue and nothing else, which is
 what the check before Claude comments runs.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

@@ -25,7 +25,7 @@
 # certificate for tileliteelite.com — which it cannot validate, because DNS
 # points somewhere else. Repeated failures also risk a Let's Encrypt rate
 # limit. A host with no DNS of its own uses <ip>.sslip.io, which resolves
-# back to that IP and certificates immediately (see docs/3.1's HTTPS note).
+# back to that IP and certificates immediately (see docs/4.3.1's HTTPS note).
 
 # A loopback-only health listener, for the container's HEALTHCHECK.
 #

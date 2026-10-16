@@ -18,7 +18,7 @@ run_log_start rehearsal-limits.sh "$@"
 # temporary, and visible.
 #
 # **Why it is needed at all.** Registration is 2 a minute with a burst of 3
-# (`docs/4.1`), and the e2e suite registers an account per test. Measured
+# (`docs/4.4.1`), and the e2e suite registers an account per test. Measured
 # 2026-09-19, same code and same host, limits the only difference:
 #
 #   preview, relaxed limits      0 failed, 31 passed

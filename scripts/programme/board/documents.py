@@ -1,11 +1,11 @@
 """Which documents change on `main` and which ride a project branch — decided once.
 
-Everything maintained is in one of three classes (docs/5.2, *Programme and
+Everything maintained is in one of three classes (the programme's docs/1.3, *Programme and
 application*), and the class decides how it changes:
 
 - **generic programme assets** (processes, role definitions, templates) and
 - **programme records** (instances produced by operating the programme: the
-  delivery log, the workstream list, the artefact register in docs/4.8,
+  delivery log, the workstream list, the artefact register in the programme's 3.1.2,
   reports, change notes) are `programme`.
   They belong to no project and change on `main`: a copy on a branch
   disagrees with `main` until it merges, and makes the programme wait on a
@@ -16,10 +16,10 @@ application*), and the class decides how it changes:
   to `main` is warned about, not refused (owner: keep some flexibility).
 
 This answers the branch question only, which follows the class. It does not
-say which `programme` documents are generic and which are records; docs/5.2
+say which `programme` documents are generic and which are records; the programme's docs/1.3
 lists the generic assets and their instances.
 
-Generated documents belong to neither: `docs/1.5` and `docs/1.6` are built
+Generated documents belong to neither: `docs/4.1.5` and `docs/4.1.6` are built
 from whichever branch they are on, and regenerated there after the rebase that
 precedes a merge. Pure: paths in, answers out.
 """
@@ -33,8 +33,8 @@ APPLICATION = "application"
 GENERATED = "generated"
 
 GENERATED_DOCUMENTS = (
-    "docs/1.5-work-in-progress.md",
-    "docs/1.6-document-map.md",
+    "docs/4.1.5-work-in-progress.md",
+    "docs/4.1.6-document-map.md",
 )
 
 # Exact paths, then prefixes. Anything else under docs/, and the root README,
@@ -47,7 +47,7 @@ PROGRAMME_DOCUMENTS = (
     "docs/4.8-artefacts.md",  # a record: this application's artefact register
 )
 PROGRAMME_PREFIXES = (
-    "docs/1.4-",
+    "docs/4.1.4-",
     "docs/1.7-",
     "docs/5.",
     "docs/templates/",

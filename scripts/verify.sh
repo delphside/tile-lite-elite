@@ -127,7 +127,7 @@ check_ci() {
 
 LABEL[branches]="No merged branches left behind"
 check_branches() {
-  # 3.3's "Delete the branch once its change is live" is a two-part step, and
+  # 4.3.3's "Delete the branch once its change is live" is a two-part step, and
   # only the first part can be automated away: GitHub can delete the *remote*
   # branch on merge, but nothing reaches this workstation to remove the local
   # one. `git fetch --prune` drops the remote-tracking ref and leaves the branch
@@ -183,7 +183,7 @@ LABEL[unreleased]="What main holds that production does not"
 #
 # **It matters most at the worst moment.** An emergency release cut from `main`
 # ships everything here alongside the fix, and the person restoring service is
-# in no position to audit it. `docs/3.3` says to cut from the last released tag
+# in no position to audit it. `docs/4.3.3` says to cut from the last released tag
 # instead; this is what makes the thing that rule protects against visible.
 #
 # **Counted in image terms, never in commits.** "3 commits ahead" is the answer
@@ -268,7 +268,7 @@ check_rehearsal() {
 }
 
 LABEL[tests]="Tooling tests pass"
-# **The runners, not a file pattern** (docs/3.3 §2.2). This looped over
+# **The runners, not a file pattern** (docs/4.3.3 §2.2). This looped over
 # `scripts/tests/*.test.sh` and skipped any it could not find, so as the suites
 # moved to bats on 2026-09-27 each batch dropped out of this check unnoticed,
 # and with the last one gone it would have passed having run nothing. bats

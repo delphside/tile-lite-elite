@@ -9,7 +9,7 @@
 //! ships is a shell one-liner per source (`gunzip`, `jq -r '.[]'`) and stays
 //! outside this tool deliberately: teaching it to un-gzip and parse JSON would
 //! add both dependencies to a crate that compiles to wasm, to save one line run
-//! once a year. See `docs/3.5-word-lists-and-dictionaries.md`.
+//! once a year. See `docs/4.3.5-word-lists-and-dictionaries.md`.
 //!
 //! `--remove-denied` additionally drops the denylisted words. It is a separate
 //! flag, and meant to be a separate commit, because the first deviation of a

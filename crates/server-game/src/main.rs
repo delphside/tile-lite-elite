@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // which is the right moment, because a stored line has to serve every
     // future question and a rendered one serves the question being asked now.
     //
-    // Every field a line carries is declared in `docs/4.7-log-events.md`, and a
+    // Every field a line carries is declared in `docs/4.4.7-log-events.md`, and a
     // test compares the two — see `tests/log_schema.rs`. Adding a field to an
     // event without adding it there fails CI, which is what keeps
     // "identifiers only" a property rather than an intention.

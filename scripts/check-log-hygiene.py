@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a stream of log lines against the schema `docs/4.7` declares.
+"""Validate a stream of log lines against the schema `docs/4.4.7` declares.
 
 **Reads; never drives.** Two callers feed it, and the difference is the source
 of the lines rather than anything this script does:
@@ -20,7 +20,7 @@ exception log."*
 What it asserts, in order of how much each is worth:
 
   1. no email address reaches the log, in any field of any event
-  2. a declared event carries exactly the fields `docs/4.7` declares — no more,
+  2. a declared event carries exactly the fields `docs/4.4.7` declares — no more,
      which is the leak this exists to catch, and no fewer
   3. every object in the schema sets `additionalProperties: false`. A schema
      that has quietly stopped guarding passes everything, so the property is
@@ -33,7 +33,7 @@ What it asserts, in order of how much each is worth:
      can slip and a compose file is reviewed
 
 An event the schema does not mention is **not** an error: the schema deliberately
-covers the events carrying player identifiers, and `docs/4.7` says so. Rule 1
+covers the events carrying player identifiers, and `docs/4.4.7` says so. Rule 1
 still applies to it, which is what keeps that decision safe.
 """
 
@@ -44,9 +44,9 @@ import re
 import sys
 
 def _doc() -> pathlib.Path:
-    """Where `4.7-log-events.md` is, in both places this runs.
+    """Where `4.4.7-log-events.md` is, in both places this runs.
 
-    In a checkout it is `../docs/4.7-log-events.md`. **On the production host
+    In a checkout it is `../docs/4.4.7-log-events.md`. **On the production host
     there is no checkout** — `deploy.sh` ships images, not source — so the
     delivery copies this script, the document and the nightly wrapper into
     `/opt/tile-lite-elite/` together, side by side. They are one artefact in
@@ -55,11 +55,11 @@ def _doc() -> pathlib.Path:
     against last month's document.
     """
     here = pathlib.Path(__file__).resolve().parent
-    for candidate in (here.parent / "docs" / "4.7-log-events.md",
-                      here / "4.7-log-events.md"):
+    for candidate in (here.parent / "docs" / "4.4.7-log-events.md",
+                      here / "4.4.7-log-events.md"):
         if candidate.exists():
             return candidate
-    return here.parent / "docs" / "4.7-log-events.md"
+    return here.parent / "docs" / "4.4.7-log-events.md"
 
 
 DOC = _doc()
@@ -150,12 +150,12 @@ def main() -> int:
             carried = set(event) - ENVELOPE
             for extra in sorted(carried - declared):
                 problems.append(
-                    f"line {number}: {message!r} carries {extra!r}, which docs/4.7 "
+                    f"line {number}: {message!r} carries {extra!r}, which docs/4.4.7 "
                     "does not declare")
             for missing in sorted(declared - carried):
                 problems.append(
                     f"line {number}: {message!r} is missing {missing!r}, which "
-                    "docs/4.7 declares")
+                    "docs/4.4.7 declares")
 
     if stream is not sys.stdin:
         stream.close()

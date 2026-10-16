@@ -4,7 +4,7 @@ name: CI
 # on pull requests, and on demand. The heavier `e2e` job (Playwright against the
 # preview Docker stack) is gated to main pushes, PRs, and manual runs — it does a
 # full image build, so it doesn't run on every branch push. See
-# docs/3.3-testing-ci-and-release.md for how this fits alongside local preview.
+# docs/4.3.3-testing-ci-and-release.md for how this fits alongside local preview.
 on:
   push:
   pull_request:
@@ -33,7 +33,7 @@ env:
   CARGO_TERM_COLOR: always
   # .cargo/config.toml sets `rustc-wrapper = sccache` for fast local rebuilds,
   # but sccache isn't installed on the runner and is incompatible with the
-  # wasm32 target anyway (see docs/3.2-development.md's "Known Build Issues").
+  # wasm32 target anyway (see docs/4.3.2-development.md's "Known Build Issues").
   # An empty value disables the wrapper for the whole job; the wasm32
   # `target-feature` rustflags in that same config file still apply.
   RUSTC_WRAPPER: ""
@@ -100,7 +100,7 @@ jobs:
           -p server-game -p admin-cli -p tile-lite-elite-ui
           --check
 
-      # The Python tooling's tests, on the standard library's runner (docs/3.3
+      # The Python tooling's tests, on the standard library's runner (docs/4.3.3
       # §2.4): the board model's in scripts/programme/board/tests/, and checks of the
       # repository's own files in scripts/tests/test_*.py. Two runs, because the
       # model imports as `board` from scripts/programme/.
@@ -120,7 +120,7 @@ jobs:
       # ran, which is how two of them came to fail open and a third to refuse
       # every rehearsal for a day.
       #
-      # bats-core runs the shell tooling's tests (docs/3.3 §2.2), with the
+      # bats-core runs the shell tooling's tests (docs/4.3.3 §2.2), with the
       # standard bats-support and bats-assert helpers. None is on the image.
       # Every *.bats in the directory, not a list: the list CI once kept by
       # hand had lost three suites, including one a project's post-deployment
@@ -156,7 +156,7 @@ jobs:
       # too, and native checks above won't catch wasm-only breakage. This is a
       # plain cargo compile (default `web` feature); it deliberately does not
       # run the full dx / wasm-bindgen packaging pipeline the release build uses.
-      - name: Log hygiene (the suite's own output, against docs/4.7)
+      - name: Log hygiene (the suite's own output, against docs/4.4.7)
         run: |
           # The regression suite is the stream. It drives registration, login,
           # invitations and the whole password-reset family — including the rare
@@ -181,7 +181,7 @@ jobs:
   # client in a browser with Playwright. Heavier than `check` (a full image
   # build), so it's gated to main pushes / PRs / manual runs, and only after
   # `check` passes — no point burning a build if the code doesn't lint. See
-  # docs/3.3's runbook step 3 and e2e/README.md.
+  # docs/4.3.3's runbook step 3 and e2e/README.md.
   stamp:
     name: commit stamp (app/api versions)
     runs-on: ubuntu-latest
@@ -200,7 +200,7 @@ jobs:
       # `pull_request` event `github.sha` is GitHub's merge of the branch with
       # its base, and `before` is the branch's previous head — so the range
       # above took in everything on `main` the branch did not have. Found on
-      # 2026-10-02 by a branch cut from a `prod-*` tag (docs/3.3 §1.13): the
+      # 2026-10-02 by a branch cut from a `prod-*` tag (docs/4.3.3 §1.13): the
       # job reported a stampless commit from `main`, and would have refused
       # every emergency for a commit that was not the emergency's.
       - name: Check the version stamp on each new commit

@@ -18,7 +18,7 @@ Refuses (exit 2) when GitHub cannot be read, or when no project has a Phase --
 a token that cannot see issue fields -- rather than writing headers from a
 partial board. `.github/workflows/context.yml` runs `--write` daily.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

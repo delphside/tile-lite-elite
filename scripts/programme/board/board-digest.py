@@ -8,14 +8,14 @@
 The brake's two measures, what landed, what was deleted, and anything decided
 that the owner might have decided differently. #382 asked for an issue comment
 a week; since 2026-09-27 it is a report file, the `weekly-digest` activity in
-docs/5.3, under CLAUDE.md's rule for reports the programme produces on a
+the programme's docs/1.4, under CLAUDE.md's rule for reports the programme produces on a
 cadence. Owner: the file, not the comment, so the series outlives #382.
 
 Three of the four parts are derived from git and the board. The fourth is a
 judgement about someone else's preferences, so `--decided` supplies it and an
 empty one says it was not written rather than that there was nothing.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def main(argv=None) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         heading, rest = text.split("\n", 1)
         path.write_text(f"{heading}\n\n`{code}`\n{rest}\n")
-        # And next week's draft, for the notes (docs/5.3).
+        # And next week's draft, for the notes (the programme's docs/1.4).
         nyear, nweek, _ = (today + timedelta(days=7)).isocalendar()
         ncode = f"TLE_WD_{nyear}_W{nweek:02d}"
         npath = REPORTS / f"{ncode}.md"

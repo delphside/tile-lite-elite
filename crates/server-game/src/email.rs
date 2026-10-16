@@ -40,7 +40,7 @@ const MOVE_REMINDER_TEMPLATE: &str = include_str!("../emails/move-reminder.txt")
 /// "identifiers only" rule applied to the one place that used to carry an
 /// address in plain text.
 ///
-/// A closed set rather than a `&str`, because `docs/4.7-log-events.md` declares
+/// A closed set rather than a `&str`, because `docs/4.4.7-log-events.md` declares
 /// these values and a test compares them: a free-form string would let a new
 /// kind reach the log without the document hearing about it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -230,7 +230,7 @@ async fn send(
     player_id: Option<&str>,
 ) -> bool {
     // Empty rather than absent when there is no account behind the address —
-    // a field that is always present keeps `docs/4.7`'s schema simple, and the
+    // a field that is always present keeps `docs/4.4.7`'s schema simple, and the
     // one case that produces it (a join invitation) is documented there.
     let player_id = player_id.unwrap_or("");
 

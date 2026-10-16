@@ -5,7 +5,7 @@ set -euo pipefail
 # *kind* of version for what is in it?
 #
 # A patch release may not carry functional change. The rule lives in
-# docs/3.3-testing-ci-and-release.md ("Releases are branches"): any
+# docs/4.3.3-testing-ci-and-release.md ("Releases are branches"): any
 # a `functional` issue in the scope makes it a minor,
 # and a minor is branched to rather than bumped into.
 #
@@ -29,7 +29,7 @@ set -euo pipefail
 # not to add a dependency to shipping.
 
 # The value of the **Type of change** issue field that means a user could
-# notice. It was a label until 2026-08-26; see docs/5.1 2.6.
+# notice. It was a label until 2026-08-26; see the programme's docs/1.2 2.6.
 FUNCTIONAL='IN("functional")' 
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -38,7 +38,7 @@ usage: check-release-version.sh <version> [previous-version]
 
 Checks whether <version> is the right kind of release given what its
 milestone contains: a patch may not carry functional change
-(docs/3.3, "Releases are branches").
+(docs/4.3.3, "Releases are branches").
 
 Exits 1 (wrong) only when:
   - <version> is a patch bump over its predecessor, and the milestone
@@ -155,7 +155,7 @@ cat >&2 <<EOF
 
 A patch release may not carry functional change. Either:
 
-  - this belongs on a minor release branch — see docs/3.3,
+  - this belongs on a minor release branch — see docs/4.3.3,
     "Releases are branches"; or
   - the labels are wrong, and these are fixes rather than functionality.
 

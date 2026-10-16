@@ -1,6 +1,6 @@
 """The board's issues, as one class per type.
 
-Designed in `docs/changes/workstreams/delivery-tooling/383-one-board-model/`.
+Designed in `programme/records/2.5-changes/programme-tooling/383-one-board-model/`.
 The rule this exists to enforce: **a fact is derived in exactly one place, is
 named there, and every consumer imports it.** Nine scripts each re-derive the
 same few concepts today, and the cost is not duplication but disagreement —
@@ -518,7 +518,7 @@ class StandaloneProject(Project):
 
 
 # Who holds a decision at each `Decision State`, and what they do next:
-# docs/5.1's table, decided here once. The turn alternates at every step, so
+# the programme's docs/1.2's table, decided here once. The turn alternates at every step, so
 # the owner holds three of the five. Until 2026-09-30 the reports knew only
 # `Asked`, and five decisions documented for sign-off read as nothing waiting.
 DECISION_TURNS: dict[str, tuple[str, str]] = {
@@ -544,7 +544,7 @@ class Decision(Issue):
 
     @property
     def turn(self) -> tuple[str, str] | None:
-        """Who holds the decision now, and what they do: docs/5.1's table."""
+        """Who holds the decision now, and what they do: the programme's docs/1.2's table."""
         return DECISION_TURNS.get(self.step or "")
 
     @property

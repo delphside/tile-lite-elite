@@ -318,7 +318,7 @@ One.
                                               fields={"Decision State": "Decided"}))))
 
     def test_a_decisions_turn_alternates_as_docs_5_1_says(self):
-        """docs/5.1: the owner holds Asked, Documented Ready for Sign-Off and
+        """the programme's docs/1.2: the owner holds Asked, Documented Ready for Sign-Off and
         Actioned; Claude holds Feedback Provided and Decided"""
         def d(state):
             return classify(issue(1, kind="Decision", fields={"Decision State": state}))
@@ -477,7 +477,7 @@ One.
         """a delivery at closedown owes its lesson, or says who carries it"""
         # This was a gap: the obligation existed with no evidence function, so #398
         # reached Project Closedown owing lessons learnt and read as complete. The
-        # delegation is why it looked hard -- docs/5.1 lets a package point at its
+        # delegation is why it looked hard -- the programme's docs/1.2 lets a package point at its
         # parent, so an absent heading is not by itself a finding.
         closing = classify(issue(1, parent=2, fields={"Project State": "Project Closedown", "Route": "x"},
                                  body="nothing to say\n"))

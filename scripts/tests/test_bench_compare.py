@@ -102,7 +102,7 @@ class BenchCompare(Cases):
 
     def test_is_registered_as_a_tool(self):
         self.expect("is registered as a tool", True,
-                    "bench-compare.py" in (SCRIPTS.parent / "docs/3.0-tools.md").read_text())
+                    "bench-compare.py" in (SCRIPTS.parent / "docs/4.3.0-tools.md").read_text())
 
 
 if __name__ == "__main__":

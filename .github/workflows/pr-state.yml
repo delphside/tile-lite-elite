@@ -1,7 +1,7 @@
 # Keeps the board's PR State current whenever a pull request or its review
 # changes, so it no longer depends on which session opened the pull request.
 #
-# `PR State` is derived, never typed (docs/5.5): `board-pr-state.py` reads
+# `PR State` is derived, never typed (the programme's docs/1.6): `board-pr-state.py` reads
 # GitHub's own state and writes the field. Until now it ran only from local
 # scripts (`create-pr.sh`, `verify.sh`, `.githooks/post-merge`), so a pull
 # request opened from a web session sat with no PR State and the owner could

@@ -27,7 +27,7 @@ count exactly what `issue-mentions.sh` counts for it. A pre-flight that passes
 where the gate refuses is worse than no pre-flight: the release stops anyway,
 at the point where stopping costs most.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

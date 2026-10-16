@@ -4,7 +4,7 @@ set -euo pipefail
 # ci-status.sh — Did a *particular* CI run pass for a commit?
 #
 # Push is the one step of the release that has an *answer* rather than just
-# an effect (docs/3.3, step 1.e), and this is how you get it. Relying on
+# an effect (docs/4.3.3, step 1.e), and this is how you get it. Relying on
 # GitHub's failure emails instead has two problems: they only arrive when
 # something breaks, so silence means "passed", "never started" and "went to
 # spam" all at once; and they land somewhere other than where you are
@@ -107,7 +107,7 @@ is what let a commit whose e2e had failed reach production.
   --run push:<branch>       your branch's own run
   --run pull_request        the pull request's run
 
-See docs/3.3, "Gating on a particular run".
+See docs/4.3.3, "Gating on a particular run".
 USAGE
   exit 2
 fi

@@ -1,5 +1,5 @@
 # The nightly offsite backup (#174). Installed to /etc/systemd/system/ on the
-# production host — see docs/3.4 and the delivery runbook in the project's design.
+# production host — see docs/4.3.4 and the delivery runbook in the project's design.
 #
 # `Type=oneshot` because it runs and finishes; the timer beside it decides when.
 # A failure exits non-zero and lands in the journal, but **nothing watches for

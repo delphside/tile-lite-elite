@@ -1,6 +1,6 @@
 """The grid: what each issue type owes at each lifecycle step.
 
-This is `docs/changes/workstreams/delivery-tooling/383-one-board-model/obligations.md`
+This is `programme/records/2.5-changes/programme-tooling/383-one-board-model/obligations.md`
 as data rather than as prose. The document is the argument; this is the
 requirement, and R4 is it rendered.
 
@@ -158,7 +158,7 @@ OBLIGATIONS: tuple[Obligation, ...] = (
         "change-type-set", (ParentProject, WorkPackage, StandaloneProject),
         ANY_STEP,
         "a `Type of change`",
-        "triage owes it — CLAUDE.md's minimum, and docs/5.1: every issue "
+        "triage owes it — CLAUDE.md's minimum, and the programme's docs/1.2: every issue "
         "carries one and it is a field",
         lambda i: bool(i.field("Type of change")),
     ),
@@ -364,7 +364,7 @@ OBLIGATIONS: tuple[Obligation, ...] = (
     # `Project Closedown` owing lessons learnt and read as complete. The
     # delegation is the reason it looked hard: a package may point at its
     # parent rather than answer, so an absent heading is not by itself a
-    # finding -- docs/5.1: *"`Delegated to #<parent>` -- so `board-check.py`
+    # finding -- the programme's docs/1.2: *"`Delegated to #<parent>` -- so `board-check.py`
     # reads an answer rather than an omission"*. Both forms are read here, and
     # the unticked-box half matches `parent-closedown`, because a package that
     # closes with a box outstanding leaves work owned by nobody.

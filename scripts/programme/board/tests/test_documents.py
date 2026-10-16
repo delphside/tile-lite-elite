@@ -2,7 +2,7 @@
 
 From the rules, owner 2026-09-25 and 2026-09-29/30: the programme's documents
 describe the programme and change on main; the application's change with the
-code; docs/1.5 and docs/1.6 are generated and belong to neither; change notes,
+code; docs/4.1.5 and docs/4.1.6 are generated and belong to neither; change notes,
 templates and reports are the programme's; and a path that is not a document
 is neither.
 """
@@ -23,8 +23,8 @@ class ProgrammeDocuments(unittest.TestCase):
         self.assertEqual(list(paths), of("programme", *paths))
 
     def test_the_roadmap_and_the_programme_overview(self):
-        self.assertEqual(["docs/1.4-roadmap.md", "docs/1.7-programme.md"],
-                         of("programme", "docs/1.4-roadmap.md", "docs/1.7-programme.md"))
+        self.assertEqual(["docs/4.1.4-roadmap.md", "docs/1.7-programme.md"],
+                         of("programme", "docs/4.1.4-roadmap.md", "docs/1.7-programme.md"))
 
     def test_everything_outside_the_numbered_set(self):
         paths = ("docs/templates/agent-handover.md", "docs/reports/weekly_digest/x.md",
@@ -33,18 +33,18 @@ class ProgrammeDocuments(unittest.TestCase):
         self.assertEqual(list(paths), of("programme", *paths))
 
     def test_the_artefact_register_is_a_programme_record(self):
-        # docs/5.2: 4.8 is this application's instance of the artefact register,
+        # the programme's docs/1.3: 4.8 (now 3.1.2) is this application's instance of the artefact register,
         # a record, so it changes on main (owner, 2026-10-03, #474).
         self.assertEqual(["docs/4.8-artefacts.md"], of("programme", "docs/4.8-artefacts.md"))
 
     def test_an_application_document_is_not_one(self):
-        self.assertEqual([], of("programme", "docs/4.3-api-schema.md", "docs/3.0-tools.md"))
+        self.assertEqual([], of("programme", "docs/4.4.3-api-schema.md", "docs/4.3.0-tools.md"))
 
 
 class ApplicationDocuments(unittest.TestCase):
     def test_the_1x_overviews_of_the_application_and_the_2x_3x_4x_groups(self):
-        paths = ("docs/1.0-rules.md", "docs/1.1-architecture.md", "docs/2.7-authentication-and-invitations.md",
-                 "docs/3.3-testing-ci-and-release.md", "docs/3.10-benchmarking.md", "docs/4.2-database-schema.md")
+        paths = ("docs/4.1.0-rules.md", "docs/4.1.1-architecture.md", "docs/4.2.7-authentication-and-invitations.md",
+                 "docs/4.3.3-testing-ci-and-release.md", "docs/4.3.10-benchmarking.md", "docs/4.4.2-database-schema.md")
         self.assertEqual(list(paths), of("application", *paths))
 
     def test_the_repository_readme(self):
@@ -53,7 +53,7 @@ class ApplicationDocuments(unittest.TestCase):
 
 class NeitherSide(unittest.TestCase):
     def test_the_generated_documents(self):
-        paths = ("docs/1.5-work-in-progress.md", "docs/1.6-document-map.md")
+        paths = ("docs/4.1.5-work-in-progress.md", "docs/4.1.6-document-map.md")
         self.assertEqual([], of("programme", *paths))
         self.assertEqual([], of("application", *paths))
 
@@ -63,10 +63,10 @@ class NeitherSide(unittest.TestCase):
         self.assertEqual([], of("application", *paths))
 
     def test_kind_names_each(self):
-        out = run("programme/board/board-documents.py", "kind", "CLAUDE.md", "docs/4.1-configuration.md",
-                  "docs/1.6-document-map.md", "scripts/x.sh").stdout.split("\n")
-        self.assertEqual(["CLAUDE.md\tprogramme", "docs/4.1-configuration.md\tapplication",
-                          "docs/1.6-document-map.md\tgenerated", "scripts/x.sh\tnone"], out[:4])
+        out = run("programme/board/board-documents.py", "kind", "CLAUDE.md", "docs/4.4.1-configuration.md",
+                  "docs/4.1.6-document-map.md", "scripts/x.sh").stdout.split("\n")
+        self.assertEqual(["CLAUDE.md\tprogramme", "docs/4.4.1-configuration.md\tapplication",
+                          "docs/4.1.6-document-map.md\tgenerated", "scripts/x.sh\tnone"], out[:4])
 
     def test_an_unknown_command_is_refused(self):
         self.assertEqual(2, run("programme/board/board-documents.py", "frobnicate").returncode)

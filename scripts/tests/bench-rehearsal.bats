@@ -63,6 +63,6 @@ col() {
 }
 
 @test "it is registered as a tool" {
-  run grep -q 'bench-rehearsal.sh' "$ROOT/docs/3.0-tools.md"
+  run grep -q 'bench-rehearsal.sh' "$ROOT/docs/4.3.0-tools.md"
   assert_success
 }

@@ -20,7 +20,7 @@ name: Docs
 # remaining job requires a `pull_request` event. Removed 2026-09-07 — #339 R4.
 #
 # The reason that job was awkward is worth keeping and now lives in
-# `docs/3.3` §2.5.2: `issue_comment` workflows always run the copy of the file
+# `docs/4.3.3` §2.5.2: `issue_comment` workflows always run the copy of the file
 # on the **default branch**, never the one in the pull request.
 
 on:

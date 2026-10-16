@@ -9,7 +9,7 @@
 #
 # 2666 words, 0.99% of the 268214 in sowpods and enable2k combined.
 #
-# See docs/3.5-word-lists-and-dictionaries.md.
+# See docs/4.3.5-word-lists-and-dictionaries.md.
 ABO
 ABORTION
 ABORTIONAL

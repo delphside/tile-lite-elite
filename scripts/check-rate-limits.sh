@@ -36,7 +36,7 @@ set -euo pipefail
 #
 # The separation is covered in-process instead, by
 # `one_callers_allowance_is_not_anothers` in app/throttle.rs, where two keys
-# can actually exist. See docs/changes/25-rate-limiting.md.
+# can actually exist. See programme/applications/tile-lite-elite/3.1.7-changes/25-rate-limiting-test-design.md.
 #
 # It does not assert the numbers are *right*. It asserts the shape holds:
 # refusal rather than a growing queue, per-caller rather than global, and

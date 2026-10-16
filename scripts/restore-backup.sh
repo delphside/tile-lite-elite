@@ -116,7 +116,7 @@ if [[ -n "$INTO" ]]; then
   # restart, when it opens the restored file and none of the intervening work
   # is there.
   #
-  # `docs/3.4` says to stop the server first. `deploy.sh` obeys that without
+  # `docs/4.3.4` says to stop the server first. `deploy.sh` obeys that without
   # being asked; this did neither, and said so nowhere.
   #
   # **Refuse rather than stop the stack itself.** Stopping is a second failure
@@ -133,7 +133,7 @@ if [[ -n "$INTO" ]]; then
     echo >&2
     echo "  Replacing the database under a live connection does not fail. It" >&2
     echo "  succeeds, silently, into a file that no longer has a name, and the" >&2
-    echo "  loss appears at the next restart. docs/3.4." >&2
+    echo "  loss appears at the next restart. docs/4.3.4." >&2
     echo >&2
     if [[ -n "$project" ]]; then
       echo "  Stop it, restore, start it again:" >&2

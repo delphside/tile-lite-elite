@@ -1,6 +1,6 @@
 """What reaches the image — decided once.
 
-**`docs/5.1` is the authority**, under *Route* in §2.15: anything
+**`programme/docs/1.2-change-lifecycle.md` is the authority**, under *Route* in §2.15: anything
 built into the image is Production Release — `crates/**`, the word lists,
 `Caddyfile`, `docker-compose.yml`, `Dockerfile` — and everything else in the
 repository is one of the two repository routes. This is that rule in the form code can apply,
@@ -8,7 +8,7 @@ written as the *exceptions* rather than the members: the list of things that
 ship grows whenever a crate is added, and the list of things that do not is
 stable.
 
-Test code is excluded deliberately — `docs/4.8`, *What counts as an artefact*:
+Test code is excluded deliberately — `programme/applications/tile-lite-elite/3.1.2-artefacts.md`, *What counts as an artefact*:
 a test exists to hold an artefact to its behaviour and is delivered with it.
 So are a crate's `examples/` and `benches/`, which are never compiled into the
 binary; the release's own benchmark rows, under `examples/`, once passed for an
@@ -65,7 +65,7 @@ def version_bump_only(files: Sequence[str], changed_lines: Sequence[str]) -> boo
     The files are `Cargo.toml`, optionally with `Cargo.lock`, and every changed
     line in them is a `version = "X.Y.Z"` line. It is the one image change that
     belongs on `main` — the version bump after a production deploy, and the
-    minor raised for a functional release (docs/3.3 §2.4) — and it ships no
+    minor raised for a functional release (docs/4.3.3 §2.4) — and it ships no
     behaviour. No changed lines is *not* a bump: "nothing changed" must not read
     as "nothing disallowed changed".
 

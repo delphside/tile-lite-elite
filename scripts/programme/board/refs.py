@@ -11,7 +11,7 @@ different question, and the case-sensitive form is what keeps prose out.
 `issue-mentions.sh` measured it at `9293893` — it drops exactly the prose
 mentions and keeps every real trailer — and it was measured again on
 2026-09-26: `Refs` 1050, `Closes` 31, nothing else. The design note is in
-`docs/changes/workstreams/delivery-tooling/383-one-board-model/model.md`.
+`programme/records/2.5-changes/programme-tooling/383-one-board-model/model.md`.
 
 Pure: text in, numbers out. Reading git is `repo.py`'s.
 """

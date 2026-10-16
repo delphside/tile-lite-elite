@@ -138,7 +138,7 @@ in the tool (it flags `NEGROES` but not `NEGRO`). They are not derived from any
 third-party list, though LDNOOBW's `en` file was consulted as a cross-check.
 
 `denylist.txt` is empty and has no attribution to make. See
-`docs/3.5-word-lists-and-dictionaries.md` for why the greylist was filled first.
+`docs/4.3.5-word-lists-and-dictionaries.md` for why the greylist was filled first.
 
 ## Rules and board
 

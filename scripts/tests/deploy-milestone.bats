@@ -93,7 +93,7 @@ settle() { run settle_milestone; }
 }
 
 # A project whose last delivery has not shipped is not in this milestone
-# (docs/5.1 §1.1), so the guarantee needed is that nothing outside the list is
+# (the programme's docs/1.2 §1.1), so the guarantee needed is that nothing outside the list is
 # touched. #195: a project was closed by the first of its three deliveries.
 @test "it settles exactly the milestone's issues, no more" {
   export MILESTONE_ISSUES=201

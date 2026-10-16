@@ -1,6 +1,6 @@
 """What reaches the image, decided once (#421).
 
-The cases are docs/5.1's rule, not the pattern's: built into the image is a
+The cases are the programme's docs/1.2's rule, not the pattern's: built into the image is a
 Production Release, and everything else is not. `shipping-paths.bats` keeps
 testing the functions the bash callers source, against real commits.
 """
@@ -23,7 +23,7 @@ class ReachesTheImage(unittest.TestCase):
                 self.assertTrue(reaches_image(path))
 
     def test_not_built_in(self):
-        for path in ("docs/3.3-testing-ci-and-release.md", "scripts/deploy.sh", "e2e/tests/smoke.spec.ts",
+        for path in ("docs/4.3.3-testing-ci-and-release.md", "scripts/deploy.sh", "e2e/tests/smoke.spec.ts",
                      ".github/workflows/ci.yml", ".githooks/pre-commit", ".claude/settings.json",
                      ".cargo/audit.toml", "crates/server-game/examples/engine_timing_results.csv",
                      "crates/server-game/tests/api.rs", "crates/engine-core/benches/b.rs",

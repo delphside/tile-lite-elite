@@ -25,7 +25,7 @@ from pathlib import Path
 from . import refs
 
 # **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
-# 2026-09-18. The convention (CLAUDE.md, docs/3.3 §393, docs/5.1 §1132) is that
+# 2026-09-18. The convention (CLAUDE.md, docs/4.3.3 §393, the programme's docs/1.2 §1132) is that
 # commits say `Refs #N` and **the deploy** is what closes them -- `Closes #N`
 # is correct only where the change never leaves the repository, because
 # nothing else will ever close it.
@@ -85,7 +85,7 @@ class Commits:
     def shipped_milestones(self) -> frozenset[str]:
         """Milestones a `prod-*` tag exists for, so they are demonstrably out.
 
-        docs/3.3: *"`Closes #N` fires when the commit reaches the default
+        docs/4.3.3: *"`Closes #N` fires when the commit reaches the default
         branch — written, not shipped. So commits say `Refs #N`, and the
         milestone means 'in production' — the deploy is what closes them."*
         That makes the milestone, not the commit, the delivery evidence for
@@ -125,7 +125,7 @@ class Commits:
         if number in self.released.closes:
             return "released"
         # **The milestone is the delivery evidence, with or without commits.**
-        # docs/3.3: the deploy is what closes an issue, and the milestone means
+        # docs/4.3.3: the deploy is what closes an issue, and the milestone means
         # "in production". A package split out of its parent after the work
         # landed has no commits of its own and is still shipped -- #362 read as
         # `not started` at Post-deployment on milestone 0.8.0, which R7 caught
@@ -156,7 +156,7 @@ def last_release_at() -> float | None:
 
 
 # **A change document is not a delivery.** `docs/changes/` holds a project's
-# own design, impact and test notes -- docs/5.1: *"a workstream's note lives on
+# own design, impact and test notes -- the programme's docs/1.2: *"a workstream's note lives on
 # `main` for the life of the workstream"*, which is why writing one lands on
 # `main` while the project is still in design. A commit touching nothing else
 # has therefore delivered nothing to anybody, and counting it as delivery

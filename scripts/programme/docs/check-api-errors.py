@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-api-errors.py — every error the API can return is documented in 4.3.
+"""check-api-errors.py — every error the API can return is documented in 4.4.3.
 
 **An error is part of the interface** (#329). A caller writes code against
 *"Current password is incorrect"* as surely as against the shape of the response
@@ -10,7 +10,7 @@ sends — so the server's wording is on a player's screen, undeclared.
 expired.** Documenting an error is writing, and a build must not go red over
 writing that has not happened yet — so while the debt was 44 it reported and a
 person decided. The debt is now nil: all 70 messages the API can construct are
-in 4.3, against the endpoints that return them. What is left to protect is that
+in 4.4.3, against the endpoints that return them. What is left to protect is that
 staying true, and a new error added without a line in the document is not a debt
 somebody is working through, it is a regression. #329's third acceptance
 condition asks for it to be *caught*, which a report cannot do.
@@ -24,7 +24,7 @@ decoy password on the miss so both paths cost the same. That is the behaviour a
 caller needs, and none of it is derivable from the source. So a person writes
 the entry and this verifies nothing was missed.
 
-Exit 1 on an undocumented message, per `docs/4.8`: 1 is fatal, and this is a
+Exit 1 on an undocumented message, per `programme/applications/tile-lite-elite/3.1.2-artefacts.md`: 1 is fatal, and this is a
 gate. `check-docs.sh` runs it, and CI runs `check-docs.sh` on every push, so the
 message that reaches a player and the line describing it now ship together or
 not at all.
@@ -35,7 +35,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "crates" / "server-game" / "src"
-DOC = ROOT / "docs" / "4.3-api-schema.md"
+DOC = ROOT / "docs" / "4.4.3-api-schema.md"
 
 # `ApiProblem::kind("literal"` — the first argument only, and only where it is a
 # literal. A message built with `format!` carries a runtime value and cannot be

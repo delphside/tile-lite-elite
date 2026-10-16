@@ -31,7 +31,7 @@
 //!
 //! **What this does not yet do.** CPU, memory and steal on the *target*
 //! host are not sampled here — the capacity plan already reads those over
-//! SSH (`docs/reports/capacity_plan/`), and correlating a run here with a
+//! SSH (`programme/applications/tile-lite-elite/3.1.3-capacity-plan/`), and correlating a run here with a
 //! host-side sample is the next increment, not built tonight.
 
 use std::env;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Count the phrases that mark mixed content in the numbered documents. #427 R8.
 
-A numbered document states what is true now (docs/5.4). History, argument and
+A numbered document states what is true now (the programme's docs/1.5). History, argument and
 quotation belong in the issue or the commit, and each has a tell: a dated
 attribution, "until 2026-...", "Added 2026-...", or the headings of a design
 note ("next steps", "open questions"). The count is a measure, not a gate: a
@@ -37,8 +37,8 @@ SIGNALS = [
         rf"moved|retired|deleted|removed)|Created) (on )?{DATE}")),
 ]
 
-# Records whose dates are their content: the delivery log, and the generated map.
-EXEMPT = {"5.6-delivery-log.md", "1.6-document-map.md"}
+# A record whose dates are its content: the generated map.
+EXEMPT = {"4.1.6-document-map.md"}
 
 
 def documents(root: Path = ROOT) -> list[Path]:

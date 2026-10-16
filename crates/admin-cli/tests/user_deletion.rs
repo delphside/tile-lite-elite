@@ -1,6 +1,6 @@
 //! Deleting an account through the real CLI binary, over a real connection.
 //!
-//! Rules: `docs/1.0-rules.md`, DEL-1, DEL-2, DEL-8 and DEL-9. Test plan:
+//! Rules: `docs/4.1.0-rules.md`, DEL-1, DEL-2, DEL-8 and DEL-9. Test plan:
 //! issue #41.
 //!
 //! Everything else in this plan hands a `Request` straight to the server with

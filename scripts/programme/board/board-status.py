@@ -11,7 +11,7 @@ difference between them is what the parallel run is for.
 Three sources meet here: GitHub says what each change is, git says where it
 got to, and `/health` says what is running. None of them alone can answer it.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

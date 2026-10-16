@@ -5,7 +5,7 @@ set -euo pipefail
 # a migration is rehearsed against real rows rather than an empty volume.
 #
 # Why it matters: a migration that applies cleanly to nothing proves very
-# little. The schema incidents in docs/4.2 are all about applying to data
+# little. The schema incidents in docs/4.4.2 are all about applying to data
 # that already exists — wrong types, unexpected nulls, a UNIQUE that only
 # collides once there are duplicates to collide.
 #

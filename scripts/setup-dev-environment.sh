@@ -12,7 +12,7 @@ set -euo pipefail
 #
 # What this does NOT do, on purpose:
 #   - Restore the Oracle deploy SSH key. That's a secret; copy it back in
-#     by hand (see docs/3.1-setup.md's "Development Environment Setup").
+#     by hand (see docs/4.3.1-setup.md's "Development Environment Setup").
 #   - Enable systemd in WSL. That's a Windows-side /etc/wsl.conf edit
 #     needing a `wsl --shutdown`, which a script running inside the distro
 #     can't safely trigger on itself. This script checks and warns instead.
@@ -28,7 +28,7 @@ Docker Engine, and the shell aliases. Safe to re-run — every step
 checks whether it is already done.
 
 It does NOT restore the deploy SSH key (a secret, copied back by hand
-— docs/3.1) and it does NOT enable systemd in WSL (a Windows-side
+— docs/4.3.1) and it does NOT enable systemd in WSL (a Windows-side
 /etc/wsl.conf edit needing `wsl --shutdown`, which a script inside
 the distro cannot safely trigger on itself). It checks and warns.
 
@@ -43,7 +43,7 @@ Refuses (exit 1) when:
     -> "setup-dev-environment: refusing — this is a linked worktree."
     It writes sadev, sapre, dbdev and the rest for the tree it runs
     in, so from a project worktree they would point at that tree and
-    its database, silently. Scripts are operated from main (docs/3.2,
+    its database, silently. Scripts are operated from main (docs/4.3.2,
     #389). SETUP_ALLOW_WORKTREE=1 to do it anyway.
 
 Warns without failing when:
@@ -99,7 +99,7 @@ if [ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-d
   echo >&2
   echo "  It writes sadev, sapre, dbdev and the rest for the tree it runs in," >&2
   echo "  so from here they would point at the project worktree and its" >&2
-  echo "  database. Scripts are operated from main — docs/3.2." >&2
+  echo "  database. Scripts are operated from main — docs/4.3.2." >&2
   echo >&2
   echo "  Run it there:" >&2
   echo "    $(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$||')/scripts/$(basename "$0")" >&2
@@ -228,12 +228,12 @@ fi
 
 echo "==> SSH host aliases"
 # The deploy scripts pass `-i <key>` explicitly and need none of this. What
-# needs it is everything a person types: docs/3.4's `ssh tile-lite-elite`, and
+# needs it is everything a person types: docs/4.3.4's `ssh tile-lite-elite`, and
 # the dbprod shortcut below. Without a config those resolve `tile-lite-elite`
 # as a literal hostname and fail.
 #
 # The keys themselves are not created here — they are secrets, restored by
-# hand from the Windows backup (see the closing note and docs/3.1-setup.md).
+# hand from the Windows backup (see the closing note and docs/4.3.1-setup.md).
 # This only names the hosts they open.
 if [ -f ~/.ssh/config ] && grep -q "Host tile-lite-elite$" ~/.ssh/config; then
     echo "    already configured"
@@ -360,7 +360,7 @@ echo "==> SQLite shortcuts (dbdev, dbpre, dbprod)"
 # volume (#356). `docker compose exec` allocates a pseudo-tty by default; `-T`
 # drops it when a query is given, so `dbpre "select ..."` works in a pipeline
 # as well as interactively. If the stack is stopped, `exec` has nothing to
-# reach — docs/3.4 documents the throwaway-container fallback for that case.
+# reach — docs/4.3.4 documents the throwaway-container fallback for that case.
 #
 # dbdev is a plain alias because dev's database is a file in the checkout.
 python3 - "$REPO_DIR" <<'PYEOF'
@@ -394,7 +394,7 @@ PYEOF
 
 cat <<EOF
 
-==> Tooling setup done. Two manual steps left (see docs/3.1-setup.md):
+==> Tooling setup done. Two manual steps left (see docs/4.3.1-setup.md):
     1. Copy your Oracle deploy SSH key back in:
          ~/.ssh/oracle_tile_lite_elite (private) and .pub — from your Windows backup.
     2. Start a new shell (for the docker group to take effect), then verify:

@@ -2,7 +2,7 @@
 
 # read-api-version.sh, run as its callers run it: its own `set -euo pipefail`
 # holds, because bats runs it as a separate process. A harness that relaxed it
-# once let a silent-abort bug through to a production deploy (docs/3.3,
+# once let a silent-abort bug through to a production deploy (docs/4.3.3,
 # "Rolling back").
 
 setup() {

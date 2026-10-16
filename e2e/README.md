@@ -9,7 +9,7 @@ workspace.
 ## Running
 
 The suite runs against an **already-running dev environment** — it does not
-start the app itself. That's [runbook](../docs/3.3-testing-ci-and-release.md#shipping-a-change-the-full-sequence)
+start the app itself. That's [runbook](../docs/4.3.3-testing-ci-and-release.md#shipping-a-change-the-full-sequence)
 step 2 (`./scripts/services.sh restart-server` or `restart`), which brings up
 the server (`:3000`) and web client (`:8080`). Then:
 

@@ -17,9 +17,9 @@ setup() {
   git -C "$R" config user.name t
   git -C "$R" config core.hooksPath /dev/null
   mkdir -p "$R/docs"
-  # docs/3.0-tools.md must exist: the registration rule reads it, and the docs
+  # docs/4.3.0-tools.md must exist: the registration rule reads it, and the docs
   # check is skipped by keeping every fixture free of other markdown.
-  printf 'x\n' > "$R/docs/3.0-tools.md"
+  printf 'x\n' > "$R/docs/4.3.0-tools.md"
 }
 
 base() { git -C "$R" add -A; git -C "$R" commit -qm "app 0.0.0 api 0.0: base"; git -C "$R" branch -M main; }
@@ -207,7 +207,7 @@ bump() { sed -i 's/^version = "0.7.2"/version = "0.7.3"/' "$R/$1"; git -C "$R" a
   assert_equal "$status" 1
 }
 
-@test "a new script registered in the programme's register, 5.0, is allowed" {
+@test "a new script registered in the programme's register, 1.1, is allowed" {
   printf '| `scripts/brand-new.sh` | x |\n' > "$R/docs/5.0-programme-tooling.md"
   commit_on main scripts/brand-new.sh
   assert_success
@@ -228,7 +228,7 @@ commit_exec_on_main() {   # <file>: a base on main, then <file> staged as execut
   assert_output --partial "not in the register"
 }
 
-@test "a new executable script in a folder, registered in 5.0, is allowed" {
+@test "a new executable script in a folder, registered in the programme's 1.1, is allowed" {
   printf '| `board-brand-new.py` | x |\n' > "$R/docs/5.0-programme-tooling.md"
   commit_exec_on_main scripts/programme/board/board-brand-new.py
   assert_success
@@ -327,7 +327,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 # --- the programme's own documents live on main (1b) ------------------------------
 # 2026-09-21: the ITIL rule, a CLAUDE.md clause and an obligations.py fix were
 # all written onto 399-database-failure-status. commit-msg cannot catch it: a
-# process edit carries no Refs. docs/1.6 is generated from the branch's own
+# process edit carries no Refs. docs/4.1.6 is generated from the branch's own
 # headings, so it is regenerated on the branch after the rebase before a merge.
 
 @test "branch: CLAUDE.md on a project branch is refused" {
@@ -351,7 +351,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: a project's own document is fine on it" {
-  commit_on 399-x docs/4.3-api-schema.md
+  commit_on 399-x docs/4.4.3-api-schema.md
   assert_success
 }
 
@@ -361,7 +361,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: and so is the generated document map" {
-  commit_on 399-x docs/1.6-document-map.md
+  commit_on 399-x docs/4.1.6-document-map.md
   assert_success
 }
 
@@ -377,7 +377,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: and the generated work-in-progress page is fine" {
-  commit_on 399-x docs/1.5-work-in-progress.md
+  commit_on 399-x docs/4.1.5-work-in-progress.md
   assert_success
 }
 
@@ -385,7 +385,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 # Owner, 2026-09-30: warn, but not block.
 
 @test "main: an application document is committed, with a note" {
-  commit_on main docs/4.3-api-schema.md
+  commit_on main docs/4.4.3-api-schema.md
   assert_success
   assert_output --partial "application documents committed to main"
 }
@@ -397,7 +397,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: an application document on its branch gets no note" {
-  commit_on 399-x docs/4.3-api-schema.md
+  commit_on 399-x docs/4.4.3-api-schema.md
   assert_success
   refute_output --partial "application documents"
 }

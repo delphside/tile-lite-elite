@@ -5,7 +5,7 @@
 and `awaiting-review` labels were deleted in #219 for being a second store of
 what GitHub already knew, and a column set by hand went wrong within a day
 (#338 and #341 sat in Approved after merging). So the board is generated from
-the source, like `docs/1.5`: where the field disagrees, the field is wrong.
+the source, like `docs/4.1.5`: where the field disagrees, the field is wrong.
 
 **It also adds what is missing.** The project's auto-add workflow has no API,
 so nothing can widen it to pull requests; adding them here is idempotent.

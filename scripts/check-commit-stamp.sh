@@ -4,7 +4,7 @@ set -euo pipefail
 # check-commit-stamp.sh — Every commit subject must carry the app and api
 # versions, and they must be true of the tree at that commit.
 #
-# The convention is documented in docs/3.3-testing-ci-and-release.md
+# The convention is documented in docs/4.3.3-testing-ci-and-release.md
 # ("Version numbers: which to bump, and when"):
 #
 #   app <X.Y.Z> api <M.N>: <subject>

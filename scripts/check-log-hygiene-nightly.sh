@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The nightly log check on the production host (#174).
 #
-# Reads the day's journal, validates it against the schema `docs/4.7` declares,
+# Reads the day's journal, validates it against the schema `docs/4.4.7` declares,
 # writes exceptions to its own log, and refreshes a marker object **only on a
 # clean run**.
 #

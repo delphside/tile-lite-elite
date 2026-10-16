@@ -30,7 +30,7 @@
 //! **What this cannot test, and why.** Caddy replaces `X-Forwarded-For` with
 //! the address the connection came from, so every request from one machine is
 //! one caller however the header is set — see
-//! `docs/changes/25-rate-limiting.md`. Two checks were written here on the
+//! `programme/applications/tile-lite-elite/3.1.7-changes/25-rate-limiting-test-design.md`. Two checks were written here on the
 //! assumption that addresses could be spoofed, and would have reported
 //! confidently on nothing:
 //!
