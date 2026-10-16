@@ -648,13 +648,12 @@ DEL-1 for the host restriction.
 
 #### Q12 Administrator actions with no use case
 
-Answered in part (owner, 2026-10-16): the admin CLI tidies old data, so it
-never deletes a game in play, ADM-2; deleting an account waits for its
-sessions or signs it out, DEL-11; "Delete a game" and "Sign a player out" are
-journeys. Removing a misbehaving player, and a player closing their own
-account, are #296's, and will likely resign the player from games rather than
-delete them. Still open: whether an administrator resetting a player's
-password is a use case. What follows is the question as raised.
+Answered (owner, 2026-10-16): the admin CLI tidies old data, so it never
+deletes a game in play, ADM-2; deleting an account waits for its sessions or
+signs it out, DEL-11; "Delete a game" and "Sign a player out" are journeys.
+Removing a misbehaving player, a player closing their own account, an
+administrator resetting a password, and the support requests and complaints
+that lead to them are #296's. What follows is the question as raised.
 The admin CLI deletes a game
 (`admin_delete_game`, admin.rs:379, `DELETE /admin/games/{id}`), resets a
 player's password (`admin_reset_password`, admin.rs:266) and signs a player
