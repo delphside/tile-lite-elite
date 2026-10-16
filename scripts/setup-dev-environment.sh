@@ -318,6 +318,23 @@ echo "==> git hooks"
 git config core.hooksPath .githooks
 echo "    core.hooksPath = .githooks"
 
+echo "==> the programme submodule"
+# The generic documents, rules, skills and agents (#485): .claude/skills and
+# .claude/agents link into it. Pinned, so it moves when this repository takes a
+# newer commit of it, and `git pull` does not update it by itself.
+git submodule update --init
+echo "    programme/ at $(git -C programme rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+# The programme's *records* are a second clone, beside this one, never the
+# submodule: the scripts read them from ../programme or $PROGRAMME_DIR. Told
+# rather than cloned, because where it goes is the owner's layout (docs/4.3.1).
+PROGRAMME_LIVE="${PROGRAMME_DIR:-$(cd .. && pwd)/programme}"
+if [ -e "$PROGRAMME_LIVE/.git" ]; then
+  echo "    live checkout: $PROGRAMME_LIVE"
+else
+  echo "    WARNING: no live checkout of the programme at $PROGRAMME_LIVE." >&2
+  echo "    Clone it there: git clone git@github.com:delphside/programme.git $PROGRAMME_LIVE" >&2
+fi
+
 echo "==> git: tell it where the agent lives"
 # VS Code runs git from a process that never sourced ~/.bashrc, so it has no
 # SSH_AUTH_SOCK and falls back to asking for the passphrase on every fetch and
