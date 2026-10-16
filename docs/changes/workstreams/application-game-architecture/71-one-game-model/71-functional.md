@@ -436,10 +436,13 @@ Journeys: [U6.1 Force-end a game](#u61-force-end-a-game), [U6.2 Delete an accoun
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Administrator: names a game, on the machine hosting the service<br/>Q11"]
+  s0((start)) --> a1["Administrator: names a game, on the machine hosting the service<br/>ADM-1"]
   a1 --> v1{"Server: the game exists, and is not already<br/>Finished or Aborted?"}
   v1 -- no --> r1["refused, nothing changes"]
-  v1 -- yes --> t1["Server: game Not Started or Active → Finished<br/>seats frozen as they stand, a record of the force-end kept<br/>Q11"]
+  v1 -- yes --> d1{"Server: the game started?"}
+  d1 -- no --> t0["Server: game Not Started → Aborted<br/>a record of the force-end kept<br/>GAME-11"]
+  d1 -- yes --> t1["Server: game Active → Finished<br/>seats frozen as they stand, a record of the force-end kept<br/>GAME-11"]
+  t0 --> t2
   t1 --> t2["Server: no rating changes<br/>RATE-1"]
   t2 --> t3["Server: version bumps, every client told (no transition)"]
 ```
@@ -448,7 +451,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> a1["Administrator: names an account or gives its id, in the admin CLI<br/>on the machine hosting the service<br/>DEL-1, DEL-9"]
+  s0((start)) --> a1["Administrator: names an account or gives its id, in the admin CLI<br/>on the machine hosting the service<br/>ADM-1, DEL-1, DEL-9"]
   a1 --> v1{"Server: the account exists? (reads)<br/>DEL-8"}
   v1 -- no --> r1["reported as not found"]
   v1 -- yes --> v2{"Server: does any game refer to it: created, seated or invited,<br/>in any state, hidden by the player or not? (reads)<br/>DEL-2, DEL-3, DEL-5"}
@@ -602,6 +605,9 @@ goes.
 
 #### Q11 An administrator's force-end has no arrow, and only DEL-1 says admin actions need the host
 
+Answered: a force-end aborts a game not started and finishes one in play,
+GAME-11, and every administrator action needs the host, ADM-1 (owner,
+2026-10-16). What follows is the question as raised.
 `admin_force_finish` (game_state.rs) takes a game
 `Waiting` or `Active` to `Finished`, so a game never started can finish
 with no racks dealt. The game lifecycle has no arrow for a force-end.
@@ -694,8 +700,8 @@ stateDiagram-v2
     state "Game: Finished or Aborted<br/>seats frozen as they stand" as Over
 
     Claimed --> Playing: start, deal racks
-    NotStarted --> Over: creator aborts
-    Active --> Over: a seat goes out, or creator aborts
+    NotStarted --> Over: creator aborts, or administrator force-ends
+    Active --> Over: a seat goes out, creator aborts,<br/>or administrator force-ends
     NotStarted --> [*]: RET-3, 30 days
     Over --> [*]: RET-1, 7 days
 ```
