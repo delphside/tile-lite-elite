@@ -20,7 +20,7 @@ pub struct Environment {
     pub server_url: &'static str,
 }
 
-/// The four environments of docs/4.3.3, in the order a change moves through
+/// The four environments of docs/3.3, in the order a change moves through
 /// them. A desktop client can be pointed at any of them with `--env`, which
 /// resolves at runtime — so exercising a release build against rehearsal
 /// before anyone downloads it needs no separate build.
@@ -36,7 +36,7 @@ pub const ENVIRONMENTS: &[Environment] = &[
     Environment {
         // No domain of its own, so this hard-codes the rehearsal host's IP
         // and breaks if that VM is ever rebuilt. Unavoidable — sslip.io is
-        // what gives it a certificate without a DNS record (docs/4.3.1) — but
+        // what gives it a certificate without a DNS record (docs/3.1) — but
         // worth knowing rather than discovering.
         name: "rehearsal",
         server_url: "https://129.151.84.183.sslip.io",
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(default_server_url(), "https://tileliteelite.com");
     }
 
-    /// Every environment docs/4.3.3 names is selectable. A desktop client that
+    /// Every environment docs/3.3 names is selectable. A desktop client that
     /// cannot reach preview or rehearsal cannot be tested anywhere except
     /// local and production, which is the gap this closes.
     #[test]

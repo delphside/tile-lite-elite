@@ -367,7 +367,7 @@ pub(crate) async fn get_game(
     if access == ViewerAccess::Rejected {
         // 401 only when there is nobody to be. A signed-in caller who is not
         // in this game is *authenticated and not allowed*, which is 403 — see
-        // docs/4.4.3's status table. Answering 401 told the client its session
+        // docs/4.3's status table. Answering 401 told the client its session
         // was invalid, and a client that acts on that logs the caller out for
         // opening somebody else's game. Every new player meets this, because
         // the games list includes open invitations they may not view.

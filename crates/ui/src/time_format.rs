@@ -49,7 +49,7 @@ pub fn format_time_remaining(turn_started_at: i64, move_time_limit_seconds: u64)
     remaining_label(deadline - now)
 }
 
-/// The countdown for `remaining` seconds, per `docs/4.1.0` CLOCK-5 and CLOCK-6:
+/// The countdown for `remaining` seconds, per `docs/1.0` CLOCK-5 and CLOCK-6:
 /// at most two adjacent units, truncated rather than rounded up, and `<1m`
 /// for the last minute, because `0m` says the turn is lost and `1m` promises
 /// time that may not exist. Days and hours above an hour, minutes below it.
@@ -94,7 +94,7 @@ pub fn format_move_time(elapsed_us: u64) -> String {
 mod tests {
     use super::*;
 
-    // CLOCK-5 and CLOCK-6, docs/4.1.0: two adjacent units at most, truncated,
+    // CLOCK-5 and CLOCK-6, docs/1.0: two adjacent units at most, truncated,
     // and nothing that claims time the player may not have.
 
     #[test]

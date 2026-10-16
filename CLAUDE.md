@@ -9,8 +9,9 @@
   `.claude/skills` and `.claude/agents` link into it. Run
   `git submodule update --init` after a clone or a pull that moves the pin.
 - **The `docs/1.x`, `records/` and `applications/` paths in the imported rules
-  are the programme repository's**: read them in `programme/`, and change them
-  in the live checkout.
+  are the programme repository's.** `docs/1.x` (the generic rules) are read in
+  `programme/`. `records/` and `applications/` paths are read **and** changed in
+  the live checkout (`board-records.py live`), never the submodule.
 - The records and change documents are in `delphside/programme` too, but its
   live checkout, beside this repository's main worktree at `../programme` or
   wherever `PROGRAMME_DIR` says. They are changed there, on its `main`; a cloud

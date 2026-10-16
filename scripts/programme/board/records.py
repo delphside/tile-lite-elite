@@ -113,7 +113,12 @@ def _git(path: Path, *args: str) -> subprocess.CompletedProcess:
 
 def problem(root: Path | None = None) -> str | None:
     """What is wrong with the live checkout for a session starting now, as one
-    line naming the path, or None when it is present, on main and not behind.
+    line naming the path, or None when it is present and HEAD contains the local
+    `origin/main`.
+
+    The branch does not matter: a cloud session puts every repository on a
+    `claude/...` session branch and a record reaches main there by a short-lived
+    pull request. A detached HEAD is judged the same way.
 
     Read-only and offline: it compares with the local `origin/main` ref and says
     it cannot tell when that ref is absent, because a fetch is a network call
@@ -128,10 +133,6 @@ def problem(root: Path | None = None) -> str | None:
         branch = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
         if branch.returncode != 0:
             return f"The programme's live checkout at {path} is not a git checkout; records may be stale."
-        name = branch.stdout.strip()
-        if name != "main":
-            shown = "a detached HEAD" if name == "HEAD" else f"branch {name}"
-            return f"The programme's live checkout at {path} is on {shown}, not main; records may be wrong."
         if _git(path, "rev-parse", "--verify", "-q", "refs/remotes/origin/main").returncode != 0:
             return (f"The programme's live checkout at {path}: cannot tell whether it is "
                     f"behind origin/main (no local origin/main ref; git fetch there).")

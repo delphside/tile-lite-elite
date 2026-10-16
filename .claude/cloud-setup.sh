@@ -34,7 +34,8 @@
 # cached setup script — docs/4.3.1 has the line.
 #
 # Never fails a session: a step that cannot finish says so and the rest go on.
-# Progress goes to stderr; stdout is one line for Claude's context.
+# Progress goes to stderr; stdout is one line for Claude's context, plus one
+# more when the live programme checkout needs attention (board-records.py check).
 
 [[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]] || exit 0
 
