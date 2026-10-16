@@ -108,3 +108,6 @@ __pycache__/
 # The digit prefix is what distinguishes them: moves/wide-5x5-c2281dc.csv is
 # tracked deliberately, for the analysis in docs/4.2.3.
 crates/server-game/examples/moves/[0-9]*.csv
+
+# CI checks the programme repository's live copy out here (#485); PROGRAMME_DIR points at it.
+/.programme-live/

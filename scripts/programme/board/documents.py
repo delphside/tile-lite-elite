@@ -6,9 +6,12 @@ application*), and the class decides how it changes:
 - **generic programme assets** (processes, role definitions, templates) and
 - **programme records** (instances produced by operating the programme: the
   delivery log, the workstream list, the artefact register in the programme's 3.1.2,
-  reports, change notes) are `programme`.
-  They belong to no project and change on `main`: a copy on a branch
-  disagrees with `main` until it merges, and makes the programme wait on a
+  reports, change notes) are `programme`. Since #485 almost all of them are in the
+  programme repository, which has its own `main`; what this repository still holds
+  of them is the instruction files (`CLAUDE.md`, `AGENTS.md`, the `docs/` index), the
+  roadmap (`docs/4.1.4`) and its diagram, and the `programme/` submodule, whose pin
+  is the programme's. They belong to no project and change on `main`: a copy on a
+  branch disagrees with `main` until it merges, and makes the programme wait on a
   project it has nothing to do with. `.githooks/pre-commit` asks here before
   committing one on a branch.
 - **application assets** are `application`: their documents describe the
@@ -43,17 +46,12 @@ PROGRAMME_DOCUMENTS = (
     "CLAUDE.md",
     "AGENTS.md",
     "docs/README.md",
-    "docs/programme-activity-log.csv",
-    "docs/4.8-artefacts.md",  # a record: this application's artefact register
+    "docs/diagrams/roadmap.svg",  # generated from the roadmap
+    "programme",  # the submodule's pin: anything in the programme repository
 )
 PROGRAMME_PREFIXES = (
     "docs/4.1.4-",
-    "docs/1.7-",
-    "docs/5.",
-    "docs/templates/",
-    "docs/reports/",
-    "docs/changes/",
-    "docs/diagrams/",
+    "programme/",
 )
 APPLICATION_OUTSIDE_DOCS = (
     "README.md",

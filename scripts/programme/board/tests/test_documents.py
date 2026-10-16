@@ -2,8 +2,8 @@
 
 From the rules, owner 2026-09-25 and 2026-09-29/30: the programme's documents
 describe the programme and change on main; the application's change with the
-code; docs/4.1.5 and docs/4.1.6 are generated and belong to neither; change notes,
-templates and reports are the programme's; and a path that is not a document
+code; docs/4.1.5 and docs/4.1.6 are generated and belong to neither; everything in the
+programme repository (change notes, templates, reports) is the programme's; and a path that is not a document
 is neither.
 """
 
@@ -17,28 +17,32 @@ def of(which: str, *paths: str) -> list[str]:
 
 
 class ProgrammeDocuments(unittest.TestCase):
-    def test_the_instructions_the_index_and_the_5x_group(self):
-        paths = ("CLAUDE.md", "AGENTS.md", "docs/README.md",
-                 "docs/5.1-change-lifecycle.md", "docs/5.2-workstreams.md", "docs/5.6-delivery-log.md")
+    def test_the_instructions_and_the_index(self):
+        paths = ("CLAUDE.md", "AGENTS.md", "docs/README.md")
         self.assertEqual(list(paths), of("programme", *paths))
 
-    def test_the_roadmap_and_the_programme_overview(self):
-        self.assertEqual(["docs/4.1.4-roadmap.md", "docs/1.7-programme.md"],
-                         of("programme", "docs/4.1.4-roadmap.md", "docs/1.7-programme.md"))
-
-    def test_everything_outside_the_numbered_set(self):
-        paths = ("docs/templates/agent-handover.md", "docs/reports/weekly_digest/x.md",
-                 "docs/changes/workstreams/a/71-x/71-design.md", "docs/diagrams/README.md",
-                 "docs/programme-activity-log.csv")
+    def test_the_roadmap_and_its_diagram(self):
+        paths = ("docs/4.1.4-roadmap.md", "docs/diagrams/roadmap.svg")
         self.assertEqual(list(paths), of("programme", *paths))
 
-    def test_the_artefact_register_is_a_programme_record(self):
-        # the programme's docs/1.3: 4.8 (now 3.1.2) is this application's instance of the artefact register,
-        # a record, so it changes on main (owner, 2026-10-03, #474).
-        self.assertEqual(["docs/4.8-artefacts.md"], of("programme", "docs/4.8-artefacts.md"))
+    def test_anything_in_the_programme_repository_and_its_pin(self):
+        # #485: the generic documents and the records are in the programme
+        # repository, here as the pinned submodule; its pin changes on main.
+        paths = ("programme", "programme/docs/1.2-change-lifecycle.md",
+                 "programme/applications/tile-lite-elite/3.1.1-delivery-log.md")
+        self.assertEqual(list(paths), of("programme", *paths))
+
+    def test_what_moved_out_is_not_a_programme_document_here(self):
+        # The old paths no longer exist in this repository; if one turns up it is
+        # an application document, not a programme one to be kept on main.
+        paths = ("docs/5.1-change-lifecycle.md", "docs/templates/agent-handover.md",
+                 "docs/changes/workstreams/a/71-x/71-design.md", "docs/programme-activity-log.csv",
+                 "docs/diagrams/README.md")
+        self.assertEqual([], of("programme", *paths))
 
     def test_an_application_document_is_not_one(self):
-        self.assertEqual([], of("programme", "docs/4.4.3-api-schema.md", "docs/4.3.0-tools.md"))
+        self.assertEqual([], of("programme", "docs/4.4.3-api-schema.md", "docs/4.3.0-tools.md",
+                                "scripts/programme/board/documents.py"))
 
 
 class ApplicationDocuments(unittest.TestCase):

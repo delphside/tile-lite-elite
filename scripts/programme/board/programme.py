@@ -165,7 +165,11 @@ def documents_to_reread() -> tuple[list[tuple[str, int, str]], list[str]]:
     """Documents that have changed a lot since anybody read them whole."""
     flagged, unstamped = [], []
     root = Path(".")
-    for doc in sorted(list(root.glob("docs/*.md")) + list(root.glob("docs/changes/*.md"))):
+    # This repository's own documents only. A change document is a record, in the
+    # programme repository's checkout (`records.change_documents()`), whose history
+    # and `Reviewed whole at` commits are that repository's: this `git diff` cannot
+    # measure them, so they are not read here (#485).
+    for doc in sorted(root.glob("docs/*.md")):
         text = doc.read_text(errors="replace")
         match = STAMP.search(text)
         if not match:

@@ -155,14 +155,20 @@ def last_release_at() -> float | None:
         return None
 
 
-# **A change document is not a delivery.** `docs/changes/` holds a project's
-# own design, impact and test notes -- the programme's docs/1.2: *"a workstream's note lives on
-# `main` for the life of the workstream"*, which is why writing one lands on
-# `main` while the project is still in design. A commit touching nothing else
-# has therefore delivered nothing to anybody, and counting it as delivery
-# evidence reported #291 as *merged, awaiting release* on the day its design
-# note was written, and then reported the contradiction against the board.
-# 131 of the history's 1191 commits touch only this path.
+# **A change document is not a delivery.** A project's own design, impact and
+# test notes -- the programme's docs/1.2: *"a workstream's note lives on
+# `main` for the life of the workstream"* -- land on `main` while the project is
+# still in design. A commit touching nothing else has therefore delivered nothing
+# to anybody, and counting it as delivery evidence reported #291 as *merged,
+# awaiting release* on the day its design note was written, and then reported the
+# contradiction against the board. 131 of the history's 1191 commits touch only
+# this path.
+#
+# **Since #485 the notes are not in this repository**: they are in the live
+# programme checkout (`records.change_documents()`), whose commits this `git log`
+# never sees. What is left to recognise is the *history* of this repository, whose
+# commits before the move touched `docs/changes/`, so the old prefix stays: it
+# names paths in old commits, it is not read from the filesystem.
 NOTES = "docs/changes/"
 
 

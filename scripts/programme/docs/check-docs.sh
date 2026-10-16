@@ -32,49 +32,58 @@ FAILED=0
 # Pinned, and the same globs CI used before this script existed — the linter is
 # otherwise "whatever is in one machine's npx cache", which is not a dependency
 # anybody declared. Agents' worktrees under .claude/worktrees/ are copies of the
-# repository, so they are skipped (#441).
+# repository, so they are skipped (#441), and so is the `programme/` submodule:
+# its documents are checked in the programme repository, not as ours, and so
+# are the skills and agents linked from `.claude/` into it (#485). CI
+# checks the live programme checkout out at `.programme-live/`, also skipped.
 bold "1. markdownlint"
-npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" "#.claude/worktrees" 2>&1 | tail -4 || FAILED=1
+npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" "#.claude/worktrees" "#programme" "#.programme-live" "#.claude/skills" "#.claude/agents" 2>&1 | tail -4 || FAILED=1
 
 bold "2. links"
 python3 scripts/programme/docs/check-doc-links.py || FAILED=1
 
 # The convention (#156): design documents live in an issue folder named for the
 # issue that owns them — or for the parent issue where there is a workstream —
-# and testing documents live in a release folder. Both under docs/changes/.
+# and testing documents live in a release folder. Both under this application's
+# change documents, `3.1.7-changes/` in the programme repository's live checkout
+# (`PROGRAMME_DIR`, see `board/records.py`; #485), which is where they moved to.
+# A missing checkout fails the check, saying where it looked: a placement check
+# that finds no documents because it looked nowhere would report everything in
+# place.
 #
-# The five files already in the flat directory stay there: GitHub does not
+# The four files already in the flat directory stay there: GitHub does not
 # follow a rename and several issue comments point at them. They are listed
 # rather than pattern-matched so that the list can only shrink.
-#
-# Two of them were renamed on 2026-08-21 when *test plan* became *test design
-# specification* — which broke exactly the links this list was protecting. The
-# reason for grandfathering those two is therefore spent: the cost has been
-# paid, so they should move into the convention's folders when the folder move
-# happens rather than being protected from a second rename that now costs
-# nothing.
 bold "3. placement"
 GRANDFATHERED=(
-  "docs/changes/README.md"
-  "docs/changes/0.6.0-user-testing.md"
-  "docs/changes/25-rate-limiting-test-design.md"
-  "docs/changes/41-user-deletion-test-design.md"
-  "docs/changes/glossary-draft-2026-08-15.md"
+  "README.md"
+  "0.6.0-user-testing.md"
+  "25-rate-limiting-test-design.md"
+  "41-user-deletion-test-design.md"
 )
-STRAY=0
-while IFS= read -r file; do
-  keep=0
-  for old in "${GRANDFATHERED[@]}"; do [[ "$file" == "$old" ]] && keep=1 && break; done
-  (( keep )) && continue
-  echo "  STRAY   $file"
-  echo "          → docs/changes/workstreams/<workstream>/<issue>-<name>/ for a design"
-  echo "            docs/changes/releases/<version>/ for a testing document (#156)"
-  STRAY=1
-done < <(find docs/changes -maxdepth 1 -name '*.md' | sort)
-if (( STRAY )); then
-  FAILED=1
+if LIVE="$("$HERE/scripts/programme/board/board-records.py" live)"; then
+  CHANGES="$LIVE/applications/tile-lite-elite/3.1.7-changes"
+  STRAY=0
+  if [[ ! -d "$CHANGES" ]]; then
+    echo "  MISSING $CHANGES — the live checkout has no change documents folder"
+    STRAY=1
+  fi
+  while IFS= read -r file; do
+    keep=0
+    for old in "${GRANDFATHERED[@]}"; do [[ "$file" == "$old" ]] && keep=1 && break; done
+    (( keep )) && continue
+    echo "  STRAY   $file (in $CHANGES)"
+    echo "          → workstreams/<workstream>/<issue>-<name>/ for a design"
+    echo "            releases/<version>/ for a testing document (#156)"
+    STRAY=1
+  done < <(find "$CHANGES" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null | sort)
+  if (( STRAY )); then
+    FAILED=1
+  else
+    echo "  every change document is in an issue or release folder"
+  fi
 else
-  echo "  every change document is in an issue or release folder"
+  FAILED=1
 fi
 
 # Tile Lite Elite's documents are 4.G.N in the programme's one numbering: 4.1
