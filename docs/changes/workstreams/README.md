@@ -9,6 +9,7 @@ two it was originally decided for.
 | `process-definition/` | the rules, and the documents that state them |
 | `delivery-tooling/` | the machinery that carries a change to a running environment |
 | `operations/` | the service once it is live |
+| `programme-tooling/` | the programme's own scripts, hooks, skills and agents, and where they live |
 
 Inside each: documents the **workstream** owns at the top level, and a folder per
 issue or project that has documents of its own, named `<number>-<name>`.
