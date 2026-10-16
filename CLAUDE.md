@@ -225,8 +225,8 @@ docs/5.5 records the app it works through.
   next release, whose regression testing is the last one; it never justifies a
   release of its own. Every update is tested for what it changes, on preview
   and rehearsal at the branch tip where only a deployed stack can show it. A
-  new toolchain or major version gets a look at its new features, raised as
-  requirements. An `Other` one (a host package, a kernel, a reboot) has no
+  new toolchain or major version gets a look at its new features; anything
+  that might be worth considering is raised as a requirement, which judges it. An `Other` one (a host package, a kernel, a reboot) has no
   release to ride, so it supplies its own vehicle: work package, letter
   milestone, delivery-log row. `docs/5.1` §2.2.1 is the table.
 - **Who drove the change decides the ceremony, not how big the diff is.** A
