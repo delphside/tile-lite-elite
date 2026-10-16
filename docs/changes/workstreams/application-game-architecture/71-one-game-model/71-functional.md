@@ -50,7 +50,7 @@ flowchart LR
   creator -- "U4.4 leave a game in play (force-resign a seat),<br/>U4.5 abort a game" --- play
   time -- "U4.4 leave a game in play (time out),<br/>U4.6 remind the player on turn" --- play
   player -- "U5.1 see my games, ratings and history,<br/>U5.2 remove a game from my list" --- follow
-  admin -- "U6.1 force-end a game, U6.2 delete an account" --- administer
+  admin -- "U6.1 force-end a game, U6.2 delete an account,<br/>U6.4 delete a game, U6.5 sign a player out" --- administer
   time -- "U6.3 remove expired games" --- administer
 ```
 
@@ -59,7 +59,7 @@ flowchart LR
 - [U3 Join a game](#u3-join-a-game): [U3.1](#u31-accept-or-decline-an-invitation) Accept or decline an invitation, [U3.2](#u32-take-an-open-seat) Take an open seat, [U3.3](#u33-withdraw-from-my-seat) Withdraw from my seat
 - [U4 Play a game](#u4-play-a-game): [U4.1](#u41-take-a-turn) Take a turn, [U4.2](#u42-ask-for-a-suggested-move) Ask for a suggested move, [U4.3](#u43-chat-in-a-game) Chat in a game, [U4.4](#u44-leave-a-game-in-play) Leave a game in play, [U4.5](#u45-abort-a-game) Abort a game, [U4.6](#u46-remind-the-player-on-turn) Remind the player on turn
 - [U5 Follow my games](#u5-follow-my-games): [U5.1](#u51-see-my-games-ratings-and-history) See my games, ratings and history, [U5.2](#u52-remove-a-game-from-my-list) Remove a game from my list
-- [U6 Look after the service](#u6-look-after-the-service): [U6.1](#u61-force-end-a-game) Force-end a game, [U6.2](#u62-delete-an-account) Delete an account, [U6.3](#u63-remove-expired-games) Remove expired games
+- [U6 Look after the service](#u6-look-after-the-service): [U6.1](#u61-force-end-a-game) Force-end a game, [U6.2](#u62-delete-an-account) Delete an account, [U6.3](#u63-remove-expired-games) Remove expired games, [U6.4](#u64-delete-a-game) Delete a game, [U6.5](#u65-sign-a-player-out) Sign a player out
 
 ## Journeys
 
@@ -425,16 +425,20 @@ flowchart TD
 ### U6 Look after the service
 
 The administrator and the clock keep the service in order: ending games
-that cannot end, removing old games, and deleting accounts.
+that cannot end, removing old games and accounts, and signing a player out.
+The admin CLI tidies old data (ADM-2); closing your own account and
+suspending one are #296's.
 
 ```mermaid
 flowchart TD
   s0((start)) --> a1["U6.1 Force-end a game"]
   s0 --> a2["U6.2 Delete an account"]
   s0 --> a3["U6.3 Remove expired games"]
+  s0 --> a4["U6.4 Delete a game"]
+  s0 --> a5["U6.5 Sign a player out"]
 ```
 
-Journeys: [U6.1 Force-end a game](#u61-force-end-a-game), [U6.2 Delete an account](#u62-delete-an-account), [U6.3 Remove expired games](#u63-remove-expired-games).
+Journeys: [U6.1 Force-end a game](#u61-force-end-a-game), [U6.2 Delete an account](#u62-delete-an-account), [U6.3 Remove expired games](#u63-remove-expired-games), [U6.4 Delete a game](#u64-delete-a-game), [U6.5 Sign a player out](#u65-sign-a-player-out).
 
 #### U6.1 Force-end a game
 
@@ -460,14 +464,16 @@ flowchart TD
   v1 -- no --> r1["reported as not found"]
   v1 -- yes --> v2{"Server: does any game refer to it: created, seated or invited,<br/>in any state, hidden by the player or not? (reads)<br/>DEL-2, DEL-3, DEL-5"}
   v2 -- yes --> r2["refused, naming the games<br/>DEL-6"]
-  r2 --> d3{"Administrator: waits, or deletes the blocking games?"}
+  r2 --> d3{"Administrator: waits, or deletes the blocking games<br/>that are not in play?"}
   d3 -- waits --> w1["Administrator: waits, because every game goes eventually<br/>DEL-4, RET-1, RET-3, TIME-2"]
-  d3 -- deletes --> g1["Server: each blocking game removed, with its chat,<br/>moves and invitations<br/>any state → removed, Q12"]
+  d3 -- deletes --> g1["Administrator: deletes them, as in Delete a game<br/>ADM-2"]
   g1 --> a1
   w1 --> a1
-  v2 -- no --> v3{"Server: a live session? (reads)<br/>Q12"}
-  v3 -- yes --> r3["refused until the session ends or the administrator signs it out"]
+  v2 -- no --> v3{"Server: a live session? (reads)<br/>DEL-11"}
+  v3 -- yes --> r3["refused until the session ends<br/>or the administrator signs it out<br/>DEL-11"]
   r3 --> w1
+  r3 --> s1["Administrator: signs it out, as in Sign a player out"]
+  s1 --> a1
   v3 -- no --> t1["Server: sessions, invitations sent and received,<br/>rating and rating history removed, nothing of anyone else's<br/>email Live → None, account closed<br/>DEL-7, ACC-3, DEL-10"]
 ```
 
@@ -483,6 +489,26 @@ flowchart TD
   d1 -- delete --> t3["Server: Not Started → removed, the game goes at once<br/>RET-3"]
   d1 -- keep --> t4["Server: counts as activity, thirty days start again (no transition)<br/>RET-3"]
   d1 -- nothing --> t5["Time: the countdown carries on, and thirty days after the last activity<br/>Not Started → removed<br/>RET-3"]
+```
+
+#### U6.4 Delete a game
+
+```mermaid
+flowchart TD
+  s0((start)) --> a1["Administrator: names a game, in the admin CLI<br/>ADM-1"]
+  a1 --> v1{"Server: the game exists, and is not in play?<br/>ADM-2"}
+  v1 -- no --> r1["refused, nothing changes: a game in play<br/>is left to end or time out"]
+  v1 -- yes --> t1["Server: Not Started or Over → removed,<br/>with its seats, chat, moves and invitations;<br/>rating history stays<br/>ADM-2, RET-2, DEL-10"]
+```
+
+#### U6.5 Sign a player out
+
+```mermaid
+flowchart TD
+  s0((start)) --> a1["Administrator: names an account, in the admin CLI<br/>ADM-1"]
+  a1 --> v1{"Server: the account exists? (reads)"}
+  v1 -- no --> r1["reported as not found"]
+  v1 -- yes --> t1["Server: every session of the account ended<br/>(no transition)<br/>DEL-11"]
 ```
 
 ### Questions the journeys raise
@@ -622,6 +648,13 @@ DEL-1 for the host restriction.
 
 #### Q12 Administrator actions with no use case
 
+Answered in part (owner, 2026-10-16): the admin CLI tidies old data, so it
+never deletes a game in play, ADM-2; deleting an account waits for its
+sessions or signs it out, DEL-11; "Delete a game" and "Sign a player out" are
+journeys. Removing a misbehaving player, and a player closing their own
+account, are #296's, and will likely resign the player from games rather than
+delete them. Still open: whether an administrator resetting a player's
+password is a use case. What follows is the question as raised.
 The admin CLI deletes a game
 (`admin_delete_game`, admin.rs:379, `DELETE /admin/games/{id}`), resets a
 player's password (`admin_reset_password`, admin.rs:266) and signs a player
