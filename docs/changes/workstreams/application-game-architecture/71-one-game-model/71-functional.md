@@ -224,7 +224,7 @@ flowchart TD
   c1 --> v1{"Server: the creator's game, still Not Started?"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> d0{"which?"}
-  d0 -- add --> c2["Creator: names a bot, a player, an email or an open seat<br/>GAME-4"]
+  d0 -- add --> c2["Creator: names a bot, a player, an email or an open seat<br/>GAME-4, GAME-10"]
   c2 --> v2{"Server: a named player exists?<br/>GAME-9"}
   v2 -- no --> r2["refused, nothing changes"]
   v2 -- yes --> t1["Server: seat appended and numbered<br/>a bot's seat Claimed,<br/>any other Invited, its invitation sent<br/>the same player or bot may hold several seats<br/>GAME-4"]
@@ -273,11 +273,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  s0((start)) --> p1["Player: sees games with a seat open to anyone (reads)<br/>Q10"]
+  s0((start)) --> p1["Player: sees games with a seat open to anyone (reads)<br/>GAME-10"]
   p1 --> p2["Player: accepts the seat, whether or not already seated in that game<br/>GAME-4"]
   p2 --> v1{"Server: the game still Not Started,<br/>and the seat still unclaimed?<br/>INV-3, INV-7"}
   v1 -- no --> r1["refused: no longer available, nothing changes"]
-  v1 -- yes --> t1["Server: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>INV-3"]
+  v1 -- yes --> t1["Server: seat Invited → Claimed, named for the claimant<br/>version bumps, everyone watching is told<br/>of two at once, one wins<br/>GAME-10"]
 ```
 
 #### U3.3 Withdraw from my seat
@@ -589,7 +589,8 @@ the three limits.
 
 #### Q10 A seat open to anyone
 
-`create_game` and `add_seat_to_game` accept an
+Answered: the open seat stays, GAME-10 (owner, 2026-10-16). What follows is
+the question as raised. `create_game` and `add_seat_to_game` accept an
 open claim, an invitation with neither a name nor an email has no invitee,
 `list_games` shows every such invitation to every signed-in player
 (`get_open_invitations`, relationship `InvitedOpen`), and
