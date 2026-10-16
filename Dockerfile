@@ -15,7 +15,7 @@
 # rehearsal like any other change. The tag stays alongside the digest so the
 # line still reads for a person; the `@sha256:...` is what Docker actually
 # resolves.
-FROM rust:1-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e AS builder
+FROM rust:1-bookworm@sha256:e12566d5abc17a0da741628782cdb504b68b8961f5bfcf677936bf3e8b32de29 AS builder
 WORKDIR /workspace
 
 # dioxus-cli version pinned to match crates/ui's `dioxus`/`dioxus-web` deps
@@ -112,7 +112,7 @@ RUN BUNDLE_DIR=target/dx/tile-lite-elite-ui/release/web/public \
 
 # ---------------------------------------------------------------------------
 
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS runtime-server
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS runtime-server
 # curl is otherwise unused here — pulled in solely so HEALTHCHECK below has
 # something to hit /health with, without reaching for a heavier base image.
 #
