@@ -67,7 +67,8 @@ jobs:
             printf 'Raised by `.github/workflows/programme-activities.yml` ([run](%s/%s/actions/runs/%s)).\n' \
               "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
             printf 'The register is programme/docs/1.4-programme-activities.md; the record of what has\n'
-            printf 'been done is programme/records/2.3-activity-log.csv. A row appended there closes\n'
+            printf 'been done is records/2.3-activity-log.csv in delphside/programme (its live\n'
+            printf 'checkout, never the programme/ submodule here). A row appended there closes\n'
             printf 'this.\n\n'
             printf '```\n'
             cat /tmp/practices.txt

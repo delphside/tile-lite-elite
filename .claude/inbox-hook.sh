@@ -83,6 +83,14 @@ if [[ "$MODE" != "--build" && ! -t 0 ]]; then
 fi
 log "sid=${SID:-?} start"
 
+# The live programme checkout missing, off main or behind: one line, or nothing.
+# Local git only, never changes the checkout, and never fails the session.
+NOTE=""
+[[ "$MODE" != "--build" ]] && NOTE="$(timeout 10 ./scripts/programme/board/board-records.py check 2>/dev/null || true)"
+with_note() { if [[ -n "$NOTE" ]]; then printf '%s\n\n%s' "$NOTE" "$1"; else printf '%s' "$1"; fi; }
+# Leave without a summary, still saying so if the checkout has a problem.
+bail() { [[ -n "$NOTE" ]] && emit_json "$NOTE" && mark_delivered "$SID"; exit 0; }
+
 emit_json() {
   printf '%s' "$1" | python3 -c '
 import sys, json
@@ -96,14 +104,14 @@ if t:
 }
 
 if [[ "$MODE" != "--build" && -s "$CACHE" ]]; then
-  emit_json "$(cache_text)" && mark_delivered "$SID"
+  emit_json "$(with_note "$(cache_text)")" && mark_delivered "$SID"
   (( $(cache_age) >= STALE_SECS )) && start_build
   log "sid=${SID:-?} end (from cache)"
   exit 0
 fi
 
 # --build, or SessionStart with no cache at all: do the slow work.
-command -v gh > /dev/null 2>&1 || exit 0
+command -v gh > /dev/null 2>&1 || bail
 if [[ "$MODE" == "--build" ]]; then
   # One build at a time; a lock older than five minutes is a dead build's.
   find "$LOCK" -maxdepth 0 -mmin +5 -exec rmdir {} \; 2> /dev/null || true
@@ -111,8 +119,8 @@ if [[ "$MODE" == "--build" ]]; then
   trap 'rmdir "$LOCK" 2> /dev/null' EXIT
 fi
 
-RAW="$(./scripts/programme/board/board-inbox.py 7 --no-colour 2>/dev/null)" || exit 0
-[[ -z "$RAW" ]] && exit 0
+RAW="$(./scripts/programme/board/board-inbox.py 7 --no-colour 2>/dev/null)" || bail
+[[ -z "$RAW" ]] && bail
 
 # **The to-do half is `board-inbox.py --open`** (#454), run with the others below:
 # the owner's comments Claude has not answered, of any age. This awk keeps only
@@ -136,8 +144,8 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 # **What is waiting on Claude, and what does not add up** — #347 R2. The two
 # tools that answer this were wired to nothing: the actions report was in no
 # hook at all, and the transition check was reachable only by hand or through
-# `verify.sh`, where it is a `note` and `CLAUDE.md`:82 says to trust the exit
-# status rather than read the output. Following the process exactly meant never
+# `verify.sh`, where it is a `note` and the rule in `CLAUDE.md` is to trust the
+# exit status rather than read the output. Following the process exactly meant never
 # seeing either.
 #
 # **Both moved to the board model on 2026-09-19** — `board-actions.py --claude`
@@ -154,7 +162,7 @@ SUMMARY="$(printf '%s\n' "$RAW" | awk '
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"; [[ "$MODE" == "--build" ]] && rmdir "$LOCK" 2> /dev/null' EXIT
 ( timeout 25 ./scripts/programme/board/board-actions.py --claude --no-colour 2>/dev/null > "$TMP/actions" ) &
 ( timeout 25 ./scripts/programme/board/board-check.py --no-colour 2>/dev/null > "$TMP/trans" ) &
-( timeout 10 ./scripts/programme/board/board-practices.py 2>/dev/null > "$TMP/practices" ) &
+( timeout 10 ./scripts/programme/board/board-practices.py 2> "$TMP/practices.err" > "$TMP/practices" ) &
 ( timeout 60 ./scripts/programme/board/board-inbox.py --open --no-colour 2>/dev/null > "$TMP/open" ) &
 wait
 
@@ -168,6 +176,9 @@ ACTIONS="$(grep -E '^  #[0-9]+' "$TMP/actions" 2>/dev/null | head -40 || true)"
 # the previous one — there is nothing to debounce, unlike the weekly digest
 # `programme-activities.yml` sends the owner during an absence.
 PRACTICES="$(grep -E 'OVERDUE|never logged' "$TMP/practices" 2>/dev/null || true)"
+# Its stderr is the reason when it cannot judge (the live checkout missing), so
+# it reaches the session rather than being thrown away.
+PRACTICES_ERR="$(head -3 "$TMP/practices.err" 2>/dev/null || true)"
 
 # **Reports from the scheduled workflows.** Owner, 2026-09-27: "can you add a
 # hook so you notice a new report?" The workflows report by writing an issue
@@ -188,16 +199,18 @@ EXTRA=""
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to fix: incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"
 [[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue, whose move is the activity's owner in the programme's docs/1.4 (./scripts/programme/board/board-practices.py):"$'\n'"$PRACTICES"
 
-[[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
+[[ -n "$PRACTICES_ERR" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities could not be judged (./scripts/programme/board/board-practices.py):"$'\n'"$PRACTICES_ERR"
+
+[[ -z "$SUMMARY" && -z "$EXTRA" ]] && bail
 
 # Written whole and moved into place, so a reader never sees half a cache.
 printf '%s\n' "$SUMMARY$EXTRA" > "$CACHE.tmp" && mv "$CACHE.tmp" "$CACHE"
 if [[ "$MODE" == "--build" ]]; then
   log "build end"
 else
-  emit_json "GitHub activity in the last 7 days. Run ./scripts/programme/board/board-inbox.py for the detail.
+  emit_json "$(with_note "GitHub activity in the last 7 days. Run ./scripts/programme/board/board-inbox.py for the detail.
 
-$SUMMARY$EXTRA" && mark_delivered "$SID"
+$SUMMARY$EXTRA")" && mark_delivered "$SID"
   log "sid=${SID:-?} end (built)"
 fi
 exit 0

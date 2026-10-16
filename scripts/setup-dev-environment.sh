@@ -325,14 +325,17 @@ echo "==> the programme submodule"
 git submodule update --init
 echo "    programme/ at $(git -C programme rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 # The programme's *records* are a second clone, beside this one, never the
-# submodule: the scripts read them from ../programme or $PROGRAMME_DIR. Told
-# rather than cloned, because where it goes is the owner's layout (docs/4.3.1).
-PROGRAMME_LIVE="${PROGRAMME_DIR:-$(cd .. && pwd)/programme}"
-if [ -e "$PROGRAMME_LIVE/.git" ]; then
-  echo "    live checkout: $PROGRAMME_LIVE"
+# submodule: the scripts read them from beside the main worktree or
+# $PROGRAMME_DIR. Told rather than cloned, because where it goes is the owner's
+# layout (docs/4.3.1). board-records.py holds the default and the override and
+# judges the checkout (missing, not on main, behind), so it is asked, not
+# repeated here.
+PROGRAMME_NOTE="$(scripts/programme/board/board-records.py check)"
+if [ -n "$PROGRAMME_NOTE" ]; then
+  echo "    WARNING: $PROGRAMME_NOTE" >&2
+  echo "    Clone it beside this repository: git clone git@github.com:delphside/programme.git <path>" >&2
 else
-  echo "    WARNING: no live checkout of the programme at $PROGRAMME_LIVE." >&2
-  echo "    Clone it there: git clone git@github.com:delphside/programme.git $PROGRAMME_LIVE" >&2
+  echo "    live checkout: $(scripts/programme/board/board-records.py live)"
 fi
 
 echo "==> git: tell it where the agent lives"

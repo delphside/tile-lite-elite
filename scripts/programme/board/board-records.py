@@ -3,10 +3,16 @@
 
     scripts/programme/board/board-records.py live       # the live checkout, for records
     scripts/programme/board/board-records.py generic    # the pinned submodule
+    scripts/programme/board/board-records.py check      # one line if the live checkout needs attention
 
 One definition of the default and the override (`records.py`), asked rather
 than repeated in each shell script. A missing live checkout prints the path
 tried and exits non-zero.
+
+`check` is for the start of a session: it prints one line naming the path when
+the live checkout is missing, on a branch other than main, or behind the local
+`origin/main`, and nothing when all is well. It never changes the checkout and
+always exits 0.
 """
 
 import sys
@@ -21,6 +27,10 @@ def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if args == ["live"]:
         print(records.live())
+    elif args == ["check"]:
+        line = records.problem()
+        if line:
+            print(line)
     elif args == ["generic"]:
         print(records.generic())
     else:

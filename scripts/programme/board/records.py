@@ -24,11 +24,14 @@ Shell scripts ask `board-records.py live` rather than repeat the default.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# **The one constant.** Relative to the repository root; `PROGRAMME_DIR` replaces it.
+# **The one constant.** Relative to the *main worktree's* root, so a script run
+# from a linked worktree (`.claude/worktrees/...`) finds the same live checkout
+# as one run from the main checkout; `PROGRAMME_DIR` replaces it.
 DEFAULT_PROGRAMME_DIR = "../programme"
 ENV = "PROGRAMME_DIR"
 
@@ -52,9 +55,25 @@ def generic(root: Path | None = None) -> Path:
     return (root or ROOT) / "programme"
 
 
+def main_worktree(root: Path) -> Path:
+    """The root of the repository's main worktree: the parent of the common git
+    directory, which every linked worktree shares. `root` itself when git cannot
+    say (not a repository, no git)."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return root
+    common = out.stdout.strip()
+    if out.returncode != 0 or not common:
+        return root
+    return Path(common).parent
+
+
 def live(root: Path | None = None) -> Path:
     """The live checkout, for records. Exits non-zero with the path it tried."""
-    base = root or ROOT
+    base = main_worktree(root or ROOT)
     given = os.environ.get(ENV)
     path = Path(given) if given else (base / DEFAULT_PROGRAMME_DIR)
     path = Path(os.path.normpath(path if path.is_absolute() else Path.cwd() / path))
@@ -86,3 +105,40 @@ def capacity_plan() -> Path:
 
 def change_documents() -> Path:
     return application() / "3.1.7-changes"
+
+
+def _git(path: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, timeout=10)
+
+
+def problem(root: Path | None = None) -> str | None:
+    """What is wrong with the live checkout for a session starting now, as one
+    line naming the path, or None when it is present, on main and not behind.
+
+    Read-only and offline: it compares with the local `origin/main` ref and says
+    it cannot tell when that ref is absent, because a fetch is a network call
+    at the start of every session. It never changes the checkout.
+    """
+    try:
+        path = live(root)
+    except NoLiveCheckout as gone:
+        return (f"The programme's live checkout is missing at {gone.tried}: clone "
+                f"delphside/programme there, or set {ENV}; records cannot be read or written.")
+    try:
+        branch = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
+        if branch.returncode != 0:
+            return f"The programme's live checkout at {path} is not a git checkout; records may be stale."
+        name = branch.stdout.strip()
+        if name != "main":
+            shown = "a detached HEAD" if name == "HEAD" else f"branch {name}"
+            return f"The programme's live checkout at {path} is on {shown}, not main; records may be wrong."
+        if _git(path, "rev-parse", "--verify", "-q", "refs/remotes/origin/main").returncode != 0:
+            return (f"The programme's live checkout at {path}: cannot tell whether it is "
+                    f"behind origin/main (no local origin/main ref; git fetch there).")
+        behind = _git(path, "rev-list", "--count", "HEAD..refs/remotes/origin/main").stdout.strip()
+        if behind not in ("", "0"):
+            return (f"The programme's live checkout at {path} is {behind} commit(s) behind "
+                    f"origin/main (as last fetched); pull it before reading records.")
+    except (OSError, subprocess.SubprocessError):
+        return f"The programme's live checkout at {path}: cannot tell its state (git did not answer)."
+    return None

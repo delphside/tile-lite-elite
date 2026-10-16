@@ -5,7 +5,7 @@
 # **Cloud only.** It exits at once unless CLAUDE_CODE_REMOTE is `true`, which
 # a cloud session's VM sets and a local one never does, so on the WSL machine
 # and in VS Code it does nothing. A local machine is set up once by
-# scripts/setup-dev-environment.sh (docs/3.1).
+# scripts/setup-dev-environment.sh (docs/4.3.1).
 #
 # **Run every session, not cached.** The environment's own setup script is
 # snapshotted and reused; a SessionStart hook is not, so this pays its cost on
@@ -31,7 +31,7 @@
 #
 # Not here: dioxus-desktop's system libraries. Desktop builds are rare and the
 # libraries add ~25s to every start, so they belong in the environment's
-# cached setup script — docs/3.1 has the line.
+# cached setup script — docs/4.3.1 has the line.
 #
 # Never fails a session: a step that cannot finish says so and the rest go on.
 # Progress goes to stderr; stdout is one line for Claude's context.
@@ -104,6 +104,11 @@ git config core.hooksPath .githooks || missing+=("git hooks")
 # not this: the cloud session has it beside the repository already.
 git submodule update --init >&2 2>&1 || missing+=("programme submodule")
 
+# --- the live programme checkout ----------------------------------------------
+# board-records.py says in one line if it is missing, off main or behind the
+# local origin/main, and nothing when it is fine. It changes nothing.
+PROGRAMME_NOTE=$(scripts/programme/board/board-records.py check 2>/dev/null || true)
+
 # --- session environment -----------------------------------------------------
 CHROMIUM=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | sort -V | tail -1)
 if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
@@ -119,4 +124,5 @@ if ((${#missing[@]})); then
 else
   echo "cloud-setup: dx $DX_VERSION, wasm-bindgen $WB_VERSION, the pinned toolchain, bats, sqlite3 and e2e dependencies are installed, and the git hooks in .githooks are on. Playwright uses the preinstalled Chromium (PLAYWRIGHT_CHROMIUM_EXECUTABLE); start dev with ./scripts/services.sh start."
 fi
+[[ -n "$PROGRAMME_NOTE" ]] && echo "$PROGRAMME_NOTE"
 exit 0
