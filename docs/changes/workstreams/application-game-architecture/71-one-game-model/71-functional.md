@@ -342,7 +342,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   s0((start)) --> p1["Player: writes a message"]
-  p1 --> v1{"Server: the caller holds a seat in the game,<br/>and the message is not blank or too long?<br/>Q13"}
+  p1 --> v1{"Server: the caller holds a seat in the game or created it,<br/>and the message is neither blank nor over 1000 characters?<br/>GAME-12"}
   v1 -- no --> r1["refused, nothing changes"]
   v1 -- yes --> t1["Server: message recorded, on or off turn, in any game state<br/>version bumps, every client told (no transition)<br/>RET-1"]
 ```
@@ -672,6 +672,10 @@ still in play.
 
 #### Q13 Some steps change a game's record and move no seat, and the invariant does not treat them alike
 
+Answered: the seated players and the creator may chat, up to 1000
+characters, GAME-12 (owner, 2026-10-16); hiding a game and recording a
+reminder save without advancing the version, [71-design.md](71-design.md#one-version-moved-in-one-place).
+What follows is the question as raised.
 Chat and hiding a game bump the version
 (`mark_changed`), hiding without a broadcast on purpose; the reminder
 (`send_move_time_reminders`, sweeps_game.rs) sets `reminder_sent_turn` and

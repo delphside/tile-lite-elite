@@ -105,6 +105,12 @@ be shown is a variant; there is no other way in.
 The handler applies the change, advances the version, records the event and
 broadcasts — in that order, in one place. Nothing else writes to a game.
 
+**Two messages save without advancing the version.** `Hide` changes one
+player's own list, not the game, and `ReminderSent` records that a reminder
+went so it is not sent twice. Neither is anything another client is shown,
+so each is saved under the same lock and nothing is broadcast; neither counts
+as activity for RET-3.
+
 **A rejected message changes nothing.** The handler validates against the game
 as it stands and applies only a message that will succeed, so a refused
 exchange or placement leaves the racks and the bag as they were.
