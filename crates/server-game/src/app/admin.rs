@@ -80,7 +80,7 @@ pub(crate) async fn admin_delete_user(
 ) -> Result<StatusCode, ApiProblem> {
     // Refuse while anything still refers to the account — a game it created,
     // a seat it holds, or an invitation it has not answered
-    // (docs/4.1.0-rules.md, DEL-2).
+    // (docs/1.0-rules.md, DEL-2).
     //
     // Deleting a user with games attached is what raises every awkward
     // question: unclaimed seats, an unmanageable game whose creator is gone,

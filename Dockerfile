@@ -125,7 +125,7 @@ FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595
 # and is fine as a deliberate act at a chosen moment, less so unattended at
 # 03:00 while somebody is mid-move.
 #
-# **And it retires a wart `docs/4.3.4` already complains about**: reading the
+# **And it retires a wart `docs/3.4` already complains about**: reading the
 # database on production installed the sqlite package into a throwaway Alpine
 # container on every single invocation, needing the network each time.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 \

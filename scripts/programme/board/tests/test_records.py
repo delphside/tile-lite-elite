@@ -112,13 +112,28 @@ class TheStartOfSessionCheck(Cases):
         self.expect("names the path", True, str(gone) in result.stdout)
         self.expect("says missing", True, "missing" in result.stdout)
 
-    def test_on_another_branch(self):
-        git(self.live, "checkout", "-q", "-b", "side")
+    def test_a_branch_at_origin_main_says_nothing(self):
+        # Cloud sessions put every repository on a session branch.
+        git(self.live, "checkout", "-q", "-b", "claude/session")
+        self.expect("no problem", None, records.problem())
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("prints nothing", "", result.stdout + result.stderr)
+
+    def test_a_branch_behind_origin_main_says_behind(self):
+        git(self.live, "checkout", "-q", "-b", "claude/session")
+        (self.origin / "g").write_text("2")
+        git(self.origin, "add", "g")
+        git(self.origin, "commit", "-q", "-m", "two")
+        git(self.live, "fetch", "-q", "origin")
         result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
         self.expect("exit", 0, result.returncode)
         self.expect("one line", 1, len(result.stdout.strip().splitlines()))
-        self.expect("names the path", True, str(self.live) in result.stdout)
-        self.expect("names the branch", True, "side" in result.stdout)
+        self.expect("says 1 behind", True, "1 commit(s) behind" in result.stdout)
+
+    def test_a_detached_head_is_judged_the_same_way(self):
+        git(self.live, "checkout", "-q", "--detach")
+        self.expect("no problem", None, records.problem())
 
     def test_behind_origin_main(self):
         (self.origin / "g").write_text("2")

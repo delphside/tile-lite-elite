@@ -70,7 +70,7 @@ use serde::{Deserialize, Serialize};
 // than kept, because a third-party client needs the contract version to mean
 // the contract, not "our web build changed". Client updates are delivered by
 // a hash of the built bundle instead; see `watch_for_new_bundle` in
-// `tile-lite-elite-ui`, and docs/4.3.3's "Decide whether the API version
+// `tile-lite-elite-ui`, and docs/3.3's "Decide whether the API version
 // moves" for which changes bump this.
 // 2.14 — `GET /players/{player_id}/invitations` answered 400 on a database
 // failure and now answers 500, or 503 with `Retry-After` when the failure is
@@ -80,11 +80,11 @@ use serde::{Deserialize, Serialize};
 // **The precedent is `ec72268`**, which moved 2.10 to 2.11 for the same shape:
 // a status changed on a path that already existed. #380 made that kind of
 // change and did not bump, so this is the second time it was missed rather
-// than a settled exemption — docs/4.3.3's table has gained the row.
+// than a settled exemption — docs/3.3's table has gained the row.
 // 2.15 — `GET /admin/scheduler-health` joins the admin surface, for #400's
 // R5 (last-completed and errored-item-count per scheduled job). Minor by
 // the 2.4 test: loopback-only, one client, ships in the same container.
-// 2.16 — statuses changed on paths that already existed (docs/4.3.3's third
+// 2.16 — statuses changed on paths that already existed (docs/3.3's third
 // row): a sign-in is now required where one was optional, and a request the
 // board or alphabet cannot address is refused as a 400. Old clients still
 // work; a signed-in one sees no difference.

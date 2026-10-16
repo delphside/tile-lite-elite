@@ -10,8 +10,8 @@ than repeated in each shell script. A missing live checkout prints the path
 tried and exits non-zero.
 
 `check` is for the start of a session: it prints one line naming the path when
-the live checkout is missing, on a branch other than main, or behind the local
-`origin/main`, and nothing when all is well. It never changes the checkout and
+the live checkout is missing, not a git checkout, behind the local `origin/main`
+(whatever branch it is on), or cannot be judged for want of that ref, and nothing when all is well. It never changes the checkout and
 always exits 0.
 """
 

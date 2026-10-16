@@ -33,7 +33,7 @@ fn build_id_appends_as_semver_build_metadata() {
 /// Write every log event the suite produces to the file named by
 /// `TILE_LITE_ELITE_LOG_CAPTURE`, in the same JSON shape production uses.
 ///
-/// **This is how the log schema gets checked** (#174). `docs/4.4.7-log-events.md`
+/// **This is how the log schema gets checked** (#174). `docs/4.7-log-events.md`
 /// declares the fields each event may carry; `scripts/check-log-hygiene.sh`
 /// validates a stream of lines against it. The stream has to come from
 /// somewhere, and the regression suite is by far the best source available: it

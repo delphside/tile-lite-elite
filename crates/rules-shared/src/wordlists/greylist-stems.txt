@@ -2,7 +2,7 @@
 #
 # Nothing here is generated: this file is the judgement, which is why it is
 # committed and reviewed rather than recomputed. See
-# docs/4.3.5-word-lists-and-dictionaries.md, "Generating the greylist".
+# docs/3.5-word-lists-and-dictionaries.md, "Generating the greylist".
 #
 # REVIEWED IN FULL by the owner, 2026-08-12. ESCORT* and DOMINATION* struck as
 # ordinary words; everything else kept, including the contested rows — WELCH*,

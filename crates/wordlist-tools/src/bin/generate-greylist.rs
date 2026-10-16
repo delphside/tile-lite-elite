@@ -140,7 +140,7 @@ fn main() {
         words.len()
     );
     println!("#");
-    println!("# See docs/4.3.5-word-lists-and-dictionaries.md.");
+    println!("# See docs/3.5-word-lists-and-dictionaries.md.");
     for word in &greylist {
         println!("{word}");
     }

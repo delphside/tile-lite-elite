@@ -61,7 +61,7 @@ services:
     #
     # journald's store belongs to the **host**, so it survives that. It already
     # runs, already persists to /var/log/journal, and already rotates; retention
-    # is set by a drop-in on the host (see docs/4.3.4), not here. Its rate limit —
+    # is set by a drop-in on the host (see docs/3.4), not here. Its rate limit —
     # 10,000 messages per 30 seconds — is four orders of magnitude above us.
     #
     # `tag` is what makes the lines findable afterwards:

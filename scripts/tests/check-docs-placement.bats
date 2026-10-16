@@ -35,6 +35,12 @@ placement() { run env PATH="$STUBS:$PATH" PROGRAMME_DIR="$1" "$CHECK"; }
   placement "$LIVE"
   assert_output --partial "MISSING"
   refute_output --partial "every change document is in"
+  # Reported only: the exit status is what a clean folder gives, whatever the
+  # other steps make of this machine.
+  missing_status=$status
+  mkdir -p "$CHANGES"
+  placement "$LIVE"
+  assert_equal "$status" "$missing_status"
 }
 
 @test "placement: a stray document at the top of the folder is reported" {

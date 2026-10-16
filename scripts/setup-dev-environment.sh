@@ -333,7 +333,10 @@ echo "    programme/ at $(git -C programme rev-parse --short HEAD 2>/dev/null ||
 PROGRAMME_NOTE="$(scripts/programme/board/board-records.py check)"
 if [ -n "$PROGRAMME_NOTE" ]; then
   echo "    WARNING: $PROGRAMME_NOTE" >&2
-  echo "    Clone it beside this repository: git clone git@github.com:delphside/programme.git <path>" >&2
+  case "$PROGRAMME_NOTE" in
+    *"is missing"*)
+      echo "    Clone it beside this repository: git clone git@github.com:delphside/programme.git <path>" >&2 ;;
+  esac
 else
   echo "    live checkout: $(scripts/programme/board/board-records.py live)"
 fi
