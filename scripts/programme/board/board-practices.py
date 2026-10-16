@@ -5,9 +5,10 @@
     scripts/programme/board/board-practices.py --json   # the same, machine-readable
     scripts/programme/board/board-practices.py --exit-code  # non-zero when anything is overdue
 
-Reads the register (`programme/docs/1.4-programme-activities.md`) for what exists and
-how often it is owed, and the log (`programme/records/2.3-activity-log.csv`) for when
-each was last done. Neither is inferred from an artefact's age — the owner,
+Reads the register (`docs/1.4-programme-activities.md` in the pinned `programme/`
+submodule) for what exists and how often it is owed, and the log
+(`records/2.3-activity-log.csv` in the live checkout, `PROGRAMME_DIR`, see
+`records.py`) for when each was last done. Neither is inferred from an artefact's age — the owner,
 2026-09-22: *"Deriving actions from the presence or absence of a document
 seems fragile to me... we need a record of the activities we have done, or the
 last date each one was done."*
@@ -34,12 +35,23 @@ from pathlib import Path
 
 import os
 
-ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from board import records  # noqa: E402
+
 # Overridable for the test, which reads a real table and a real CSV rather
 # than stubbing the parser — the same reasoning `CI_STATUS` and `SYNC_PR_STATE`
-# already use in merge-to-release.sh.
-REGISTER = Path(os.environ.get("REGISTER_OVERRIDE") or ROOT / "docs" / "5.3-programme-activities.md")
-LOG = Path(os.environ.get("LOG_OVERRIDE") or ROOT / "docs" / "programme-activity-log.csv")
+# already use in merge-to-release.sh. Otherwise `records.py` says where each is,
+# and a missing live checkout stops the script there.
+REGISTER: Path
+LOG: Path
+
+
+def _locate() -> None:
+    global REGISTER, LOG
+    reg, log = os.environ.get("REGISTER_OVERRIDE"), os.environ.get("LOG_OVERRIDE")
+    REGISTER = Path(reg) if reg else records.activity_register()
+    LOG = Path(log) if log else records.activity_log()
 
 _ROW = re.compile(
     r"^\|\s*`([\w-]+)`\s*\|([^|]*)\|\s*(\d+)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|",
@@ -119,6 +131,13 @@ def main() -> int:
     ap.add_argument("--exit-code", action="store_true",
                     help="exit 1 when anything is overdue or never logged")
     args = ap.parse_args()
+
+    try:
+        _locate()
+    except records.NoLiveCheckout as exc:
+        # `cannot tell`, like an unreadable log: D46's 2.
+        print(f"board-practices: {exc}", file=sys.stderr)
+        return 2
 
     if not REGISTER.exists() or not LOG.exists():
         # `cannot tell`, never `nothing outstanding` — an unreadable source and

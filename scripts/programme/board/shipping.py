@@ -34,7 +34,9 @@ from typing import Iterable, Sequence
 
 _NON_SHIPPING = re.compile(
     r"^(docs/|scripts/|e2e/|\.github/|\.githooks/|\.claude/|\.cargo/audit\.toml$"
-    r"|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$)"
+    r"|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$"
+    # the programme submodule (#485): the Dockerfile copies named folders, never this one
+    r"|\.gitmodules$|programme$|programme/)"
 )
 
 

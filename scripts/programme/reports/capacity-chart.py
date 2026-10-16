@@ -59,10 +59,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-FOLDER = ROOT / "docs" / "reports" / "capacity_plan"
-DATA = FOLDER / "measurements.csv"
-CHARTS = FOLDER / "charts"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from board import records  # noqa: E402
+
+# The capacity plan is a record: `3.1.3-capacity-plan/` in this application's
+# folder of the live programme checkout (`PROGRAMME_DIR`, see `records.py`).
+# Resolved in `main`, so importing this module never needs the checkout.
 
 # The roadmap's palette, so two generated diagrams in one repository look like
 # one hand drew them.
@@ -183,7 +186,7 @@ class Series:
         return None
 
 
-def read(path: Path = DATA) -> list[Series]:
+def read(path: Path) -> list[Series]:
     rows = list(csv.DictReader(path.open()))
     order: list[str] = []
     by: dict[str, list[dict]] = {}
@@ -460,10 +463,16 @@ def main() -> int:
                     help="periods to project the trend (default 6)")
     args = ap.parse_args()
 
-    if not DATA.exists():
-        print(f"capacity-chart: {DATA} not found", file=sys.stderr)
+    try:
+        folder = records.capacity_plan()
+    except records.NoLiveCheckout as exc:
+        print(f"capacity-chart: {exc}", file=sys.stderr)
+        return 2
+    data, charts = folder / "measurements.csv", folder / "charts"
+    if not data.exists():
+        print(f"capacity-chart: {data} not found", file=sys.stderr)
         return 1
-    all_series = read()
+    all_series = read(data)
 
     if args.table:
         print(table(all_series))
@@ -474,11 +483,10 @@ def main() -> int:
         return 0
 
     if args.write:
-        CHARTS.mkdir(parents=True, exist_ok=True)
+        charts.mkdir(parents=True, exist_ok=True)
         for s in all_series:
-            (CHARTS / f"{slug(s.metric)}.svg").write_text(draw(s, args.horizon))
-        print(f"==> {len(all_series)} chart(s) in "
-              f"{CHARTS.relative_to(ROOT)}")
+            (charts / f"{slug(s.metric)}.svg").write_text(draw(s, args.horizon))
+        print(f"==> {len(all_series)} chart(s) in {charts}")
 
     for s in all_series:
         print(f"  {verdict(s, args.horizon)}")

@@ -51,6 +51,22 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The pinned programme (generic documents), for the scripts that read them (#485).
+          submodules: true
+
+      # The programme's records, at the head of its main: the placement check
+      # reads this application's change documents there, and the tests that
+      # need a live checkout set their own. `PROGRAMME_DIR` is the variable
+      # `scripts/programme/board/records.py` reads. Inside the workspace, and
+      # skipped by the document checks, which are for this repository's own.
+      - uses: actions/checkout@v7
+        with:
+          repository: delphside/programme
+          ref: main
+          path: .programme-live
+
+      - name: Point the scripts at the programme's records
+        run: echo "PROGRAMME_DIR=$GITHUB_WORKSPACE/.programme-live" >> "$GITHUB_ENV"
 
       # The documents are checked here because they were not checked anywhere:
       # the config (.markdownlint.jsonc) existed for weeks and was only ever run

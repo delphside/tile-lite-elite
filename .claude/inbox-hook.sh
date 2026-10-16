@@ -186,7 +186,7 @@ EXTRA=""
 [[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to read: reports from the scheduled workflows, opened, updated or closed (./scripts/programme/board/board-inbox.py):"$'\n'"$REPORTS"
 [[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: actions on the board (./scripts/programme/board/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to fix: incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"
-[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue, whose move is the activity's owner in docs/5.3 (./scripts/programme/board/board-practices.py, docs/5.3):"$'\n'"$PRACTICES"
+[[ -n "$PRACTICES" ]] && EXTRA="$EXTRA"$'\n\n'"Programme activities overdue, whose move is the activity's owner in the programme's docs/1.4 (./scripts/programme/board/board-practices.py):"$'\n'"$PRACTICES"
 
 [[ -z "$SUMMARY" && -z "$EXTRA" ]] && exit 0
 

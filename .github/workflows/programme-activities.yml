@@ -35,12 +35,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The register is read from the pinned programme (#485).
+          submodules: true
+
+      # The log is a record, read from the head of the programme's main.
+      - uses: actions/checkout@v7
+        with:
+          repository: delphside/programme
+          ref: main
+          path: .programme-live
 
       - name: What is overdue
         id: check
         shell: bash
         run: |
           set -o pipefail
+          export PROGRAMME_DIR="$GITHUB_WORKSPACE/.programme-live"
           python3 scripts/programme/board/board-practices.py --exit-code 2>&1 | tee /tmp/practices.txt
 
       - name: Open or update the report

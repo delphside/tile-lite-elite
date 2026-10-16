@@ -135,8 +135,10 @@ fi
 #
 # **These files are the programme, and the programme is not a project.** A
 # programme document describes the programme and how it operates; an
-# application document describes the application. The technical ones change with the code, on the
-# project branch. The process ones belong to no project, so they change on
+# application document describes the application. Most of them are in the
+# programme repository now (#485); what is staged here is the pin of its
+# submodule, `programme`, the instruction files and the roadmap. The
+# technical ones change with the code, on the project branch. The process ones belong to no project, so they change on
 # `main`: a copy on a branch disagrees with `main` until it merges, and makes the
 # process wait on a project it has nothing to do with (owner, 2026-09-25).
 #
@@ -226,8 +228,8 @@ if [ -n "$NEW" ]; then
     name="$(basename "$f")"
     case "$f" in .claude/skills/*) name="$(printf '%s' "$f" | cut -d/ -f3)" ;; esac
     # Two registers since 2026-09-30: the application's tooling in 4.3.0, the
-    # programme's in its 1.1. A name in either is registered.
-    grep -qF "$name" "$REPO/docs/4.3.0-tools.md" "$REPO/docs/5.0-programme-tooling.md" 2>/dev/null || UNREGISTERED="$UNREGISTERED $f"
+    # programme's in its 1.1 (in the pinned submodule). A name in either is registered.
+    grep -qF "$name" "$REPO/docs/4.3.0-tools.md" "$REPO/programme/docs/1.1-programme-tooling.md" 2>/dev/null || UNREGISTERED="$UNREGISTERED $f"
   done <<< "$NEW"
   if [ -n "$UNREGISTERED" ]; then
     {

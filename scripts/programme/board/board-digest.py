@@ -3,7 +3,7 @@
 
     scripts/programme/board/board-digest.py                      # the last seven days, printed
     scripts/programme/board/board-digest.py --since prod-0.8.0   # since a tag, sha or date
-    scripts/programme/board/board-digest.py --write              # docs/reports/weekly_digest/TLE_WD_<year>_W<week>.md
+    scripts/programme/board/board-digest.py --write              # <PROGRAMME_DIR>/records/2.4-weekly-digest/TLE_WD_<year>_W<week>.md
 
 The brake's two measures, what landed, what was deleted, and anything decided
 that the owner might have decided differently. #382 asked for an issue comment
@@ -14,6 +14,9 @@ cadence. Owner: the file, not the comment, so the series outlives #382.
 Three of the four parts are derived from git and the board. The fourth is a
 judgement about someone else's preferences, so `--decided` supplies it and an
 empty one says it was not written rather than that there was nothing.
+
+The register is read from the pinned `programme/` submodule and the digests are
+written to the live checkout (`PROGRAMME_DIR`), both through `records.py`.
 
 Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
@@ -27,10 +30,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from board import records  # noqa: E402
 from board.digest import build, draft, notes_for_write, render  # noqa: E402
 from board.sources import Unavailable, fetch     # noqa: E402
-
-REPORTS = Path(__file__).resolve().parents[3] / "docs" / "reports" / "weekly_digest"
 
 
 def main(argv=None) -> int:
@@ -42,8 +44,12 @@ def main(argv=None) -> int:
                     help="a judgement call the owner might have made "
                          "differently; repeatable")
     ap.add_argument("--write", action="store_true",
-                    help="write it to docs/reports/weekly_digest/ for this ISO week")
+                    help="write it to records/2.4-weekly-digest/ in the live checkout for this ISO week")
     args = ap.parse_args(argv)
+
+    # Before the board is fetched: no point asking GitHub for a digest that has
+    # nowhere to go. Printing it needs only the register; writing needs the live checkout.
+    reports = records.weekly_digests() if args.write else None
 
     try:
         # Pull requests are excluded: the share is about issues on the board.
@@ -55,7 +61,7 @@ def main(argv=None) -> int:
         print(f"cannot say: {exc}", file=sys.stderr)
         return 2
 
-    registers = (REPORTS.parents[1] / "5.3-programme-activities.md").read_text()
+    registers = records.activity_register().read_text()
     digest = build(open_snapshot, closed, since=args.since, registers=registers,
                    memory_repo=Path.home() / "claude-memory")
     text = render(digest, args.decided)
@@ -65,10 +71,10 @@ def main(argv=None) -> int:
         today = date.today()
         year, week, _ = today.isocalendar()
         code = f"TLE_WD_{year}_W{week:02d}"
-        path = REPORTS / f"{code}.md"
+        path = reports / f"{code}.md"
         notes = notes_for_write(path.read_text() if path.exists() else None)
         if notes is None:
-            print(f"board-digest: {path.relative_to(REPORTS.parents[2])} is written; "
+            print(f"board-digest: {path.relative_to(records.live())} is written; "
                   "delete it to regenerate one still in review", file=sys.stderr)
             return 1
         text = render(digest, args.decided, notes)
@@ -78,11 +84,11 @@ def main(argv=None) -> int:
         # And next week's draft, for the notes (the programme's docs/1.4).
         nyear, nweek, _ = (today + timedelta(days=7)).isocalendar()
         ncode = f"TLE_WD_{nyear}_W{nweek:02d}"
-        npath = REPORTS / f"{ncode}.md"
+        npath = reports / f"{ncode}.md"
         if not npath.exists():
             npath.write_text(draft(ncode, (today + timedelta(days=1)).isoformat()))
-        print(path.relative_to(REPORTS.parents[2]))
-        print(npath.relative_to(REPORTS.parents[2]))
+        print(path.relative_to(records.live()))
+        print(npath.relative_to(records.live()))
         return 0
 
     print(text)

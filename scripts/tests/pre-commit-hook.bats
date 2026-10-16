@@ -208,7 +208,8 @@ bump() { sed -i 's/^version = "0.7.2"/version = "0.7.3"/' "$R/$1"; git -C "$R" a
 }
 
 @test "a new script registered in the programme's register, 1.1, is allowed" {
-  printf '| `scripts/brand-new.sh` | x |\n' > "$R/docs/5.0-programme-tooling.md"
+  mkdir -p "$R/programme/docs"
+  printf '| `scripts/brand-new.sh` | x |\n' > "$R/programme/docs/1.1-programme-tooling.md"
   commit_on main scripts/brand-new.sh
   assert_success
 }
@@ -229,7 +230,8 @@ commit_exec_on_main() {   # <file>: a base on main, then <file> staged as execut
 }
 
 @test "a new executable script in a folder, registered in the programme's 1.1, is allowed" {
-  printf '| `board-brand-new.py` | x |\n' > "$R/docs/5.0-programme-tooling.md"
+  mkdir -p "$R/programme/docs"
+  printf '| `board-brand-new.py` | x |\n' > "$R/programme/docs/1.1-programme-tooling.md"
   commit_exec_on_main scripts/programme/board/board-brand-new.py
   assert_success
 }
@@ -335,14 +337,24 @@ fmt_case() {   # <cargo-fmt-exit> <file>
   assert_equal "$status" 1
 }
 
-@test "branch: so is the lifecycle document" {
-  commit_on 399-x docs/5.1-change-lifecycle.md
+@test "branch: so is the roadmap, the programme document still held here" {
+  commit_on 399-x docs/4.1.4-roadmap.md
   assert_equal "$status" 1
 }
 
-@test "branch: so is the workstreams document" {
-  commit_on 399-x docs/5.2-workstreams.md
+@test "branch: so is the pin of the programme submodule" {
+  commit_on 399-x programme
   assert_equal "$status" 1
+}
+
+@test "branch: and so is anything inside the programme repository" {
+  commit_on 399-x programme/docs/1.2-change-lifecycle.md
+  assert_equal "$status" 1
+}
+
+@test "branch: what #485 moved out is no longer the programme's here, so docs/5.x is the application's" {
+  commit_on 399-x docs/5.1-change-lifecycle.md
+  assert_success
 }
 
 @test "branch: on main they are ordinary" {
@@ -365,15 +377,10 @@ fmt_case() {   # <cargo-fmt-exit> <file>
   assert_success
 }
 
-@test "branch: a change note is the programme's, so refused on a branch" {
-  commit_on 399-x docs/changes/workstreams/a/399-x/399-design.md
+@test "branch: the refusal says it is the programme's own documents" {
+  commit_on 399-x programme/applications/tile-lite-elite/3.1.7-changes/399-design.md
   assert_equal "$status" 1
   assert_output --partial "programme's own documents"
-}
-
-@test "branch: so is a template" {
-  commit_on 399-x docs/templates/agent-handover.md
-  assert_equal "$status" 1
 }
 
 @test "branch: and the generated work-in-progress page is fine" {
@@ -391,7 +398,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "main: a programme document gets no note" {
-  commit_on main docs/5.1-change-lifecycle.md
+  commit_on main docs/4.1.4-roadmap.md
   assert_success
   refute_output --partial "application documents"
 }

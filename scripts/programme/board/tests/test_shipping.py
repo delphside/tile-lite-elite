@@ -27,7 +27,8 @@ class ReachesTheImage(unittest.TestCase):
                      ".github/workflows/ci.yml", ".githooks/pre-commit", ".claude/settings.json",
                      ".cargo/audit.toml", "crates/server-game/examples/engine_timing_results.csv",
                      "crates/server-game/tests/api.rs", "crates/engine-core/benches/b.rs",
-                     "crates/ui/README.md", "LICENSE", ".gitignore", ".markdownlint.json"):
+                     "crates/ui/README.md", "LICENSE", ".gitignore", ".markdownlint.json",
+                     ".gitmodules", "programme", "programme/docs/1.2-change-lifecycle.md"):
             with self.subTest(path):
                 self.assertFalse(reaches_image(path))
 

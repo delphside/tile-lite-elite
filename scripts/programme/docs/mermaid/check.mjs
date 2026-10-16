@@ -21,7 +21,7 @@ import { join, relative } from "node:path";
 const ROOT = process.cwd();
 // `worktrees`: agents work in git worktrees under .claude/worktrees/, and a copy
 // of the repository there doubles every count (#441).
-const SKIP = new Set(["node_modules", "target", ".git", "old-crates", "dist", "worktrees"]);
+const SKIP = new Set(["node_modules", "target", ".git", "old-crates", "dist", "worktrees", ".programme-live"]);
 const require_deps = process.argv.includes("--require");
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -40,10 +40,15 @@ given on the command line does not exist.`);
   process.exit(0);
 }
 
+// The programme submodule is the programme's documents, checked in its own repository (#485);
+// skipped by path, because `scripts/programme/` is ours.
+const SUBMODULE = join(ROOT, "programme");
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     if (SKIP.has(name)) continue;
     const path = join(dir, name);
+    if (path === SUBMODULE) continue;
     const st = statSync(path);
     if (st.isDirectory()) walk(path, out);
     else if (name.endsWith(".md") || name.endsWith(".mmd")) out.push(path);

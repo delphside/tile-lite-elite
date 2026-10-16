@@ -15,16 +15,16 @@ preferences. The tool leaves the section empty and says so, on the same rule as
 `obligations.py` — something nothing can evidence must not read as *nothing to
 report*, because an empty section and an unanswerable question look identical.
 
-**The measure is the programme's docs/1.7's, not the one first proposed.** Owner, 2026-09-21:
+**The measure is the programme's docs/1.0's, not the one first proposed.** Owner, 2026-09-21:
 *"The test is that we produce fewer issues and that they take less of my
 time"*, and 2026-09-27, that the issues he meant are programme overhead,
 `tooling` and `documentation`. So the headline is that count beside the week
-before, every other type is counted with the programme's docs/1.7's reading of it, and what
+before, every other type is counted with the programme's docs/1.0's reading of it, and what
 the board reports as waiting on the owner. The tooling
 share stays as an observation: its 45% figure is provisional and its horizon is
 #383 finishing, not a date. Until 2026-09-27 this module still reported the
 share against a 45% threshold and a 2026-10-17 date, and asked for a
-confirmation the owner had already given, because the answer landed in the programme's docs/1.7
+confirmation the owner had already given, because the answer landed in the programme's docs/1.0
 and not here.
 
 **Deletions are counted first among equals**, because D54 says so: *"removing
@@ -47,12 +47,12 @@ from .model import classify
 from .sources import Snapshot
 from .turn import waiting_on_owner
 
-# The programme's docs/1.7's brake: programme overhead is these two types of change. Not the
+# The programme's docs/1.0's brake: programme overhead is these two types of change. Not the
 # type called `non-functional`, which is work on the application (owner,
 # 2026-09-27).
 OVERHEAD = ("tooling", "documentation")
 
-# Every type, in the programme's docs/1.7's order and with its reading in the owner's words
+# Every type, in the programme's docs/1.0's order and with its reading in the owner's words
 # (2026-09-27), so the digest counts them all rather than only the overhead.
 READINGS = (
     ("functional", "constructive"),
@@ -349,7 +349,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     until = date.today().isoformat() if d.until == "HEAD" else d.until[:10]
     out = [f"# Weekly digest, {window_start(d.since)} to {until}", ""]
 
-    # the programme's docs/1.7's brake, limit 1: fewer non-functional issues, and less of the
+    # the programme's docs/1.0's brake, limit 1: fewer non-functional issues, and less of the
     # owner's time. Both counted, neither argued.
     out.append("## The brake: less programme overhead, less of your time")
     out.append("")
@@ -365,10 +365,10 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
         out.append(f"- #{number} {title}")
     out.append("")
     # Every type, because each says something different about the owner's
-    # time (the programme's docs/1.7). A type with nothing either week still gets its row, so
+    # time (the programme's docs/1.0). A type with nothing either week still gets its row, so
     # a quiet week for bugs is visible rather than absent.
     # Raised, closed and open by type: what arrived, what was cleared, and
-    # what stands (owner, 2026-09-27). Every type in the programme's docs/1.7's order, a quiet
+    # what stands (owner, 2026-09-27). Every type in the programme's docs/1.0's order, a quiet
     # one included, so a week with no bugs is visible rather than absent.
     # Grouped by week, owner 2026-09-27: raised, closed and open for this
     # week, then the same for last week. Markdown has one header row, so the
@@ -378,7 +378,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     known = {kind for kind, _ in READINGS}
     others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)
                      | set(w.closed_before) | set(w.open_before) | set(d.by_type)) - known)
-    for kind, reading in list(READINGS) + [(k, "not in the programme's docs/1.7") for k in others]:
+    for kind, reading in list(READINGS) + [(k, "not in the programme's docs/1.0") for k in others]:
         out.append(f"| `{kind}` | {w.raised_by_type[kind]} | {w.closed_by_type[kind]} | {d.by_type[kind]} | "
                    f"{w.raised_before[kind]} | {w.closed_before[kind]} | {w.open_before[kind]} | {reading} |")
     out.append("")
@@ -391,7 +391,7 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     else:
         out.append("**Nothing** the board reports as waiting on you.")
     out.append("")
-    # An observation, not the target (the programme's docs/1.7). Always name the starting
+    # An observation, not the target (the programme's docs/1.0). Always name the starting
     # point, so a one-point move cannot read like a ten-point one.
     out.append(f"*The tooling share, as an observation:* {d.tooling} of {d.total} open "
                f"issues are `tooling`, **{d.share}%**, against {MEASURED_AT}% when D54 "
