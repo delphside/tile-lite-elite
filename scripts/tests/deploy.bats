@@ -26,8 +26,10 @@
 #
 # CI checks out with fetch-depth: 0 for these commits.
 
-GOOD_COMMIT=8a5d71d   # released as 0.5.1: push-to-main run green, e2e included
-BAD_COMMIT=3d821e9    # released as 0.5.0: main run cancelled, PR run failed
+# Short forms as git abbreviates them here: deploy.sh compares `rev-parse --short`,
+# whose length grows with the repository, so a hard-coded 7 stops matching.
+GOOD_COMMIT="$(git -C "$BATS_TEST_DIRNAME" rev-parse --short 8a5d71de8dc4ee1090f517c786b9a35a9587ad96)"  # released as 0.5.1: push-to-main run green, e2e included
+BAD_COMMIT="$(git -C "$BATS_TEST_DIRNAME" rev-parse --short 3d821e9117f82882f2681a0cca1d0b28871c5c15)"  # released as 0.5.0: main run cancelled, PR run failed
 
 setup_file() {
   export ROOT="$BATS_TEST_DIRNAME/../.."
