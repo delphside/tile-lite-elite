@@ -406,7 +406,7 @@ flowchart TD
   v1 -- yes --> t1["Server: finished and aborted games over 7 days old<br/>Over → removed, with their invitations<br/>RET-1, RET-4"]
   t1 --> v2["Server: lists the games the player is seated in, was invited to<br/>or created, less those they hid, newest activity first (reads)<br/>DEL-5"]
   v2 --> p2["Player: opens a rating, stats or a rating history,<br/>their own, another player's or a bot's"]
-  p2 --> v3{"Server: their own, a bot's, only the current rating,<br/>or the other player's are public? (reads)<br/>RATE-5"}
+  p2 --> v3{"Server: their own, only the current rating,<br/>or the other player's or bot's are public? (reads)<br/>RATE-5"}
   v3 -- no --> r3["shown the current rating only"]
   v3 -- yes --> t3["shown (reads)<br/>ACC-3, DEL-10, RET-2"]
   t3 --> p3["Player: reads times in local time (reads)<br/>CLOCK-4"]
@@ -651,7 +651,7 @@ and the record of a reminder sent are exempt, and a rule for who may chat.
 #### Q14 Who may read a rating
 
 Answered: the current rating is always visible, and stats and history are
-public unless the player makes them private, RATE-5 (owner, 2026-10-16). The
+public unless the player, or whoever runs a bot, makes them private, RATE-5 (owner, 2026-10-16). The
 private flag needs a column on `players`; which migration carries it is
 settled with WP C's schema. What follows is the question as raised.
 `get_player_stats` and
