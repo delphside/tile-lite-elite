@@ -22,6 +22,9 @@
 #     and sqlite3, which the e2e teardown's account cleanup uses
 #   - e2e/node_modules
 #   - the repository's git hooks, switched on as a local clone has them
+#   - the `programme/` submodule (the pinned generic documents and tooling,
+#     #485). Not the live programme checkout: a cloud session has that already,
+#     cloned beside this repository, which is where the scripts look for it
 #   - for the session: RUSTC_WRAPPER emptied, because .cargo/config.toml names
 #     one machine's sccache; and the preinstalled Chromium for Playwright,
 #     because the cloud network refuses Playwright's own browser download
@@ -94,6 +97,12 @@ fi
 # what this VM has: pre-commit's checks need only cargo, python3 and npx, and
 # post-merge acts only on a merge into main, which a cloud session never makes.
 git config core.hooksPath .githooks || missing+=("git hooks")
+
+# --- the programme submodule ---------------------------------------------------
+# The skills and agents in .claude/ link into it, and the scripts read the
+# generic documents from it. The live checkout of the programme's records is
+# not this: the cloud session has it beside the repository already.
+git submodule update --init >&2 2>&1 || missing+=("programme submodule")
 
 # --- session environment -----------------------------------------------------
 CHROMIUM=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | sort -V | tail -1)
