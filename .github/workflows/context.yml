@@ -13,6 +13,9 @@
 # **It refuses rather than guessing** when the token cannot see issue fields:
 # every phase would read as blank and be written onto every project. A failed
 # run here is that refusal, and says so in its log.
+#
+# **It needs `BOARD_TOKEN`**, as `pr-state.yml` does: the automatic token
+# cannot read an organisation's issue fields.
 name: Context headers
 
 on:
@@ -36,5 +39,5 @@ jobs:
       - name: Rewrite
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
         run: python3 scripts/programme/board/board-context.py --write
