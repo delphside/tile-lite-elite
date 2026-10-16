@@ -36,7 +36,7 @@ use rules_shared::format_move_error;
 // Handler modules split out of what was once one ~8.6k-line file. Each
 // submodule does `use super::*;` to pull in this module's imports,
 // `AppState`, and its sibling handlers/helpers; `build_router` wires them
-// together. See docs/1.2-components-and-interactions.md.
+// together. See docs/4.1.2-components-and-interactions.md.
 mod admin;
 mod auth;
 mod catalog;
@@ -84,7 +84,7 @@ pub struct AppState {
     /// only for building an absolute link into a password-reset email
     /// (`{public_base_url}/reset-password?token=...`). Everything else the
     /// server does is host-agnostic (see `TILE_LITE_ELITE_API_BASE_URL`'s
-    /// own doc comment in `docs/4.1-configuration.md` for why the *client* doesn't
+    /// own doc comment in `docs/4.4.1-configuration.md` for why the *client* doesn't
     /// need this baked in), so this field exists solely for that one link.
     pub public_base_url: String,
     pub email: crate::email::EmailConfig,
@@ -182,7 +182,7 @@ pub fn build_router(state: AppState) -> Router {
     // Admin routes are for operating the server, not for players — no
     // token or account, just "you're on the same machine as the server."
     // The guard below enforces that regardless of what TILE_LITE_ELITE_BIND is
-    // set to (docs/3.2-development.md documents binding to 0.0.0.0 for LAN
+    // set to (docs/4.3.2-development.md documents binding to 0.0.0.0 for LAN
     // play, which would otherwise expose these to the whole LAN too).
     let admin_routes = Router::new()
         .route("/admin/users", get(admin_list_users))
@@ -313,7 +313,7 @@ pub fn build_router(state: AppState) -> Router {
         // A client compares this against its own build id and, if they differ,
         // confirms against `/version.txt` before reloading — that file is
         // served alongside the bundle, so it knows what is *actually* being
-        // served, which this header cannot. See docs/3.3 and `crates/ui`'s
+        // served, which this header cannot. See docs/4.3.3 and `crates/ui`'s
         // `note_server_build`.
         //
         // Omitted entirely on a build with no id (a local `cargo run`), since

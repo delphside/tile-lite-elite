@@ -57,7 +57,7 @@ tested and its contents are deliberately not invented, because a list assembled
 from memory would be both wrong and unaccountable — #116 owns filling it.
 
 The process is settled and written up in
-[`docs/3.5-word-lists-and-dictionaries.md`](../../../../docs/3.5-word-lists-and-dictionaries.md),
+[`docs/4.3.5-word-lists-and-dictionaries.md`](../../../../docs/4.3.5-word-lists-and-dictionaries.md),
 "Generating the denylist and the greylist". In short, and measured rather than
 assumed (rustrict 0.7.38 against sowpods, 2026-08-11):
 

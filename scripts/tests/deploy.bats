@@ -196,7 +196,7 @@ ahead() {
   assert_output --partial "Skipping the rehearsal gate (emergency)"
 }
 
-# An emergency is cut from the last prod-* tag (docs/3.3 §1.13), so its commit
+# An emergency is cut from the last prod-* tag (docs/4.3.3 §1.13), so its commit
 # has no push-to-main run and its branch push skips e2e. The run that answers
 # for it is the pull request's, which does execute e2e against the branch.
 @test "an emergency is judged by its pull request's run, with e2e, and names it" {

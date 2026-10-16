@@ -16,12 +16,12 @@ no column that can show them.
 **Derived, never maintained.** Generated from the issues each time it is asked
 for. A hand-drawn diagram is stale the first time something moves and stale in
 a way nobody can see; this one cannot disagree with the data because it has no
-independent existence — the same reasoning as docs/5.6's "change history is
+independent existence — the same reasoning as the programme's 3.1.1's "change history is
 derived from git".
 
 Reads the board model, so "is this a delivery" is answered in one place
 (`scripts/programme/board/model.py`) rather than re-derived here. Design:
-docs/changes/workstreams/delivery-tooling/383-one-board-model/
+programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations
@@ -138,10 +138,10 @@ def main(argv=None) -> int:
                     help="where the chart itself is written by --write. "
                          "Defaults to roadmap.svg beside the document")
     ap.add_argument("--write", metavar="FILE", nargs="?",
-                    const="docs/1.5-work-in-progress.md",
+                    const="docs/4.1.5-work-in-progress.md",
                     help="replace the block between the roadmap-diagram markers "
                          "in FILE instead of printing. Defaults to "
-                         "docs/1.5-work-in-progress.md, the document that "
+                         "docs/4.1.5-work-in-progress.md, the document that "
                          "exists to be left open while working")
     args = ap.parse_args(argv)
 
@@ -171,7 +171,7 @@ def main(argv=None) -> int:
         # The chart is a file and the document points at it: GitHub renders an
         # `.svg` referenced from markdown, and `docs/` ships nothing, so it may
         # live on `main` like any other document.
-        doc = Path(args.write or "docs/1.5-work-in-progress.md")
+        doc = Path(args.write or "docs/4.1.5-work-in-progress.md")
         target = Path(args.svg) if args.svg else doc.parent / "diagrams" / "roadmap.svg"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(svg)

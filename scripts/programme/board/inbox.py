@@ -10,7 +10,7 @@ and the step it is at — rather than a bare number.
 issue closed in silence produces no comment at all, so a comment listing never
 reveals it. That distinction is `inbox.sh`'s and is kept.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

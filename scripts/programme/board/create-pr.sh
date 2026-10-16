@@ -20,7 +20,7 @@ set -euo pipefail
 #   scripts/programme/board/create-pr.sh --base main --head <branch> \
 #     --title "..." --body-file /path/to/body.md
 #
-# `--reviewer` defaults to `SteveStyle`, never `stephenmor` — `docs/4.8`
+# `--reviewer` defaults to `SteveStyle`, never `stephenmor` — `programme/applications/tile-lite-elite/3.1.2-artefacts.md`
 # names that trap: `gh pr create --reviewer` accepts a login it cannot use,
 # prints the failure on stderr, and creates the pull request anyway,
 # requesting nobody. Passing `--reviewer` explicitly overrides the default.

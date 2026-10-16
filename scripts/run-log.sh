@@ -22,7 +22,7 @@
 # did it say the last time it went wrong"*, which is a whole run — not a grep
 # across interleaved ones. Twenty is about a month at four releases a fortnight.
 #
-# **Identifiers only**, as `docs/4.7` requires of the server: no password, no
+# **Identifiers only**, as `docs/4.4.7` requires of the server: no password, no
 # token, no PAR url. `run_log_event` takes `key=value` pairs and writes them as
 # they are, so a caller passing a secret writes a secret — the rule is the
 # caller's to keep, and `check-log-hygiene.py` is what checks it.

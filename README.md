@@ -40,8 +40,8 @@ it yourself:
 ./scripts/desktop.sh                 # optional: a native client against the same backend
 ```
 
-Then open <http://127.0.0.1:8080>. [3.1 Setup](docs/3.1-setup.md) covers a
-cold machine in full; [3.2 Development](docs/3.2-development.md) covers the
+Then open <http://127.0.0.1:8080>. [4.3.1 Setup](docs/4.3.1-setup.md) covers a
+cold machine in full; [4.3.2 Development](docs/4.3.2-development.md) covers the
 day-to-day loop.
 
 ## How it's put together
@@ -63,8 +63,8 @@ per-game JSON snapshot as the single source of truth and denormalized
 tables alongside it for querying. Deployment is Docker Compose behind Caddy
 on a free-tier Oracle Cloud VM.
 
-[1.1 Architecture](docs/1.1-architecture.md) has the full picture and
-[1.3 Technology Decisions](docs/1.3-technology-decisions.md) explains why
+[4.1.1 Architecture](docs/4.1.1-architecture.md) has the full picture and
+[4.1.3 Technology Decisions](docs/4.1.3-technology-decisions.md) explains why
 each piece was chosen.
 
 ## Documentation
@@ -74,8 +74,8 @@ each piece was chosen.
 lifecycle (setup → development → testing and release → production), and
 **4.x** reference (configuration, database schema, API schema, data
 dictionary). Start at
-[1.1 Architecture](docs/1.1-architecture.md) to understand the system, or
-[3.1 Setup](docs/3.1-setup.md) to get it running.
+[4.1.1 Architecture](docs/4.1.1-architecture.md) to understand the system, or
+[4.3.1 Setup](docs/4.3.1-setup.md) to get it running.
 
 ## Tests
 
@@ -87,13 +87,13 @@ cd e2e && npm test         # Playwright, drives the real client in a browser
 CI runs format, clippy (warnings denied), the test suite, and a wasm build
 on every push, plus the end-to-end suite against a real preview Docker stack
 on pull requests and pushes to `main`. See
-[3.3 Testing, CI & Release](docs/3.3-testing-ci-and-release.md).
+[4.3.3 Testing, CI & Release](docs/4.3.3-testing-ci-and-release.md).
 
 ## Status
 
 A hobby project, in production and actively developed. The core game,
 accounts, invitations, ratings, chat and both clients are built and live;
-[1.4 Roadmap](docs/1.4-roadmap.md) tracks what's next.
+[4.1.4 Roadmap](docs/4.1.4-roadmap.md) tracks what's next.
 
 ## Licence
 

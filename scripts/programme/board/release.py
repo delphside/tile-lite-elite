@@ -12,7 +12,7 @@ is the question a person has before deploying and is scoped by milestone.
 **A parent owes nothing here.** Its packages own the test approach -- D51 -- so
 naming it would be a finding nobody can clear.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

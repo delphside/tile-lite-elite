@@ -62,7 +62,7 @@ classify_target() {
 
 ENV_NAME="$(classify_target "$TARGET")"
 
-# **Exit `1`, which is fatal** — D46, and `docs/4.8`. This was `3` until
+# **Exit `1`, which is fatal** — D46, and `programme/applications/tile-lite-elite/3.1.2-artefacts.md`. This was `3` until
 # 2026-09-10, and `3` in the scheme means *it went wrong and the run continued*.
 # This refusal is the opposite: it is the strongest stop the script has, it
 # carries on with nothing, and it is the reason the script exists at all.
@@ -90,7 +90,7 @@ esac
 
 # How the admin CLI is reached, which differs per environment because
 # `/admin/*` only accepts connections from the container's own loopback
-# (docs/3.4). That is why #148's "the admin CLI already does the work" does not
+# (docs/4.3.4). That is why #148's "the admin CLI already does the work" does not
 # hold for a script running on a laptop against a remote host.
 admin() {
   case "$ENV_NAME" in

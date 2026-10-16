@@ -5,17 +5,17 @@ config:
     nodePlacementStrategy: BRANDES_KOEPF
 ---
 flowchart TB
-    %% Flavour C — a release carrying one delivery. docs/3.3, the flavours
+    %% Flavour C — a release carrying one delivery. docs/4.3.3, the flavours
     %% table: 1.1, 1.2, 1.3, 1.4, 1.5, then 1.9, then 1.6, 1.7, 1.10.
     %% .
-    %% Arrow numbers are docs/3.3 part 1 section numbers, so 1.9 sitting
+    %% Arrow numbers are docs/4.3.3 part 1 section numbers, so 1.9 sitting
     %% between 1.5 and 1.6 is not a mistake in the numbering — it is the
     %% point of the flavour. The release is proved on the branch, then main
     %% takes it by fast-forward, and production deploys main.
     %% .
     %% Why that order: main is what gets deployed, so an unproven release
     %% commit on main blocks every other release until it is proven or
-    %% removed. docs/5.1 section 2.2.
+    %% removed. the programme's docs/1.2 section 2.2.
     %% .
     %% Since D55 (#388), 1.6 need not follow 1.9 immediately. main is the
     %% accumulating next release, so it may already carry other proven

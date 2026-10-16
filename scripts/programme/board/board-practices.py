@@ -5,8 +5,8 @@
     scripts/programme/board/board-practices.py --json   # the same, machine-readable
     scripts/programme/board/board-practices.py --exit-code  # non-zero when anything is overdue
 
-Reads the register (`docs/5.3-programme-activities.md`) for what exists and
-how often it is owed, and the log (`docs/programme-activity-log.csv`) for when
+Reads the register (`programme/docs/1.4-programme-activities.md`) for what exists and
+how often it is owed, and the log (`programme/records/2.3-activity-log.csv`) for when
 each was last done. Neither is inferred from an artefact's age — the owner,
 2026-09-22: *"Deriving actions from the presence or absence of a document
 seems fragile to me... we need a record of the activities we have done, or the
@@ -137,7 +137,7 @@ def main() -> int:
             for a in items
         ], indent=2))
     else:
-        print("==> Programme activities, against docs/5.3")
+        print("==> Programme activities, against the programme's docs/1.4")
         print(render(items))
         if overdue:
             print(f"\n  {len(overdue)} overdue or never logged.")

@@ -1,4 +1,4 @@
-"""The tooling's tests outside the model's own, run by unittest (docs/3.3 §2.2):
+"""The tooling's tests outside the model's own, run by unittest (docs/4.3.3 §2.2):
 
     python3 -m unittest discover -s scripts -t scripts
 

@@ -166,7 +166,7 @@ pub async fn connect(database_url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
     // fetches, the games list, WebSocket state pushes) no longer block
     // behind a writer's transaction, which matters once more than a
     // handful of players are active concurrently. Persists in the database
-    // file itself once set — see docs/4.1-configuration.md's "Infrastructure
+    // file itself once set — see docs/4.4.1-configuration.md's "Infrastructure
     // Configuration" section for the pragma verification this replaced.
     let options = SqliteConnectOptions::from_str(database_url)?
         .create_if_missing(true)
@@ -196,7 +196,7 @@ pub async fn migrate(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
 /// compares it against the highest migration the *target commit* carries
 /// and refuses to ship an older image that the database has already moved
 /// past — that image would fail `validate_applied_migrations` on startup
-/// and never boot. See docs/3.3's "Rolling back".
+/// and never boot. See docs/4.3.3's "Rolling back".
 ///
 /// Read once at startup rather than per request: migrations run during
 /// `connect`, nothing applies one afterwards, so this cannot change while
@@ -679,7 +679,7 @@ pub async fn delete_player(pool: &Pool<Sqlite>, player_id: &str) -> Result<bool,
 /// handles the database side.
 ///
 /// **`rating_history` survives.** A player's rating history belongs to the
-/// player rather than to the games that produced it (docs/1.0-rules.md,
+/// player rather than to the games that produced it (docs/4.1.0-rules.md,
 /// ACC-3 and RET-2), and it is what makes deleting games acceptable at all —
 /// every game is deleted eventually, so history that went with them would
 /// mean nobody had one.
@@ -1445,7 +1445,7 @@ pub async fn get_invitations_for_player(
 
 /// Every game whose rows still mention this player, other than through the
 /// creator or a seat — which the caller checks against the loaded sessions
-/// (docs/1.0-rules.md, DEL-2).
+/// (docs/4.1.0-rules.md, DEL-2).
 ///
 /// Deliberately broad. Deleting an account is a data-cleanup command, so
 /// anything at all tying it to a game that still exists is reason enough to

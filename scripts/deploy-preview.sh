@@ -9,7 +9,7 @@ run_log_start deploy-preview.sh "$@"
 
 # deploy-preview.sh — Build and run the preview stack locally (e.g. inside
 # WSL), using the exact same Dockerfile/build process as scripts/deploy.sh,
-# just without the ssh/scp hop to the real VM. See docs/3.3-testing-ci-and-release.md's
+# just without the ssh/scp hop to the real VM. See docs/4.3.3-testing-ci-and-release.md's
 # "Preview Environment" section for why this exists and how to use it.
 #
 # Every mode builds a *fresh checkout of a commit* in a throwaway
@@ -45,7 +45,7 @@ run_log_start deploy-preview.sh "$@"
 #
 # To test against a realistic copy of production data rather than whatever
 # preview has accumulated on its own, restore a production backup
-# (docs/3.4-production-environment.md's Backups section) into
+# (docs/4.3.4-production-environment.md's Backups section) into
 # tile-lite-elite-preview-data before running this.
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,7 +88,7 @@ usage: deploy-preview.sh                # build + (re)start preview from HEAD
 
 Builds and runs the preview stack locally from a fresh checkout of a
 commit, using the same Dockerfile as deploy.sh. See the header comment
-above and docs/3.3, "Preview Environment".
+above and docs/4.3.3, "Preview Environment".
 
 Refuses (exit 1) when:
   - 'at' is given with no ref
@@ -264,7 +264,7 @@ git worktree add --detach "$WORKTREE_DIR" "$COMMIT" >/dev/null
 # the rest.
 #
 # Build metadata baked into both binaries, and what `at prod`/`verify` read
-# back out of /health later — see docs/4.1-configuration.md's "Versioning"
+# back out of /health later — see docs/4.4.1-configuration.md's "Versioning"
 # section. The short sha here matches what `deploy.sh` exports, so an image
 # built by either path reports the same version.
 export TILE_LITE_ELITE_BUILD_ID="$SHORT_SHA"
@@ -336,7 +336,7 @@ fi
 # document errors whenever we do a deployment to Preview etc then that is
 # okay."*
 #
-# So this **reports and does not refuse** — a check, not a gate (docs/5.1
+# So this **reports and does not refuse** — a check, not a gate (the programme's docs/1.2
 # §2.16). Preview exists to look at anything at any time, and a broken anchor
 # is no reason to stop somebody looking at their change on a phone.
 #

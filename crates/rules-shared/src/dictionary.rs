@@ -465,7 +465,7 @@ mod tests {
                     after,
                     "{name} differs from its normalised form: {} lines committed, {} after \
                      normalising, first difference at line {}. Re-import it — see \
-                     docs/3.5-word-lists-and-dictionaries.md.",
+                     docs/4.3.5-word-lists-and-dictionaries.md.",
                     before.len(),
                     after.len(),
                     first + 1,
@@ -495,7 +495,7 @@ mod tests {
             if let Some(denied) = text.lines().find(|word| crate::wordlists::is_denied(word)) {
                 panic!(
                     "{name} still contains the denied word {denied:?} — regenerate every \
-                     edition when the denylist changes, see docs/3.5-word-lists-and-dictionaries.md"
+                     edition when the denylist changes, see docs/4.3.5-word-lists-and-dictionaries.md"
                 );
             }
         }

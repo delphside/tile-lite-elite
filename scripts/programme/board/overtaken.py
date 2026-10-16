@@ -11,7 +11,7 @@ is when it shipped, and it is the clock that matters: a project that wrote its
 review promptly and then sat unclosed for a month has still been open a month.
 `verify.sh` had that reasoning and it is kept.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations

@@ -40,7 +40,7 @@ MERGING=0
 # and three benchmarks do it, but anything generating a file the binary
 # `include_str!`s is a crate instead — see `crates/wordlist-tools` and #306.
 # For the same reason examples are not in the artefact register, which
-# `docs/3.0-tools.md` says in its own words. `old-crates/` is **not** excluded, though nothing in it
+# `docs/4.3.0-tools.md` says in its own words. `old-crates/` is **not** excluded, though nothing in it
 # is compiled into the binaries: the Dockerfile `COPY`s it into the build
 # context, so changing it changes the image that gets built. `Cargo.toml` is not excluded even though it carries
 # dev-dependencies: it is the file that decides what ships, and telling a dev
@@ -140,9 +140,9 @@ fi
 # `main`: a copy on a branch disagrees with `main` until it merges, and makes the
 # process wait on a project it has nothing to do with (owner, 2026-09-25).
 #
-# **docs/1.5 and docs/1.6 are neither, because they are generated.** It is the map of the
+# **docs/4.1.5 and docs/4.1.6 are neither, because they are generated.** It is the map of the
 # headings on whichever branch it is built from, so a branch that adds headings
-# needs its own. Regenerated after the rebase that precedes a merge (docs/3.3
+# needs its own. Regenerated after the rebase that precedes a merge (docs/4.3.3
 # §1.9), it is exactly the map `main` will have once the branch fast-forwards.
 #
 # **A project may still change them**, when it is the project that changes the
@@ -225,9 +225,9 @@ if [ -n "$NEW" ]; then
     git ls-tree -r --name-only HEAD -- "$f" 2>/dev/null | grep -qx "$f" && continue
     name="$(basename "$f")"
     case "$f" in .claude/skills/*) name="$(printf '%s' "$f" | cut -d/ -f3)" ;; esac
-    # Two registers since 2026-09-30: the application's tooling in 3.0, the
-    # programme's in 5.0. A name in either is registered.
-    grep -qF "$name" "$REPO/docs/3.0-tools.md" "$REPO/docs/5.0-programme-tooling.md" 2>/dev/null || UNREGISTERED="$UNREGISTERED $f"
+    # Two registers since 2026-09-30: the application's tooling in 4.3.0, the
+    # programme's in its 1.1. A name in either is registered.
+    grep -qF "$name" "$REPO/docs/4.3.0-tools.md" "$REPO/docs/5.0-programme-tooling.md" 2>/dev/null || UNREGISTERED="$UNREGISTERED $f"
   done <<< "$NEW"
   if [ -n "$UNREGISTERED" ]; then
     {
@@ -235,8 +235,8 @@ if [ -n "$NEW" ]; then
       echo
       printf '  %s\n' $UNREGISTERED
       echo
-      echo "  Add a row saying what it is and what runs it: docs/3.0-tools.md for"
-      echo "  the application's tooling, docs/5.0-programme-tooling.md for the"
+      echo "  Add a row saying what it is and what runs it: docs/4.3.0-tools.md for"
+      echo "  the application's tooling, programme/docs/1.1-programme-tooling.md for the"
       echo "  programme's."
       echo "  A row, not an issue."
     } >&2

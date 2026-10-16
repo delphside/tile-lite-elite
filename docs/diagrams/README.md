@@ -35,7 +35,7 @@ viewpoint from a second framework is a smaller cost than a name only this
 repository knows.
 
 **Information is Rozanski and Woods' too**, a second view C4 lacks. The data's
-structure is drawn as an entity-relationship diagram, as [4.2](../4.2-database-schema.md)'s
+structure is drawn as an entity-relationship diagram, as [4.4.2](../4.4.2-database-schema.md)'s
 is. Its flows go on the arrows of the other views: each arrow is labelled with
 the data it carries, a DTO, a row or an event, which is C4's own guidance for a
 relationship, so the Container and Component diagrams show the flows without a
@@ -62,7 +62,7 @@ inside it as stadium shapes, the closest Mermaid has to an oval. Added
 **Activity diagrams are UML's too**, for the player's journeys: they sit
 between the text requirements and the architecture, to think the requirements
 through. Each step either causes a state machine transition or only reads
-state, and cites the `docs/1.0` rules it exercises, so the end-to-end tests
+state, and cites the `docs/4.1.0` rules it exercises, so the end-to-end tests
 come from them. They are not used to map releases or manage work. Added
 2026-09-30 (#71).
 
@@ -82,7 +82,7 @@ heavier than three plus two supplementary ones.
 **Container and Deployment are different diagrams and the difference matters
 here.** Container is logical — what the processes are and what each is for.
 Deployment is physical — which of them run where, per environment. An earlier
-version of this table called `1.1` a Container view when it is a Deployment
+version of this table called `4.1.1` a Container view when it is a Deployment
 view, which is how the missing rehearsal environment stayed invisible: a logical
 diagram has no environments to be missing from.
 
@@ -143,10 +143,10 @@ above describes the system, and a process diagram describes us.
 
 | diagram | view |
 | --- | --- |
-| [1.1](../1.1-architecture.md)'s deployment diagram | **Deployment** — which containers run in which environment |
-| [1.2](../1.2-components-and-interactions.md)'s component diagram | **Component**, with the clients drawn as Context around it |
-| 1.2's move-submission sequence | **Dynamic** |
-| [3.3](../3.3-testing-ci-and-release.md)'s sequence diagram | process, not a view |
+| [4.1.1](../4.1.1-architecture.md)'s deployment diagram | **Deployment** — which containers run in which environment |
+| [4.1.2](../4.1.2-components-and-interactions.md)'s component diagram | **Component**, with the clients drawn as Context around it |
+| 4.1.2's move-submission sequence | **Dynamic** |
+| [4.3.3](../4.3.3-testing-ci-and-release.md)'s sequence diagram | process, not a view |
 | `release-flow`, `version-lifecycle`, `flavour-a` to `flavour-d` | process, not a view |
 | `roadmap.svg` | a plan, not a view — and note that #406 R3 will add a *Deployment* roadmap alongside it, answering *what will it look like* where this one answers *when does work happen* |
 
@@ -158,7 +158,7 @@ re-render, and commit both.
 **`roadmap.svg` is the exception: it has no `.mmd`.** Its source is the board,
 and `scripts/programme/board/roadmap-diagram.py --write` regenerates both it and
 the block in
-[1.5](../1.5-work-in-progress.md) that embeds it. Do not edit it by hand — the
+[4.1.5](../4.1.5-work-in-progress.md) that embeds it. Do not edit it by hand — the
 next run overwrites it. Why it is not Mermaid is below.
 
 ```bash
@@ -259,5 +259,5 @@ download does not.
 
 Diagrams that *are* simple enough for dagre stay inline in the docs, where
 GitHub renders them from source — see the sequence diagram in
-[3.3](../3.3-testing-ci-and-release.md). Inline is preferable when it works:
+[4.3.3](../4.3.3-testing-ci-and-release.md). Inline is preferable when it works:
 no rendering step, and the source is the thing you read.

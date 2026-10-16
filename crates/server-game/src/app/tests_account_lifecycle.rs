@@ -1,7 +1,7 @@
 //! An account through the whole life of its games — created, invited, seated,
 //! played, ended, swept, and only then deleted.
 //!
-//! Rules: `docs/1.0-rules.md` — DEL-1 to DEL-9, GAME-1 and GAME-2, RET-1 to
+//! Rules: `docs/4.1.0-rules.md` — DEL-1 to DEL-9, GAME-1 and GAME-2, RET-1 to
 //! RET-4, TIME-1 to TIME-4. Test plan: issue #41.
 //!
 //! It began as a test of deleting an account and grew into this, because the

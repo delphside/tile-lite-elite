@@ -11,11 +11,11 @@ adds the one neither covers, which is why #342 belonged here rather than
 standing alone — the objection that branches are a different seam was the work,
 not a reason against it.
 
-The rule is `docs/5.1` §2.12: a branch is created when its project starts and
+The rule is `programme/docs/1.2-change-lifecycle.md` §2.12: a branch is created when its project starts and
 deleted when the project is **live and closed**. So the two things worth saying
 are that the branch names something real, and that it has not outlived it.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def check(branches: Sequence[str],
             continue
         if raw.issue_type != "Project":
             out.append(Finding(branch, number,
-                               "names #%d, a %s — a branch belongs to a project (docs/5.1 §2.12)"
+                               "names #%d, a %s — a branch belongs to a project (the programme's docs/1.2 §2.12)"
                                % (number, raw.issue_type or "typeless issue")))
     return tuple(out)
 

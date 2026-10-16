@@ -3,7 +3,7 @@ set -uo pipefail
 
 # check-docs.sh — the documentation's own gate: lint, links, and placement.
 #
-# 3.3's rule, applied to itself: *"wherever a rule can be checked by the
+# 4.3.3's rule, applied to itself: *"wherever a rule can be checked by the
 # tooling, check it there — a rule in a document is advisory; a rule in a gate
 # is real."* Every check here was being run by hand, which means run when
 # remembered, which is how #137 shipped 81 broken anchors into a branch and
@@ -18,7 +18,8 @@ set -uo pipefail
 #
 #   1. markdownlint  — the house style in .markdownlint.jsonc
 #   2. links         — every `](#anchor)` resolves (scripts/programme/docs/check-doc-links.py)
-#   3. placement     — the folder convention settled on #156
+#   3. placement     — the folder convention settled on #156, and the numbering
+#                      of the documents in docs/ (4.1 to 4.4, three levels)
 #
 # Exits non-zero if any check failed.
 
@@ -76,21 +77,30 @@ else
   echo "  every change document is in an issue or release folder"
 fi
 
+# Tile Lite Elite's documents are 4.G.N in the programme's one numbering: 4.1
+# overview, 4.2 design, 4.3 development and operation, 4.4 reference.
+# document-map.py holds the pattern, so the map and this gate cannot disagree.
+if "$HERE/scripts/programme/docs/document-map.py" --names; then
+  echo "  every document in docs/ is named 4.G.N (G in 1-4) or is the README"
+else
+  FAILED=1
+fi
+
 # 4. the document map is derived, so a stale one is always wrong and always
 # fixed by regenerating. A **gate**, unlike step 5: there is no judgement in it
 # and no writing to do, only `document-map.py --write`.
 #
 # It was wired into nothing until 2026-09-11 — not this script, not the
-# pre-commit hook, not CI, not verify.sh — so `docs/1.6` went stale silently.
+# pre-commit hook, not CI, not verify.sh — so `docs/4.1.6` went stale silently.
 # Found by ticking #349's own box asking whether the map lists every heading:
 # it did not, because the commit before it added ten and did not regenerate.
 # A derived artefact with no check is the shape #326 and #340 are also about.
 echo
 bold "4. the document map"
 if "$HERE/scripts/programme/docs/document-map.py" --check > /dev/null 2>&1; then
-  echo "  docs/1.6 lists every heading in every document"
+  echo "  docs/4.1.6 lists every heading in every document"
 else
-  echo "  STALE   docs/1.6-document-map.md"
+  echo "  STALE   docs/4.1.6-document-map.md"
   echo "          → run ./scripts/programme/docs/document-map.py --write and commit it"
   FAILED=1
 fi
@@ -99,7 +109,7 @@ fi
 # the document carried none of the 44, a build going red over writing that had
 # not happened yet would have been wrong. All 70 are now documented against the
 # endpoints that return them, so what is left to protect is that staying true,
-# and a new error with no line in 4.3 is a regression rather than a debt (#329).
+# and a new error with no line in 4.4.3 is a regression rather than a debt (#329).
 #
 # **Run bare**, as 6 and 7 are: piping it through `sed` to indent reported
 # `sed`'s exit status and nothing else, which is how it could be a gate and
@@ -129,7 +139,7 @@ bold "7. script log events"
 if ! "$HERE/scripts/programme/docs/check-run-log-events.py"; then FAILED=1; fi
 
 # 8. history signals -- #427 R8. A measure, not a gate: the lines in the
-# numbered documents carrying a phrase that marks history or argument (docs/5.4).
+# numbered documents carrying a phrase that marks history or argument (the programme's docs/1.5).
 # It reports and never fails, because a phrase can be used legitimately; a
 # person reads the list. It should fall. Run bare, as 5 to 7 are.
 echo

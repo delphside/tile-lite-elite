@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check-doc-links.py — every `](#anchor)` in the documentation resolves.
 
-Why this exists: #137 renumbered every heading in `docs/3.3`, which changed
+Why this exists: #137 renumbered every heading in `docs/4.3.3`, which changed
 every anchor GitHub generates from those headings. **53 links inside the
 document and 28 from other documents broke at once**, and none of them errors —
 a bad anchor is a link that quietly lands the reader at the top of the page.
@@ -24,6 +24,11 @@ import glob
 import pathlib
 import re
 import sys
+
+
+# A link to another repository, such as the programme's documents, cannot be
+# resolved from a checkout of this one: it is skipped here.
+URL = re.compile(r"https?://")
 
 
 def slug(text: str) -> str:
@@ -49,13 +54,15 @@ def main() -> int:
         path = pathlib.Path(name)
         own = headings(path)
         text = path.read_text(encoding="utf-8")
-        # Inline code is an example, not a link. `docs/3.0` describes this very
+        # Inline code is an example, not a link. `docs/4.3.0` describes this very
         # check with a literal `](#anchor)` in a table cell, and without this the
         # checker read its own documentation as a broken link — the second time
         # in a day that documenting a convention broke the tool that reads it.
         text = re.sub(r"`[^`\n]*`", "``", text)
         for m in re.finditer(r"\]\(([^)\s]+)?#([a-zA-Z0-9_-]+)\)", text):
             target, anchor = m.group(1), m.group(2).lower()
+            if target and URL.match(target):
+                continue
             if target is None:
                 if anchor not in own:
                     broken.append(f"{name}: #{anchor} — no such heading here")
@@ -67,12 +74,14 @@ def main() -> int:
                     broken.append(f"{name}: {target}#{anchor} — no such heading there")
 
         # A link to a document with no anchor was not checked at all until
-        # 2026-08-21, when `docs/3.3` gained a link to `4.8-artefacts.md` before
+        # 2026-08-21, when `docs/4.3.3` gained a link to `4.8-artefacts.md` before
         # the file existed and this reported "all anchors resolve". The anchor
         # half was always the interesting case, which is how the plain half came
         # to be missed — and a link to a file that is not there is the more
         # obvious defect of the two.
         for m in re.finditer(r"\]\(([^)\s#]+\.md)\)", text):
+            if URL.match(m.group(1)):
+                continue
             other = (path.parent / m.group(1)).resolve()
             if not other.exists():
                 broken.append(f"{name}: {m.group(1)} — no such file")

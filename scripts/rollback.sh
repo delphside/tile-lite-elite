@@ -66,7 +66,7 @@ done
 # game, move and account. That is the accepted trade, and it assumes a
 # rollback happens promptly, while the lost writes are the few games played
 # since the deploy. It is not a way to recover last week; for that, take a
-# real backup (docs/3.4's Backups section) and keep it off the VM.
+# real backup (docs/4.3.4's Backups section) and keep it off the VM.
 #
 # Usage:
 #   ./scripts/rollback.sh                    # show what's available, change nothing

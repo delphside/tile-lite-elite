@@ -1,1 +1,1 @@
-"""The board model. See docs/changes/workstreams/delivery-tooling/383-one-board-model/."""
+"""The board model. See programme/records/2.5-changes/programme-tooling/383-one-board-model/."""

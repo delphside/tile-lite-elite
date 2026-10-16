@@ -69,7 +69,7 @@ class TheProgramme(Cases):
 
     def test_the_milestone_is_the_delivery_evidence_with_or_without_commits(self):
         """the milestone is the delivery evidence, with or without commits"""
-        # docs/3.3: `Closes #N` fires when a commit reaches the default branch —
+        # docs/4.3.3: `Closes #N` fires when a commit reaches the default branch —
         # written, not shipped. So the deploy closes an issue and the milestone means
         # "in production". #362 and #373 were split out of their parents after the
         # work landed, so they carry no commits of their own and still shipped.

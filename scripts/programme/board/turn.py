@@ -12,7 +12,7 @@ The fourth cannot, and that is reported rather than passed over:
 
 | source | how it is read |
 | --- | --- |
-| a decision waiting on the owner | `Decision State` is one the owner holds (`model.DECISION_TURNS`, docs/5.1's table) |
+| a decision waiting on the owner | `Decision State` is one the owner holds (`model.DECISION_TURNS`, the programme's docs/1.2's table) |
 | a pull request waiting to be reviewed | `PR State` is `Awaiting review` |
 | a phase only the owner can advance | `User testing`, with Preview boxes unticked |
 | an unanswered question in a body | an unticked `- [ ]` labelled **owner** |
@@ -239,7 +239,7 @@ def waiting_on_claude(issue: Issue) -> Waiting | None:
     if (isinstance(issue, DELIVERING) and issue.step == "Post-deployment"
             and RELEASE_CHECK not in issue.labels):
         return Waiting(issue, "post-deployment review is due — "
-                              "docs/templates/post-deployment-review.md",
+                              "programme/docs/templates/post-deployment-review.md",
                        "post-deployment", due_after=REVIEW_DUE_DAYS)
 
     recurring = due_recurrences(issue, CLAUDE, date.today())

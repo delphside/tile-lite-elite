@@ -8,7 +8,7 @@ set -euo pipefail
 # (VM.Standard.E2.1.Micro) has 1GB RAM, which isn't enough to compile the
 # Rust/wasm workspace. So this always builds locally (where there's room)
 # and transfers the finished images instead of the source — `docker save`,
-# scp, `docker load`, `docker compose up`. See docs/3.3-testing-ci-and-release.md's
+# scp, `docker load`, `docker compose up`. See docs/4.3.3-testing-ci-and-release.md's
 # "Container Deployment" section for the full story, including the Oracle
 # Cloud networking setup this assumes is already in place.
 #
@@ -86,8 +86,8 @@ previous_release_tag() {
 #
 # GitHub writes the notes from the pull requests merged since the previous
 # release, so nobody types a changelog — one that has to be remembered is one
-# that stops being written. `docs/5.6` is not replaced by this: a delivery that
-# ships no code has no tag for a release to hang on. See docs/3.3 §2.5.4.
+# that stops being written. `programme/applications/tile-lite-elite/3.1.1-delivery-log.md` is not replaced by this: a delivery that
+# ships no code has no tag for a release to hang on. See docs/4.3.3 §2.5.4.
 #
 # Never fatal. Production is already serving the new version by the time this
 # runs, so a changelog that fails to post prints the command to run by hand and
@@ -148,7 +148,7 @@ publish_release() {
 # hand against the real API. The test below now asserts the shape, because a
 # stub that accepts anything is a test of nothing.
 #
-# **A non-project is still closed.** Milestones belong to projects (docs/5.1), so
+# **A non-project is still closed.** Milestones belong to projects (the programme's docs/1.2), so
 # anything else here is an anomaly the gate above has already called out — and
 # closing it is what used to happen, so nothing new is invented for a case that
 # should not arise.
@@ -378,7 +378,7 @@ issue_touches_image() {
 # no commit in the range*. The second is already the milestone gate's
 # `UNBUILT` check, which prints "Nothing in this release mentions:" and asks
 # before deploying — so writing it again here would be a second statement of one
-# rule, which is what `docs/5.1` calls a defect whichever copy is right.
+# rule, which is what `programme/docs/1.2-change-lifecycle.md` calls a defect whichever copy is right.
 #
 # The first is new: **nothing today notices a change that reaches players and is
 # in no milestone.** The gate looks outward from the plan and finds issues that
@@ -402,7 +402,7 @@ report_plan_disagreement() {
   while IFS= read -r num; do
     [[ -n "$num" ]] || continue
     issue_touches_image "$num" "$range" || continue
-    # One call for both facts. A **Requirement** is skipped: `docs/5.1` 1.1 —
+    # One call for both facts. A **Requirement** is skipped: `programme/docs/1.2-change-lifecycle.md` 1.1 —
     # *"Milestones go with project deliveries, and not with requirements"* — so
     # asking one to carry a milestone asks for something the process forbids.
     # #277 was reported until this was added, because a commit claiming it
@@ -642,7 +642,7 @@ announce_release_checks() {  # $1 = IS_RELEASE, $2 = DEPLOY_ENV
 #
 # **Each step carries its own remedy**, because *"needs doing by hand"* is not a
 # thing anybody can act on at the end of a deploy. Reviewing what a failure
-# reports is part of the design (docs/5.1): the moment it is read is the moment
+# reports is part of the design (the programme's docs/1.2): the moment it is read is the moment
 # nobody can go back and add detail to it. The exit code is reported for the
 # same reason — `git commit` returning 1 and returning 128 are different
 # problems, and only one of them is the pre-commit hook.
@@ -676,7 +676,7 @@ usage: deploy.sh              # deploy HEAD
 Builds fresh images from a clean checkout and ships them to the
 deployment VM (production by default; DEPLOY_ENV=rehearsal for the
 rehearsal host — deploy-rehearsal.sh sets that and more). See the
-header comment above for the full six-step sequence, and docs/3.3,
+header comment above for the full six-step sequence, and docs/4.3.3,
 "Container Deployment".
 
 Refuses before touching anything (exit 1) when:
@@ -803,7 +803,7 @@ esac
 # --- Emergency changes -------------------------------------------------------
 #
 # `DEPLOY_EMERGENCY="<why>"` — restore service when the normal path is too slow.
-# See docs/3.3, "Emergency changes", which says the important part: **try
+# See docs/4.3.3, "Emergency changes", which says the important part: **try
 # rollback first.** `rollback.sh` is a retag and a restore, needs no build and
 # no transfer, and has no gates because it only ever moves to something that
 # was already running. This path is for when rolling back cannot help — a bug
@@ -976,7 +976,7 @@ fi
 # the rule — "this commit is on the remote" — and pinning it to main was
 # stricter than that without saying so. It also blocked a legitimate case:
 # deploying a branch deliberately, to trial a change or to rehearse a
-# rollback with something you intend to abandon (docs/3.3's "Rollback
+# rollback with something you intend to abandon (docs/4.3.3's "Rollback
 # drill"). A branch that has been pushed is just as reproducible as main;
 # what must never ship is a commit that exists only on this machine.
 #
@@ -997,7 +997,7 @@ note_gate on-remote
 # and have not shipped. That is the intended state, and it is also a hazard at
 # exactly one moment: an emergency deploy of `main` ships every one of them
 # alongside the fix, and the person restoring service cannot audit what else is
-# there. `docs/3.3` says to cut from the last released tag and apply the one
+# there. `docs/4.3.3` says to cut from the last released tag and apply the one
 # fix; this is what makes ignoring that visible at the point it is happening.
 #
 # **Asked, not refused.** Production is down when this runs. A gate that stops
@@ -1014,7 +1014,7 @@ if [[ -n "$EMERGENCY" && "$DEPLOY_ENV" == "production" ]]; then
   if [[ -n "$EMERG_LIVE" ]] && git cat-file -e "$EMERG_LIVE^{commit}" 2>/dev/null; then
     EMERG_EXTRA=""
     # **Only what is also on `main`.** Cutting from the last `prod-*` tag — which
-    # is what 3.3 §1.13 now says to do — makes the fix itself a change
+    # is what 4.3.3 §1.13 now says to do — makes the fix itself a change
     # production lacks, so counting everything flagged the emergency's own
     # commit and asked about it. A false positive at the worst possible moment,
     # found by walking the path on 2026-09-20 rather than by reading it.
@@ -1040,7 +1040,7 @@ if [[ -n "$EMERGENCY" && "$DEPLOY_ENV" == "production" ]]; then
       echo
       printf '%s' "$EMERG_EXTRA"
       echo
-      echo "    docs/3.3: cut an emergency from the last released tag, not from main."
+      echo "    docs/4.3.3: cut an emergency from the last released tag, not from main."
       echo "      git switch --detach prod-<version> && <apply the fix> "
       echo
       if [[ ! -t 0 ]]; then
@@ -1071,7 +1071,7 @@ echo "==> $TARGET_SHA confirmed on the remote ($REMOTE_BRANCHES)"
 # explicitly, because a job whose `if` does not match is recorded as `skipped`
 # and a run of skipped jobs still concludes success. Asking the looser question
 # is what passed the commit released as 0.5.0, whose only run that executed
-# e2e had failed. See docs/3.3, "Gating on a particular run".
+# e2e had failed. See docs/4.3.3, "Gating on a particular run".
 #
 # **Which run depends on the environment.** A rehearsal exercises a commit that
 # is usually still on a branch, so there is no push-to-`main` run to wait for —
@@ -1081,7 +1081,7 @@ echo "==> $TARGET_SHA confirmed on the remote ($REMOTE_BRANCHES)"
 # one.
 #
 # **An emergency is judged by its pull request's run.** It is cut from the last
-# `prod-*` tag, never from `main` (docs/3.3 §1.13), so its commit has no
+# `prod-*` tag, never from `main` (docs/4.3.3 §1.13), so its commit has no
 # push-to-`main` run to wait for — and a branch push skips e2e. The pull
 # request's run is the one that exercises e2e against the branch, which is the
 # run the second gate below already reads; here it is required, with e2e, so
@@ -1193,7 +1193,7 @@ fi
 note_gate version
 
 # A patch release may not carry functional change — the rule and the reasoning
-# are in docs/3.3, "Releases are branches". Checked here, before anything is
+# are in docs/4.3.3, "Releases are branches". Checked here, before anything is
 # built, so a wrong version number costs a moment rather than a release. The
 # check passes whenever it cannot judge (no milestone, no `gh`, no network), so
 # it can only ever catch a mistake, never invent one.
@@ -1207,7 +1207,7 @@ fi
 # issue later leaves one that has already announced a release it was not in.
 #
 # Two failures inside a week are why this exists rather than being a paragraph
-# in docs/3.3. #67 was closed by 0.6.0 while the testing report listed it as
+# in docs/4.3.3. #67 was closed by 0.6.0 while the testing report listed it as
 # *Deferred* — the only one of twelve not verified — and it turned out to be
 # genuinely broken, needing its own release days later. #151 was caught sitting
 # unbuilt in 0.6.1 by hand, with an hour to spare.
@@ -1295,7 +1295,7 @@ else
         UNBUILT="$UNBUILT #$NUM"
       fi
       # A milestone is a release, and a release is made of project deliveries —
-      # so a milestone should contain projects and nothing else (docs/5.1 §1.1).
+      # so a milestone should contain projects and nothing else (the programme's docs/1.2 §1.1).
       # A warning rather than a refusal: the operator's intent stays
       # authoritative, and the convention stops being one nobody checks.
       [[ "$KIND" == "Project" ]] || NOT_PROJECT="$NOT_PROJECT #$NUM($KIND)"
@@ -1305,7 +1305,7 @@ else
       echo
       echo "    Not a project, and a milestone is made of project deliveries:$NOT_PROJECT" >&2
       echo "    A requirement is closed when it folds into a project, so it" >&2
-      echo "    should not be carrying a milestone at all — docs/5.1 §1.1." >&2
+      echo "    should not be carrying a milestone at all — the programme's docs/1.2 §1.1." >&2
     fi
 
     # The mirror image of the check above: that one finds an issue in the
@@ -1362,7 +1362,7 @@ note_gate milestone
 # this check, rehearsing commit A and then committing a "quick
 # fix" B before deploying would silently ship B untested — easy to do
 # without noticing, since deploy.sh has no other way to know the rehearsal host
-# wasn't re-run. See docs/3.3-testing-ci-and-release.md.
+# wasn't re-run. See docs/4.3.3-testing-ci-and-release.md.
 if [[ "$DEPLOY_REF" == "HEAD" ]]; then
   STAGING_CMD="./scripts/deploy-rehearsal.sh"
 else
@@ -1536,7 +1536,7 @@ rmdir "$WORKTREE_DIR"
 git worktree add --detach "$WORKTREE_DIR" "$TARGET_FULL_SHA" >/dev/null
 
 # Baked into both binaries as SemVer build metadata (e.g. `0.2.0+a1c9f02`) —
-# see docs/4.1-configuration.md's "Versioning" section.
+# see docs/4.4.1-configuration.md's "Versioning" section.
 export TILE_LITE_ELITE_BUILD_ID="$TARGET_SHA"
 
 # `-f <worktree>/docker-compose.yml` also sets the project directory to the
@@ -1747,13 +1747,13 @@ if (( IS_RELEASE )); then
   fi
 
   # The public changelog for this version, generated by GitHub. See §3.3.1 of
-  # docs/3.3 for why it does not replace the delivery log.
+  # docs/4.3.3 for why it does not replace the delivery log.
   post_deploy "publishing the release notes" "gh release create $DEPLOY_TAG --generate-notes" publish_release "$DEPLOY_TAG" "$DEPLOYED_VERSION" || true
 fi
 
 # The working tree moves one patch ahead of what was just shipped, so no
 # later commit is ever built carrying a version number already live. This
-# used to be a step you had to remember (docs/3.3, an explicit final step) — but it is
+# used to be a step you had to remember (docs/4.3.3, an explicit final step) — but it is
 # only ever correct immediately after a successful deploy, which is exactly
 # here, and nowhere else.
 #

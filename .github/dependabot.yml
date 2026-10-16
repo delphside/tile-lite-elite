@@ -19,7 +19,7 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      # CI refuses a subject without both versions (docs/3.3 §2.7.1). Dependabot
+      # CI refuses a subject without both versions (docs/4.3.3 §2.7.1). Dependabot
       # cannot know them, so the prefix is fixed here and the versions are
       # corrected by whoever takes the pull request.
       prefix: "app 0.0.0 api 0.0"

@@ -45,11 +45,11 @@ node_modules/
 # excluded directory, so excluding the contents is what lets skills back in.
 .claude/*
 # Skills encode this project's process rather than one machine's settings, so
-# they are versioned — docs/5.1's test is that what survives a rebuild
+# they are versioned — the programme's docs/1.2's test is that what survives a rebuild
 # elsewhere is what has been delivered.
 !.claude/skills/
 # Agents are versioned for the same reason: a subagent's instructions are part
-# of how an activity is run (docs/5.4's reference-review).
+# of how an activity is run (the programme's docs/1.5's reference-review).
 !.claude/agents/
 # The two hooks are tooling by the same test, and tooling is an artefact
 # whether it runs in production or not (owner, 2026-09-03). They were invisible
@@ -86,7 +86,7 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/.last-run.json
 
-# Local dev DB backups (see scripts / 3.4 Production Environment)
+# Local dev DB backups (see scripts / 4.3.4 Production Environment)
 data/backups/
 
 
@@ -106,5 +106,5 @@ __pycache__/
 # verify.sh's clean-tree check failed for a reason nobody had to act on.
 #
 # The digit prefix is what distinguishes them: moves/wide-5x5-c2281dc.csv is
-# tracked deliberately, for the analysis in docs/2.3.
+# tracked deliberately, for the analysis in docs/4.2.3.
 crates/server-game/examples/moves/[0-9]*.csv

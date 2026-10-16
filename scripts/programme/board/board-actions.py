@@ -9,7 +9,7 @@ questions: `actions.py` lists every outstanding action on the board, this lists
 only what the owner has to do. A difference between them is expected and is the
 point of running both — see the parallel-running section of the #383 design.
 
-Design: docs/changes/workstreams/delivery-tooling/383-one-board-model/
+Design: programme/records/2.5-changes/programme-tooling/383-one-board-model/
 """
 
 from __future__ import annotations
