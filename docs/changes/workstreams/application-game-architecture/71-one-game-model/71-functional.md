@@ -699,6 +699,10 @@ rating and history.
 
 #### Q15 RET-3 has no definition of "last activity" for a game not started, and nothing implements it
 
+Answered: [docs/2.4](../../../../2.4-persistence.md) already said the roster
+and a keep count, and RET-3 now says so, with a chat, a hide, a reminder and
+a change of a player's details not counting (owner, 2026-10-16). Still not
+built: WP C. What follows is the question as raised.
 `expire_old_terminal_games` (sweeps_capacity.rs)
 removes only Finished and Aborted games, seven days after `ended_at`;
 `last_activity_by_game` is the latest move, or the creation time when there

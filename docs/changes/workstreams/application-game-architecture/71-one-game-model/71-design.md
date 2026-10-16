@@ -918,8 +918,7 @@ reader. Because nothing is rewritten, `created_at` is when a change happened.
 That alone does not give RET-3 a true last activity, because a chat and a hide
 are logged too, and #460 found they should not count. So `games` carries
 `last_activity_at`, set by the one handler for the events that count and left
-alone by the rest; which events count is question 15 in
-[`71-functional.md`](71-functional.md). A keep (`KeepRequested`) sets it, as
+alone by the rest; which events count is RET-3's. A keep (`KeepRequested`) sets it, as
 RET-3's "keep" requires.
 
 [^d61]: Decision #461 (D61): Core lays down the append-only log and writes it.
