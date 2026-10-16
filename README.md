@@ -69,11 +69,13 @@ each piece was chosen.
 
 ## Documentation
 
-[`docs/`](docs/README.md) is the index. It's organised in four groups:
-**1.x** overview and architecture, **2.x** design and domain, **3.x**
-lifecycle (setup → development → testing and release → production), and
-**4.x** reference (configuration, database schema, API schema, data
-dictionary). Start at
+[`docs/`](docs/README.md) is the index. This application's documents are
+4.1 to 4.4: **4.1** overview and architecture, **4.2** design and domain,
+**4.3** development and operation (setup → development → testing and release →
+production), and **4.4** reference (configuration, database schema, API schema,
+data dictionary). The programme's documents are 1.x and 2.x in
+[`delphside/programme`](https://github.com/delphside/programme), and this
+application's records there are 3.1.x. Start at
 [4.1.1 Architecture](docs/4.1.1-architecture.md) to understand the system, or
 [4.3.1 Setup](docs/4.3.1-setup.md) to get it running.
 

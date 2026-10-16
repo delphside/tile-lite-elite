@@ -21,7 +21,8 @@ set -uo pipefail
 #   3. placement     — the folder convention settled on #156, and the numbering
 #                      of the documents in docs/ (4.1 to 4.4, three levels)
 #
-# Exits non-zero if any check failed.
+# Exits non-zero if any check failed, except the placement of the programme's
+# change documents (step 3), which is reported only.
 
 HERE="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$HERE" || exit 1
@@ -51,6 +52,11 @@ python3 scripts/programme/docs/check-doc-links.py || FAILED=1
 # that finds no documents because it looked nowhere would report everything in
 # place.
 #
+# **What it finds in the programme's content is reported, not gated.** Those
+# documents belong to the programme repository, so a stray one there must not
+# turn this application's CI red. The check becomes a gate in the programme
+# repository's own CI in stage 2 of #485.
+#
 # The four files already in the flat directory stay there: GitHub does not
 # follow a rename and several issue comments point at them. They are listed
 # rather than pattern-matched so that the list can only shrink.
@@ -78,7 +84,7 @@ if LIVE="$("$HERE/scripts/programme/board/board-records.py" live)"; then
     STRAY=1
   done < <(find "$CHANGES" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null | sort)
   if (( STRAY )); then
-    FAILED=1
+    echo "  (reported only: the programme's content does not fail this application's check)"
   else
     echo "  every change document is in an issue or release folder"
   fi

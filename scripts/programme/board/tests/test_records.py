@@ -11,6 +11,7 @@ Each case runs the command as a caller would, with a temporary directory as
 """
 
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +32,116 @@ MEASUREMENTS = ("period,metric,value,ceiling,unit\n"
 def env(**extra):
     base = {k: v for k, v in os.environ.items() if k != "PROGRAMME_DIR"}
     return {**base, **extra}
+
+
+def git(cwd, *args):
+    subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c", "user.email=t@t",
+                    *args], check=True, capture_output=True)
+
+
+def make_repo(path: Path) -> Path:
+    path.mkdir(parents=True)
+    git(path, "init", "-q", "-b", "main")
+    (path / "f").write_text("1")
+    git(path, "add", "f")
+    git(path, "commit", "-q", "-m", "one")
+    return path
+
+
+class TheDefaultFromAWorktree(Cases):
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.top = Path(self._dir.name).resolve()
+        self.addCleanup(self._restore, os.environ.pop("PROGRAMME_DIR", None))
+
+    @staticmethod
+    def _restore(old):
+        if old is not None:
+            os.environ["PROGRAMME_DIR"] = old
+
+    def test_a_linked_worktree_finds_the_checkout_beside_the_main_worktree(self):
+        main = make_repo(self.top / "repo")
+        (self.top / "programme").mkdir()
+        wt = main / ".claude" / "worktrees" / "agent-1"
+        git(main, "worktree", "add", "-q", str(wt), "-b", "work")
+        self.expect("same as from the main checkout", self.top / "programme", records.live(main))
+        self.expect("and from the worktree under it", self.top / "programme", records.live(wt))
+
+    def test_the_variable_still_overrides_in_a_worktree(self):
+        main = make_repo(self.top / "repo")
+        wt = main / ".claude" / "worktrees" / "agent-1"
+        git(main, "worktree", "add", "-q", str(wt), "-b", "work")
+        elsewhere = self.top / "elsewhere"
+        elsewhere.mkdir()
+        os.environ["PROGRAMME_DIR"] = str(elsewhere)
+        self.expect("override wins", elsewhere, records.live(wt))
+
+
+class TheStartOfSessionCheck(Cases):
+    """One line naming the path and the problem; nothing when all is well."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        self.top = Path(self._dir.name).resolve()
+        self.origin = make_repo(self.top / "origin")
+        subprocess.run(["git", "clone", "-q", str(self.origin), str(self.top / "programme")],
+                       check=True, capture_output=True)
+        self.live = self.top / "programme"
+        self.addCleanup(self._restore, os.environ.pop("PROGRAMME_DIR", None))
+        os.environ["PROGRAMME_DIR"] = str(self.live)
+
+    @staticmethod
+    def _restore(old):
+        os.environ.pop("PROGRAMME_DIR", None)
+        if old is not None:
+            os.environ["PROGRAMME_DIR"] = old
+
+    def test_a_current_checkout_on_main_says_nothing(self):
+        self.expect("no problem", None, records.problem())
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("prints nothing", "", result.stdout + result.stderr)
+
+    def test_missing(self):
+        gone = self.top / "not-cloned"
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(gone)))
+        self.expect("never fails the session", 0, result.returncode)
+        self.expect("one line", 1, len(result.stdout.strip().splitlines()))
+        self.expect("names the path", True, str(gone) in result.stdout)
+        self.expect("says missing", True, "missing" in result.stdout)
+
+    def test_on_another_branch(self):
+        git(self.live, "checkout", "-q", "-b", "side")
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("one line", 1, len(result.stdout.strip().splitlines()))
+        self.expect("names the path", True, str(self.live) in result.stdout)
+        self.expect("names the branch", True, "side" in result.stdout)
+
+    def test_behind_origin_main(self):
+        (self.origin / "g").write_text("2")
+        git(self.origin, "add", "g")
+        git(self.origin, "commit", "-q", "-m", "two")
+        git(self.live, "fetch", "-q", "origin")
+        before = subprocess.run(["git", "-C", str(self.live), "rev-parse", "HEAD"],
+                                capture_output=True, text=True).stdout
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("one line", 1, len(result.stdout.strip().splitlines()))
+        self.expect("names the path", True, str(self.live) in result.stdout)
+        self.expect("says behind", True, "behind" in result.stdout)
+        after = subprocess.run(["git", "-C", str(self.live), "rev-parse", "HEAD"],
+                               capture_output=True, text=True).stdout
+        self.expect("never changes the checkout", before, after)
+
+    def test_no_origin_main_ref_cannot_tell(self):
+        git(self.live, "update-ref", "-d", "refs/remotes/origin/main")
+        result = run("programme/board/board-records.py", "check", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("says cannot tell", True, "cannot tell" in result.stdout)
+        self.expect("one line", 1, len(result.stdout.strip().splitlines()))
 
 
 class TheLiveCheckout(Cases):
