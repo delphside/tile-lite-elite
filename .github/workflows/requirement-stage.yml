@@ -8,6 +8,9 @@
 #
 # `typed` as well as `opened`, because an issue can be typed after it is
 # created. A set Requirement State is never overwritten.
+#
+# **It needs `BOARD_TOKEN`**, as `pr-state.yml` does: the automatic token
+# cannot write an organisation's issue fields.
 name: Requirement stage
 
 on:
@@ -33,6 +36,6 @@ jobs:
       - name: Record
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
           ISSUE: ${{ github.event.issue.number || inputs.issue }}
         run: python3 scripts/programme/board/board-stage.py "$ISSUE"
