@@ -144,7 +144,7 @@ above describes the system, and a process diagram describes us.
 | diagram | view |
 | --- | --- |
 | [4.1.1](../4.1.1-architecture.md)'s deployment diagram | **Deployment** — which containers run in which environment |
-| [4.1.2](../4.1.2-components-and-interactions.md)'s component diagram | **Component**, with the clients drawn as Context around it |
+| [4.2.0](../4.2.0-design-map.md)'s views, generated from `docs/design-map/` | **Container**, and **Component** for the game server |
 | 4.1.2's move-submission sequence | **Dynamic** |
 | [4.3.3](../4.3.3-testing-ci-and-release.md)'s sequence diagram | process, not a view |
 | `release-flow`, `version-lifecycle`, `flavour-a` to `flavour-d` | process, not a view |
