@@ -15,6 +15,7 @@
         component tle.server "server-storage" "the game server, storing games and ratings" {
             include tle.server.games tle.server.roster tle.server.invitations tle.server.scheduler
             include tle.server.adminApi tle.server.store tle.server.ratings tle.db
+            include tle.server.api
         }
         component tle.server "server-accounts" "the game server, accounts and email" {
             include tle.server.auth tle.server.games tle.server.invitations tle.server.scheduler
