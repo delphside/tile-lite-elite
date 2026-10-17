@@ -48,7 +48,7 @@
   each production deploy.
 - `Caddyfile`, `docker-compose.yml` and the `Dockerfile` are this
   application's own assets; changing one is a Production Release.
-- Rehearsal is closed. scripts/rehearsal-access.sh grants access by QR code.
+- Rehearsal is closed. scripts/deliver/rehearsal-access.sh grants access by QR code.
 - **Production access is the owner's to run**, reads included: an admin CLI
   listing, a database query, a log dump. The scripted checks the tooling
   already makes, which are bounded and reviewed, are `verify.sh`,

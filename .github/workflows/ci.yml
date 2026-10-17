@@ -57,7 +57,7 @@ jobs:
       # The programme's records, at the head of its main: the placement check
       # reads this application's change documents there, and the tests that
       # need a live checkout set their own. `PROGRAMME_DIR` is the variable
-      # `scripts/programme/board/records.py` reads. Inside the workspace, and
+      # `programme/scripts/board/records.py` reads. Inside the workspace, and
       # skipped by the document checks, which are for this repository's own.
       - uses: actions/checkout@v7
         with:
@@ -72,7 +72,7 @@ jobs:
       # the config (.markdownlint.jsonc) existed for weeks and was only ever run
       # by hand, so an error reached `main` on 2026-08-16 and would have stayed.
       #
-      # It runs `scripts/programme/docs/check-docs.sh` rather than a copy of the command, so
+      # It runs `programme/scripts/docs/check-docs.sh` rather than a copy of the command, so
       # the check made before pushing and the one CI enforces are the same code
       # — the same reason `ci-status.sh` is shared between `deploy.sh` and the
       # terminal. The script adds two checks to the lint: every `](#anchor)`
@@ -81,7 +81,7 @@ jobs:
       # First in the job because it takes seconds and the Rust steps take
       # minutes.
       - name: Check documents
-        run: ./scripts/programme/docs/check-docs.sh
+        run: ./programme/scripts/docs/check-docs.sh
 
       # **No toolchain action: `rust-toolchain.toml` is the whole of it.**
       #
@@ -116,14 +116,14 @@ jobs:
           -p server-game -p admin-cli -p tile-lite-elite-ui
           --check
 
-      # The Python tooling's tests, on the standard library's runner (docs/4.3.3
-      # §2.4): the board model's in scripts/programme/board/tests/, and checks of the
-      # repository's own files in scripts/tests/test_*.py. Two runs, because the
-      # model imports as `board` from scripts/programme/.
+      # This repository's own Python tests, on the standard library's runner
+      # (docs/4.3.3 §2.4): checks of its own files in scripts/tests/test_*.py. The
+      # board model's tests, and the programme scripts' and hooks', are the
+      # programme repository's, run by its own CI (#485): a change to them reaches
+      # this repository only by moving the `programme/` pin, which this job then
+      # exercises through the shell tests below and the documents check above.
       - name: Python tooling tests
-        run: |
-          python3 -m unittest discover -s scripts -t scripts -v
-          python3 -m unittest discover -s scripts/programme -t scripts/programme -v
+        run: python3 -m unittest discover -s scripts -t scripts -v
 
       # The release scripts have one piece of parsing that both deploy.sh and
       # check-commit-stamp.sh depend on, and it has failed twice — once loudly,
@@ -186,13 +186,13 @@ jobs:
           # hygiene failure reads as one rather than as a test failure.
           TILE_LITE_ELITE_LOG_CAPTURE="$RUNNER_TEMP/log-events.jsonl" \
             cargo test -p server-game --quiet
-          python3 scripts/check-log-hygiene.py "$RUNNER_TEMP/log-events.jsonl"
+          python3 scripts/operate/check-log-hygiene.py "$RUNNER_TEMP/log-events.jsonl"
 
       - name: Wasm build (web client)
         run: cargo build -p tile-lite-elite-ui --target wasm32-unknown-unknown
 
   # End-to-end UI tests: build + run the preview Docker stack (the same images
-  # scripts/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
+  # scripts/deliver/deploy.sh ships — so the fragile dx/wasm-bindgen packaging is done
   # inside the Dockerfile, not reproduced on the runner) and drive the real
   # client in a browser with Playwright. Heavier than `check` (a full image
   # build), so it's gated to main pushes / PRs / manual runs, and only after
@@ -207,6 +207,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          submodules: true   # check-commit-stamp.sh calls programme/scripts/board
 
       # Checks the commits this push actually added, not all of history:
       # commits predating the convention would fail it forever. `before` is
@@ -222,17 +223,17 @@ jobs:
       - name: Check the version stamp on each new commit
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            ./scripts/check-commit-stamp.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+            ./scripts/deliver/check-commit-stamp.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
             exit
           fi
           before="${{ github.event.before }}"
           if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
-            ./scripts/check-commit-stamp.sh
+            ./scripts/deliver/check-commit-stamp.sh
           else
-            ./scripts/check-commit-stamp.sh "$before..${{ github.sha }}"
+            ./scripts/deliver/check-commit-stamp.sh "$before..${{ github.sha }}"
           fi
 
-  # Whether a pull request's diff reaches the image, per scripts/shipping-paths.sh
+  # Whether a pull request's diff reaches the image, per scripts/deliver/shipping-paths.sh
   # (#348) — one definition, shared with the pre-commit hook and deploy.sh's
   # manifest, rather than a second copy of NON_SHIPPING in this file. Only
   # pull requests ask: R2 applies the condition to pushes unconditionally,
@@ -249,9 +250,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          submodules: true   # shipping-paths.sh calls programme/scripts/board
       - id: check
         run: |
-          source scripts/shipping-paths.sh
+          source scripts/deliver/shipping-paths.sh
           if touches_image_range "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"; then
             echo "touches=true" >> "$GITHUB_OUTPUT"
           else

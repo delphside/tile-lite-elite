@@ -1,5 +1,5 @@
 # Tile Lite Elite's technical profile: the facts about this repository that the
-# programme's tooling asks for (scripts/programme/board/profile.py,
+# programme's tooling asks for (programme/scripts/board/profile.py,
 # delphside/tile-lite-elite#485 stage 2). It changes on a project's branch with
 # the code it describes. What the programme's processes need to know about the
 # application (name, repository, environments' purposes, routes) is its
@@ -24,7 +24,7 @@ pattern = '^version\s*=\s*"([^"]+)"'
 [versions.api]
 # `command` reads `file` on stdin and prints the api version, `M.N`.
 file = "crates/api/src/lib.rs"
-command = "scripts/read-api-version.sh"
+command = "scripts/deliver/read-api-version.sh"
 
 [versions.bump]
 # A change is a version bump only when it touches `required` and optionally the
@@ -62,6 +62,17 @@ non_shipping = [
   'programme\.toml$',
 ]
 
+[scripts]
+# The application's own scripts, in four folders that follow the workstreams that
+# own them (#447's grouping). A commit to `main` touching one is warned about, not
+# refused: the pre-commit hook asks `board-shipping.py application-tooling`.
+groups = [
+  "scripts/develop/",
+  "scripts/deliver/",
+  "scripts/operate/",
+  "scripts/measure/",
+]
+
 [environments.preview]
 # A variable that overrides, in order, then the default.
 env = ["PREVIEW_URL", "STAGING_URL"]
@@ -70,7 +81,7 @@ url = "http://localhost:8081"
 [environments.rehearsal]
 env = ["REHEARSAL_URL"]
 # The script is sourced in a subshell and `url_variable` read from it.
-url_from = "scripts/rehearsal-target.sh"
+url_from = "scripts/deliver/rehearsal-target.sh"
 url_variable = "TARGET_URL"
 
 [environments.production]
@@ -84,7 +95,7 @@ tag_prefix = "prod-"
 announcement = "Released in prod-"
 deploy_marker = "[deploy.sh]"
 # Prints why CI is red on main and exits non-zero, or exits 0.
-ci_status = "scripts/ci-status.sh --run push:main"
+ci_status = "scripts/deliver/ci-status.sh --run push:main"
 
 [documents]
 # Generated from the code or the board: neither the programme's nor the
@@ -105,13 +116,8 @@ programme_exact = ["docs/diagrams/roadmap.svg"]  # generated from the roadmap
 programme_prefixes = ["docs/4.1.4-"]
 # Documents outside docs/ that describe the application.
 application_outside_docs = ["README.md"]
-# Change documents already in the flat folder, which stay (GitHub does not follow a rename).
-grandfathered_changes = [
-  "README.md",
-  "0.6.0-user-testing.md",
-  "25-rate-limiting-test-design.md",
-  "41-user-deletion-test-design.md",
-]
+# (The change documents already in a flat folder, which stay, are the programme file's
+# `records.grandfathered_changes`: the programme repository's CI needs them without an application.)
 # What the markdown linter skips, besides the programme's own folders.
 lint_ignore = ["#target", "#**/node_modules", "#old-crates", "#pipeline.md"]
 
@@ -135,8 +141,8 @@ fix = "Run 'cargo fmt --all' and stage the result. CI denies this, so the altern
 [[hooks.check_docs]]
 # The application's own documentation checks, run by check-docs.sh in order.
 name = "API errors"
-command = "scripts/programme/docs/check-api-errors.py"
+command = "scripts/develop/check-api-errors.py"
 
 [[hooks.check_docs]]
 name = "script log events"
-command = "scripts/programme/docs/check-run-log-events.py"
+command = "scripts/develop/check-run-log-events.py"

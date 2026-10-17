@@ -20,7 +20,7 @@ setup() {
   git -C "$REPO_DIR" commit -q -m base
   BASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
   # shellcheck source=/dev/null
-  source "$BATS_TEST_DIRNAME/../shipping-paths.sh"
+  source "$BATS_TEST_DIRNAME/../deliver/shipping-paths.sh"
 }
 
 commit_file() {   # <path> <message>
@@ -103,8 +103,62 @@ commit_file() {   # <path> <message>
 @test "an unreadable profile ends a script that asks inside an if, as deploy.sh and verify.sh do" {
   printf 'application = "widget"\n' > "$BATS_TEST_TMPDIR/bare.toml"
   export PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/bare.toml"
-  run bash -c 'source "$1"; if ships HEAD; then echo ships; else echo does-not-ship; fi; echo carried-on' _ "$BATS_TEST_DIRNAME/../shipping-paths.sh"
+  run bash -c 'source "$1"; if ships HEAD; then echo ships; else echo does-not-ship; fi; echo carried-on' _ "$BATS_TEST_DIRNAME/../deliver/shipping-paths.sh"
   assert_equal "$status" 70
   refute_output --partial "does-not-ship"
   refute_output --partial "carried-on"
+}
+
+# The `programme/` submodule not being checked out is Python's status 2, and
+# every caller reads anything but 0 as "no": the stamp and touches-image CI jobs
+# did this, and e2e was skipped on pull requests that reach the image.
+@test "a missing board-shipping.py stops every function, and an if does not read it as no" {
+  commit_file crates/ui/src/x.rs "the image changes"
+  _SHIPPING_CMD="$BATS_TEST_TMPDIR/no-such/board-shipping.py"
+  for call in "touches_image HEAD" "touches_image_range $BASE_SHA HEAD" "ships HEAD" "require_shipping_profile"; do
+    run $call
+    assert_equal "$status" 70
+    assert_output --partial "git submodule update --init"
+  done
+  run bash -c 'source "$1"; _SHIPPING_CMD="$2"; if ships HEAD; then echo ships; else echo does-not-ship; fi; echo carried-on' \
+    _ "$BATS_TEST_DIRNAME/../deliver/shipping-paths.sh" "$BATS_TEST_TMPDIR/no-such/board-shipping.py"
+  assert_equal "$status" 70
+  refute_output --partial "does-not-ship"
+}
+
+@test "a command that exits with a status other than 0 or 1 is an error, not a no" {
+  commit_file crates/ui/src/x.rs "the image changes"
+  printf '#!/usr/bin/env python3\nimport sys\nprint("it broke", file=sys.stderr)\nsys.exit(2)\n' > "$BATS_TEST_TMPDIR/odd.py"
+  _SHIPPING_CMD="$BATS_TEST_TMPDIR/odd.py"
+  run touches_image HEAD
+  assert_equal "$status" 70
+  assert_output --partial "status 2"
+  assert_output --partial "it broke"
+}
+
+# A malformed regular expression in the profile makes the model raise; Python calls
+# an uncaught exception status 1, which every caller reads as "no". The commands now
+# exit 70 on a crash (`profile.run`) and `_ask_shipping` stops on it.
+@test "a malformed ships regex stops touches_image, touches_image_range and ships, rather than answering no" {
+  commit_file crates/ui/src/x.rs "the image changes"
+  sed "s|^non_shipping = \[|non_shipping = [\n  'docs/(',|" "$FAKES/programme.toml" > "$BATS_TEST_TMPDIR/broken.toml"
+  export PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/broken.toml"
+  for call in "touches_image HEAD" "touches_image_range $BASE_SHA HEAD" "ships HEAD"; do
+    run $call
+    assert_equal "$status" 70
+    assert_output --partial "Traceback"
+  done
+  run bash -c 'source "$1"; if ships HEAD; then echo ships; else echo does-not-ship; fi; echo carried-on' _ "$BATS_TEST_DIRNAME/../deliver/shipping-paths.sh"
+  assert_equal "$status" 70
+  refute_output --partial "does-not-ship"
+}
+
+# `check` has no "no", so a 1 is a failure before the command could answer, such
+# as an import or syntax error, which `profile.run` cannot catch.
+@test "require_shipping_profile stops when check exits 1" {
+  printf '#!/usr/bin/env python3\nimport sys\nprint("it failed to load", file=sys.stderr)\nsys.exit(1)\n' > "$BATS_TEST_TMPDIR/one.py"
+  _SHIPPING_CMD="$BATS_TEST_TMPDIR/one.py"
+  run require_shipping_profile
+  assert_equal "$status" 70
+  assert_output --partial "could not be checked"
 }

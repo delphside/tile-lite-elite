@@ -8,7 +8,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../merge-to-release.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../deliver/merge-to-release.sh"
   export STUB_DIR="$BATS_TEST_TMPDIR"
   BIN="$STUB_DIR/bin"; mkdir -p "$BIN"
   # One stub for every gh call, dispatching on the subcommand. MERGED records the
@@ -175,5 +175,5 @@ merged() { [ -f "$STUB_DIR/MERGED" ]; }
   export SYNC_FAIL=1
   merge 9
   assert_success
-  assert_output --partial 'run scripts/programme/board/board-pr-state.py'
+  assert_output --partial 'run programme/scripts/board/board-pr-state.py'
 }

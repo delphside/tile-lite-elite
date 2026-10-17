@@ -13,21 +13,21 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  VERIFY="$BATS_TEST_DIRNAME/../verify.sh"
+  VERIFY="$BATS_TEST_DIRNAME/../deliver/verify.sh"
 }
 
 # Runs verify.sh's check_transitions alone against a stubbed
-# scripts/programme/board/board-check.py: 0 clean, 2 could not run, anything else findings.
+# programme/scripts/board/board-check.py: 0 clean, 2 could not run, anything else findings.
 #   $1  the exit status the stub returns
 #   $2  what the stub prints
 #   $3  "timeout" to stub `timeout` as having killed it (exit 124), which
 #       reaches that branch without waiting 60 seconds
 transitions() {
   local status="$1" printed="$2" mode="${3:-}" work="$BATS_TEST_TMPDIR/work"
-  mkdir -p "$work/scripts/programme/board" "$work/bin"
+  mkdir -p "$work/programme/scripts/board" "$work/bin"
   printf '%s' "$printed" > "$work/out"
-  printf '#!/usr/bin/env bash\ncat "%s/out"\nexit %s\n' "$work" "$status" > "$work/scripts/programme/board/board-check.py"
-  chmod +x "$work/scripts/programme/board/board-check.py"
+  printf '#!/usr/bin/env bash\ncat "%s/out"\nexit %s\n' "$work" "$status" > "$work/programme/scripts/board/board-check.py"
+  chmod +x "$work/programme/scripts/board/board-check.py"
   if [[ "$mode" == timeout ]]; then
     printf '#!/usr/bin/env bash\nexit 124\n' > "$work/bin/timeout"
     chmod +x "$work/bin/timeout"

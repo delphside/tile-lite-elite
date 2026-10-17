@@ -3,14 +3,14 @@
     python3 -m unittest discover -s scripts -t scripts
 
 They share the model's harness, `board.tests.cases` and `board.tests.cli`, so
-the model's folder is put on the path here, as each `board-*.py` command does
+the model's folder, in the programme submodule, is put on the path here, as each `board-*.py` command does
 for itself.
 """
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "programme"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "programme" / "scripts"))
 
 from board.tests.profiles import use_fakes  # noqa: E402
 
