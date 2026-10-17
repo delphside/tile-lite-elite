@@ -22,23 +22,22 @@ must know to avoid breaking something on its first change.
   application's records there are 3.1.x. A document states what is true now,
   with at most a line of reason; history, argument and quotations go in the commit
   message or the issue ([`docs/1.5`](https://github.com/delphside/programme/blob/main/docs/1.5-writing-documents.md)).
-  `scripts/programme/docs/doc-signals.py --list` shows lines that look like
+  `programme/scripts/docs/doc-signals.py --list` shows lines that look like
   history.
 - **`docs/4.1.6-document-map.md` is generated**: run
-  `scripts/programme/docs/document-map.py --write` after changing any heading;
+  `programme/scripts/docs/document-map.py --write` after changing any heading;
   do not edit it.
 - **Programme documents change only on `main`**, never on a project branch:
-  those `scripts/programme/board/documents.py` classes as the programme's,
+  those `programme/scripts/board/documents.py` classes as the programme's,
   including `CLAUDE.md`, this file and every change note.
-- **Never touch production**, and never run `scripts/deploy.sh`.
+- **Never touch production**, and never run `scripts/deliver/deploy.sh`.
 
 ## Checking your change
 
 ```bash
-scripts/programme/docs/check-docs.sh                  # documentation: lint, links, placement, the map
+programme/scripts/docs/check-docs.sh                  # documentation: lint, links, placement, the map
 bats scripts/tests                                    # the shell tooling
 python3 -m unittest discover -s scripts -t scripts    # the Python tooling's checks
-python3 -m unittest discover -s scripts/programme -t scripts/programme  # the board model's
 cargo test --workspace                                # the application
 ```
 

@@ -35,9 +35,9 @@ The quickest look is [tileliteelite.com](https://tileliteelite.com). To run
 it yourself:
 
 ```bash
-./scripts/setup-dev-environment.sh   # Rust toolchain, wasm target, dx, sccache, Docker
-./scripts/services.sh start          # backend on :3000, web client on :8080
-./scripts/desktop.sh                 # optional: a native client against the same backend
+./scripts/develop/setup-dev-environment.sh   # Rust toolchain, wasm target, dx, sccache, Docker
+./scripts/develop/services.sh start          # backend on :3000, web client on :8080
+./scripts/develop/desktop.sh                 # optional: a native client against the same backend
 ```
 
 Then open <http://127.0.0.1:8080>. [4.3.1 Setup](docs/4.3.1-setup.md) covers a

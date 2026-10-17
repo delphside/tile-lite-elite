@@ -11,7 +11,7 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../backup-to-oci.sh"
+  SCRIPT="$BATS_TEST_DIRNAME/../operate/backup-to-oci.sh"
   D="$BATS_TEST_TMPDIR"
   mkdir -p "$D/bin"
   # docker: `cp` produces a file, anything else succeeds.
@@ -83,9 +83,9 @@ backup() {  # [PAR_URL]
 @test "no script uploads a marker from stdin" {
   local f
   for f in backup-to-oci.sh restore-backup.sh check-log-hygiene-nightly.sh; do
-    [[ -e "$BATS_TEST_DIRNAME/../$f" ]] || continue
+    [[ -e "$BATS_TEST_DIRNAME/../operate/$f" ]] || fail "$f is not where this test looks"
     # Uncommented occurrences only: the explanatory comments quote the flag.
-    run bash -c "grep -vE '^[[:space:]]*#' '$BATS_TEST_DIRNAME/../$f' | grep -c -- '-T -'"
+    run bash -c "grep -vE '^[[:space:]]*#' '$BATS_TEST_DIRNAME/../operate/$f' | grep -c -- '-T -'"
     assert_output 0
   done
 }
