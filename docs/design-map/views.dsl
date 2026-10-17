@@ -1,8 +1,19 @@
         container tle "containers" "the deployable parts and how they talk" {
             include *
         }
-        component tle.server "server-components" "inside the game server" {
-            include *
+        component tle.server "server-requests" "the game server, taking a request" {
+            include tle.caddy tle.cli tle.server.throttle tle.server.api
+            include tle.server.auth tle.server.games tle.server.roster tle.server.invitations
+            include tle.server.events tle.server.catalog tle.server.ratings tle.server.adminApi
+        }
+        component tle.server "server-games" "the game server, changing a game" {
+            include tle.server.games tle.server.roster tle.server.invitations tle.server.scheduler
+            include tle.server.session tle.server.proxy tle.server.engines tle.server.rules
+            include tle.server.store tle.server.ratings tle.db
+        }
+        component tle.server "server-accounts" "the game server, accounts and email" {
+            include tle.server.auth tle.server.games tle.server.invitations tle.server.scheduler
+            include tle.server.adminApi tle.server.store tle.server.email tle.db resend
         }
         styles {
             element "Element" {
