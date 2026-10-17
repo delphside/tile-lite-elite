@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import repo
+from . import profile, repo
 from .model import classify
 from .sources import Snapshot
 from .turn import waiting_on_owner
@@ -67,7 +67,22 @@ READINGS = (
 # from. Not a target.
 MEASURED_AT = 55
 
-SUBJECT = re.compile(r"^app [\d.]+ api [\d.]+: (.*)$")
+
+
+def report_code(day: date) -> str:
+    """The code a weekly digest is filed under for the ISO week `day` falls in:
+    `<code>_<yyyy>_W<ww>`. A digest is programme-wide, so the code is the
+    programme file's (`records.weekly_digest_code`), not an application's."""
+    year, week, _ = day.isocalendar()
+    return f"{profile.programme_file().string('records.weekly_digest_code')}_{year}_W{week:02d}"
+
+
+def _subject_without_stamp(subject: str) -> str:
+    """The subject after the commit stamp (the technical profile's
+    `versions.stamp`, whose last group is the rest of the subject), or the whole
+    subject when it carries none."""
+    match = re.match(profile.technical().string("versions.stamp"), subject)
+    return match.group(match.lastindex) if match and match.lastindex else subject
 
 
 @dataclass
@@ -261,8 +276,7 @@ def build(open_snapshot: Snapshot, closed_snapshot: Snapshot | None,
         if "\x1f" not in line:
             continue
         sha, subject = line.split("\x1f", 1)
-        match = SUBJECT.match(subject)
-        d.landed.append((sha[:7], match.group(1) if match else subject))
+        d.landed.append((sha[:7], _subject_without_stamp(subject)))
 
     d.files_deleted = [f for f in repo._git(
         "log", "--diff-filter=D", "--name-only", "--format=", rev).split() if f]
@@ -373,7 +387,8 @@ def render(d: Digest, judgements: list[str] | None = None, notes: str = "") -> s
     # Grouped by week, owner 2026-09-27: raised, closed and open for this
     # week, then the same for last week. Markdown has one header row, so the
     # week names the first column of each group.
-    out.append("| type of change | this week: raised | closed | open | last week: raised | closed | open | use of Steve's time |")
+    out.append("| type of change | this week: raised | closed | open | last week: raised | closed | open "
+               f"| use of {profile.owner_name()}'s time |")
     out.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     known = {kind for kind, _ in READINGS}
     others = sorted((set(w.raised_by_type) | set(w.closed_by_type) | set(w.raised_before)

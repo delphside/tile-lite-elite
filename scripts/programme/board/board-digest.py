@@ -2,8 +2,8 @@
 """board-digest.py — D54's weekly digest.
 
     scripts/programme/board/board-digest.py                      # the last seven days, printed
-    scripts/programme/board/board-digest.py --since prod-0.8.0   # since a tag, sha or date
-    scripts/programme/board/board-digest.py --write              # <PROGRAMME_DIR>/records/2.4-weekly-digest/TLE_WD_<year>_W<week>.md
+    scripts/programme/board/board-digest.py --since <tag>        # since a tag, sha or date
+    scripts/programme/board/board-digest.py --write              # <PROGRAMME_DIR>/records/2.4-weekly-digest/PRG_WD_<year>_W<week>.md
 
 The brake's two measures, what landed, what was deleted, and anything decided
 that the owner might have decided differently. #382 asked for an issue comment
@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from board import records  # noqa: E402
-from board.digest import build, draft, notes_for_write, render  # noqa: E402
+from board.digest import build, draft, notes_for_write, render, report_code  # noqa: E402
 from board.sources import Unavailable, fetch     # noqa: E402
 
 
@@ -67,10 +67,9 @@ def main(argv=None) -> int:
     text = render(digest, args.decided)
 
     if args.write:
-        # Named for the ISO week it closes, like TLE_CP_2026_09 names its month.
+        # Named for the ISO week it closes, like a capacity plan names its month.
         today = date.today()
-        year, week, _ = today.isocalendar()
-        code = f"TLE_WD_{year}_W{week:02d}"
+        code = report_code(today)
         path = reports / f"{code}.md"
         notes = notes_for_write(path.read_text() if path.exists() else None)
         if notes is None:
@@ -82,8 +81,7 @@ def main(argv=None) -> int:
         heading, rest = text.split("\n", 1)
         path.write_text(f"{heading}\n\n`{code}`\n{rest}\n")
         # And next week's draft, for the notes (the programme's docs/1.4).
-        nyear, nweek, _ = (today + timedelta(days=7)).isocalendar()
-        ncode = f"TLE_WD_{nyear}_W{nweek:02d}"
+        ncode = report_code(today + timedelta(days=7))
         npath = reports / f"{ncode}.md"
         if not npath.exists():
             npath.write_text(draft(ncode, (today + timedelta(days=1)).isoformat()))

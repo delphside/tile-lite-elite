@@ -49,8 +49,9 @@ if [[ -z "$COMMITS" ]]; then
 fi
 
 # `app 1.2.3 api 4.5: something` — the subject after the colon must be
-# non-empty, so the stamp can't be the whole message.
-STAMP='^app ([0-9]+\.[0-9]+\.[0-9]+) api ([0-9]+\.[0-9]+): .+'
+# non-empty, so the stamp can't be the whole message. The pattern is the technical
+# profile's `versions.stamp`, the one the commit-msg hook uses too (#485).
+STAMP="$(python3 "$(dirname "$0")/programme/board/board-profile.py" get versions.stamp)" || exit 1
 
 failed=0
 checked=0

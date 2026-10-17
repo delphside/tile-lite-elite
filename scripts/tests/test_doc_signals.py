@@ -51,9 +51,16 @@ class DocSignals(Cases):
         self.expect("a number", True, result.stdout.strip().isdigit())
 
     def test_the_map_is_exempt(self):
-        names = {p.name for p in signals.documents()}
-        self.expect("the generated map", False, "4.1.6-document-map.md" in names)
-        self.expect("a numbered document", True, "4.3.3-testing-ci-and-release.md" in names)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            docs = Path(tmp) / "docs"
+            docs.mkdir()
+            for name in ("9.1.6-document-map.md", "9.3.3-testing.md", "4.3.3-another-range.md", "README.md"):
+                (docs / name).write_text("x\n")
+            names = {p.name for p in signals.documents(Path(tmp))}
+        self.expect("the generated map, which the technical profile names", False, "9.1.6-document-map.md" in names)
+        self.expect("a numbered document", True, "9.3.3-testing.md" in names)
+        self.expect("another application's range is not this one's", False, "4.3.3-another-range.md" in names)
 
 
 if __name__ == "__main__":

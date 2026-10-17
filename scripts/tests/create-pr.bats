@@ -6,6 +6,8 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   SCRIPT="$BATS_TEST_DIRNAME/../programme/board/create-pr.sh"
   export STUB_DIR="$BATS_TEST_TMPDIR"
   # gh stubbed for the one call this script makes, `pr create`. It records the
@@ -32,17 +34,17 @@ STUB
 
 created() { cat "$STUB_DIR/CREATED" 2>/dev/null || true; }
 
-@test "the reviewer defaults to SteveStyle, and the board is corrected after" {
+@test "the reviewer defaults to the programme file's owner, and the board is corrected after" {
   run "$SCRIPT" --base main --head x --title t --body-file /dev/null
   assert_success
-  assert_equal "$(grep -c -- '--reviewer SteveStyle' <<< "$(created)")" 1
+  assert_equal "$(grep -c -- '--reviewer fake-owner' <<< "$(created)")" 1
   assert [ -f "$STUB_DIR/SYNCED" ]
 }
 
 @test "an explicit --reviewer overrides the default, which is not also passed" {
   run "$SCRIPT" --base main --head x --title t --body-file /dev/null --reviewer other
   assert_equal "$(grep -c -- '--reviewer other' <<< "$(created)")" 1
-  assert_equal "$(grep -c -- '--reviewer SteveStyle' <<< "$(created)")" 0
+  assert_equal "$(grep -c -- '--reviewer fake-owner' <<< "$(created)")" 0
 }
 
 @test "a missing --base is a usage error, and nothing is created" {
@@ -64,4 +66,11 @@ created() { cat "$STUB_DIR/CREATED" 2>/dev/null || true; }
   refute_output --partial 'FAILED'
   refute_output --partial 'error'
   assert_output --partial 'run scripts/programme/board/board-pr-state.py'
+}
+
+@test "with no programme file there is no default reviewer, and nothing is created" {
+  PROGRAMME_CONFIG="$BATS_TEST_TMPDIR/nowhere.toml" run "$SCRIPT" --base main --head x --title t --body-file /dev/null
+  assert_equal "$status" 1
+  assert_output --partial "$BATS_TEST_TMPDIR/nowhere.toml"
+  assert_equal "$(created)" ""
 }

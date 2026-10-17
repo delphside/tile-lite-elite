@@ -14,6 +14,12 @@ set -euo pipefail
 # This checks the two things that can be known now: the shape of the subject,
 # and whether the versions claimed match the tree about to be committed.
 
+# What the stamp looks like, and where the versions it claims are read, are the
+# application's: its technical profile's `versions` table (#485), asked through
+# `board-profile.py` rather than held here.
+PROFILE="$(dirname "$0")/../scripts/programme/board/board-profile.py"
+HERE="$(git rev-parse --show-toplevel)"
+
 MSG_FILE="$1"
 SUBJECT="$(head -1 "$MSG_FILE")"
 
@@ -22,11 +28,14 @@ case "$SUBJECT" in
   "Merge "*|"Revert "*|fixup!*|squash!*) exit 0 ;;
 esac
 
-STAMP='^app ([0-9]+\.[0-9]+\.[0-9]+) api ([0-9]+\.[0-9]+): .+'
+# A profile that cannot be read refuses the commit and says why: a stamp
+# checked against nothing would pass everything.
+STAMP="$(python3 "$PROFILE" -C "$HERE" get versions.stamp)" || exit 1
+STAMP_FORM="$(python3 "$PROFILE" -C "$HERE" get versions.stamp_form)" || exit 1
 if [[ ! "$SUBJECT" =~ $STAMP ]]; then
   echo "commit refused: the subject does not carry the version stamp." >&2
   echo "  got:    $SUBJECT" >&2
-  echo "  wanted: app <X.Y.Z> api <M.N>: <subject>" >&2
+  echo "  wanted: $STAMP_FORM" >&2
   echo >&2
   echo "  The colon after the api version is part of it, and is the one" >&2
   echo "  people miss." >&2
@@ -35,17 +44,17 @@ fi
 
 CLAIMED_APP="${BASH_REMATCH[1]}"
 CLAIMED_API="${BASH_REMATCH[2]}"
-HERE="$(git rev-parse --show-toplevel)"
 
-ACTUAL_APP="$(grep -m1 '^version' "$HERE/Cargo.toml" 2>/dev/null | cut -d'"' -f2 || true)"
-ACTUAL_API="$("$HERE/scripts/read-api-version.sh" < "$HERE/crates/api/src/lib.rs" 2>/dev/null || true)"
+# Empty when the tree holds no such version, which skips that comparison.
+ACTUAL_APP="$(python3 "$PROFILE" -C "$HERE" version app)" || exit 1
+ACTUAL_API="$(python3 "$PROFILE" -C "$HERE" version api)" || exit 1
 
 if [[ -n "$ACTUAL_APP" && "$CLAIMED_APP" != "$ACTUAL_APP" ]]; then
-  echo "commit refused: subject says app $CLAIMED_APP, Cargo.toml says $ACTUAL_APP" >&2
+  echo "commit refused: subject says app $CLAIMED_APP, $(python3 "$PROFILE" -C "$HERE" get versions.app.file) says $ACTUAL_APP" >&2
   exit 1
 fi
 if [[ -n "$ACTUAL_API" && "$CLAIMED_API" != "$ACTUAL_API" ]]; then
-  echo "commit refused: subject says api $CLAIMED_API, API_VERSION is $ACTUAL_API" >&2
+  echo "commit refused: subject says api $CLAIMED_API, $(python3 "$PROFILE" -C "$HERE" get versions.api.file) says $ACTUAL_API" >&2
   exit 1
 fi
 

@@ -754,6 +754,12 @@ EOF
   exit 0
 fi
 
+# What ships is the technical profile's (#485). Several callers ask for it inside
+# command substitutions, where a profile error cannot stop the deploy, so it is
+# asked for once here, before anything is built or touched, and a profile that
+# cannot be read ends the deploy with its message.
+require_shipping_profile
+
 DEPLOY_ENV="${DEPLOY_ENV:-production}"
 DEPLOY_HOST="${DEPLOY_HOST:-129.151.69.246}"
 DEPLOY_USER="${DEPLOY_USER:-ubuntu}"

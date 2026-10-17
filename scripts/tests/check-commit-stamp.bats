@@ -8,6 +8,8 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   CHECK="$BATS_TEST_DIRNAME/../check-commit-stamp.sh"
   # A scratch repository carrying the two files the stamp is checked against.
   R="$BATS_TEST_TMPDIR/repo"
@@ -118,4 +120,18 @@ merge_side() {
   commit_at 0.4.25 2.10 "app 0.4.25 api 2.10: only commit"
   stamp_check HEAD..HEAD
   assert_success
+}
+
+@test "the stamp is the technical profile's, the same one the commit-msg hook reads" {
+  commit_at 0.4.25 2.10 "app 0.4.25 api 2.10: a stamp true of its tree"
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" stamp_check
+  assert_equal "$status" 1
+  assert_output --partial "subject doesn't start with the version stamp"
+}
+
+@test "a profile that cannot be read fails the check rather than passing everything" {
+  commit_at 0.4.25 2.10 "app 0.4.25 api 2.10: a subject"
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/nowhere.toml" stamp_check
+  assert_equal "$status" 1
+  assert_output --partial "$BATS_TEST_TMPDIR/nowhere.toml"
 }

@@ -3,6 +3,7 @@
 
     scripts/programme/board/board-records.py live       # the live checkout, for records
     scripts/programme/board/board-records.py generic    # the pinned submodule
+    scripts/programme/board/board-records.py change-documents  # this application's change documents, in the live checkout
     scripts/programme/board/board-records.py check      # one line if the live checkout needs attention
 
 One definition of the default and the override (`records.py`), asked rather
@@ -33,6 +34,8 @@ def main(argv=None) -> int:
             print(line)
     elif args == ["generic"]:
         print(records.generic())
+    elif args == ["change-documents"]:
+        print(records.change_documents())
     else:
         print(__doc__, file=sys.stderr)
         return 2

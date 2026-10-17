@@ -1,13 +1,13 @@
 """Where the programme's files are read from and written to (#485 T4).
 
 From the design, not the code: generic documents come from the pinned
-submodule, records from the live checkout (`PROGRAMME_DIR`, default
-`<repo>/../programme`), and a script that needs the live checkout and does not
+submodule, records from the live checkout (`PROGRAMME_DIR`, default the programme
+file's `programme.live_default` beside the main worktree), and a script that needs the live checkout and does not
 find it says where it looked and exits non-zero -- it never falls back to the
 pinned copy, which would read an old record and write a new one nowhere.
 
 Each case runs the command as a caller would, with a temporary directory as
-`PROGRAMME_DIR`.
+`PROGRAMME_DIR`. The profiles are the fakes (`board.tests.profiles`).
 """
 
 import os
@@ -16,9 +16,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from board import records
+from board import profile, records
 from board.tests.cases import Cases
 from board.tests.cli import run
+from board.tests.profiles import APPLICATION, install_profile
 
 REGISTER = """\
 | id | activity | frequency (days) | owner | produces | ITIL practice |
@@ -62,11 +63,11 @@ class TheDefaultFromAWorktree(Cases):
 
     def test_a_linked_worktree_finds_the_checkout_beside_the_main_worktree(self):
         main = make_repo(self.top / "repo")
-        (self.top / "programme").mkdir()
+        (self.top / "fake-programme").mkdir()
         wt = main / ".claude" / "worktrees" / "agent-1"
         git(main, "worktree", "add", "-q", str(wt), "-b", "work")
-        self.expect("same as from the main checkout", self.top / "programme", records.live(main))
-        self.expect("and from the worktree under it", self.top / "programme", records.live(wt))
+        self.expect("same as from the main checkout", self.top / "fake-programme", records.live(main))
+        self.expect("and from the worktree under it", self.top / "fake-programme", records.live(wt))
 
     def test_the_variable_still_overrides_in_a_worktree(self):
         main = make_repo(self.top / "repo")
@@ -86,6 +87,9 @@ class TheStartOfSessionCheck(Cases):
         self.addCleanup(self._dir.cleanup)
         self.top = Path(self._dir.name).resolve()
         self.origin = make_repo(self.top / "origin")
+        install_profile(self.origin)
+        git(self.origin, "add", "-A")
+        git(self.origin, "commit", "-q", "-m", "profile")
         subprocess.run(["git", "clone", "-q", str(self.origin), str(self.top / "programme")],
                        check=True, capture_output=True)
         self.live = self.top / "programme"
@@ -111,6 +115,14 @@ class TheStartOfSessionCheck(Cases):
         self.expect("one line", 1, len(result.stdout.strip().splitlines()))
         self.expect("names the path", True, str(gone) in result.stdout)
         self.expect("says missing", True, "missing" in result.stdout)
+
+    def test_a_missing_programme_file_is_said_in_one_line_and_does_not_fail(self):
+        gone = self.top / "no-such.toml"
+        result = run("programme/board/board-records.py", "check",
+                     env=env(PROGRAMME_DIR=str(self.live), PROGRAMME_CONFIG=str(gone)))
+        self.expect("never fails the session", 0, result.returncode)
+        self.expect("one line", 1, len(result.stdout.strip().splitlines()))
+        self.expect("names the file", True, str(gone) in result.stdout)
 
     def test_a_branch_at_origin_main_says_nothing(self):
         # Cloud sessions put every repository on a session branch.
@@ -163,8 +175,9 @@ class TheLiveCheckout(Cases):
     def setUp(self):
         self._dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._dir.cleanup)
-        self.live = Path(self._dir.name) / "programme"
+        self.live = Path(self._dir.name) / "fake-programme"
         self.live.mkdir()
+        install_profile(self.live)
         self.missing = Path(self._dir.name) / "not-cloned"
 
     def test_the_helper_finds_it_by_the_variable(self):
@@ -175,21 +188,24 @@ class TheLiveCheckout(Cases):
         self.expect("the live checkout is the variable's", self.live, records.live())
         self.expect("the log is a record, in it", self.live / "records" / "2.3-activity-log.csv",
                     records.activity_log())
-        self.expect("this application's capacity plan",
-                    self.live / "applications" / "tile-lite-elite" / "3.1.3-capacity-plan",
+        self.expect("this application's capacity plan, by the path its programme profile gives",
+                    self.live / "applications" / APPLICATION / "3.6.3-capacity-plan",
                     records.capacity_plan())
+        self.expect("and its change documents",
+                    self.live / "applications" / APPLICATION / "3.6.7-changes",
+                    records.change_documents())
         self.expect("the register is generic, from the pinned submodule, not the live checkout",
-                    records.ROOT / "programme" / "docs" / "1.4-programme-activities.md",
+                    profile.app_root() / "programme" / "docs" / "1.4-programme-activities.md",
                     records.activity_register())
 
     def test_the_default_is_beside_the_repository(self):
         old = os.environ.pop("PROGRAMME_DIR", None)
         if old is not None:
             self.addCleanup(os.environ.__setitem__, "PROGRAMME_DIR", old)
-        self.expect("one constant", "../programme", records.DEFAULT_PROGRAMME_DIR)
-        beside = Path(self._dir.name) / "repo"
-        (Path(self._dir.name) / "programme").mkdir(exist_ok=True)
-        self.expect("<repo>/../programme", Path(self._dir.name) / "programme", records.live(beside))
+        beside = make_repo(Path(self._dir.name) / "repo")
+        (Path(self._dir.name) / "fake-programme").mkdir(exist_ok=True)
+        self.expect("the programme file's default, beside the repository",
+                    Path(self._dir.name) / "fake-programme", records.live(beside))
 
     def test_missing_says_where_it_looked_and_exits_non_zero(self):
         result = run("programme/board/board-records.py", "live", env=env(PROGRAMME_DIR=str(self.missing)))
@@ -197,11 +213,29 @@ class TheLiveCheckout(Cases):
         self.expect("names the path it tried", True, str(self.missing) in result.stderr)
         self.expect("prints nothing a caller could take for a path", "", result.stdout)
 
+    def test_missing_names_the_programme_repository_the_programme_file_names(self):
+        result = run("programme/board/board-records.py", "live", env=env(PROGRAMME_DIR=str(self.missing)))
+        self.expect("clone it from there", True, "clone fakeorg/fake-programme there" in result.stderr)
+
+    def test_the_change_documents_are_asked_by_a_command_for_shell_scripts(self):
+        result = run("programme/board/board-records.py", "change-documents", env=env(PROGRAMME_DIR=str(self.live)))
+        self.expect("exit", 0, result.returncode)
+        self.expect("the path its programme profile gives", str(self.live / "applications" / APPLICATION / "3.6.7-changes"),
+                    result.stdout.strip())
+
+    def test_without_the_applications_profile_there_are_no_records_to_name(self):
+        bare = Path(self._dir.name) / "bare-live"
+        bare.mkdir()
+        result = run("programme/board/board-records.py", "change-documents", env=env(PROGRAMME_DIR=str(bare)))
+        self.expect("non-zero", True, result.returncode != 0)
+        self.expect("says what is missing", True, "programme profile" in result.stderr)
+        self.expect("prints nothing a caller could take for a path", "", result.stdout)
+
     def test_the_command_prints_the_path_for_shell_scripts(self):
         result = run("programme/board/board-records.py", "live", env=env(PROGRAMME_DIR=str(self.live)))
         self.expect("exit", 0, result.returncode)
         self.expect("the path", str(self.live), result.stdout.strip())
-        self.expect("generic is the submodule", str(records.ROOT / "programme"),
+        self.expect("generic is the submodule", str(profile.app_root() / "programme"),
                     run("programme/board/board-records.py", "generic").stdout.strip())
 
     def test_the_activity_log_is_read_from_the_live_checkout(self):
@@ -229,7 +263,7 @@ class TheLiveCheckout(Cases):
         self.expect("names the path", True, str(self.missing) in result.stderr)
 
     def test_the_capacity_charts_are_written_to_the_live_checkout(self):
-        plan = self.live / "applications" / "tile-lite-elite" / "3.1.3-capacity-plan"
+        plan = self.live / "applications" / APPLICATION / "3.6.3-capacity-plan"
         plan.mkdir(parents=True)
         (plan / "measurements.csv").write_text(MEASUREMENTS)
         result = run("programme/reports/capacity-chart.py", "--write", env=env(PROGRAMME_DIR=str(self.live)))

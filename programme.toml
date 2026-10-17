@@ -1,0 +1,142 @@
+# Tile Lite Elite's technical profile: the facts about this repository that the
+# programme's tooling asks for (scripts/programme/board/profile.py,
+# delphside/tile-lite-elite#485 stage 2). It changes on a project's branch with
+# the code it describes. What the programme's processes need to know about the
+# application (name, repository, environments' purposes, routes) is its
+# programme profile, 3.1.6 in the programme repository; this file says how to
+# reach it. Paths are relative to this file's folder.
+
+# The application's folder in the programme repository's `applications/`.
+application = "tile-lite-elite"
+
+[versions]
+# The subject of every commit starts with this stamp. Group 1 is the app
+# version, group 2 the api version, group 3 the rest of the subject.
+stamp = '^app ([0-9]+\.[0-9]+\.[0-9]+) api ([0-9]+\.[0-9]+): (.+)'
+# The stamp as a message shows it.
+stamp_form = "app <X.Y.Z> api <M.N>: <subject>"
+
+[versions.app]
+# The first line of `file` matching `pattern` holds the app version (group 1).
+file = "Cargo.toml"
+pattern = '^version\s*=\s*"([^"]+)"'
+
+[versions.api]
+# `command` reads `file` on stdin and prints the api version, `M.N`.
+file = "crates/api/src/lib.rs"
+command = "scripts/read-api-version.sh"
+
+[versions.bump]
+# A change is a version bump only when it touches `required` and optionally the
+# rest of `files`, and every changed line matches `line`.
+files = ["Cargo.toml", "Cargo.lock"]
+required = ["Cargo.toml"]
+line = '^[-+]version = "[0-9]+\.[0-9]+\.[0-9]+"$'
+
+[versions.deployed]
+# A running environment reports its version, `X.Y.Z+<sha>`, at `path` in `field`.
+path = "/health"
+field = "app_version"
+
+[ships]
+# What does NOT reach the image; every other path does. Regular expressions,
+# each matched from the start of the path.
+non_shipping = [
+  'docs/',
+  'scripts/',
+  'e2e/',
+  '\.github/',
+  '\.githooks/',
+  '\.claude/',
+  '\.cargo/audit\.toml$',
+  'crates/[^/]+/(examples|tests|benches)/',
+  'LICENSE',
+  '\.gitignore$',
+  '\.markdownlint',
+  '.*\.md$',
+  # the programme submodule (#485): the Dockerfile copies named folders, never this one
+  '\.gitmodules$',
+  'programme$',
+  'programme/',
+  # this file: the Dockerfile copies named files and folders, never this one
+  'programme\.toml$',
+]
+
+[environments.preview]
+# A variable that overrides, in order, then the default.
+env = ["PREVIEW_URL", "STAGING_URL"]
+url = "http://localhost:8081"
+
+[environments.rehearsal]
+env = ["REHEARSAL_URL"]
+# The script is sourced in a subshell and `url_variable` read from it.
+url_from = "scripts/rehearsal-target.sh"
+url_variable = "TARGET_URL"
+
+[environments.production]
+env = ["PROD_URL"]
+
+[release]
+# A release is tagged `<tag_prefix><X.Y.Z>`.
+tag_prefix = "prod-"
+# What a deploy announces on an issue: a comment starting with `announcement`,
+# or with `deploy_marker`.
+announcement = "Released in prod-"
+deploy_marker = "[deploy.sh]"
+# Prints why CI is red on main and exits non-zero, or exits 0.
+ci_status = "scripts/ci-status.sh --run push:main"
+
+[documents]
+# Generated from the code or the board: neither the programme's nor the
+# application's to edit by hand.
+generated = ["docs/4.1.5-work-in-progress.md", "docs/4.1.6-document-map.md"]
+# The document map, and the roadmap document the diagram is written into.
+map = "docs/4.1.6-document-map.md"
+roadmap = "docs/4.1.5-work-in-progress.md"
+# The application's register of tooling: a new script or skill must be named in
+# it or in the programme's (`programme_documents.tools_register`).
+tools_registers = ["docs/4.3.0-tools.md"]
+# The line in a reference document that gives the commit it was last read whole at.
+review_stamp = 'Reviewed whole at `([0-9a-f]+)`'
+# The programme's documents that live here besides the programme's own
+# (`programme_documents` in the programme file), which change on main: exact
+# paths, then prefixes.
+programme_exact = ["docs/diagrams/roadmap.svg"]  # generated from the roadmap
+programme_prefixes = ["docs/4.1.4-"]
+# Documents outside docs/ that describe the application.
+application_outside_docs = ["README.md"]
+# Change documents already in the flat folder, which stay (GitHub does not follow a rename).
+grandfathered_changes = [
+  "README.md",
+  "0.6.0-user-testing.md",
+  "25-rate-limiting-test-design.md",
+  "41-user-deletion-test-design.md",
+]
+# What the markdown linter skips, besides the programme's own folders.
+lint_ignore = ["#target", "#**/node_modules", "#old-crates", "#pipeline.md"]
+
+[source]
+# Where the source is, for the reviewers (`git log <stamp>..HEAD -- <globs>`).
+globs = ["crates/"]
+# What the test designer must not read.
+implementation = ["crates/*/src/"]
+
+[[hooks.pre_commit]]
+# Run when a staged path matches `staged`, `requires_file` exists and
+# `requires_command` is installed; a non-zero exit refuses the commit.
+name = "rustfmt"
+staged = '\.rs$'
+requires_file = "Cargo.toml"
+requires_command = "cargo"
+command = "cargo fmt --all -- --check"
+refusal = "rustfmt would change staged Rust."
+fix = "Run 'cargo fmt --all' and stage the result. CI denies this, so the alternative is a red build and a release gate that refuses the commit."
+
+[[hooks.check_docs]]
+# The application's own documentation checks, run by check-docs.sh in order.
+name = "API errors"
+command = "scripts/programme/docs/check-api-errors.py"
+
+[[hooks.check_docs]]
+name = "script log events"
+command = "scripts/programme/docs/check-run-log-events.py"

@@ -1,0 +1,27 @@
+# A fake programme file, for the tests: not the programme's.
+[organisation]
+login = "fakeorg"
+
+[board]
+project_id = "PVT_fakeboard"
+
+[accounts]
+owner = "fake-owner"
+machine_user = "fake-owner-claude"
+bot = "fake-bot"
+owner_name = "Pat"
+
+[programme]
+repository = "fakeorg/fake-programme"
+live_default = "../fake-programme"
+submodule = "programme"
+
+[records]
+activity_register = "docs/1.4-programme-activities.md"
+activity_log = "records/2.3-activity-log.csv"
+weekly_digest = "records/2.4-weekly-digest"
+weekly_digest_code = "FAKE_WD"
+
+[programme_documents]
+exact = ["CLAUDE.md", "AGENTS.md", "docs/README.md"]
+tools_register = "docs/1.1-programme-tooling.md"

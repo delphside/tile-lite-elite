@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from . import refs
+from . import profile, refs
 
 # **`Refs #N` does not imply anything specific; `Closes #N` does.** Owner,
 # 2026-09-18. The convention (CLAUDE.md, docs/4.3.3 §393, the programme's docs/1.2 §1132) is that
@@ -48,6 +48,15 @@ from . import refs
 # case #375 exists for. The second is worse: a prose `closes` read as a
 # *closing* trailer, the strongest evidence `state_of` has, so a sentence
 # about a question in #311 was the reason #311 read as closed by a commit.
+
+
+def _tag_prefix() -> str:
+    """Releases are tagged `<prefix><version>`; the prefix is the technical profile's."""
+    return profile.technical().string("release.tag_prefix")
+
+
+def _bump_files() -> list[str]:
+    return profile.technical().strings("versions.bump.files")
 
 
 def _git(*args: str) -> str:
@@ -83,7 +92,7 @@ class Commits:
     last_tag: str | None = None
 
     def shipped_milestones(self) -> frozenset[str]:
-        """Milestones a `prod-*` tag exists for, so they are demonstrably out.
+        """Milestones a release tag (`release.tag_prefix`) exists for, so they are demonstrably out.
 
         docs/4.3.3: *"`Closes #N` fires when the commit reaches the default
         branch — written, not shipped. So commits say `Refs #N`, and the
@@ -91,8 +100,9 @@ class Commits:
         That makes the milestone, not the commit, the delivery evidence for
         anything taking the release route.
         """
-        tags = {t.removeprefix("prod-") for t in
-                _git("tag", "--list", "prod-*").split() if t}
+        prefix = _tag_prefix()
+        tags = {t.removeprefix(prefix) for t in
+                _git("tag", "--list", f"{prefix}*").split() if t}
         return frozenset(tags)
 
     def state_of(self, number: int, live_at_merge: bool,
@@ -140,14 +150,14 @@ class Commits:
 
 
 def last_release_at() -> float | None:
-    """When the most recent `prod-*` tag was created, as a unix time.
+    """When the most recent release tag was created, as a unix time.
 
     The clock a shipped-but-still-open project is measured against: a project
     that shipped and was still open when the *next* release went out has been
     overtaken, whatever its phase says.
     """
     out = _git("for-each-ref", "--sort=-creatordate",
-               "--format=%(creatordate:unix)", "refs/tags/prod-*")
+               "--format=%(creatordate:unix)", f"refs/tags/{_tag_prefix()}*")
     first = out.split("\n")[0].strip() if out else ""
     try:
         return float(first)
@@ -230,17 +240,17 @@ def changed_paths(sha: str) -> list[str]:
 
 
 def version_lines(sha: str) -> list[str]:
-    """One commit's changed lines in `Cargo.toml` and `Cargo.lock`, `+`/`-` only."""
-    return [line for line in _git("show", "-U0", "--format=", sha, "--", "Cargo.toml",
-                                  "Cargo.lock").splitlines()
+    """One commit's changed lines in the version files (`versions.bump.files`), `+`/`-` only."""
+    return [line for line in _git("show", "-U0", "--format=", sha, "--",
+                                  *_bump_files()).splitlines()
             if line[:1] in "+-" and not line.startswith(("+++", "---"))]
 
 
 def staged() -> tuple[list[str], list[str]]:
-    """The staged paths, and the staged changed lines in `Cargo.toml`/`Cargo.lock`."""
+    """The staged paths, and the staged changed lines in the version files."""
     files = [p for p in _git("diff", "--cached", "--name-only").splitlines() if p.strip()]
-    lines = [line for line in _git("diff", "--cached", "-U0", "--", "Cargo.toml",
-                                   "Cargo.lock").splitlines()
+    lines = [line for line in _git("diff", "--cached", "-U0", "--",
+                                   *_bump_files()).splitlines()
              if line[:1] in "+-" and not line.startswith(("+++", "---"))]
     return files, lines
 
@@ -287,7 +297,8 @@ def mentions_on(ref: str = "origin/main") -> Scope:
 def commits(main: str = "origin/main") -> Commits:
     got = Commits()
 
-    tags = [t for t in _git("tag", "--list", "prod-*", "--sort=-creatordate").split() if t]
+    tags = [t for t in _git("tag", "--list", f"{_tag_prefix()}*",
+                            "--sort=-creatordate").split() if t]
     got.last_tag = tags[0] if tags else None
 
     got.off_main = _scope(["--all", f"^{main}"], notes_count=False)
@@ -386,7 +397,8 @@ def running_on(version: str | None, main: str = "origin/main") -> RunningOn | No
 def ci_red_on_main() -> str | None:
     """The `push:main` run's conclusion, if it concluded and failed.
 
-    Delegates to `ci-status.sh` rather than asking GitHub again: that script
+    Delegates to the technical profile's `release.ci_status` command (Tile Lite
+    Elite's `ci-status.sh`) rather than asking GitHub again: that script
     is already the release gate `deploy.sh` trusts, and a second opinion about
     whether CI passed is exactly the duplication this model exists to remove.
 
@@ -394,11 +406,13 @@ def ci_red_on_main() -> str | None:
     has to appear before this says anything, because an absent answer must not
     read as a red one any more than as a green one.
     """
-    script = Path(__file__).resolve().parents[2] / "ci-status.sh"
+    root = profile.app_root()
+    command = shlex.split(profile.technical(root).string("release.ci_status"))
+    script = root / command[0]
     if not script.exists():
         return None
     try:
-        out = subprocess.run([str(script), "--run", "push:main"],
+        out = subprocess.run([str(script), *command[1:]], cwd=root,
                              capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -414,13 +428,16 @@ def ci_red_on_main() -> str | None:
 
 
 def live_version(url: str, timeout: float = 5.0) -> str | None:
-    """`app_version` from `/health`, or None if the environment did not answer.
+    """The version an environment reports (`versions.deployed`: its `/health` and
+    `app_version`), or None if it did not answer.
 
     None means *did not answer*, never *not deployed*: an unreachable host and
     an empty one are different facts and the report must not merge them.
     """
+    spec = profile.technical()
+    path, field_name = spec.string("versions.deployed.path"), spec.string("versions.deployed.field")
     try:
-        with urllib.request.urlopen(f"{url}/health", timeout=timeout) as response:
-            return (json.loads(response.read().decode()) or {}).get("app_version")
+        with urllib.request.urlopen(f"{url}{path}", timeout=timeout) as response:
+            return (json.loads(response.read().decode()) or {}).get(field_name)
     except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
         return None

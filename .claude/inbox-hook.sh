@@ -192,8 +192,11 @@ REPORTS="$(printf '%s\n' "$RAW" | sed -n '/^REPORTS FROM THE SCHEDULED WORKFLOWS
 # `...N earlier` line are not findings, so a quiet board adds nothing.
 OPEN="$(grep -E '^(#[0-9]+|  > |\.\.\.[0-9]+ earlier)' "$TMP/open" 2>/dev/null || true)"
 
+# How the owner is named is the programme file's; a hook must not fail.
+OWNER_NAME="$(python3 ./scripts/programme/board/board-profile.py get accounts.owner_name 2>/dev/null)" || OWNER_NAME="the owner"
+
 EXTRA=""
-[[ -n "$OPEN" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: comments from Steve not yet answered, of any age (./scripts/programme/board/board-inbox.py --open --all):"$'\n'"$OPEN"
+[[ -n "$OPEN" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: comments from $OWNER_NAME not yet answered, of any age (./scripts/programme/board/board-inbox.py --open --all):"$'\n'"$OPEN"
 [[ -n "$REPORTS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to read: reports from the scheduled workflows, opened, updated or closed (./scripts/programme/board/board-inbox.py):"$'\n'"$REPORTS"
 [[ -n "$ACTIONS" ]] && EXTRA="$EXTRA"$'\n\n'"Waiting on Claude: actions on the board (./scripts/programme/board/board-actions.py --claude for the detail):"$'\n'"$ACTIONS"
 [[ -n "$TRANS" ]] && EXTRA="$EXTRA"$'\n\n'"For Claude to fix: incomplete for their type and step (./scripts/programme/board/board-check.py):"$'\n'"$TRANS"

@@ -36,12 +36,16 @@ KIND="${N%% *}"; N="${N##* }"
 OPEN="$(timeout 20 "$INBOX" --open --issue "$N" --no-colour 2>/dev/null | grep -E '^  > ')" || exit 0
 [[ -n "$OPEN" ]] || exit 0
 
+# How the owner is named is the programme file's (`accounts.owner_name`); a hook
+# must not fail, so an unreadable file says "the owner".
+NAME="$(python3 ./scripts/programme/board/board-profile.py get accounts.owner_name 2>/dev/null)" || NAME="the owner"
+
 python3 -c '
 import sys, json
-n, text = sys.argv[1], sys.argv[2]
+n, text, name = sys.argv[1], sys.argv[2], sys.argv[3]
 print(json.dumps({"hookSpecificOutput": {
     "hookEventName": "PreToolUse",
-    "additionalContext": f"#{n} has comments from Steve that no comment of yours has answered. Make sure this one answers them, or say why not:\n{text}",
+    "additionalContext": f"#{n} has comments from {name} that no comment of yours has answered. Make sure this one answers them, or say why not:\n{text}",
 }}))
-' "$N" "$OPEN" 2>/dev/null
+' "$N" "$OPEN" "$NAME" 2>/dev/null
 exit 0

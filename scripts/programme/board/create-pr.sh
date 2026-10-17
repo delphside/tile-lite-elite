@@ -20,7 +20,8 @@ set -euo pipefail
 #   scripts/programme/board/create-pr.sh --base main --head <branch> \
 #     --title "..." --body-file /path/to/body.md
 #
-# `--reviewer` defaults to `SteveStyle`, never `stephenmor` — `programme/applications/tile-lite-elite/3.1.2-artefacts.md`
+# `--reviewer` defaults to the owner's account (`accounts.owner` in the programme
+# file), never his personal one — the application's artefact register (`3.n.2`)
 # names that trap: `gh pr create --reviewer` accepts a login it cannot use,
 # prints the failure on stderr, and creates the pull request anyway,
 # requesting nobody. Passing `--reviewer` explicitly overrides the default.
@@ -38,7 +39,8 @@ usage: create-pr.sh --base <branch> --head <branch> --title <title>
 
 Wraps `gh pr create` and corrects the board's PR State afterward, which
 creation otherwise leaves unset until something else happens to run
-board-pr-state.py. --reviewer defaults to SteveStyle.
+board-pr-state.py. --reviewer defaults to the owner's account, the
+programme file's accounts.owner.
 
 Any additional arguments are passed through to `gh pr create` unchanged.
 
@@ -49,7 +51,7 @@ USAGE
 fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REVIEWER="SteveStyle"
+REVIEWER=""
 ARGS=()
 BASE="" HEAD="" TITLE="" BODY_FILE=""
 
@@ -67,6 +69,11 @@ done
 if [[ -z "$BASE" || -z "$HEAD" || -z "$TITLE" || -z "$BODY_FILE" ]]; then
   echo "usage: create-pr.sh --base <branch> --head <branch> --title <title> --body-file <path> [--reviewer <login>]" >&2
   exit 2
+fi
+
+# The owner's account is the programme file's, asked rather than held here.
+if [[ -z "$REVIEWER" ]]; then
+  REVIEWER="$(python3 "$HERE/board-profile.py" get accounts.owner)" || exit 1
 fi
 
 echo "==> Opening pull request: $HEAD -> $BASE"

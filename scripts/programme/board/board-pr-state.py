@@ -35,7 +35,7 @@ Warns without failing (the run continues, exit unaffected) when:
 
 Exit 0 from --check when the board agrees with GitHub, and from the plain form
 once it has added and corrected what it found. PR_REVIEWER names the login the
-requests-nobody hint suggests (default SteveStyle).
+requests-nobody hint suggests (default: the programme file's `accounts.owner`).
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from board import pr_sync  # noqa: E402
+from board import pr_sync, profile  # noqa: E402
 from board.model import PR_STATE  # noqa: E402
 from board.sources import (Unavailable, add_to_project,  # noqa: E402
                            board_pull_requests, project_field_options,
@@ -67,7 +67,7 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 0
     checking = "--check" in argv
-    reviewer = os.environ.get("PR_REVIEWER") or "SteveStyle"
+    reviewer = os.environ.get("PR_REVIEWER") or profile.programme_file().string("accounts.owner")
     try:
         project_field_options(PR_STATE)
     except Unavailable:

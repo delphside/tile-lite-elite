@@ -6,12 +6,17 @@
     board-shipping.py paths < path-list      # print the paths, of those given, that reach it
     board-shipping.py ships <sha>            # exit 0 if it reaches the image and is more than a version bump
     board-shipping.py version-bump --staged  # exit 0 if what is staged is only the app version moving
+    board-shipping.py check                  # exit 0 if the profile holds what the others read
     board-shipping.py -C <dir> ...           # against the repository at <dir>
 
 The rule is `scripts/programme/board/shipping.py`'s. This is the command the bash tooling
 calls instead of keeping a copy of it: `shipping-paths.sh`'s functions, the
 pre-commit hook, `deploy.sh`, `verify.sh` and CI (#421). An unknown commit
 changed nothing, so it answers 1.
+
+**Exit 70 is not an answer**: the technical profile, which holds what ships, is
+missing or lacks a key (`profile.EXIT_PROFILE_ERROR`). A caller that branches on
+0 against anything else must stop on it, never read it as "no".
 """
 
 from __future__ import annotations
@@ -43,6 +48,10 @@ def main(argv: list[str]) -> int:
         return 0 if shipping.ships(changed_paths(args[0]), version_lines(args[0])) else 1
     if cmd == "version-bump" and args == ["--staged"]:
         return 0 if shipping.version_bump_only(*staged()) else 1
+    if cmd == "check" and not args:
+        shipping.reaches_image("")
+        shipping.version_bump_only([], [])
+        return 0
     if cmd == "paths" and not args:
         for path in shipping.image_paths(line.strip() for line in sys.stdin):
             print(path)

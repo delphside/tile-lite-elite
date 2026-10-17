@@ -35,7 +35,8 @@ from board.context import (family, family_root, fields_visible,  # noqa: E402
                            headers, missing_members, needs_writing,
                            wanted_titles, with_header)
 from board.model import classify  # noqa: E402
-from board.sources import (REPO, OWNER, Unavailable, fetch,  # noqa: E402
+from board import profile  # noqa: E402
+from board.sources import (Unavailable, fetch,  # noqa: E402
                            issues_by_number, issues_in_full)
 
 
@@ -100,7 +101,7 @@ def main(argv=None) -> int:
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
             f.write(body)
         # `--body-file`, never `--body`: the shell would evaluate backticks.
-        out = subprocess.run(["gh", "issue", "edit", str(n), "-R", f"{OWNER}/{REPO}",
+        out = subprocess.run(["gh", "issue", "edit", str(n), "-R", "/".join(profile.repository()),
                               "--body-file", f.name], capture_output=True, text=True)
         Path(f.name).unlink(missing_ok=True)
         if out.returncode != 0:

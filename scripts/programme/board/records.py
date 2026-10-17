@@ -16,27 +16,28 @@ for different things:
   looked; it never falls back to the pinned copy, which would read an old
   record and write a new one nowhere.
 
-Stage 2 of #485 moves the default into an application profile; until then it is
-`DEFAULT_PROGRAMME_DIR` below, and `PROGRAMME_DIR` overrides it (CI, tests).
-Shell scripts ask `board-records.py live` rather than repeat the default.
+The default location, this application's folder and the paths below come from
+the profiles (`profile.py`, #485 stage 2): the programme file holds the default
+and the registers' paths, the technical profile names the application's folder
+and its programme profile its records. `PROGRAMME_DIR` overrides the location
+(CI, tests). Shell scripts ask `board-records.py live` rather than repeat it.
 """
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+from . import profile
 
-# **The one constant.** Relative to the *main worktree's* root, so a script run
-# from a linked worktree (`.claude/worktrees/...`) finds the same live checkout
-# as one run from the main checkout; `PROGRAMME_DIR` replaces it.
-DEFAULT_PROGRAMME_DIR = "../programme"
+# The default (the programme file's `programme.live_default`) is relative to
+# the *main worktree's* root, so a script run from a linked worktree
+# (`.claude/worktrees/...`) finds the same live checkout as one run from the
+# main checkout; `PROGRAMME_DIR` replaces it.
 ENV = "PROGRAMME_DIR"
-
-# This application's folder in the programme repository.
-APPLICATION = "tile-lite-elite"
 
 
 class NoLiveCheckout(SystemExit):
@@ -45,14 +46,16 @@ class NoLiveCheckout(SystemExit):
     def __init__(self, tried: Path):
         super().__init__(
             f"cannot find the programme repository's live checkout at {tried}: "
-            f"clone delphside/programme there, or set {ENV} to where it is "
+            f"clone {profile.programme_file().string('programme.repository')} there, "
+            f"or set {ENV} to where it is "
             f"(the pinned copy in programme/ holds no current records, so it is not used)")
         self.tried = tried
 
 
 def generic(root: Path | None = None) -> Path:
     """The pinned submodule: generic documents, read-only."""
-    return (root or ROOT) / "programme"
+    root = root or profile.app_root()
+    return root / profile.programme_file(root).string("programme.submodule")
 
 
 def main_worktree(root: Path) -> Path:
@@ -73,9 +76,12 @@ def main_worktree(root: Path) -> Path:
 
 def live(root: Path | None = None) -> Path:
     """The live checkout, for records. Exits non-zero with the path it tried."""
-    base = main_worktree(root or ROOT)
+    root = root or profile.app_root()
     given = os.environ.get(ENV)
-    path = Path(given) if given else (base / DEFAULT_PROGRAMME_DIR)
+    if given:
+        path = Path(given)
+    else:
+        path = main_worktree(root) / profile.programme_file(root).string("programme.live_default")
     path = Path(os.path.normpath(path if path.is_absolute() else Path.cwd() / path))
     if not path.is_dir():
         raise NoLiveCheckout(path)
@@ -83,28 +89,37 @@ def live(root: Path | None = None) -> Path:
 
 
 def application(root: Path | None = None) -> Path:
-    """This application's records: `<live>/applications/tile-lite-elite`."""
-    return live(root) / "applications" / APPLICATION
+    """This application's records: `<live>/applications/<its folder>`."""
+    return live(root) / "applications" / profile.application_folder(root)
 
 
 def activity_register() -> Path:
-    return generic() / "docs" / "1.4-programme-activities.md"
+    return generic() / profile.programme_file().string("records.activity_register")
 
 
 def activity_log() -> Path:
-    return live() / "records" / "2.3-activity-log.csv"
+    return live() / profile.programme_file().string("records.activity_log")
 
 
 def weekly_digests() -> Path:
-    return live() / "records" / "2.4-weekly-digest"
+    return live() / profile.programme_file().string("records.weekly_digest")
+
+
+def record(suffix: int) -> Path:
+    """One of this application's records, `3.n.<suffix>`, by the path its
+    programme profile gives."""
+    paths = profile.application_profile()["records"]
+    if str(suffix) not in paths:
+        raise profile.ProfileError(f"the programme profile has no record 3.n.{suffix}")
+    return application() / paths[str(suffix)]
 
 
 def capacity_plan() -> Path:
-    return application() / "3.1.3-capacity-plan"
+    return record(3)
 
 
 def change_documents() -> Path:
-    return application() / "3.1.7-changes"
+    return record(7)
 
 
 def _git(path: Path, *args: str) -> subprocess.CompletedProcess:
@@ -124,11 +139,28 @@ def problem(root: Path | None = None) -> str | None:
     it cannot tell when that ref is absent, because a fetch is a network call
     at the start of every session. It never changes the checkout.
     """
+    quiet = contextlib.redirect_stderr(io.StringIO())  # a ProfileError speaks when raised
     try:
-        path = live(root)
+        with quiet:
+            path = live(root)
     except NoLiveCheckout as gone:
+        try:
+            with quiet:
+                name = profile.programme_file(root).string("programme.repository")
+        except profile.ProfileError as bad:
+            return f"The programme's profiles cannot be read: {bad.message}"
         return (f"The programme's live checkout is missing at {gone.tried}: clone "
-                f"delphside/programme there, or set {ENV}; records cannot be read or written.")
+                f"{name} there, or set {ENV}; records cannot be read or written.")
+    except profile.ProfileError as bad:
+        return f"The programme's profiles cannot be read: {bad.message}"
+    # The three profiles the tooling reads, each present and holding what it is asked for.
+    try:
+        with quiet:
+            profile.programme_file(root)
+            profile.technical(root)
+            profile.application_profile(root)
+    except profile.ProfileError as bad:
+        return f"The programme's profiles cannot be read: {bad.message}"
     try:
         branch = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
         if branch.returncode != 0:

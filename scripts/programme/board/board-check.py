@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from board import profile                 # noqa: E402
 from board.report import render          # noqa: E402
 from board.branches import check as check_branches
 from board.branches import render as render_branches
@@ -47,14 +48,10 @@ from board.sources import (Unavailable, fetch, issues_by_number, issues_in_full,
                            remote_branches, step_ages)  # noqa: E402
 
 
-def _cargo_version() -> str | None:
-    """The version being built, which names the milestone under construction."""
-    try:
-        text = (Path(__file__).resolve().parents[3] / "Cargo.toml").read_text()
-    except OSError:
-        return None
-    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
-    return m.group(1) if m else None
+def _app_version() -> str | None:
+    """The version being built, which names the milestone under construction:
+    read where the technical profile's `versions.app` says."""
+    return profile.current_version("app")
 
 
 def main(argv=None) -> int:
@@ -122,7 +119,7 @@ def main(argv=None) -> int:
         # `check_approach`, which asked GitHub for the milestone's projects,
         # then each body, then each one's sub-issues to tell a parent from a
         # package -- all of it in the snapshot already.
-        version = _cargo_version()
+        version = _app_version()
         if version:
             promised = tests_outstanding(typed, version)
             text += "\n\n" + render_tests(promised, version)

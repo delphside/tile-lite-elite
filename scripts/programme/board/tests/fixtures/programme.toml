@@ -1,0 +1,96 @@
+# A fake application's technical profile, for the tests: not Tile Lite Elite's.
+# Its shape is the real one's; its values are not, so a test that passes has
+# read this file rather than a built-in value.
+application = "widget"
+
+[versions]
+stamp = '^app ([0-9]+\.[0-9]+\.[0-9]+) api ([0-9]+\.[0-9]+): (.+)'
+stamp_form = "app <X.Y.Z> api <M.N>: <subject>"
+
+[versions.app]
+file = "Cargo.toml"
+pattern = '^version\s*=\s*"([^"]+)"'
+
+[versions.api]
+file = "crates/api/src/lib.rs"
+command = "scripts/read-api-version.sh"
+
+[versions.bump]
+files = ["Cargo.toml", "Cargo.lock"]
+required = ["Cargo.toml"]
+line = '^[-+]version = "[0-9]+\.[0-9]+\.[0-9]+"$'
+
+[versions.deployed]
+path = "/health"
+field = "app_version"
+
+[ships]
+non_shipping = [
+  'docs/',
+  'scripts/',
+  'e2e/',
+  '\.github/',
+  '\.githooks/',
+  '\.claude/',
+  '\.cargo/audit\.toml$',
+  'crates/[^/]+/(examples|tests|benches)/',
+  'LICENSE',
+  '\.gitignore$',
+  '\.markdownlint',
+  '.*\.md$',
+  '\.gitmodules$',
+  'programme$',
+  'programme/',
+  'notes/',  # the fake's own: the real profile does not list it
+]
+
+[environments.preview]
+env = ["WIDGET_PREVIEW_URL"]
+url = "http://localhost:9001"
+
+[environments.rehearsal]
+env = ["WIDGET_REHEARSAL_URL"]
+url_from = "scripts/rehearsal-target.sh"
+url_variable = "TARGET_URL"
+
+[environments.production]
+env = ["WIDGET_PROD_URL"]
+
+[release]
+tag_prefix = "rel-"
+announcement = "Shipped in rel-"
+deploy_marker = "[ship.sh]"
+ci_status = "scripts/ci-status.sh --run push:main"
+
+[documents]
+generated = ["docs/9.1.5-work-in-progress.md", "docs/9.1.6-document-map.md"]
+map = "docs/9.1.6-document-map.md"
+roadmap = "docs/9.1.5-work-in-progress.md"
+tools_registers = ["docs/9.3.0-tools.md"]
+review_stamp = 'Checked whole at `([0-9a-f]+)`'
+programme_exact = ["docs/diagrams/roadmap.svg"]
+programme_prefixes = ["docs/9.1.4-"]
+application_outside_docs = ["README.md"]
+grandfathered_changes = ["README.md", "old-design.md"]
+lint_ignore = ["#target", "#vendored"]
+
+[source]
+globs = ["src/"]
+implementation = ["src/*/code/"]
+
+[[hooks.pre_commit]]
+name = "rustfmt"
+staged = '\.rs$'
+requires_file = "Cargo.toml"
+requires_command = "cargo"
+command = "cargo fmt --all -- --check"
+refusal = "rustfmt would change staged Rust."
+fix = "Run 'cargo fmt --all' and stage the result."
+
+[[hooks.check_docs]]
+name = "first fake check"
+command = "scripts/fake-check-one.sh"
+
+[[hooks.check_docs]]
+name = "second fake check"
+command = "scripts/fake-check-two.sh"

@@ -67,7 +67,7 @@ class TheBrake(Cases):
         text = render(d)
         # Owner, 2026-09-27: this week raised, closed, open; then last week the same.
         self.expect("grouped by week", True,
-                    "| type of change | this week: raised | closed | open | last week: raised | closed | open | use of Steve's time |" in text)
+                    "| type of change | this week: raised | closed | open | last week: raised | closed | open | use of Pat's time |" in text)
         self.expect("functional", True, "| `functional` | 4 | 0 | 10 | 0 | 1 | 0 | constructive |" in text)
         self.expect("bugs", True, "| `bug` | 1 | 2 | 2 | 3 | 0 | 0 | poor quality overhead" in text)
         # A quiet type still gets its row, so a week with no bugs is visible.

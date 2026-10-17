@@ -32,6 +32,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The pinned programme: its programme file (config/programme.toml), #485.
+          submodules: true
+
+      # The programme's records, at the head of its main: this application's
+      # programme profile is read there. `PROGRAMME_DIR` is the variable
+      # `scripts/programme/board/records.py` reads.
+      - uses: actions/checkout@v7
+        with:
+          repository: delphside/programme
+          ref: main
+          path: .programme-live
+
+      - name: Point the scripts at the programme's records
+        run: echo "PROGRAMME_DIR=$GITHUB_WORKSPACE/.programme-live" >> "$GITHUB_ENV"
 
       - name: Record
         shell: bash

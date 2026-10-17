@@ -10,7 +10,7 @@ no column that can show them.
     scripts/programme/board/roadmap-diagram.py                        # the whole roadmap
     scripts/programme/board/roadmap-diagram.py --parent 71            # one project's packages
     scripts/programme/board/roadmap-diagram.py --workstream "Client UI"
-    scripts/programme/board/roadmap-diagram.py --write                # into 1.5-work-in-progress
+    scripts/programme/board/roadmap-diagram.py --write                # into the roadmap document (documents.roadmap)
     scripts/programme/board/roadmap-diagram.py --project 71           # one project's allocation
 
 **Derived, never maintained.** Generated from the issues each time it is asked
@@ -37,6 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from board import profile                       # noqa: E402
 from board.roadmap import caption, render       # noqa: E402
 from board.sources import Unavailable, fetch    # noqa: E402
 
@@ -137,13 +138,14 @@ def main(argv=None) -> int:
     ap.add_argument("--svg", metavar="FILE",
                     help="where the chart itself is written by --write. "
                          "Defaults to roadmap.svg beside the document")
-    ap.add_argument("--write", metavar="FILE", nargs="?",
-                    const="docs/4.1.5-work-in-progress.md",
+    ap.add_argument("--write", metavar="FILE", nargs="?", const="",
                     help="replace the block between the roadmap-diagram markers "
-                         "in FILE instead of printing. Defaults to "
-                         "docs/4.1.5-work-in-progress.md, the document that "
+                         "in FILE instead of printing. Defaults to the technical "
+                         "profile's documents.roadmap, the document that "
                          "exists to be left open while working")
     args = ap.parse_args(argv)
+    if args.write == "":
+        args.write = profile.technical().string("documents.roadmap")
 
     if args.project:
         block = project_diagram(args.project)
@@ -171,7 +173,7 @@ def main(argv=None) -> int:
         # The chart is a file and the document points at it: GitHub renders an
         # `.svg` referenced from markdown, and `docs/` ships nothing, so it may
         # live on `main` like any other document.
-        doc = Path(args.write or "docs/4.1.5-work-in-progress.md")
+        doc = Path(args.write or profile.technical().string("documents.roadmap"))
         target = Path(args.svg) if args.svg else doc.parent / "diagrams" / "roadmap.svg"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(svg)

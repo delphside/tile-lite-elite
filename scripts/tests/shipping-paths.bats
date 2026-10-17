@@ -8,6 +8,8 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   export REPO_DIR="$BATS_TEST_TMPDIR/repo"
   git init -q "$REPO_DIR"
   git -C "$REPO_DIR" config user.email t@t
@@ -68,4 +70,41 @@ commit_file() {   # <path> <message>
   commit_file crates/ui/src/lib.rs "a crate change"
   run ships HEAD
   assert_success
+}
+
+# What ships is the technical profile's list (#485), so the same commits answer
+# differently under another profile.
+@test "the answer is the profile's: under another one docs/ ships and spec/ does not" {
+  commit_file docs/b.md "docs"
+  export PROGRAMME_PROFILE="$FAKES/programme-other.toml"
+  run touches_image_range "$BASE_SHA" HEAD
+  assert_success
+  BASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+  mkdir -p "$REPO_DIR/spec"
+  commit_file spec/s.md "spec"
+  run touches_image_range "$BASE_SHA" HEAD
+  assert_equal "$status" 1
+}
+
+# A profile that cannot be read is neither yes nor no (#485 review): the loader
+# exits 70 and the functions stop their caller with the message, where reading
+# it as "does not reach the image" would let a gate pass.
+@test "an unreadable profile stops touches_image, touches_image_range and ships" {
+  commit_file crates/ui/src/x.rs "the image changes"
+  printf 'application = "widget"\n' > "$BATS_TEST_TMPDIR/bare.toml"
+  export PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/bare.toml"
+  for call in "touches_image HEAD" "touches_image_range $BASE_SHA HEAD" "ships HEAD" "require_shipping_profile"; do
+    run $call
+    assert_equal "$status" 70
+    assert_output --partial "bare.toml"
+  done
+}
+
+@test "an unreadable profile ends a script that asks inside an if, as deploy.sh and verify.sh do" {
+  printf 'application = "widget"\n' > "$BATS_TEST_TMPDIR/bare.toml"
+  export PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/bare.toml"
+  run bash -c 'source "$1"; if ships HEAD; then echo ships; else echo does-not-ship; fi; echo carried-on' _ "$BATS_TEST_DIRNAME/../shipping-paths.sh"
+  assert_equal "$status" 70
+  refute_output --partial "does-not-ship"
+  refute_output --partial "carried-on"
 }
