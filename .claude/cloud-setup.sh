@@ -5,7 +5,7 @@
 # **Cloud only.** It exits at once unless CLAUDE_CODE_REMOTE is `true`, which
 # a cloud session's VM sets and a local one never does, so on the WSL machine
 # and in VS Code it does nothing. A local machine is set up once by
-# scripts/setup-dev-environment.sh (docs/4.3.1).
+# scripts/develop/setup-dev-environment.sh (docs/4.3.1).
 #
 # **Run every session, not cached.** The environment's own setup script is
 # snapshotted and reused; a SessionStart hook is not, so this pays its cost on
@@ -93,22 +93,30 @@ fi
 # resumed session would reinstall what it already has.
 (cd e2e && npm install --no-audit --no-fund --loglevel=error) >&2 2>&1 || missing+=("e2e node_modules")
 
-# --- git hooks ---------------------------------------------------------------
-# The same switch setup-dev-environment.sh makes locally. Each hook runs with
-# what this VM has: pre-commit's checks need only cargo, python3 and npx, and
-# post-merge acts only on a merge into main, which a cloud session never makes.
-git config core.hooksPath .githooks || missing+=("git hooks")
-
 # --- the programme submodule ---------------------------------------------------
-# The skills and agents in .claude/ link into it, and the scripts read the
-# generic documents from it. The live checkout of the programme's records is
-# not this: the cloud session has it beside the repository already.
+# The skills and agents in .claude/ link into it, the git hooks and the Claude
+# hooks are in it, and the scripts read the generic documents from it. The live
+# checkout of the programme's records is not this: the cloud session has it
+# beside the repository already.
 git submodule update --init >&2 2>&1 || missing+=("programme submodule")
+
+# --- git hooks ---------------------------------------------------------------
+# The same switch setup-dev-environment.sh makes locally: `.githooks`, this
+# repository's shim in front of the programme's hooks in the submodule above
+# (#485). The shim exists whether or not the submodule does, so a failed update
+# is refused at the first commit with the way out, not run as no hook. Each
+# hook runs with what this VM has: pre-commit's checks need only cargo, python3 and
+# npx, and post-merge acts only on a merge into main, which a cloud session never
+# makes. The shim also sets the submodule's own hooks path, which refuses a commit
+# made inside the pinned copy (the programme's 485 design, T1); done here as well
+# so it holds before the first hook runs.
+git config core.hooksPath .githooks || missing+=("git hooks")
+[[ -d programme/.githooks/in-submodule ]] && git -C programme config core.hooksPath .githooks/in-submodule
 
 # --- the live programme checkout ----------------------------------------------
 # board-records.py says in one line if it is missing, off main or behind the
 # local origin/main, and nothing when it is fine. It changes nothing.
-PROGRAMME_NOTE=$(scripts/programme/board/board-records.py check 2>/dev/null || true)
+PROGRAMME_NOTE=$(programme/scripts/board/board-records.py check 2>/dev/null || true)
 
 # --- session environment -----------------------------------------------------
 CHROMIUM=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | sort -V | tail -1)
@@ -123,7 +131,7 @@ fi
 if ((${#missing[@]})); then
   printf 'cloud-setup: ready except: %s. See .claude/cloud-setup.sh.\n' "$(IFS=,; echo "${missing[*]}")"
 else
-  echo "cloud-setup: dx $DX_VERSION, wasm-bindgen $WB_VERSION, the pinned toolchain, bats, sqlite3 and e2e dependencies are installed, and the git hooks in .githooks are on. Playwright uses the preinstalled Chromium (PLAYWRIGHT_CHROMIUM_EXECUTABLE); start dev with ./scripts/services.sh start."
+  echo "cloud-setup: dx $DX_VERSION, wasm-bindgen $WB_VERSION, the pinned toolchain, bats, sqlite3 and e2e dependencies are installed, and the git hooks (.githooks, the shim in front of the programme's) are on. Playwright uses the preinstalled Chromium (PLAYWRIGHT_CHROMIUM_EXECUTABLE); start dev with ./scripts/develop/services.sh start."
 fi
 [[ -n "$PROGRAMME_NOTE" ]] && echo "$PROGRAMME_NOTE"
 exit 0

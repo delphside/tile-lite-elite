@@ -144,14 +144,14 @@ fn run_tag() -> String {
     format!("{:x}", now_unix_seconds() & 0xff_ffff)
 }
 
-/// The rehearsal access key (#240), the way `scripts/rehearsal-key.sh` gets
+/// The rehearsal access key (#240), the way `scripts/deliver/rehearsal-key.sh` gets
 /// one — over ssh, or `REHEARSAL_ACCESS_KEY` to short-circuit it. Before this,
 /// `check-rate-limits.sh` knew how to get in and this example did not, which
 /// is #371: every request came back 403 from the gate, a closed door that
 /// looks exactly like a broken limiter.
 fn rehearsal_gate_cookie() -> Option<String> {
-    let script =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/rehearsal-key.sh");
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/deliver/rehearsal-key.sh");
     let output = Command::new(&script).output().ok()?;
     if !output.status.success() {
         return None;
@@ -193,7 +193,7 @@ async fn main() {
         None => {
             eprintln!("warning: no rehearsal access key — every request will be refused by the");
             eprintln!("         gate, and a refusal at the door looks exactly like a broken");
-            eprintln!("         limiter. Run ./scripts/rehearsal-access.sh grant first.");
+            eprintln!("         limiter. Run ./scripts/deliver/rehearsal-access.sh grant first.");
         }
     }
 
@@ -234,7 +234,9 @@ async fn main() {
                 eprintln!(
                     "A closed rehearsal gate (#240) and a broken rate limiter refuse identically;"
                 );
-                eprintln!("this is the gate. Run ./scripts/rehearsal-access.sh grant, or check");
+                eprintln!(
+                    "this is the gate. Run ./scripts/deliver/rehearsal-access.sh grant, or check"
+                );
                 eprintln!("REHEARSAL_ACCESS_KEY / REHEARSAL_SSH_HOST, then try again.");
                 std::process::exit(2);
             }

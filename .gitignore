@@ -51,22 +51,21 @@ node_modules/
 # Agents are versioned for the same reason: a subagent's instructions are part
 # of how an activity is run (the programme's docs/1.5's reference-review).
 !.claude/agents/
-# The two hooks are tooling by the same test, and tooling is an artefact
-# whether it runs in production or not (owner, 2026-09-03). They were invisible
-# to the repo until then, which is how turn-check.sh came to be filtering on a
-# convention that nothing had written for weeks.
-!.claude/turn-check.sh
-!.claude/inbox-hook.sh
-!.claude/comment-check.sh
+# The session setup script is tooling by the same test, and tooling is an
+# artefact whether it runs in production or not (owner, 2026-09-03). The three
+# hooks that run each turn are the programme's, in its `.claude/hooks/` (#485);
+# `settings.json` below runs them from the `programme/` submodule through the
+# wrapper, which says so, and does not fail, when it is not initialised.
 !.claude/cloud-setup.sh
-# settings.json wires those hooks up, so without it they are versioned and
+!.claude/programme-hook.sh
+# settings.json wires the hooks up, so without it they are versioned and
 # never run: a worktree or a rebuilt machine had the scripts and no hooks
 # (owner, 2026-09-24). It holds the hooks and nothing else. One machine's
 # permissions and absolute paths belong in settings.local.json, which stays
 # ignored.
 !.claude/settings.json
 
-# PID files written by scripts/services.sh
+# PID files written by scripts/develop/services.sh
 .pid.server
 .pid.web
 

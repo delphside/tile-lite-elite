@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { runPrefixFor } from './naming';
 
-// Purge the players/games **this run** created (see scripts/e2e-clean.sh).
+// Purge the players/games **this run** created (see scripts/develop/e2e-clean.sh).
 //
 // The run's own prefix is passed, not the suite's (#252 R1). Two runs against
 // one environment used to share `e2e-`, so whichever finished first deleted the
@@ -19,7 +19,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 
 export default async function globalTeardown() {
   try {
-    execFileSync(path.join(__dirname, '..', 'scripts', 'e2e-clean.sh'), {
+    execFileSync(path.join(__dirname, '..', 'scripts', 'develop', 'e2e-clean.sh'), {
       stdio: 'inherit',
       env: {
         ...process.env,

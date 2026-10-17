@@ -10,7 +10,7 @@ setup() {
   bats_load_library bats-assert
   load fixtures
   use_fake_profiles
-  CHECK="$BATS_TEST_DIRNAME/../check-commit-stamp.sh"
+  CHECK="$BATS_TEST_DIRNAME/../deliver/check-commit-stamp.sh"
   # A scratch repository carrying the two files the stamp is checked against.
   R="$BATS_TEST_TMPDIR/repo"
   git init -q "$R"

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/inbox-hook.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/programme-hook.sh inbox-hook.sh",
             "timeout": 90,
             "statusMessage": "Checking the GitHub inbox..."
           }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/turn-check.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/programme-hook.sh turn-check.sh",
             "timeout": 20,
             "statusMessage": "Checking GitHub..."
           }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/turn-check.sh --reseed-bodies",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/programme-hook.sh turn-check.sh --reseed-bodies",
             "timeout": 20
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/comment-check.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/programme-hook.sh comment-check.sh",
             "timeout": 30
           }
         ]

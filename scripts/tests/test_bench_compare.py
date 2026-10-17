@@ -12,7 +12,14 @@ import unittest
 from pathlib import Path
 
 from board.tests.cases import Cases
-from board.tests.cli import SCRIPTS, run
+from board.tests import cli
+
+# This repository's `scripts/`, not the programme's that the harness's `run` defaults to.
+SCRIPTS = Path(__file__).resolve().parents[1]
+
+
+def run(command, *args, **kwargs):
+    return cli.run(str(SCRIPTS / "measure" / command), *args, **kwargs)
 
 H = "run,game,turn,seat,blanks,rack_tiles,wall_ms,cpu_ms"
 
