@@ -45,7 +45,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/app/throttle.rs"
                     }
                 }
-                auth = component "Accounts" "Registration, sign-in, sessions and email changes." {
+                auth = component "Accounts" "Registration, sign-in, sessions, passwords, player details and player search." {
                     properties {
                         "artefact" "crates/server-game/src/app/auth.rs"
                     }
@@ -136,7 +136,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
 
         tle.web -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
         tle.desktop -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
-        tle.caddy -> tle.server.throttle "proxies the API requests, all but /health" "HTTP"
+        tle.caddy -> tle.server.throttle "proxies the API routes its matcher lists, all but /health" "HTTP"
         tle.caddy -> tle.server.catalog "proxies /health" "HTTP"
         tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
 
@@ -159,7 +159,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.server.session -> tle.server.rules "validates and scores MoveCandidate with"
         tle.server.proxy -> tle.server.engines "requests an EngineAction from"
         tle.server.proxy -> tle.server.session "applies the EngineAction to the GameSession"
-        tle.server.engines -> tle.server.rules "searches the BoardState with"
+        tle.server.engines -> tle.server.rules "searches the GameState with"
 
         tle.server.games -> tle.server.events "publishes GameEventDto to"
         tle.server.roster -> tle.server.events "publishes GameEventDto to"
@@ -167,11 +167,11 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.server.scheduler -> tle.server.events "publishes GameEventDto to"
         tle.server.adminApi -> tle.server.events "publishes GameEventDto to"
 
-        tle.server.games -> tle.server.store "saves the GameSession, deletes old games, records the database size"
+        tle.server.games -> tle.server.store "saves the GameSession, deletes old games and expired sessions, records the database size"
         tle.server.roster -> tle.server.store "saves the GameSession, updates invitation rows"
         tle.server.invitations -> tle.server.store "saves the GameSession and invitation rows"
         tle.server.scheduler -> tle.server.store "saves the GameSession, reads player rows"
-        tle.server.auth -> tle.server.store "reads and writes player and session rows"
+        tle.server.auth -> tle.server.store "reads and writes player, session and password-reset rows"
         tle.server.adminApi -> tle.server.store "reads and writes player, session and game rows, reads the database-size history"
         tle.server.adminApi -> tle.server.scheduler "reads the scheduler's health"
         tle.server.store -> tle.server.ratings "settles the ratings of a finished game"
@@ -182,7 +182,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.server.scheduler -> tle.server.ratings "attaches ratings to the GameStateDto"
         tle.server.api -> tle.server.store "reads the session row, updates last-seen"
         tle.server.api -> tle.server.throttle "marks the session verified"
-        tle.server.catalog -> tle.server.engines "reads EngineProfileDto from"
+        tle.server.catalog -> tle.server.engines "reads EngineMetadata from"
         tle.server.catalog -> tle.server.rules "reads the word lists from"
         tle.server.games -> tle.server.scheduler "expires an overdue turn with"
         tle.server.store -> tle.db "reads and writes rows" "SQL"
