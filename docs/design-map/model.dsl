@@ -20,7 +20,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "crates/ui"
                 }
             }
-            caddy = container "Web server" "Serves the web client and proxies the API." "Caddy" {
+            caddy = container "Web server" "Serves the web client and proxies the API routes it lists." "Caddy" {
                 properties {
                     "artefact" "Caddyfile"
                 }
@@ -136,7 +136,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
 
         tle.web -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
         tle.desktop -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
-        tle.caddy -> tle.server.throttle "proxies the API routes its matcher lists, all but /health" "HTTP"
+        tle.caddy -> tle.server.throttle "proxies the API routes its matcher lists" "HTTP"
         tle.caddy -> tle.server.catalog "proxies /health" "HTTP"
         tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
 
