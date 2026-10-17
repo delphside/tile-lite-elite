@@ -73,7 +73,8 @@ logic. A project draws the Container and Component diagrams, and whichever Code
 diagrams its change touches.
 
 **Why C4 as the base.** It is built for this size, and *Container* means a
-deployable process, which is literally our two containers and the database.
+deployable or runnable unit: the clients, the web server, the game server, the
+admin CLI and the database.
 4+1's *Development view* is module ownership across teams, an empty box for one
 developer and one repository; arc42 is a twelve-section document template, and
 the numbered documents already do that job; Rozanski's full seven viewpoints are
