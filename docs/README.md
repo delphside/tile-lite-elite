@@ -36,7 +36,7 @@ history in the issue or the commit.
 
 - [4.1.0 Rules](4.1.0-rules.md) — the decisions about how the service behaves, cited by id from tests and commits
 - [4.1.1 Architecture](4.1.1-architecture.md) — system overview, deployment topology, guiding principles and roles
-- [4.1.2 Components and Interactions](4.1.2-components-and-interactions.md) — component diagram, move/turn sequence diagrams
+- [4.1.2 Components and Interactions](4.1.2-components-and-interactions.md) — the move sequence diagram and its notes
 - [4.1.3 Technology Decisions](4.1.3-technology-decisions.md) — why Axum/SQLite/Dioxus/etc.
 - [4.1.4 Roadmap](4.1.4-roadmap.md) — CLI prototype → UI direction → MVP → v1 → Later
 - [4.1.5 Work in progress](4.1.5-work-in-progress.md) — what is in flight, drawn from the issues and regenerated, never typed
@@ -44,6 +44,7 @@ history in the issue or the commit.
 
 ## 4.2 Functional design
 
+- [4.2.0 Design map](4.2.0-design-map.md) — the Container and Component views, generated
 - [4.2.1 Rules Engine](4.2.1-rules-engine.md)
 - [4.2.2 Rules Engine Implementation](4.2.2-rules-engine-implementation.md)
 - [4.2.3 Engine Interface](4.2.3-engine-interface.md) — the trait an engine implements, and how the server runs one
