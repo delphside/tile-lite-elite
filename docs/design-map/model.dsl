@@ -25,7 +25,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "Caddyfile"
                 }
             }
-            cli = container "Admin CLI" "Lists and deletes users and games." "Rust" {
+            cli = container "Admin CLI" "Administers accounts and games, and reads the database size and scheduler health." "Rust" {
                 properties {
                     "artefact" "crates/admin-cli"
                 }
@@ -37,10 +37,10 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
 
                 api = component "Transport API" "The routes, and the extractors that say who is calling." "Axum" {
                     properties {
-                        "artefact" "crates/server-game/src/app.rs"
+                        "artefact" "crates/server-game/src/app.rs, crates/server-game/src/app/common.rs"
                     }
                 }
-                throttle = component "Rate limiting" "How often a caller may ask." "tower" {
+                throttle = component "Rate limiting" "How often a caller may ask, on every public route but /health." "tower_governor" {
                     properties {
                         "artefact" "crates/server-game/src/app/throttle.rs"
                     }
@@ -50,12 +50,12 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/app/auth.rs"
                     }
                 }
-                games = component "Game service" "Creates games and applies every move." {
+                games = component "Game service" "Creates and lists games, and applies every move." {
                     properties {
                         "artefact" "crates/server-game/src/app/games.rs"
                     }
                 }
-                roster = component "Roster" "Seats before the start: swap, fill, remove." {
+                roster = component "Roster" "Seats before the start, force-resigning a seat, and aborting a game." {
                     properties {
                         "artefact" "crates/server-game/src/app/roster.rs"
                     }
@@ -77,7 +77,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                 }
                 ratings = component "Ratings" "Ratings and per-player statistics." {
                     properties {
-                        "artefact" "crates/server-game/src/stats.rs"
+                        "artefact" "crates/server-game/src/stats.rs, crates/server-game/src/app/ratings.rs"
                     }
                 }
                 adminApi = component "Admin endpoints" "The loopback-only /admin routes." {
@@ -85,9 +85,9 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/app/admin.rs"
                     }
                 }
-                scheduler = component "Scheduler" "Periodic scans: deadlines, sweeps, capacity." {
+                scheduler = component "Scheduler" "Periodic jobs: overdue turns, move-time reminders and stalled-job checks." {
                     properties {
-                        "artefact" "crates/server-game/src/app/scheduler.rs"
+                        "artefact" "crates/server-game/src/app/scheduler.rs, crates/server-game/src/app/scheduler_jobs.rs, crates/server-game/src/app/sweeps_game.rs"
                     }
                 }
                 session = component "Game model" "GameSession: one game's authoritative state." {
@@ -95,7 +95,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/game_state.rs"
                     }
                 }
-                proxy = component "Engine proxy" "Takes an engine's turn through the same validation as a player's." {
+                proxy = component "Engine proxy" "Runs an engine's turn and applies its move through the same validation as a player's." {
                     properties {
                         "artefact" "crates/server-game/src/game_state.rs"
                     }
@@ -132,48 +132,58 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         player -> tle.web "plays in"
         player -> tle.desktop "plays in"
         admin -> tle.cli "runs"
-        tle.caddy -> tle.web "serves"
+        tle.caddy -> tle.web "serves the wasm bundle"
 
-        tle.web -> tle.caddy "calls the API and opens the event stream" "HTTPS, WebSocket"
-        tle.desktop -> tle.caddy "calls the API and opens the event stream" "HTTPS, WebSocket"
-        tle.caddy -> tle.server.throttle "proxies /api" "HTTP"
-        tle.cli -> tle.server.adminApi "calls" "HTTP, loopback"
+        tle.web -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
+        tle.desktop -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
+        tle.caddy -> tle.server.throttle "proxies the API routes" "HTTP"
+        tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
 
-        tle.server.throttle -> tle.server.api "passes what is within its limits"
-        tle.server.api -> tle.server.auth "passes account requests to"
-        tle.server.api -> tle.server.games "passes game commands to"
-        tle.server.api -> tle.server.roster "passes seat changes to"
-        tle.server.api -> tle.server.invitations "passes invitation requests to"
+        tle.server.throttle -> tle.server.api "passes requests within their limits"
+        tle.server.api -> tle.server.auth "routes account requests"
+        tle.server.api -> tle.server.games "routes GameActionRequest and game requests"
+        tle.server.api -> tle.server.roster "routes seat requests"
+        tle.server.api -> tle.server.invitations "routes invitation requests"
         tle.server.api -> tle.server.events "upgrades to a WebSocket"
-        tle.server.api -> tle.server.catalog "passes catalogue reads to"
-        tle.server.api -> tle.server.ratings "passes statistics reads to"
-        tle.server.api -> tle.server.adminApi "passes admin requests to"
+        tle.server.api -> tle.server.catalog "routes catalogue reads"
+        tle.server.api -> tle.server.ratings "routes statistics reads"
 
-        tle.server.games -> tle.server.session "applies the move to"
-        tle.server.roster -> tle.server.session "changes the seats of"
-        tle.server.invitations -> tle.server.session "fills a seat of"
-        tle.server.scheduler -> tle.server.session "times out and sweeps"
-        tle.server.session -> tle.server.rules "validates and scores with"
-        tle.server.session -> tle.server.proxy "asks for an engine turn"
-        tle.server.proxy -> tle.server.engines "requests a move from"
-        tle.server.proxy -> tle.server.rules "previews the candidate move with"
-        tle.server.games -> tle.server.events "publishes the new state to"
-        tle.server.roster -> tle.server.events "publishes the new state to"
-        tle.server.invitations -> tle.server.events "publishes the new state to"
-        tle.server.scheduler -> tle.server.events "publishes the new state to"
-        tle.server.games -> tle.server.store "saves the game"
-        tle.server.roster -> tle.server.store "saves the game"
-        tle.server.invitations -> tle.server.store "saves the game and the invitation"
-        tle.server.scheduler -> tle.server.store "saves the game, deletes old ones"
-        tle.server.store -> tle.server.ratings "records the result of a finished game"
-        tle.server.auth -> tle.server.store "reads and writes accounts and sessions with"
+        tle.server.games -> tle.server.session "applies the move to the GameSession"
+        tle.server.games -> tle.server.rules "previews and suggests moves with"
+        tle.server.games -> tle.server.proxy "runs engine turns with"
+        tle.server.roster -> tle.server.session "changes the seats of the GameSession"
+        tle.server.invitations -> tle.server.session "fills a seat of the GameSession"
+        tle.server.scheduler -> tle.server.session "times out overdue turns of the GameSession"
+        tle.server.adminApi -> tle.server.session "force-ends the GameSession"
+        tle.server.session -> tle.server.rules "validates and scores moves with"
+        tle.server.proxy -> tle.server.engines "requests an EngineAction from"
+        tle.server.proxy -> tle.server.session "applies the EngineAction to the GameSession"
+        tle.server.engines -> tle.server.rules "searches with"
+
+        tle.server.games -> tle.server.events "publishes GameEventDto to"
+        tle.server.roster -> tle.server.events "publishes GameEventDto to"
+        tle.server.invitations -> tle.server.events "publishes GameEventDto to"
+        tle.server.scheduler -> tle.server.events "publishes GameEventDto to"
+        tle.server.adminApi -> tle.server.events "publishes GameEventDto to"
+
+        tle.server.games -> tle.server.store "saves the GameSession, deletes old games, records the database size"
+        tle.server.roster -> tle.server.store "saves the GameSession"
+        tle.server.invitations -> tle.server.store "saves the GameSession and invitation rows"
+        tle.server.scheduler -> tle.server.store "saves the GameSession"
+        tle.server.auth -> tle.server.store "reads and writes player and session rows"
+        tle.server.adminApi -> tle.server.store "reads and deletes player and game rows"
+        tle.server.adminApi -> tle.server.scheduler "reads the scheduler's health"
+        tle.server.store -> tle.server.ratings "settles the ratings of a finished game"
+        tle.server.games -> tle.server.ratings "attaches ratings to the GameStateDto"
+        tle.server.roster -> tle.server.ratings "attaches ratings to the GameStateDto"
+        tle.server.adminApi -> tle.server.ratings "attaches ratings to the GameStateDto"
+        tle.server.store -> tle.db "reads and writes rows" "SQL"
+        tle.server.ratings -> tle.db "reads and writes rating rows" "SQL"
+
         tle.server.auth -> tle.server.email "sends welcome and password-reset emails with"
         tle.server.games -> tle.server.email "sends invitation emails with"
         tle.server.invitations -> tle.server.email "sends invitation emails with"
         tle.server.scheduler -> tle.server.email "sends move-time reminders with"
-        tle.server.adminApi -> tle.server.store "lists and deletes"
-        tle.server.store -> tle.db "reads and writes" "SQL"
-        tle.server.ratings -> tle.db "reads and writes" "SQL"
-        tle.server.email -> resend "sends" "HTTPS"
+        tle.server.email -> resend "sends each email to" "HTTPS"
     }
 }
