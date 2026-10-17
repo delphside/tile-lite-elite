@@ -2,9 +2,12 @@
 
 From the rules, owner 2026-09-25 and 2026-09-29/30: the programme's documents
 describe the programme and change on main; the application's change with the
-code; docs/4.1.5 and docs/4.1.6 are generated and belong to neither; everything in the
+code; the generated documents belong to neither; everything in the
 programme repository (change notes, templates, reports) is the programme's; and a path that is not a document
 is neither.
+
+The lists are the application's, so these cases read the fake technical profile
+(`fixtures/programme.toml`), whose document range is 9 and not the real one's.
 """
 
 import unittest
@@ -22,14 +25,14 @@ class ProgrammeDocuments(unittest.TestCase):
         self.assertEqual(list(paths), of("programme", *paths))
 
     def test_the_roadmap_and_its_diagram(self):
-        paths = ("docs/4.1.4-roadmap.md", "docs/diagrams/roadmap.svg")
+        paths = ("docs/9.1.4-roadmap.md", "docs/diagrams/roadmap.svg")
         self.assertEqual(list(paths), of("programme", *paths))
 
     def test_anything_in_the_programme_repository_and_its_pin(self):
         # #485: the generic documents and the records are in the programme
         # repository, here as the pinned submodule; its pin changes on main.
         paths = ("programme", "programme/docs/1.2-change-lifecycle.md",
-                 "programme/applications/tile-lite-elite/3.1.1-delivery-log.md")
+                 "programme/applications/widget/3.6.1-delivery-log.md")
         self.assertEqual(list(paths), of("programme", *paths))
 
     def test_what_moved_out_is_not_a_programme_document_here(self):
@@ -41,14 +44,18 @@ class ProgrammeDocuments(unittest.TestCase):
         self.assertEqual([], of("programme", *paths))
 
     def test_an_application_document_is_not_one(self):
-        self.assertEqual([], of("programme", "docs/4.4.3-api-schema.md", "docs/4.3.0-tools.md",
+        self.assertEqual([], of("programme", "docs/9.4.3-api-schema.md", "docs/9.3.0-tools.md",
                                 "scripts/programme/board/documents.py"))
+
+    def test_the_lists_are_the_profiles_not_a_built_in_one(self):
+        # The real application's roadmap is not this application's.
+        self.assertEqual([], of("programme", "docs/4.1.4-roadmap.md"))
 
 
 class ApplicationDocuments(unittest.TestCase):
     def test_the_1x_overviews_of_the_application_and_the_2x_3x_4x_groups(self):
-        paths = ("docs/4.1.0-rules.md", "docs/4.1.1-architecture.md", "docs/4.2.7-authentication-and-invitations.md",
-                 "docs/4.3.3-testing-ci-and-release.md", "docs/4.3.10-benchmarking.md", "docs/4.4.2-database-schema.md")
+        paths = ("docs/9.1.0-rules.md", "docs/9.1.1-architecture.md", "docs/9.2.7-authentication-and-invitations.md",
+                 "docs/9.3.3-testing-ci-and-release.md", "docs/9.3.10-benchmarking.md", "docs/9.4.2-database-schema.md")
         self.assertEqual(list(paths), of("application", *paths))
 
     def test_the_repository_readme(self):
@@ -57,7 +64,7 @@ class ApplicationDocuments(unittest.TestCase):
 
 class NeitherSide(unittest.TestCase):
     def test_the_generated_documents(self):
-        paths = ("docs/4.1.5-work-in-progress.md", "docs/4.1.6-document-map.md")
+        paths = ("docs/9.1.5-work-in-progress.md", "docs/9.1.6-document-map.md")
         self.assertEqual([], of("programme", *paths))
         self.assertEqual([], of("application", *paths))
 
@@ -67,10 +74,10 @@ class NeitherSide(unittest.TestCase):
         self.assertEqual([], of("application", *paths))
 
     def test_kind_names_each(self):
-        out = run("programme/board/board-documents.py", "kind", "CLAUDE.md", "docs/4.4.1-configuration.md",
-                  "docs/4.1.6-document-map.md", "scripts/x.sh").stdout.split("\n")
-        self.assertEqual(["CLAUDE.md\tprogramme", "docs/4.4.1-configuration.md\tapplication",
-                          "docs/4.1.6-document-map.md\tgenerated", "scripts/x.sh\tnone"], out[:4])
+        out = run("programme/board/board-documents.py", "kind", "CLAUDE.md", "docs/9.4.1-configuration.md",
+                  "docs/9.1.6-document-map.md", "scripts/x.sh").stdout.split("\n")
+        self.assertEqual(["CLAUDE.md\tprogramme", "docs/9.4.1-configuration.md\tapplication",
+                          "docs/9.1.6-document-map.md\tgenerated", "scripts/x.sh\tnone"], out[:4])
 
     def test_an_unknown_command_is_refused(self):
         self.assertEqual(2, run("programme/board/board-documents.py", "frobnicate").returncode)

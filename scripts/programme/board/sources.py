@@ -18,14 +18,20 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
+from . import profile
 from .model import (PR_STATE, RawBoardItem, RawIssue, RawPullRequest,
                     RawSubIssue)
 
-OWNER = "delphside"
-REPO = "tile-lite-elite"
-# The project board, `Tile Lite Elite Programme`. Its fields and options are
-# looked up by name per call; only the board itself is named by id.
-PROJECT_ID = "PVT_kwDOEyOvmc4BhpOl"
+
+def _repository() -> tuple[str, str]:
+    """(owner, name) of this application's repository: its programme profile's."""
+    return profile.repository()
+
+
+def _project_id() -> str:
+    """The one programme board. Its fields and options are looked up by name per
+    call; only the board itself is named by id, in the programme file."""
+    return profile.project_id()
 
 _QUERY = """
 query($owner:String!, $repo:String!, $cursor:String, $states:[IssueState!]) {
@@ -70,6 +76,11 @@ query($owner:String!, $repo:String!, $cursor:String) {
   }
 }
 """
+
+
+def _repository_query(parts: str) -> str:
+    owner, name = _repository()
+    return f'{{ repository(owner:"{owner}", name:"{name}") {{ {parts} }} }}'
 
 
 def pr_state(draft: bool, review: str | None, reviewers: int,
@@ -275,7 +286,7 @@ def step_ages(wanted: Sequence[tuple[int, str, str]]) -> dict[int, float]:
             "... on IssueFieldAddedEvent { createdAt value "
             "issueField { ... on IssueFieldSingleSelect { name } } } } } }"
             for n, _, _ in chunk)
-        query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+        query = _repository_query(parts)
         try:
             payload = _gh_graphql(query)
         except Unavailable:
@@ -325,10 +336,12 @@ def comment_jq(url_key: str) -> str:
     text, created. Who is decided here, in this order: deploy.sh's announcement, then
     Claude's account, then any bot, then the owner. A function so the rule can
     be tested with the real jq rather than only read."""
+    announcement = json.dumps(profile.technical().string("release.announcement"))
+    machine = json.dumps(profile.programme_file().string("accounts.machine_user"))
     return (f'.[] | [(.{url_key} | split("/") | last), .updated_at[0:16], '
-            '(if (.body | test("^Released in prod-")) then "deploy" '
-            'elif (.user.login == "SteveStyle-typed-by-Claude") then "claude" '
-            'elif (.user.type == "Bot") then "bot" '
+            f'(if (.body | startswith({announcement})) then "deploy" '
+            f'elif (.user.login == {machine}) then "claude" '
+            "elif (.user.type == \"Bot\") then \"bot\" "
             'else "owner" end), (.body | gsub("[\n\r]"; " ") | .[0:150]), '
             '.created_at[0:19]] | @tsv')
 
@@ -344,7 +357,7 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
     is right: an edit is a change you have not seen.
 
     **Who typed it is the account, and only the account.** Claude posts through
-    `gh`, which authenticates as `SteveStyle-typed-by-Claude`; the owner types in
+    `gh`, which authenticates as the programme file's `accounts.machine_user`; the owner types in
     a browser as himself. Owner, 2026-09-21: *"We no longer use the footer in
     comments, we rely on the different GitHub accounts."*
 
@@ -375,7 +388,7 @@ def comments_since(since_iso: str) -> tuple[Remark, ...]:
         try:
             run = subprocess.run(
                 ["gh", "api",
-                 f"repos/{OWNER}/{REPO}/{endpoint}"
+                 f"repos/{'/'.join(_repository())}/{endpoint}"
                  f"?since={since_iso}&sort=updated&direction=asc&per_page=100",
                  "--paginate", "--jq", jq],
                 capture_output=True, text=True, timeout=90)
@@ -408,7 +421,7 @@ def comments_on(number: int) -> tuple[Remark, ...]:
     jq = comment_jq("issue_url")
     try:
         run = subprocess.run(
-            ["gh", "api", f"repos/{OWNER}/{REPO}/issues/{number}/comments?per_page=100",
+            ["gh", "api", f"repos/{'/'.join(_repository())}/issues/{number}/comments?per_page=100",
              "--paginate", "--jq", jq],
             capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -450,7 +463,9 @@ def reports_since(since_iso: str) -> tuple[Report, ...]:
     Raises `Unavailable` rather than returning nothing, for the reason
     `comments_since` gives.
     """
-    query = f"repo:{OWNER}/{REPO} is:issue author:app/github-actions updated:>={since_iso[:10]}"
+    bot = profile.programme_file().string("accounts.bot")
+    query = (f"repo:{'/'.join(_repository())} is:issue author:app/{bot} "
+             f"updated:>={since_iso[:10]}")
     try:
         run = subprocess.run(
             ["gh", "api", "-X", "GET", "search/issues", "-f", f"q={query}",
@@ -483,7 +498,7 @@ def issues_by_number(numbers: Sequence[int]) -> dict[int, RawIssue]:
         return {}
     parts = " ".join(f'i{n}: issue(number:{n}) {{ number title state '
                      f'issueType {{ name }} }}' for n in sorted(set(numbers)))
-    query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+    query = _repository_query(parts)
     payload = _gh_graphql(query, partial=True)
     # Errors here are per-field -- a missing issue is an error beside the data,
     # not instead of it -- so the data is read even when `errors` is present.
@@ -521,7 +536,7 @@ def issues_in_full(numbers: Sequence[int]) -> dict[int, RawIssue]:
         return {}
     parts = " ".join(f"i{n}: issue(number:{n}) {{ {_FULL_FIELDS} }}"
                      for n in sorted(set(numbers)))
-    query = f'{{ repository(owner:"{OWNER}", name:"{REPO}") {{ {parts} }} }}'
+    query = _repository_query(parts)
     repo = (_gh_graphql(query, partial=True).get("data") or {}).get("repository") or {}
     return {node["number"]: _to_raw(node) for node in repo.values() if node}
 
@@ -536,7 +551,7 @@ def pull_request_for(branch: str) -> tuple[int, str, str] | None:
       repository(owner:$owner, name:$repo) {
         pullRequests(headRefName:$head, first:1, orderBy:{field:CREATED_AT, direction:DESC}) {
           nodes { number title body } } } }"""
-    payload = _gh_graphql(query, owner=OWNER, repo=REPO, head=branch)
+    payload = _gh_graphql(query, owner=_repository()[0], repo=_repository()[1], head=branch)
     nodes = (((payload.get("data") or {}).get("repository") or {})
              .get("pullRequests") or {}).get("nodes") or []
     if not nodes:
@@ -552,7 +567,7 @@ def set_field(number: int, field: str, value: str) -> None:
     caller -- the rule this module exists to keep. A name that does not exist
     raises, rather than setting nothing and looking as if it worked.
     """
-    fields = _gh_graphql(f"""{{ organization(login:"{OWNER}") {{ issueFields(first:30) {{
+    fields = _gh_graphql(f"""{{ organization(login:"{profile.organisation()}") {{ issueFields(first:30) {{
       nodes {{ ... on IssueFieldSingleSelect {{ id name options {{ id name }} }} }} }} }} }}""")
     nodes = ((((fields.get("data") or {}).get("organization") or {})
               .get("issueFields") or {}).get("nodes") or [])
@@ -562,7 +577,7 @@ def set_field(number: int, field: str, value: str) -> None:
     option = next((o for o in chosen["options"] if o["name"] == value), None)
     if option is None:
         raise Unavailable(f"field {field!r} has no option {value!r}")
-    issue = _gh_graphql(f"""{{ repository(owner:"{OWNER}", name:"{REPO}") {{
+    issue = _gh_graphql(f"""{{ repository(owner:"{_repository()[0]}", name:"{_repository()[1]}") {{
       issue(number:{number}) {{ id }} }} }}""")
     issue_id = (((issue.get("data") or {}).get("repository") or {})
                 .get("issue") or {}).get("id")
@@ -587,7 +602,7 @@ def _project_field(field: str) -> tuple[str, dict[str, str]]:
     payload = _gh_graphql("""query($project:ID!) { node(id:$project) {
       ... on ProjectV2 { fields(first:50) { nodes {
         ... on ProjectV2SingleSelectField { id name options { id name } } } } } } }""",
-                          project=PROJECT_ID)
+                          project=_project_id())
     nodes = ((((payload.get("data") or {}).get("node") or {})
               .get("fields") or {}).get("nodes") or [])
     chosen = next((f for f in nodes if f and f.get("name") == field), None)
@@ -607,7 +622,7 @@ def pull_requests() -> tuple[RawPullRequest, ...]:
     out: list[RawPullRequest] = []
     cursor = None
     while True:
-        payload = _gh_graphql(query, owner=OWNER, repo=REPO, cursor=cursor)
+        payload = _gh_graphql(query, owner=_repository()[0], repo=_repository()[1], cursor=cursor)
         if "errors" in payload:
             raise Unavailable(str(payload["errors"])[:300])
         block = payload["data"]["repository"]["pullRequests"]
@@ -640,7 +655,7 @@ def board_pull_requests(field: str = PR_STATE) -> tuple[RawBoardItem, ...]:
     out: list[RawBoardItem] = []
     cursor = None
     while True:
-        payload = _gh_graphql(query, project=PROJECT_ID, cursor=cursor)
+        payload = _gh_graphql(query, project=_project_id(), cursor=cursor)
         if "errors" in payload:
             raise Unavailable(str(payload["errors"])[:300])
         block = (((payload.get("data") or {}).get("node") or {}).get("items")
@@ -669,7 +684,7 @@ def add_to_project(content_id: str) -> str:
     """
     payload = _gh_graphql("""mutation($project:ID!, $content:ID!) {
       addProjectV2ItemById(input:{projectId:$project, contentId:$content}) {
-        item { id } } }""", project=PROJECT_ID, content=content_id)
+        item { id } } }""", project=_project_id(), content=content_id)
     item = ((((payload.get("data") or {}).get("addProjectV2ItemById") or {})
              .get("item") or {}).get("id") or "")
     if not item.startswith("PVTI_"):
@@ -691,7 +706,7 @@ def set_project_field(item_id: str, field: str, value: str) -> None:
       updateProjectV2ItemFieldValue(input:{projectId:$project, itemId:$item,
         fieldId:$field, value:{singleSelectOptionId:$option}}) {
         projectV2Item { id } } }""",
-                project=PROJECT_ID, item=item_id, field=field_id, option=options[value])
+                project=_project_id(), item=item_id, field=field_id, option=options[value])
 
 
 def remote_branches(remote: str = "origin") -> tuple[str, ...]:
@@ -776,7 +791,7 @@ def fetch(states: str = "OPEN", with_bodies: bool = True,
     pages = 0
     while True:
         payload = _gh_graphql(
-            query, owner=OWNER, repo=REPO, cursor=cursor, states=states
+            query, owner=_repository()[0], repo=_repository()[1], cursor=cursor, states=states
         )
         if "errors" in payload:
             raise Unavailable(str(payload["errors"])[:300])
@@ -791,7 +806,7 @@ def fetch(states: str = "OPEN", with_bodies: bool = True,
         cursor = None
         while True:
             payload = _gh_graphql(_PR_QUERY % {"pr_states": pr_states},
-                                  owner=OWNER, repo=REPO, cursor=cursor)
+                                  owner=_repository()[0], repo=_repository()[1], cursor=cursor)
             if "errors" in payload:
                 raise Unavailable(str(payload["errors"])[:300])
             block = payload["data"]["repository"]["pullRequests"]

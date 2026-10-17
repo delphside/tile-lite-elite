@@ -10,6 +10,8 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   HOOK="$BATS_TEST_DIRNAME/../../.githooks/pre-commit"
   R="$BATS_TEST_TMPDIR/repo"
   git init -q "$R"
@@ -17,9 +19,9 @@ setup() {
   git -C "$R" config user.name t
   git -C "$R" config core.hooksPath /dev/null
   mkdir -p "$R/docs"
-  # docs/4.3.0-tools.md must exist: the registration rule reads it, and the docs
+  # docs/9.3.0-tools.md must exist: the registration rule reads it, and the docs
   # check is skipped by keeping every fixture free of other markdown.
-  printf 'x\n' > "$R/docs/4.3.0-tools.md"
+  printf 'x\n' > "$R/docs/9.3.0-tools.md"
 }
 
 base() { git -C "$R" add -A; git -C "$R" commit -qm "app 0.0.0 api 0.0: base"; git -C "$R" branch -M main; }
@@ -329,7 +331,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 # --- the programme's own documents live on main (1b) ------------------------------
 # 2026-09-21: the ITIL rule, a CLAUDE.md clause and an obligations.py fix were
 # all written onto 399-database-failure-status. commit-msg cannot catch it: a
-# process edit carries no Refs. docs/4.1.6 is generated from the branch's own
+# process edit carries no Refs. The document map is generated from the branch's own
 # headings, so it is regenerated on the branch after the rebase before a merge.
 
 @test "branch: CLAUDE.md on a project branch is refused" {
@@ -338,7 +340,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: so is the roadmap, the programme document still held here" {
-  commit_on 399-x docs/4.1.4-roadmap.md
+  commit_on 399-x docs/9.1.4-roadmap.md
   assert_equal "$status" 1
 }
 
@@ -363,7 +365,7 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: a project's own document is fine on it" {
-  commit_on 399-x docs/4.4.3-api-schema.md
+  commit_on 399-x docs/9.4.3-api-schema.md
   assert_success
 }
 
@@ -373,18 +375,18 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 }
 
 @test "branch: and so is the generated document map" {
-  commit_on 399-x docs/4.1.6-document-map.md
+  commit_on 399-x docs/9.1.6-document-map.md
   assert_success
 }
 
 @test "branch: the refusal says it is the programme's own documents" {
-  commit_on 399-x programme/applications/tile-lite-elite/3.1.7-changes/399-design.md
+  commit_on 399-x programme/applications/widget/3.6.7-changes/399-design.md
   assert_equal "$status" 1
   assert_output --partial "programme's own documents"
 }
 
 @test "branch: and the generated work-in-progress page is fine" {
-  commit_on 399-x docs/4.1.5-work-in-progress.md
+  commit_on 399-x docs/9.1.5-work-in-progress.md
   assert_success
 }
 
@@ -392,19 +394,19 @@ fmt_case() {   # <cargo-fmt-exit> <file>
 # Owner, 2026-09-30: warn, but not block.
 
 @test "main: an application document is committed, with a note" {
-  commit_on main docs/4.4.3-api-schema.md
+  commit_on main docs/9.4.3-api-schema.md
   assert_success
   assert_output --partial "application documents committed to main"
 }
 
 @test "main: a programme document gets no note" {
-  commit_on main docs/4.1.4-roadmap.md
+  commit_on main docs/9.1.4-roadmap.md
   assert_success
   refute_output --partial "application documents"
 }
 
 @test "branch: an application document on its branch gets no note" {
-  commit_on 399-x docs/4.4.3-api-schema.md
+  commit_on 399-x docs/9.4.3-api-schema.md
   assert_success
   refute_output --partial "application documents"
 }
@@ -442,4 +444,132 @@ docs_check() {   # <check-docs exit> <file to stage>
   docs_check 1 e2e/login.spec.ts
   assert_success
   assert [ ! -e "$BATS_TEST_TMPDIR/docs-ran" ]
+}
+
+
+# --- the profile is the rule (#485) -----------------------------------------------
+# The same hook under another technical profile: what ships, the registers a new
+# script must be in, and the format step are its lists, not the hook's.
+
+@test "profile: what ships is the profile's list, so a path it lists is free on main" {
+  commit_on main notes/a.rs
+  assert_success
+}
+
+@test "profile: and under another profile the same path ships, and the refusal says where the list is" {
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" commit_on main notes/a.rs
+  assert_equal "$status" 1
+  assert_output --partial "changes what ships"
+  assert_output --partial "ships.non_shipping"
+}
+
+@test "profile: the refusal names the registers the profile lists" {
+  commit_on main scripts/brand-new.sh
+  assert_equal "$status" 1
+  assert_output --partial "docs/9.3.0-tools.md"
+  assert_output --partial "programme/docs/1.1-programme-tooling.md"
+}
+
+@test "profile: a script named in a register the profile lists is registered" {
+  printf '| `scripts/brand-new.sh` | x |\n' > "$R/docs/9.3.0-tools.md"
+  commit_on main scripts/brand-new.sh
+  assert_success
+}
+
+@test "profile: the format step's refusal and fix are the profile's, with paths from the root" {
+  printf '[workspace]\n' > "$R/Cargo.toml"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/usr/bin/env bash\necho "Diff in %s/crates/x/examples/a.rs:1:"\nexit 1\n' "$R" > "$BATS_TEST_TMPDIR/bin/cargo"
+  chmod +x "$BATS_TEST_TMPDIR/bin/cargo"
+  base
+  stage crates/x/examples/a.rs
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" hook
+  assert_equal "$status" 1
+  assert_output --partial "rustfmt would change staged Rust."
+  assert_output --partial "  crates/x/examples/a.rs:1:"
+  refute_output --partial "$R"
+  assert_output --partial "Run 'cargo fmt --all' and stage the result."
+}
+
+@test "profile: under a profile with no format step nothing is run, and with no profile the commit is refused" {
+  printf '[workspace]\n' > "$R/Cargo.toml"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/cargo"
+  chmod +x "$BATS_TEST_TMPDIR/bin/cargo"
+  base
+  stage crates/x/examples/a.rs
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/nowhere.toml" PATH="$BATS_TEST_TMPDIR/bin:$PATH" hook
+  assert_equal "$status" 1
+}
+
+# --- an unreadable profile is not an answer (#485 review) -------------------------
+# The board commands answer in their exit status, so a profile error that exited
+# 1 read as "does not ship" and "not a programme document", and both gates passed
+# in silence. The loader exits 70 now and the hook refuses on it.
+
+@test "profile: with no ships list an image change on main is refused, not waved through" {
+  printf 'application = "widget"\n' > "$BATS_TEST_TMPDIR/bare.toml"
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/bare.toml" commit_on main Caddyfile
+  assert_equal "$status" 1
+  assert_output --partial "the profile the rules read cannot be used"
+  assert_output --partial "ships.non_shipping"
+}
+
+@test "profile: with no programme document list a programme document on a branch is refused, not waved through" {
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" commit_on 399-x AGENTS.md
+  assert_equal "$status" 1
+  assert_output --partial "the profile the rules read cannot be used"
+  assert_output --partial "documents.generated"
+}
+
+# Steps are read by name (#485 review): keys in any order, and an empty value,
+# must not shift one key into another's place.
+@test "profile: a format step with its keys reordered and optional ones empty is read by name" {
+  cat > "$BATS_TEST_TMPDIR/t.toml" <<'TOML'
+application = "widget"
+[ships]
+non_shipping = ['.*\.md$', 'scripts/', 'crates/[^/]+/examples/', 'docs/']
+[[hooks.pre_commit]]
+fix = "Run the fixer."
+command = "echo 'Diff in x.rs'; exit 1"
+refusal = "the fake formatter objects."
+requires_command = ""
+requires_file = ""
+staged = '\.rs$'
+name = "fake"
+[documents]
+generated = []
+programme_exact = []
+programme_prefixes = []
+application_outside_docs = []
+tools_registers = ["docs/9.3.0-tools.md"]
+TOML
+  base
+  stage crates/x/examples/a.rs
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/t.toml" hook
+  assert_equal "$status" 1
+  assert_output --partial "the fake formatter objects."
+  assert_output --partial "Run the fixer."
+}
+
+@test "profile: a format step missing its command is refused, not skipped" {
+  cat > "$BATS_TEST_TMPDIR/t.toml" <<'TOML'
+application = "widget"
+[ships]
+non_shipping = ['crates/[^/]+/examples/']
+[[hooks.pre_commit]]
+name = "broken"
+staged = '\.rs$'
+[documents]
+generated = []
+programme_exact = []
+programme_prefixes = []
+application_outside_docs = []
+tools_registers = ["docs/9.3.0-tools.md"]
+TOML
+  base
+  stage crates/x/examples/a.rs
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/t.toml" hook
+  assert_equal "$status" 1
+  assert_output --partial "lacks its name, staged or command"
 }

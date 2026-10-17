@@ -14,6 +14,8 @@ SHA=aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   W="$BATS_TEST_TMPDIR"
   mkdir -p "$W/bin" "$W/artifacts" "$W/worktree"
   BUILDS="$W/builds.log"; : > "$BUILDS"

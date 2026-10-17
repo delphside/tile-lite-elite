@@ -9,6 +9,10 @@ set -uo pipefail
 # remembered, which is how #137 shipped 81 broken anchors into a branch and
 # found them by luck.
 #
+# The application's own facts (what the linter skips, the grandfathered change
+# documents, its own checks) come from its technical profile, `programme.toml`,
+# through `board-profile.py` (#485); nothing here names an application.
+#
 # One script, called by `.github/workflows/docs.yml`, so the check you make
 # before pushing and the one the pull request enforces are the same code — the
 # same reason `ci-status.sh` is shared between `deploy.sh` and the terminal.
@@ -26,6 +30,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$HERE" || exit 1
+PROFILE="$HERE/scripts/programme/board/board-profile.py"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 FAILED=0
@@ -38,7 +43,16 @@ FAILED=0
 # are the skills and agents linked from `.claude/` into it (#485). CI
 # checks the live programme checkout out at `.programme-live/`, also skipped.
 bold "1. markdownlint"
-npx --yes markdownlint-cli2@0.23.2 "**/*.md" "#target" "#**/node_modules" "#old-crates" "#pipeline.md" "#.claude/worktrees" "#programme" "#.programme-live" "#.claude/skills" "#.claude/agents" 2>&1 | tail -4 || FAILED=1
+# What else the linter skips is the application's: the technical profile's `documents.lint_ignore`.
+# (Read into a variable first: the status of a process substitution is lost.)
+APP_IGNORE=()
+if IGNORED="$("$PROFILE" get documents.lint_ignore)"; then
+  mapfile -t APP_IGNORE <<< "$IGNORED"
+else
+  echo "  cannot read documents.lint_ignore from the technical profile"
+  FAILED=1
+fi
+npx --yes markdownlint-cli2@0.23.2 "**/*.md" "${APP_IGNORE[@]}" "#.claude/worktrees" "#programme" "#.programme-live" "#.claude/skills" "#.claude/agents" 2>&1 | tail -4 || FAILED=1
 
 bold "2. links"
 python3 scripts/programme/docs/check-doc-links.py || FAILED=1
@@ -61,14 +75,11 @@ python3 scripts/programme/docs/check-doc-links.py || FAILED=1
 # follow a rename and several issue comments point at them. They are listed
 # rather than pattern-matched so that the list can only shrink.
 bold "3. placement"
-GRANDFATHERED=(
-  "README.md"
-  "0.6.0-user-testing.md"
-  "25-rate-limiting-test-design.md"
-  "41-user-deletion-test-design.md"
-)
-if LIVE="$("$HERE/scripts/programme/board/board-records.py" live)"; then
-  CHANGES="$LIVE/applications/tile-lite-elite/3.1.7-changes"
+# They are the technical profile's `documents.grandfathered_changes`.
+if LIVE="$("$HERE/scripts/programme/board/board-records.py" live)" \
+   && CHANGES="$("$HERE/scripts/programme/board/board-records.py" change-documents)" \
+   && KEEP="$("$PROFILE" get documents.grandfathered_changes)"; then
+  mapfile -t GRANDFATHERED <<< "$KEEP"
   STRAY=0
   if [[ ! -d "$CHANGES" ]]; then
     echo "  MISSING $CHANGES — the live checkout has no change documents folder"
@@ -92,17 +103,18 @@ else
   FAILED=1
 fi
 
-# Tile Lite Elite's documents are 4.G.N in the programme's one numbering: 4.1
-# overview, 4.2 design, 4.3 development and operation, 4.4 reference.
-# document-map.py holds the pattern, so the map and this gate cannot disagree.
+# An application's documents are R.G.N in the programme's one numbering, R its
+# document range: R.1 overview, R.2 design, R.3 development and operation, R.4
+# reference. document-map.py holds the pattern, so the map and this gate cannot
+# disagree.
 if "$HERE/scripts/programme/docs/document-map.py" --names; then
-  echo "  every document in docs/ is named 4.G.N (G in 1-4) or is the README"
+  echo "  every document in docs/ is named R.G.N (G in 1-4, R the document range) or is the README"
 else
   FAILED=1
 fi
 
 # 4. the document map is derived, so a stale one is always wrong and always
-# fixed by regenerating. A **gate**, unlike step 5: there is no judgement in it
+# fixed by regenerating. A **gate**, unlike step 7 (a measure): there is no judgement in it
 # and no writing to do, only `document-map.py --write`.
 #
 # It was wired into nothing until 2026-09-11 — not this script, not the
@@ -112,26 +124,56 @@ fi
 # A derived artefact with no check is the shape #326 and #340 are also about.
 echo
 bold "4. the document map"
-if "$HERE/scripts/programme/docs/document-map.py" --check > /dev/null 2>&1; then
-  echo "  docs/4.1.6 lists every heading in every document"
-else
-  echo "  STALE   docs/4.1.6-document-map.md"
+if MAP_OUT="$("$HERE/scripts/programme/docs/document-map.py" --check 2>&1)"; then
+  echo "  the document map lists every heading in every document"
+elif [[ "$MAP_OUT" == *"is out of date"* ]]; then
+  echo "  STALE   the document map (the technical profile's documents.map)"
   echo "          → run ./scripts/programme/docs/document-map.py --write and commit it"
+  FAILED=1
+else
+  # Not staleness (an unreadable profile, a duplicate heading, a misnamed
+  # document): regenerating would not help, so show what it said.
+  echo "  FAILED  the document map could not be checked:"
+  printf '%s\n' "$MAP_OUT" | sed 's/^/          /'
   FAILED=1
 fi
 
-# 5. API errors -- a **gate** since 2026-09-21, and a check before that. While
-# the document carried none of the 44, a build going red over writing that had
-# not happened yet would have been wrong. All 70 are now documented against the
-# endpoints that return them, so what is left to protect is that staying true,
-# and a new error with no line in 4.4.3 is a regression rather than a debt (#329).
-#
-# **Run bare**, as 6 and 7 are: piping it through `sed` to indent reported
-# `sed`'s exit status and nothing else, which is how it could be a gate and
-# still never fail.
+# 5. The application's own checks, from the technical profile's `hooks.check_docs`,
+# run in the order given. A **gate**: each is a rule about the application's own
+# content (Tile Lite Elite's: every API error documented, every script log event
+# declared), and a failure fails this script. Run bare, as 6 is: piping one
+# through `sed` to indent it reported `sed`'s exit status and nothing else,
+# which is how it could be a gate and still never fail.
 echo
-bold "5. API errors"
-if ! "$HERE/scripts/programme/docs/check-api-errors.py"; then FAILED=1; fi
+bold "5. the application's checks"
+if ! CHECKS="$("$PROFILE" get hooks.check_docs)"; then
+  echo "  cannot read hooks.check_docs from the technical profile"
+  FAILED=1
+  CHECKS=""
+fi
+# Each entry is a block of `name=value` lines and an empty line (board-profile.py),
+# read by name, so key order and empty values cannot shift one into another.
+CHECK_NAME="" CHECK_COMMAND=""
+run_check() {
+  [[ -n "$CHECK_NAME$CHECK_COMMAND" ]] || return 0
+  if [[ -z "$CHECK_NAME" || -z "$CHECK_COMMAND" ]]; then
+    echo "  an entry of hooks.check_docs lacks its name or command: '$CHECK_NAME' '$CHECK_COMMAND'"
+    FAILED=1
+  else
+    echo "  $CHECK_NAME"
+    # shellcheck disable=SC2086 # the command is a path and its arguments
+    if ! "$HERE/"$CHECK_COMMAND; then FAILED=1; fi
+  fi
+  CHECK_NAME="" CHECK_COMMAND=""
+}
+while IFS= read -r line; do
+  case "$line" in
+    name=*) CHECK_NAME="${line#name=}" ;;
+    command=*) CHECK_COMMAND="${line#command=}" ;;
+    "") run_check ;;
+  esac
+done <<< "$CHECKS"
+run_check
 
 # 6. mermaid — #340. markdownlint sees a fenced block as opaque, so a diagram
 # that does not parse renders as an error box on GitHub and is caught by
@@ -145,20 +187,12 @@ if ! "$HERE/scripts/programme/docs/check-api-errors.py"; then FAILED=1; fi
 bold "6. mermaid diagrams"
 if ! node scripts/programme/docs/mermaid/check.mjs; then FAILED=1; fi
 
-# 7. script log events -- #328 R2. The server's declaration is held true by
-# `tests/log_schema.rs`; without the equivalent the script events drift within a
-# month, and a record whose fields nobody declared is a transcript rather than a
-# log. Run bare, as mermaid is: a pipe would report the pipe's status.
-echo
-bold "7. script log events"
-if ! "$HERE/scripts/programme/docs/check-run-log-events.py"; then FAILED=1; fi
-
-# 8. history signals -- #427 R8. A measure, not a gate: the lines in the
+# 7. history signals -- #427 R8. A measure, not a gate: the lines in the
 # numbered documents carrying a phrase that marks history or argument (the programme's docs/1.5).
 # It reports and never fails, because a phrase can be used legitimately; a
-# person reads the list. It should fall. Run bare, as 5 to 7 are.
+# person reads the list. It should fall. Run bare, as 5 and 6 are.
 echo
-bold "8. history signals (a measure; --list in doc-signals.py shows them)"
+bold "7. history signals (a measure; --list in doc-signals.py shows them)"
 "$HERE/scripts/programme/docs/doc-signals.py"
 
 echo

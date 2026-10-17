@@ -86,17 +86,25 @@ fi
 # The `[deploy.sh]` test stays, and is not redundant with the author filter:
 # the owner runs production deploys himself now, so those comments are written
 # by *his* account and the author filter would let them through.
-# `gh api` takes exactly one argument after --jq and has no --arg of its own,
-# so the login is substituted into the filter rather than bound as a jq
-# variable. Writing `--jq --arg me "$ME"` fails with "accepts 1 arg(s),
-# received 4", and because this whole pipeline sends stderr to /dev/null it
-# fails *silently*: the check would report nothing, forever, and look calm.
-# An empty $ME falls back to a sentinel that matches no login, so a failed
-# lookup over-reports rather than going quiet.
-FILTER='.[] | select(.user.login != "__ME__")
-            | select((.body | test("^\\[deploy.sh\\]")) | not)
+# `gh api --jq` carries its own jq (the dev machine has no jq of its own, #329) and
+# takes no `--arg`, so the login and the marker are spliced into the filter as JSON
+# string literals, escaped by Python's json.dumps (`board-profile.py json-string`):
+# a quote or a backslash in either stays inside the string. An empty $ME falls back
+# to a sentinel that matches no login, so a failed lookup over-reports rather than
+# going quiet.
+# The marker is the technical profile's `release.deploy_marker`. This hook never
+# fails a turn, so an unreadable profile is reported in the turn and ends it.
+if ! DEPLOY_MARKER="$(python3 ./scripts/programme/board/board-profile.py get release.deploy_marker 2>&1)"; then
+  echo "turn-check: $DEPLOY_MARKER"
+  exit 0
+fi
+OWNER_NAME="$(python3 ./scripts/programme/board/board-profile.py get accounts.owner_name 2>/dev/null)" || OWNER_NAME="the owner"
+ME="${ME:-__no_such_login__}"
+ME_J="$(python3 ./scripts/programme/board/board-profile.py json-string "$ME")" || exit 0
+MARKER_J="$(python3 ./scripts/programme/board/board-profile.py json-string "$DEPLOY_MARKER")" || exit 0
+FILTER='.[] | select(.user.login != '"$ME_J"')
+            | select((.body | startswith('"$MARKER_J"')) | not)
             | "#\(.issue_url | split("/") | last)  \(.updated_at[11:16])  \((.body | gsub("\n"; " "))[0:160])"'
-FILTER="${FILTER/__ME__/${ME:-__no_such_login__}}"
 if (( PRINT_FILTER )); then printf '%s\n' "$FILTER"; exit 0; fi
 
 NEW="$(timeout 15 gh api "repos/{owner}/{repo}/issues/comments?since=$SINCE&sort=updated&direction=asc&per_page=30" \
@@ -208,7 +216,7 @@ date -u +%Y-%m-%dT%H:%M:%SZ > "$STATE"
 (( RESEED )) && exit 0
 [[ -z "$NEW" && -z "$EDITED" && -z "$MOVED" && -z "$SWEPT" ]] && exit 0
 
-echo "New on GitHub since the last check (Steve's, not yours) — reply where it was said, not here:"
+echo "New on GitHub since the last check ($OWNER_NAME's, not yours) — reply where it was said, not here:"
 [[ -n "$NEW" ]] && echo "$NEW"
 [[ -n "$EDITED" ]] && printf '%s' "$EDITED"
 # Last, and labelled, because it is the one that calls for an act rather than a

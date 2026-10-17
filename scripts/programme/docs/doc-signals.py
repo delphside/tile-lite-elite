@@ -21,7 +21,11 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from board import profile  # noqa: E402
+
+ROOT = profile.app_root()
 
 DATE = r"20\d\d-\d\d-\d\d"
 SIGNALS = [
@@ -37,13 +41,13 @@ SIGNALS = [
         rf"moved|retired|deleted|removed)|Created) (on )?{DATE}")),
 ]
 
-# A record whose dates are its content: the generated map.
-EXEMPT = {"4.1.6-document-map.md"}
-
-
 def documents(root: Path = ROOT) -> list[Path]:
-    return sorted(p for p in (root / "docs").glob("[1-5].*.md")
-                  if p.name not in EXEMPT)
+    """The numbered documents: the application's range (its programme profile's
+    `document range`). Not the generated map, a record whose dates are its content."""
+    exempt = {Path(profile.technical(root).string("documents.map")).name}
+    numbered = profile.application_profile(root)["identity"]["document_range"]
+    return sorted(p for p in (root / "docs").glob(f"{numbered}.*.md")
+                  if p.name not in exempt)
 
 
 def matches(text: str) -> list[tuple[int, str, str]]:

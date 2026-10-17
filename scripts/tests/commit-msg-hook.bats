@@ -13,6 +13,8 @@
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
+  load fixtures
+  use_fake_profiles
   HOOK="$BATS_TEST_DIRNAME/../../.githooks/commit-msg"
   # A scratch repository carrying the two files the hook reads versions from.
   R="$BATS_TEST_TMPDIR/repo"
@@ -93,4 +95,43 @@ hook() {   # <message> [CLAUDECODE value]: run the hook on it, in the scratch re
   hook "no stamp here" yes
   run grep -c '^Co-Authored-By:' "$R/msg"
   assert_output 0
+}
+
+# What the stamp looks like, and where its versions are read, are the technical
+# profile's (#485): the same hook, a different profile, a different rule.
+@test "the stamp the hook wants is the profile's, and it says so" {
+  hook "docs: a bare scope prefix"
+  assert_failure
+  assert_output --partial "wanted: app <X.Y.Z> api <M.N>: <subject>"
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" hook "docs: a bare scope prefix"
+  assert_failure
+  assert_output --partial "wanted: v<N> / <M>: <subject>"
+}
+
+@test "under another profile its stamp is accepted and the first one's is not" {
+  printf 'app=7\n' > "$R/VERSION"
+  printf '#!/bin/sh\necho 8\n' > "$R/scripts/api-version.sh"; chmod +x "$R/scripts/api-version.sh"
+  printf 'x\n' > "$R/API"
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" hook "v7 / 8: a real subject"
+  assert_success
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" hook "app 0.5.2 api 2.10: a real subject"
+  assert_failure
+  PROGRAMME_PROFILE="$FAKES/programme-other.toml" hook "v6 / 8: wrong app"
+  assert_failure
+  assert_output --partial "subject says app 6, VERSION says 7"
+}
+
+@test "a version the tree disagrees on names the profile's file" {
+  hook "app 0.5.1 api 2.10: wrong app"
+  assert_failure
+  assert_output --partial "Cargo.toml says 0.5.2"
+  hook "app 0.5.2 api 2.9: wrong api"
+  assert_failure
+  assert_output --partial "crates/api/src/lib.rs says 2.10"
+}
+
+@test "a profile that cannot be read refuses the commit, saying which file" {
+  PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/nowhere.toml" hook "app 0.5.2 api 2.10: a real subject"
+  assert_failure
+  assert_output --partial "$BATS_TEST_TMPDIR/nowhere.toml"
 }

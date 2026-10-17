@@ -29,12 +29,19 @@ class TheInbox(Cases):
         remarks = (
             Remark(7, "2026-09-15T09:00", "owner", "a question", False),
             Remark(7, "2026-09-15T10:00", "claude", "an answer", False),
-            Remark(9, "2026-09-16T09:00", "deploy", "Released in prod-0.8.1", False),
+            Remark(9, "2026-09-16T09:00", "deploy", "Shipped in rel-0.8.1", False),
         )
         inbox = build([issue(7, "seven"), issue(9, "nine")], remarks, SINCE)
         self.expect("a thread per issue", 2, len(inbox.threads))
         self.expect("remarks stay with their issue", 2, len(inbox.threads[0].remarks))
         self.expect("the owner's are counted", 1, inbox.from_owner)
+
+    def test_a_deploys_remark_is_labelled_with_the_profiles_marker(self):
+        """a deploy's remark carries the technical profile's marker"""
+        remarks = (Remark(9, "2026-09-16T09:00", "deploy", "Shipped in rel-0.8.1", False),)
+        text = render(build([issue(9, "nine")], remarks, SINCE), colour=False)
+        self.expect("the marker", True, "[ship.sh] Shipped in rel-0.8.1" in text)
+        self.expect("not a built-in one", False, "[deploy.sh]" in text)
 
     def test_a_remark_on_an_issue_the_snapshot_does_not_hold_still_arrives(self):
         """a remark on an issue the snapshot does not hold still arrives"""
@@ -168,12 +175,12 @@ class WhoTypedIt(Cases):
         self.expect("a fifth column, to the second", "2026-09-26T08:00:05", row[4])
 
     def test_each_account_is_read_as_what_it_is(self):
-        self.expect("the owner", "owner", self.who("SteveStyle", "User"))
-        self.expect("Claude", "claude", self.who("SteveStyle-typed-by-Claude", "User"))
+        self.expect("the owner", "owner", self.who("fake-owner", "User"))
+        self.expect("Claude", "claude", self.who("fake-owner-claude", "User"))
         self.expect("a workflow", "bot", self.who("github-actions[bot]", "Bot"))
         self.expect("Dependabot", "bot", self.who("dependabot[bot]", "Bot"))
         self.expect("deploy.sh's announcement", "deploy",
-                    self.who("SteveStyle-typed-by-Claude", "User", "Released in prod-0.9.0"))
+                    self.who("fake-owner-claude", "User", "Shipped in rel-0.9.0"))
 
 
 class Reports(Cases):

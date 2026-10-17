@@ -97,3 +97,12 @@ Totals  160 met  1 missing  8 not checked
     refute_line --regexp '^FAIL'
   done
 }
+
+# Exit 70 is a profile that cannot be read, which is neither "findings" nor a pass.
+@test "exit 70 says the profile cannot be read and prints the loader's message" {
+  transitions 70 "profile: the technical profile /x/programme.toml has no key \`release\`"
+  assert_equal "$(first_word)" NOTE
+  assert_output --partial 'profile cannot be read'
+  assert_output --partial 'has no key'
+  refute_output --partial 'further along'
+}

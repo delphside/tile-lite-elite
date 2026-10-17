@@ -18,7 +18,7 @@ HOOK = Path(__file__).resolve().parents[4] / ".claude" / "comment-check.sh"
 
 class BeforeCommenting(Cases):
 
-    def run_hook(self, command, open_lines):
+    def run_hook(self, command, open_lines, **env):
         with tempfile.TemporaryDirectory() as d:
             stub = Path(d) / "inbox"
             body = "\n".join(f"echo '{line}'" for line in open_lines) or "echo 'nothing from the owner is waiting for an answer'"
@@ -26,7 +26,7 @@ class BeforeCommenting(Cases):
             stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
             return subprocess.run([str(HOOK)], input=json.dumps({"tool_input": {"command": command}}),
                                   capture_output=True, text=True,
-                                  env={**os.environ, "COMMENT_CHECK_INBOX": str(stub)}).stdout
+                                  env={**os.environ, "COMMENT_CHECK_INBOX": str(stub), **env}).stdout
 
     ASK = ["#7  seven", "  > 2026-10-01T09:00  a question"]
 
@@ -38,6 +38,17 @@ class BeforeCommenting(Cases):
                         "cd x && gh issue comment 7 -F y"):
             out = self.run_hook(command, self.ASK)
             self.expect(command, True, "a question" in out and "#7 has comments" in out)
+
+    def test_it_names_the_owner_as_the_programme_file_does(self):
+        out = json.loads(self.run_hook("gh issue comment 7 --body hi", self.ASK))
+        self.expect("by the programme file's display name", True,
+                    "#7 has comments from Pat that" in out["hookSpecificOutput"]["additionalContext"])
+
+    def test_with_no_programme_file_it_still_speaks_and_does_not_name_a_person(self):
+        out = json.loads(self.run_hook("gh issue comment 7 --body hi", self.ASK,
+                                       PROGRAMME_CONFIG="/nonexistent/programme.toml"))
+        self.expect("a hook must not fail", True,
+                    "#7 has comments from the owner that" in out["hookSpecificOutput"]["additionalContext"])
 
     def test_it_says_it_as_context_and_never_blocks(self):
         out = json.loads(self.run_hook("gh issue comment 7 --body hi", self.ASK))

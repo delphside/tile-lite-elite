@@ -208,7 +208,14 @@ check_unreleased() {
   # nothing. The rule is `board/shipping.py`'s `ships`.
   while read -r sha; do
     [[ -n "$sha" ]] || continue
-    if python3 "$(dirname "${BASH_SOURCE[0]}")/programme/board/board-shipping.py" ships "$sha" </dev/null 2>/dev/null; then
+    # Exit 70 is a profile that cannot be read, not "does not ship": stop with its message.
+    ships_status=0
+    ships_err="$(python3 "$(dirname "${BASH_SOURCE[0]}")/programme/board/board-shipping.py" ships "$sha" </dev/null 2>&1 >/dev/null)" || ships_status=$?
+    if (( ships_status == 70 )); then
+      printf 'verify: what ships cannot be decided, the profile is unreadable:\n%s\n' "$ships_err" >&2
+      exit 70
+    fi
+    if (( ships_status == 0 )); then
       n=$((n + 1))
       line+="$(git log -1 --format='%h %s' "$sha" | cut -c1-96)"$'\n'
     fi
@@ -465,6 +472,9 @@ check_transitions() {
     note transitions "the transition check timed out after 60s"
   elif (( status == 0 )); then
     pass transitions "every open issue has done the work its field claims"
+  elif (( status == 70 )); then
+    note transitions "the transition check could not run: the profile cannot be read" \
+      "$(printf '%s' "$out" | tail -2)"
   elif (( status == 2 )); then
     note transitions "the transition check could not run" \
       "$(printf '%s' "$out" | tail -2)"

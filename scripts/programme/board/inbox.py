@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from . import profile
 from .model import Issue, RawIssue, classify
 from .sources import Remark, Report
 
@@ -198,7 +199,7 @@ def render(inbox: Inbox, colour: bool = True) -> str:
             elif r.who == "bot":
                 out.append(f"    {dim(r.when)}  {dim('[bot] ' + prefix + r.text)}")
             elif r.who == "deploy":
-                out.append(f"    {dim(r.when)}  {dim('[deploy.sh] ' + prefix + r.text)}")
+                out.append(f"    {dim(r.when)}  {dim(profile.technical().string('release.deploy_marker') + ' ' + prefix + r.text)}")
             else:
                 out.append(f"    {dim(r.when)}  {dim(prefix + r.text)}")
 

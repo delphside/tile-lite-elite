@@ -11,3 +11,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "programme"))
+
+from board.tests.profiles import use_fakes  # noqa: E402
+
+# Every test reads the fake profiles, never the real application's (#485).
+use_fakes()

@@ -21,7 +21,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import repo
+from . import profile, repo
 from .model import RELEASE, ParentProject, Requirement, StandaloneProject, WorkPackage, classify
 from .sources import Snapshot
 
@@ -31,10 +31,8 @@ DELIVERING = (WorkPackage, StandaloneProject)
 # changed since it was last read whole.
 REVIEW_THRESHOLD = int(os.environ.get("REVIEW_THRESHOLD_PERCENT", "45"))
 
-STAMP = re.compile(r"Reviewed whole at `([0-9a-f]+)`")
 
-
-def _rehearsal_url() -> str:
+def _rehearsal_url(script: Path, variable: str) -> str:
     """From the file that defines it, never a second copy.
 
     Read in a subshell: that file exports variables meant for `deploy.sh`, and
@@ -43,10 +41,9 @@ def _rehearsal_url() -> str:
     the rehearsal host on both lines. It looked plausible, because the two are
     usually on the same commit.
     """
-    script = Path(__file__).resolve().parents[2] / "rehearsal-target.sh"
     if not script.exists():
         return ""
-    out = subprocess.run(["bash", "-c", f'. "{script}" >/dev/null 2>&1; printf "%s" "$TARGET_URL"'],
+    out = subprocess.run(["bash", "-c", f'. "{script}" >/dev/null 2>&1; printf "%s" "${variable}"'],
                          capture_output=True, text=True)
     return out.stdout.strip()
 
@@ -67,16 +64,33 @@ def branch_line(where: "repo.RunningOn | None", prs: dict[str, tuple[int, str]])
     return line
 
 
+def _environment_url(name: str, fixed: str, root: Path) -> str:
+    """One environment's URL: a variable that overrides it, then the programme
+    profile's fixed URL, then what the technical profile gives for it (a
+    default, or the script that defines it). Empty when the script is absent,
+    which the report reads as *did not answer*."""
+    spec = profile.technical(root)
+    for variable in spec.strings(f"environments.{name}.env"):
+        if os.environ.get(variable):
+            return os.environ[variable]
+    if fixed:
+        return fixed
+    table = spec.get(f"environments.{name}")
+    if "url" in table:
+        return spec.string(f"environments.{name}.url")
+    if "url_from" in table:
+        return _rehearsal_url(root / spec.string(f"environments.{name}.url_from"),
+                              spec.string(f"environments.{name}.url_variable"))
+    raise profile.ProfileError(
+        f"{spec.source} gives environment `{name}` no `url`, `url_from` or variable that is set, "
+        f"and its programme profile gives it no fixed URL")
+
+
 def environments() -> list[tuple[str, str, str, str]]:
-    urls = [
-        ("production", os.environ.get("PROD_URL", "https://tileliteelite.com"),
-         "what users have"),
-        ("rehearsal", os.environ.get("REHEARSAL_URL") or _rehearsal_url(),
-         "what the release gate checks"),
-        ("preview", os.environ.get("PREVIEW_URL")
-         or os.environ.get("STAGING_URL", "http://localhost:8081"),
-         "what you last looked at"),
-    ]
+    """The programme profile's environments, in its order: name, URL, purpose."""
+    root = profile.app_root()
+    urls = [(row["name"], _environment_url(row["name"], row["url"], root), row["purpose"])
+            for row in profile.application_profile(root)["environments"]]
     rows = []
     for name, url, meaning in urls:
         version = repo.live_version(url) if url else None
@@ -113,7 +127,7 @@ class Change:
         """The commits and the board cannot both be right.
 
         Only states that actually imply the work landed count. A
-        *mentioned before prod-0.8.0* row is an old commit naming the issue in
+        *mentioned before <tag>* row is an old commit naming the issue in
         passing, which `Refs #N` explicitly permits — treating that as a
         contradiction reported four changes as disagreeing with the board when
         the derivation was what was wrong. Owner, 2026-09-18: *"Refs #N does
@@ -165,13 +179,14 @@ def documents_to_reread() -> tuple[list[tuple[str, int, str]], list[str]]:
     """Documents that have changed a lot since anybody read them whole."""
     flagged, unstamped = [], []
     root = Path(".")
+    review_stamp = re.compile(profile.technical().string("documents.review_stamp"))
     # This repository's own documents only. A change document is a record, in the
     # programme repository's checkout (`records.change_documents()`), whose history
     # and `Reviewed whole at` commits are that repository's: this `git diff` cannot
     # measure them, so they are not read here (#485).
     for doc in sorted(root.glob("docs/*.md")):
         text = doc.read_text(errors="replace")
-        match = STAMP.search(text)
+        match = review_stamp.search(text)
         if not match:
             unstamped.append(str(doc.relative_to("docs")) if doc.is_relative_to("docs")
                              else str(doc))

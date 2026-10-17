@@ -1,48 +1,50 @@
 """What reaches the image — decided once.
 
 **`programme/docs/1.2-change-lifecycle.md` is the authority**, under *Route* in §2.15: anything
-built into the image is Production Release — `crates/**`, the word lists,
-`Caddyfile`, `docker-compose.yml`, `Dockerfile` — and everything else in the
-repository is one of the two repository routes. This is that rule in the form code can apply,
-written as the *exceptions* rather than the members: the list of things that
-ship grows whenever a crate is added, and the list of things that do not is
-stable.
+built into the image is Production Release, and everything else in the
+repository is one of the two repository routes. This is that rule in the form
+code can apply, written as the *exceptions* rather than the members: the list
+of things that ship grows whenever a crate is added, and the list of things
+that do not is stable.
 
-Test code is excluded deliberately — `programme/applications/tile-lite-elite/3.1.2-artefacts.md`, *What counts as an artefact*:
-a test exists to hold an artefact to its behaviour and is delivered with it.
-So are a crate's `examples/` and `benches/`, which are never compiled into the
-binary; the release's own benchmark rows, under `examples/`, once passed for an
-image change in a test that used a looser pattern (#421).
-
-`.cargo/audit.toml` and not `.cargo/` — the file, deliberately. It configures
-`cargo audit` and is read by nothing else, so it cannot reach a build.
-`.cargo/config.toml` sets rustflags, the target directory and registries, and
-would change the bytes.
+**The list is the application's.** Since #485 stage 2 it is the technical
+profile's `ships.non_shipping` (regular expressions, matched from the start of
+a path), and a version-only bump is described by `versions.bump`; nothing here
+names a path. Tile Lite Elite's reasons for each entry are in its profile's
+comments and the application's artefact register (`3.n.2`),
+*What counts as an artefact*: a test exists to hold an artefact to its
+behaviour and is delivered with it.
 
 **By path, and that is its limit.** A dependency added only for an example, or
-lock-file lines for another platform, change `Cargo.toml` and `Cargo.lock` and
-so count as reaching the image though the bytes do not change (#404, #421).
+lock-file lines for another platform, change the manifest and lock file and so
+count as reaching the image though the bytes do not change (#404, #421).
 
 Owned here since 2026-09-26; it was `shipping-paths.sh`'s `NON_SHIPPING`, which
-now asks `scripts/programme/board/board-shipping.py` (#421). Pure: paths in, answers out.
+now asks `scripts/programme/board/board-shipping.py` (#421). Paths in, answers
+out; the profile is the only thing read.
 """
 
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Iterable, Sequence
 
-_NON_SHIPPING = re.compile(
-    r"^(docs/|scripts/|e2e/|\.github/|\.githooks/|\.claude/|\.cargo/audit\.toml$"
-    r"|crates/[^/]+/(examples|tests|benches)/|LICENSE|\.gitignore$|\.markdownlint|.*\.md$"
-    # the programme submodule (#485): the Dockerfile copies named folders, never this one
-    r"|\.gitmodules$|programme$|programme/)"
-)
+from . import profile
+
+
+@lru_cache(maxsize=8)
+def _compiled(patterns: tuple[str, ...]) -> "re.Pattern[str]":
+    return re.compile("^(" + "|".join(patterns) + ")")
+
+
+def _non_shipping() -> "re.Pattern[str]":
+    return _compiled(tuple(profile.technical().strings("ships.non_shipping")))
 
 
 def reaches_image(path: str) -> bool:
     """Whether a repository path is built into, or shipped with, the image."""
-    return not _NON_SHIPPING.match(path)
+    return not _non_shipping().match(path)
 
 
 def image_paths(paths: Iterable[str]) -> list[str]:
@@ -58,25 +60,28 @@ def touches_image(paths: Iterable[str]) -> bool:
     return bool(image_paths(paths))
 
 
-_VERSION_LINE = re.compile(r'^[-+]version = "[0-9]+\.[0-9]+\.[0-9]+"$')
-
-
 def version_bump_only(files: Sequence[str], changed_lines: Sequence[str]) -> bool:
     """Whether a change is nothing but the app version moving.
 
-    The files are `Cargo.toml`, optionally with `Cargo.lock`, and every changed
-    line in them is a `version = "X.Y.Z"` line. It is the one image change that
-    belongs on `main` — the version bump after a production deploy, and the
-    minor raised for a functional release (docs/4.3.3 §2.4) — and it ships no
-    behaviour. No changed lines is *not* a bump: "nothing changed" must not read
-    as "nothing disallowed changed".
+    The files are the profile's `versions.bump.required`, optionally with the
+    rest of `versions.bump.files`, and every changed line in them matches
+    `versions.bump.line`. It is the one image change that belongs on `main` —
+    the version bump after a production deploy, and the minor raised for a
+    functional release (docs/4.3.3 §2.4) — and it ships no behaviour. No
+    changed lines is *not* a bump: "nothing changed" must not read as
+    "nothing disallowed changed".
 
     Owned here since 2026-09-26; it was the pre-commit hook's own function.
     """
-    if sorted(f for f in files if f) not in (["Cargo.toml"], ["Cargo.lock", "Cargo.toml"]):
+    spec = profile.technical()
+    required = spec.strings("versions.bump.required")
+    allowed = spec.strings("versions.bump.files")
+    line_pattern = re.compile(spec.string("versions.bump.line"))
+    got = sorted(f for f in files if f)
+    if not all(r in got for r in required) or any(f not in allowed for f in got):
         return False
     lines = [line for line in changed_lines if line and not line.startswith(("+++", "---"))]
-    return bool(lines) and all(_VERSION_LINE.match(line) for line in lines)
+    return bool(lines) and all(line_pattern.match(line) for line in lines)
 
 
 def ships(files: Sequence[str], changed_lines: Sequence[str]) -> bool:
