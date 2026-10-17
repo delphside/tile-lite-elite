@@ -108,10 +108,12 @@ STUB
   chmod +x "$bin"/*
   # `timeout`: the CI gate polls with --wait, which is right for a deploy and
   # wrong for a test, where a fixture with no run would wait twenty minutes.
+  # `</dev/null`: a gate that asks when stdin is a terminal would otherwise
+  # wait for an answer when bats is run by hand, and time out with 124.
   run bash -c 'cd "$1" && shift && PATH="$1:$PATH" timeout 60 env \
       DEPLOY_GATES_ONLY=1 XDG_STATE_HOME="$2" \
       TARGET_URL=https://prod.test PREVIEW_URL=http://preview.test REHEARSAL_URL=https://rehearsal.test \
-      "${@:3}"' _ "$ROOT" "$bin" "$BATS_TEST_TMPDIR/state" "$@" "$ROOT/scripts/deliver/deploy.sh" "$commit"
+      "${@:3}"' _ "$ROOT" "$bin" "$BATS_TEST_TMPDIR/state" "$@" "$ROOT/scripts/deliver/deploy.sh" "$commit" </dev/null
   [[ ! -e "$BATS_TEST_TMPDIR/outward" ]] || fail "reached past the gates: $(cat "$BATS_TEST_TMPDIR/outward")"
 }
 
