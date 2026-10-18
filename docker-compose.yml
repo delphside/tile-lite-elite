@@ -33,6 +33,14 @@ services:
       # it logs the message instead of sending it (see crates/server-game/src/email.rs).
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS:-Tile Lite Elite <noreply@mail.tileliteelite.com>}
+      # Support desk (#515). A bare `SUPPORT_REPLY_TO:` passes the variable
+      # through only if `.env` has it: no line leaves it unset in the container
+      # (main.rs then applies the default address), `SUPPORT_REPLY_TO=` sets it
+      # empty (no Reply-To header). The two poll settings are secrets, set only
+      # in production's `.env`; the job runs only when both are non-empty.
+      SUPPORT_REPLY_TO:
+      SUPPORT_POLL_RESEND_API_KEY: ${SUPPORT_POLL_RESEND_API_KEY:-}
+      SUPPORT_POLL_GITHUB_TOKEN: ${SUPPORT_POLL_GITHUB_TOKEN:-}
       # Rate limits — how often a caller may ask, tunable without a rebuild.
       # Read once when the router is built, so a change takes a container
       # restart (`docker compose up -d server`) rather than a new image. Set
