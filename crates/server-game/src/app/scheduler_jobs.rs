@@ -15,6 +15,12 @@ use super::scheduler::{FAST_INTERVAL, Job, SLOW_INTERVAL, SchedulerHealth, spawn
 /// for a reason of its own.
 const WATCHDOG_INTERVAL: Duration = Duration::from_secs(5);
 
+/// How often the service desk's mailbox is looked at. A tier of its own
+/// because `run_once` runs a tier's jobs in sequence and this one makes
+/// network calls: a slow Resend or GitHub (up to the 10 s timeout each) on
+/// `FAST_INTERVAL` would hold up `expire_overdue_turns`.
+const SUPPORT_MAIL_INTERVAL: Duration = Duration::from_secs(60);
+
 /// A margin over a job's own `expected_interval` before its staleness
 /// counts as stalled rather than ordinary jitter — generous enough that a
 /// single slow-but-not-hung pass never trips it, tight enough that a
@@ -66,18 +72,19 @@ async fn check_for_stalled_jobs(scheduler_health: &SchedulerHealth) -> u64 {
     stalled
 }
 
-/// Wires the scheduler's first two customers — `#400`'s deliveries table
-/// names four; `#87`'s message-arrived notification and RET-3's countdown
-/// are new game behaviour and stay off this until built and reviewed. These
-/// two already exist and already run (lazily, from `list_games`); this
-/// moves *when* they run, not what they do.
+/// Wires the scheduler's customers — `#400`'s deliveries table names four;
+/// `#87`'s message-arrived notification and RET-3's countdown are new game
+/// behaviour and stay off this until built and reviewed. Turn expiry and
+/// move-time reminders already exist and already run (lazily, from
+/// `list_games`); this moves *when* they run, not what they do. The watchdog
+/// and the support-mail poller (#518) are the other two jobs.
 ///
-/// **`check_for_stalled_jobs` runs on a tier of its own**, third alongside
-/// `FAST` and `SLOW` — not sharing either. `run_once` runs a tier's jobs
-/// in sequence, so a watchdog sharing a tier with anything else can only
-/// ever reliably watch the *other* tier: a hang earlier in its own tier's
-/// list freezes it too. On its own tier nothing can share that fate —
-/// each tier is an independent `tokio::spawn`ed task, so a hang in
+/// **`check_for_stalled_jobs` runs on a tier of its own**, alongside `FAST`
+/// and `SLOW` (and the support-mail tier) — not sharing any. `run_once` runs
+/// a tier's jobs in sequence, so a watchdog sharing a tier with anything
+/// else can only ever reliably watch the *other* tiers: a hang earlier in
+/// its own tier's list freezes it too. On its own tier nothing can share
+/// that fate — each tier is an independent `tokio::spawn`ed task, so a hang in
 /// `expire_overdue_turns` or `send_move_time_reminders` cannot block the
 /// watchdog's task, and the watchdog itself has nothing in it that could
 /// hang (a mutex lock and a map iteration, no I/O). It still watches
@@ -92,7 +99,7 @@ pub fn spawn_scheduler(state: AppState) {
 /// is written here once per tier and nowhere per job (`scheduler::Job`), and
 /// this is what a test reads to prove each job is on the tier it belongs to.
 pub(crate) fn tiers(state: &AppState) -> Vec<(Duration, Vec<Job>)> {
-    vec![
+    let mut tiers = vec![
         (
             FAST_INTERVAL,
             vec![Job::new(
@@ -117,7 +124,19 @@ pub(crate) fn tiers(state: &AppState) -> Vec<(Duration, Vec<Job>)> {
                 |state| async move { check_for_stalled_jobs(&state.scheduler_health).await },
             )],
         ),
-    ]
+    ];
+    // Only when both of its settings are present (`main.rs`).
+    if state.support_mail.is_some() {
+        tiers.push((
+            SUPPORT_MAIL_INTERVAL,
+            vec![Job::new(
+                "poll_support_mail",
+                state.clone(),
+                |state| async move { super::support_mail::poll_support_mail(&state).await },
+            )],
+        ));
+    }
+    tiers
 }
 
 #[cfg(test)]
@@ -176,6 +195,36 @@ mod tests {
             ],
             "turn expiry is watched as it happens (#166), reminders tolerate an \
              hour, and the watchdog has a tier to itself"
+        );
+    }
+
+    /// Mail polling is on its own tier, and only exists when configured.
+    #[tokio::test]
+    async fn the_support_mail_job_has_a_tier_of_its_own_only_when_configured() {
+        let url = crate::app::tests::test_database_url();
+        let state = crate::app::tests::create_test_state(&url).await;
+        let names = |state: &AppState| -> Vec<(Duration, Vec<&'static str>)> {
+            tiers(state)
+                .into_iter()
+                .map(|(interval, jobs)| (interval, jobs.iter().map(|job| job.name).collect()))
+                .collect()
+        };
+
+        assert!(
+            names(&state)
+                .iter()
+                .all(|(_, jobs)| !jobs.contains(&"poll_support_mail")),
+            "an unconfigured poller must not be registered"
+        );
+
+        let configured = state.with_support_mail(crate::app::SupportMailConfig::new(
+            Some("resend-key".to_string()),
+            Some("github-token".to_string()),
+        ));
+        assert_eq!(
+            names(&configured).last(),
+            Some(&(Duration::from_secs(60), vec!["poll_support_mail"])),
+            "the poller is alone on a 60-second tier"
         );
     }
 

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use server_game::email::EmailConfig;
-use server_game::{AppState, app_version, build_router, spawn_scheduler};
+use server_game::{AppState, SupportMailConfig, app_version, build_router, spawn_scheduler};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,7 +50,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|key| !key.is_empty());
     let email_from_address = std::env::var("RESEND_FROM_ADDRESS")
         .unwrap_or_else(|_| "Tile Lite Elite <noreply@mail.tileliteelite.com>".to_string());
-    let email_config = EmailConfig::new(email_api_key, email_from_address);
+    let reply_to = server_game::email::reply_to_from_setting(
+        std::env::var("SUPPORT_REPLY_TO").ok().as_deref(),
+    );
+    let email_config = EmailConfig::new(email_api_key, email_from_address).with_reply_to(reply_to);
+    // Both keys or no poller: `SupportMailConfig::new` is `None` unless both
+    // are set and non-empty, and the job is then not registered at all.
+    let support_mail = SupportMailConfig::new(
+        std::env::var("SUPPORT_POLL_RESEND_API_KEY").ok(),
+        std::env::var("SUPPORT_POLL_GITHUB_TOKEN").ok(),
+    );
 
     // `--migrate-only`: apply pending migrations and exit, without binding a
     // port or loading any games.
@@ -79,9 +88,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let state = AppState::new(&database_url, public_base_url, email_config).await?;
-    // Turn expiry and move-time reminders (#400) — everything else this
-    // server does lazily stays lazy; see `docs/3.7`.
+    let state = AppState::new(&database_url, public_base_url, email_config)
+        .await?
+        .with_support_mail(support_mail);
+    // Turn expiry, move-time reminders and the stall watchdog (#400), and the
+    // support-mail poller when configured — everything else this server does
+    // lazily stays lazy; see `docs/3.7`.
     spawn_scheduler(state.clone());
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(bind.parse::<SocketAddr>()?).await?;

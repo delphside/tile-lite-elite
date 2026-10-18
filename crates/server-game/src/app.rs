@@ -49,6 +49,7 @@ mod ratings;
 mod roster;
 mod scheduler;
 mod scheduler_jobs;
+mod support_mail;
 mod sweeps_capacity;
 mod sweeps_game;
 #[cfg(test)]
@@ -73,6 +74,7 @@ use self::sweeps_capacity::*;
 use self::sweeps_game::*;
 
 pub use self::scheduler_jobs::spawn_scheduler;
+pub use self::support_mail::SupportMailConfig;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -116,6 +118,9 @@ pub struct AppState {
     /// for the first time — read by `admin_scheduler_health`, never written
     /// outside `scheduler::run_once`.
     pub(crate) scheduler_health: scheduler::SchedulerHealth,
+    /// The service desk's mail poller (`support_mail.rs`). `None` when its
+    /// two settings are not both present, and then its job is not scheduled.
+    pub(crate) support_mail: Option<Arc<support_mail::SupportMail>>,
 }
 
 /// Read a concurrency limit from the environment, falling back to a default
@@ -174,7 +179,16 @@ impl AppState {
             hash_limit,
             engine_limit,
             scheduler_health: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            support_mail: None,
         })
+    }
+
+    /// Switches the support-mail poller on when `main.rs` found its settings.
+    /// A method rather than an `AppState::new` argument, so the tests that
+    /// build a state without it need not name it.
+    pub fn with_support_mail(mut self, config: Option<SupportMailConfig>) -> Self {
+        self.support_mail = config.map(|config| Arc::new(support_mail::SupportMail::new(config)));
+        self
     }
 }
 

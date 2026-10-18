@@ -15,6 +15,10 @@ pub struct EmailConfig {
     /// keeps working (and stays testable) with zero external dependency.
     api_key: Option<String>,
     from_address: String,
+    /// Where a reply to any game email goes (the service desk's address).
+    /// `None` omits the header, so a reply goes to `from_address` — a
+    /// no-reply mailbox. Set with `with_reply_to`; `main.rs` owns the default.
+    reply_to: Option<String>,
 }
 
 impl EmailConfig {
@@ -22,8 +26,46 @@ impl EmailConfig {
         Self {
             api_key,
             from_address,
+            reply_to: None,
         }
     }
+
+    pub fn with_reply_to(mut self, reply_to: Option<String>) -> Self {
+        self.reply_to = reply_to;
+        self
+    }
+}
+
+/// The Reply-To for `SUPPORT_REPLY_TO`'s value (`None` when it is unset):
+/// unset is the service desk's address, empty or whitespace-only is no header,
+/// anything else is itself, trimmed. Unset and empty differ on purpose, so the
+/// header can be switched off without a code change.
+pub fn reply_to_from_setting(setting: Option<&str>) -> Option<String> {
+    match setting.map(str::trim) {
+        None => Some("support@mail.tileliteelite.com".to_string()),
+        Some("") => None,
+        Some(address) => Some(address.to_string()),
+    }
+}
+
+/// The JSON posted to Resend, split out so a test can read it without the
+/// network. `reply_to` is a key only when there is an address, never `null`.
+fn request_body(
+    config: &EmailConfig,
+    to: &str,
+    subject: &str,
+    text_body: &str,
+) -> serde_json::Value {
+    let mut body = json!({
+        "from": config.from_address,
+        "to": [to],
+        "subject": subject,
+        "text": text_body,
+    });
+    if let Some(reply_to) = &config.reply_to {
+        body["reply_to"] = json!(reply_to);
+    }
+    body
 }
 
 const WELCOME_TEMPLATE: &str = include_str!("../emails/welcome.txt");
@@ -287,12 +329,7 @@ async fn send(
     let response = client
         .post("https://api.resend.com/emails")
         .bearer_auth(api_key)
-        .json(&json!({
-            "from": config.from_address,
-            "to": [to],
-            "subject": subject,
-            "text": text_body,
-        }))
+        .json(&request_body(config, to, subject, text_body))
         .send()
         .await;
 
@@ -330,6 +367,45 @@ async fn send(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_reply_to_setting_is_unset_empty_or_an_address() {
+        assert_eq!(
+            reply_to_from_setting(None).as_deref(),
+            Some("support@mail.tileliteelite.com"),
+            "unset gives the service desk"
+        );
+        assert_eq!(reply_to_from_setting(Some("")), None);
+        assert_eq!(reply_to_from_setting(Some("  \t ")), None);
+        assert_eq!(
+            reply_to_from_setting(Some("  help@example.com ")).as_deref(),
+            Some("help@example.com"),
+            "any other value is trimmed"
+        );
+    }
+
+    #[test]
+    fn a_reply_to_address_is_sent_as_the_reply_to_key() {
+        let config = EmailConfig::new(None, "From <from@example.com>".to_string())
+            .with_reply_to(Some("support@example.com".to_string()));
+
+        let body = request_body(&config, "to@example.com", "s", "t");
+
+        assert_eq!(body["reply_to"], "support@example.com");
+        assert_eq!(body["to"], json!(["to@example.com"]));
+    }
+
+    #[test]
+    fn no_reply_to_address_leaves_the_key_out() {
+        let config = EmailConfig::new(None, "From <from@example.com>".to_string());
+
+        let body = request_body(&config, "to@example.com", "s", "t");
+
+        assert!(
+            body.get("reply_to").is_none(),
+            "an absent address must omit the key, not send null"
+        );
+    }
 
     #[test]
     fn render_substitutes_every_placeholder_in_subject_and_body() {
