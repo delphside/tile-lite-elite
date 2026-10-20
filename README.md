@@ -17,13 +17,14 @@ that survive closing the tab and turns that can be taken days apart.
   to a named player, opened to anyone signed in, or emailed as a join link
   to somebody with no account yet. The creator can reorder, add and remove
   seats until the game starts.
-- **Four editions and four dictionaries.** `official`, `north_american`,
-  `german` and `spanish` board/tile rules; SOWPODS, ENABLE2K, German and
-  Spanish word lists — including proper support for Spanish's CH/LL/RR
-  digraph tiles, which occupy one square but display two letters. Word-list
-  sources and licences are recorded in [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+- **Five editions and four dictionaries.** `official`, `north_american`,
+  `german`, `spanish` and `spicy` (the official tiles on a higher-jeopardy
+  board); SOWPODS, ENABLE2K, German and Spanish word lists — including proper
+  support for Spanish's CH/LL/RR digraph tiles, which occupy one square but
+  display two letters. Word-list sources and licences are recorded in
+  [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
 - **Bots as first-class players.** Engines plug in behind a `GameEngine`
-  trait and go through the same validation path as a human's move. They're
+  trait and go through the same validation path as a human's move. They are
   rated on the same ladder as human players.
 - **ELO ratings and stats**, per player and per engine, with a
   rating-over-time chart and per-game timings.
@@ -31,8 +32,8 @@ that survive closing the tab and turns that can be taken days apart.
 
 ## Try it
 
-The quickest look is [tileliteelite.com](https://tileliteelite.com). To run
-it yourself:
+The quickest look is [tileliteelite.com](https://tileliteelite.com). To run it
+yourself, from a clone on Ubuntu or WSL:
 
 ```bash
 ./scripts/develop/setup-dev-environment.sh   # Rust toolchain, wasm target, dx, sccache, Docker
@@ -44,40 +45,31 @@ Then open <http://127.0.0.1:8080>. [4.3.1 Setup](docs/4.3.1-setup.md) covers a
 cold machine in full; [4.3.2 Development](docs/4.3.2-development.md) covers the
 day-to-day loop.
 
-## How it's put together
+## How it is put together
 
-```text
-crates/
-  rules-shared   board, tiles, dictionaries, legality and scoring — no I/O
-  engine-core    the GameEngine trait and the bundled greedy engine
-  api            every wire type, shared verbatim by server and clients
-  server-game    Axum server: game state, persistence, auth, admin endpoints
-  ui             Dioxus client, compiled to both WASM (web) and native (desktop)
-  admin-cli      operator tooling, loopback-only, against the server's /admin/*
-```
+The workspace's crates are listed in
+[4.1.1](docs/4.1.1-architecture.md#crates).
 
-One rules crate means the same legality and scoring code runs on the server
-and in both clients — the server stays authoritative, but a client never
-disagrees with it about what a word scores. SQLite holds everything, with a
-per-game JSON snapshot as the single source of truth and denormalized
-tables alongside it for querying. Deployment is Docker Compose behind Caddy
-on a free-tier Oracle Cloud VM.
+One rules crate means the same legality and scoring code runs on the server and
+in both clients: the server stays authoritative, but a client never disagrees
+with it about what a word scores. SQLite holds everything, with a per-game JSON
+snapshot as the single source of truth and denormalised tables alongside it for
+querying.
 
-[4.1.1 Architecture](docs/4.1.1-architecture.md) has the full picture and
+[4.1.1 Architecture](docs/4.1.1-architecture.md) has the full picture,
+including deployment, and
 [4.1.3 Technology Decisions](docs/4.1.3-technology-decisions.md) explains why
 each piece was chosen.
 
 ## Documentation
 
-[`docs/`](docs/README.md) is the index. This application's documents are
-4.1 to 4.4: **4.1** overview and architecture, **4.2** design and domain,
-**4.3** development and operation (setup → development → testing and release →
-production), and **4.4** reference (configuration, database schema, API schema,
-data dictionary). The programme's documents are 1.x and 2.x in
-[`delphside/programme`](https://github.com/delphside/programme), and this
-application's records there are 3.1.x. Start at
-[4.1.1 Architecture](docs/4.1.1-architecture.md) to understand the system, or
-[4.3.1 Setup](docs/4.3.1-setup.md) to get it running.
+- [`docs/`](docs/README.md) is the index of this application's documents,
+  numbered 4.1 to 4.4.
+- The programme's documents are 1.x and 2.x in
+  [`delphside/programme`](https://github.com/delphside/programme), and this
+  application's records there are 3.1.x.
+- Start at [4.1.1 Architecture](docs/4.1.1-architecture.md) to understand the
+  system, or [4.3.1 Setup](docs/4.3.1-setup.md) to get it running.
 
 ## Tests
 
@@ -86,16 +78,18 @@ cargo test --workspace     # unit, integration and HTTP-level tests
 cd e2e && npm test         # Playwright, drives the real client in a browser
 ```
 
-CI runs format, clippy (warnings denied), the test suite, and a wasm build
-on every push, plus the end-to-end suite against a real preview Docker stack
-on pull requests and pushes to `main`. See
-[4.3.3 Testing, CI & Release](docs/4.3.3-testing-ci-and-release.md).
+The end-to-end suite runs against a running environment
+([`e2e/README.md`](e2e/README.md)). CI runs format, clippy with warnings
+denied, the test suite and a wasm build on every push, and the end-to-end suite
+against the preview Docker stack on pushes to `main` and `release/*` and on
+pull requests that reach the image
+([4.3.3](docs/4.3.3-testing-ci-and-release.md#23-continuous-integration)).
 
 ## Status
 
 A hobby project, in production and actively developed. The core game,
 accounts, invitations, ratings, chat and both clients are built and live;
-[4.1.4 Roadmap](docs/4.1.4-roadmap.md) tracks what's next.
+[4.1.4 Roadmap](docs/4.1.4-roadmap.md) tracks what is next.
 
 ## Licence
 
