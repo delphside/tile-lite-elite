@@ -15,7 +15,8 @@ lists are generated and the runbooks for changing them.
 
 `greylist-stems.txt` is the generator's input, which makes `greylist.txt`
 reproducible; no run-time code reads it. `is_avoided_by_engines` consults
-`denylist.txt` and `greylist.txt`, so what an engine avoids is the union of both.
+`denylist.txt` and `greylist.txt`, so what an engine avoids is the union of
+both.
 
 **The difference is the subject, not the severity.** A person who plays a rude
 word is expressing themselves; a machine that does it reads as the game
