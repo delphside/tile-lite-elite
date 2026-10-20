@@ -22,11 +22,10 @@ tables they create are in [4.4.2](../../../docs/4.4.2-database-schema.md#actual-
    image does not boot against a newer schema, which is what a rollback across a
    migration meets
    ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)).
-4. **Drop or rename a column in two steps.** The running deployment still reads
-   the column while the new one starts, so ship the new shape with the old
+4. **Drop or rename a column in two steps:** ship the new shape with the old
    column still read, then remove the old column in a later migration.
 
-## What happens without you
+## What is automatic
 
 - `build.rs` reruns the build when anything in `migrations/` changes, so the
   next `cargo build` or `cargo run` embeds a new file.

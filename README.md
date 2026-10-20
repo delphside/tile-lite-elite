@@ -3,8 +3,8 @@
 A multiplayer word-tile game — Rust end to end, playing at
 [tileliteelite.com](https://tileliteelite.com).
 
-The server owns every board, rack and rule; the clients are thin
-presentation layers over one HTTP and WebSocket API.
+The server owns every board, rack and rule; the two clients, a web client and a
+desktop client, are thin presentation layers over one HTTP and WebSocket API.
 
 ## What it does
 

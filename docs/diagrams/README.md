@@ -32,9 +32,10 @@ views are C4's, with five from other frameworks that C4 lacks:
   so the diagram also says where each state change is handled.
 - **Use case diagrams** are one for the service. The actors include a role held
   in one game (its creator), bots and a clock actor for scheduled events
-  (expiry, reminders); each line is a permission, and each use case has an activity diagram. Mermaid has no use
-  case diagram, so it is a flowchart: actors outside a subgraph for the system
-  boundary, use cases inside it as stadium shapes.
+  (expiry, reminders); each line is a permission, and each use case has an
+  activity diagram. Mermaid has no use case diagram, so it is a flowchart:
+  actors outside a subgraph for the system boundary, use cases inside it as
+  stadium shapes.
 - **Activity diagrams** sit between the text requirements and the architecture.
   Each step either causes a state machine transition or only reads state, and
   cites the `docs/4.1.0` rules it exercises, so the end-to-end tests come from
@@ -105,8 +106,9 @@ overwrites a hand edit. `programme/scripts/board/roadmap.py` draws it.
 - **Bold is an action somebody takes;** normal weight happens on its own. Bold
   is a Mermaid markdown string (a backtick-quoted label, `**bold**` inside), as
   `<b>` is printed literally while `htmlLabels` is false.
-- **Line shape carries meaning structurally:** a solid arrow moves code, a dotted
-  arrow returns an answer, and a diamond is a decision taken during an action.
+- **Line shape carries meaning structurally:** a solid arrow moves code, a
+  dotted arrow returns an answer, and a diamond is a decision taken during an
+  action.
 - **Marks in a label:**
 
   | Mark | Means |
@@ -126,7 +128,7 @@ overwrites a hand edit. `programme/scripts/board/roadmap.py` draws it.
 | Setting | Where | Why |
 | --- | --- | --- |
 | `htmlLabels: false` | `mermaid-config.json` | GitHub shows an embedded SVG containing `foreignObject`, which Mermaid emits for HTML labels, as a blank box |
-| `layout: elk` | the `.mmd` header | ELK routes orthogonally and places labels without collisions, which dagre could not for these graphs; it needs `@mermaid-js/layout-elk`, which `mermaid-cli` 11 bundles and GitHub's Mermaid does not, so these diagrams are pre-rendered and embedded |
+| `layout: elk` | the `.mmd` header | ELK routes orthogonally and places labels without collisions, which dagre could not for these graphs; it needs `@mermaid-js/layout-elk`, which `mermaid-cli` 11.17.0 bundles and GitHub's Mermaid does not, so these diagrams are pre-rendered and embedded |
 
 ### Mermaid parse errors
 
@@ -152,15 +154,17 @@ renders it from source, and needs no rendering step.
   teams, an empty box for one developer and one repository; arc42 is a
   twelve-section document template, which the numbered documents already are;
   Rozanski and Woods' seven viewpoints are heavier than C4's views plus the
-  five added here. A new view takes its name from the standard's own list, as
-  the programme's [`CLAUDE.md`](../../programme/CLAUDE.md) says.
+  five added here.
 - **Why a change diagram has four states and not two:** an affected and
-  unaffected key loses the difference between new and changed, which is where
-  detail matters.
-- **Why `roadmap.svg` is not Mermaid:** Mermaid has no swimlanes, and a
-  `flowchart` with a `subgraph` per lane draws a dependency inside a lane top to
-  bottom, or, with `direction LR`, lays the lanes out as columns once an edge
-  crosses lanes. `gantt` has no dependency arrows. `roadmap.py` draws the SVG
-  directly, with presentation attributes and polygon arrowheads and no
-  `<style>`, `<defs>` or `<marker>`, which GitHub's SVG sanitiser removes as it
-  does `foreignObject`.
+  unaffected key loses the difference between a new box and a changed one, which
+  matters at the detail level.
+- **Why `roadmap.svg` is not Mermaid:** Mermaid has no swimlanes, and the two
+  ways to fake them fail:
+  - a `flowchart` with a `subgraph` per lane draws a dependency inside a lane
+    top to bottom;
+  - with `direction LR`, it lays the lanes out as columns once an edge crosses
+    lanes.
+
+  `gantt` has no dependency arrows. `roadmap.py` draws the SVG directly, with
+  presentation attributes and polygon arrowheads and no `<style>`, `<defs>` or
+  `<marker>`, which GitHub's SVG sanitiser removes as it does `foreignObject`.
