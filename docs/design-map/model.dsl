@@ -147,6 +147,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.caddy -> tle.server.throttle "reverse-proxies the API paths its Caddyfile lists, but /health" "HTTP"
         tle.caddy -> tle.server.catalog "reverse-proxies /health" "HTTP"
         tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
+        tle.server -> resend "sends each email as JSON to, and reads the newest support message's id from" "HTTPS"
 
         tle.server.throttle -> tle.server.api "passes requests within their limits"
         tle.server.api -> tle.server.auth "routes account requests"
