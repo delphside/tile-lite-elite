@@ -20,6 +20,7 @@
         component tle.server "server-accounts" "the game server, accounts and email" {
             include tle.server.auth tle.server.games tle.server.invitations tle.server.scheduler
             include tle.server.adminApi tle.server.store tle.server.email tle.db resend
+            include tle.server.supportMail github
         }
         styles {
             element "Element" {
