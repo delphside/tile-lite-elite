@@ -19,14 +19,17 @@ tables they create are in [4.4.2](../../../docs/4.4.2-database-schema.md#actual-
      fails loudly when it cannot.
 3. **Keep a change additive**, as the `#[serde(default = ...)]` fields of
    `PersistedGame` and `PersistedVariantRules` in `persistence.rs` are. An older
-   image does not boot against a newer schema
-   ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)),
-   so a column a running deployment still reads is dropped or renamed in two
-   steps: ship the new shape with the old column still read, then remove the old
-   column in a later migration.
-4. **A new file needs no extra build step.** `build.rs` reruns the build when
-   anything in `migrations/` changes, so the next `cargo build` or `cargo run`
-   embeds it.
-5. **Parallel test runs need no migration lock.** sqlx's cross-connection lock is
-   a no-op for SQLite, and each test in `crates/server-game/src/app/tests.rs`
-   opens its own database file.
+   image does not boot against a newer schema, which is what a rollback across a
+   migration meets
+   ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)).
+4. **Drop or rename a column in two steps.** The running deployment still reads
+   the column while the new one starts, so ship the new shape with the old
+   column still read, then remove the old column in a later migration.
+
+## What happens without you
+
+- `build.rs` reruns the build when anything in `migrations/` changes, so the
+  next `cargo build` or `cargo run` embeds a new file.
+- Parallel test runs need no migration lock: sqlx's cross-connection lock is a
+  no-op for SQLite, and each test in `crates/server-game/src/app/tests.rs` opens
+  its own database file.
