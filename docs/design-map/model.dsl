@@ -20,7 +20,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "crates/ui"
                 }
             }
-            caddy = container "Web server" "Serves the web client and its version file. Reverse-proxies the API paths its Caddyfile lists." "Caddy" {
+            caddy = container "Web server" "Serves version.txt and the web client files. Reverse-proxies the API paths its Caddyfile lists." "Caddy" {
                 properties {
                     "artefact" "Caddyfile"
                 }
