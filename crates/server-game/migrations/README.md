@@ -1,45 +1,32 @@
 # Migrations
 
-Real, versioned schema migrations, run automatically at server startup via
-sqlx's `Migrator` (`persistence::migrate`, which just wraps
-`sqlx::migrate!("migrations")`). This replaced an ad-hoc `create table if not
-exists` scheme that looked fine but silently failed to apply to an existing
-database three separate times — see `docs/4.4.2-database-schema.md`'s migration section for
-the full history.
+Versioned schema migrations, run at server startup by sqlx's `Migrator`
+(`persistence::migrate`, which runs `sqlx::migrate!("./migrations")`). The
+tables they create are in [4.4.2](../../../docs/4.4.2-database-schema.md#actual-current-shape).
 
 ## Rules
 
-1. **Never edit a migration file once it has been applied anywhere** (your
-   local dev DB, production — anywhere). sqlx checksums every migration's
-   content when it's applied. If the file changes afterward, the next server
-   start **fails to boot** (`MigrateError::VersionMismatch`) rather than
-   silently doing nothing. This is enforced, not just a convention.
-
-2. **To change the schema, add a new file**: `NNNN_description.sql`, with
-   `NNNN` the next sequential 4-digit number (`0002_...`, `0003_...`, ...).
-   Use ordinary DDL for the actual change — `alter table ... add column
-   ...`, a plain `create table ...` for a genuinely new table, etc. Do
-   **not** use `if not exists`/`create table if not exists` for a real
-   change — that pattern is only safe in `0001_baseline.sql`, where every
-   target database is known in advance to already have (or not have) the
-   exact same shape. A real migration should apply exactly once and fail
-   loudly if it can't.
-
-3. **Keep changes additive/backward-compatible** where practical — the same
-   caution already used for `PersistedGame`/`PersistedVariantRules`'s
-   `#[serde(default = ...)]` fields elsewhere in `persistence.rs`. Don't
-   drop or rename a column a currently-running deployment still reads
-   without a coordinated two-step change (ship the new shape read-only
-   first, then remove the old column in a later migration once nothing
-   depends on it).
-
-4. **New migration files need a rebuild to be picked up.** `build.rs` tells
-   Cargo to rerun the build when anything under `migrations/` changes, so a
-   plain `cargo build`/`cargo run` after adding a file is enough — no extra
-   step needed.
-
-5. **No locking concerns on SQLite.** sqlx's cross-connection migration lock
-   is a no-op for the SQLite driver (there's no advisory-lock primitive to
-   use), so there's nothing to worry about with the many parallel test
-   runs in `crates/server-game/src/app.rs` — each test already gets its own
-   fresh on-disk database file anyway.
+1. **Never edit a migration file once it has been applied anywhere**, on a
+   local database or on production. sqlx checksums each applied migration, and
+   a changed file makes the next start fail with `MigrateError::VersionMismatch`
+   ([4.4.2](../../../docs/4.4.2-database-schema.md#notes)).
+2. **To change the schema, add a file** named `NNNN_description.sql`, `NNNN`
+   being the next 4-digit number.
+   - Write ordinary DDL: `alter table ... add column ...`, or a plain
+     `create table ...` for a new table.
+   - Leave out `if not exists`. Only `0001_baseline.sql` uses it, because every
+     database it met already had the same shape. A migration applies once and
+     fails loudly when it cannot.
+3. **Keep a change additive**, as the `#[serde(default = ...)]` fields of
+   `PersistedGame` and `PersistedVariantRules` in `persistence.rs` are. An older
+   image does not boot against a newer schema
+   ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)),
+   so a column a running deployment still reads is dropped or renamed in two
+   steps: ship the new shape with the old column still read, then remove the old
+   column in a later migration.
+4. **A new file needs no extra build step.** `build.rs` reruns the build when
+   anything in `migrations/` changes, so the next `cargo build` or `cargo run`
+   embeds it.
+5. **Parallel test runs need no migration lock.** sqlx's cross-connection lock is
+   a no-op for SQLite, and each test in `crates/server-game/src/app/tests.rs`
+   opens its own database file.

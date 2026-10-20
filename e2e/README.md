@@ -1,64 +1,89 @@
 # End-to-end UI tests (Playwright)
 
-Browser tests that drive the real (wasm) web client against a running backend —
-catching client/server **contract** breaks that Rust unit/integration tests
-can't see, since those never render the client or cross the wire. This is the
-only Node in the repo, quarantined to this directory and kept out of the cargo
-workspace.
+Browser tests that drive the real (wasm) web client against a running backend,
+so they catch client and server **contract** breaks that the Rust tests cannot
+see: those never render the client or cross the wire. This is the only Node in
+the repository, kept in this directory and out of the cargo workspace.
 
 ## Running
 
-The suite runs against an **already-running dev environment** — it does not
-start the app itself. That's [runbook](../docs/4.3.3-testing-ci-and-release.md#shipping-a-change-the-full-sequence)
-step 2 (`./scripts/develop/services.sh restart-server` or `restart`), which brings up
-the server (`:3000`) and web client (`:8080`). Then:
+The suite does not start the app: it runs against an environment that is
+already up. For a local run, start the server (`:3000`) and the web client
+(`:8080`) first
+([4.3.2](../docs/4.3.2-development.md#quick-start-scripts)). CI runs it against
+the preview stack ([4.3.3](../docs/4.3.3-testing-ci-and-release.md#23-continuous-integration)).
 
 ```bash
 cd e2e
-npm install            # first time only
-npx playwright install chromium   # first time only — downloads the browser
-npm test               # runs the suite against http://localhost:8080
-npm run test:headed    # watch it in a real browser window
-npm run report         # open the last HTML report
+npm install                       # first time only
+npx playwright install chromium   # first time only: downloads the browser
+npm test                          # the suite against http://localhost:8080
+npm run test:headed               # watch it in a browser window
+npm run report                    # open the last HTML report
 ```
 
-Point it elsewhere (e.g. preview) with `PLAYWRIGHT_BASE_URL=http://localhost:8081 npm test`.
+| setting | value |
+| --- | --- |
+| `PLAYWRIGHT_BASE_URL` | the environment to test, default `http://localhost:8080`; preview is `http://localhost:8081` |
+| `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | a browser binary to use in place of Playwright's own; set in a cloud session by `.claude/cloud-setup.sh` |
+| `REHEARSAL_ACCESS_KEY` | rehearsal's access key; when the URL names rehearsal and this is unset, `playwright.config.ts` runs `scripts/deliver/rehearsal-key.sh` |
+| `EXPECT_DEPLOY` | set to run `bundle.spec.ts`, which waits up to 25 minutes for a deploy to land underneath it; it skips otherwise |
+
+- **Projects:** every spec runs twice, as `chromium` (Desktop Chrome) and
+  `mobile` (Pixel 5), because layout regressions show only at phone width.
+- **In CI:** one worker and two retries; a local run has neither.
 
 ## Test data & cleanup
 
-Every player a test creates is named **`T-e2e-<run>-<base>`** (#252), so what
-made an account is readable from the account rather than guessed.
+Every player a test creates is named **`T-e2e-<run>-<base>-<rand>`**, so what
+made an account can be read from the account.
 
-| part | |
+| part | meaning |
 | --- | --- |
-| `T-` | a test account. Underscore-led, so that if display names come to exclude the underscore a player cannot take a name of this shape at all |
-| `e2e` | the suite. `check-rate-limits.sh` has its own |
-| `<run>` | one value for the whole run, from `global-setup.ts`. A base36 timestamp and four random characters — **timestamp first, so sorting names sorts the runs** |
+| `T-` | a test account, by convention: a player can take a name of this shape, and cleanup deletes what a run created, not what looks like it |
+| `e2e` | the suite |
+| `<run>` | one value for the whole run, from `global-setup.ts`: a base36 timestamp and four random characters, **timestamp first, so sorting names sorts the runs** |
 | `<base>` | the account within the run, as the test named it |
+| `<rand>` | five random characters; both projects run the same specs, and `display_name` is unique |
 
 **Three prefixes fall out of it**, and `clean-test-accounts.sh --prefix` takes
-any of them: `T-` is every test account anywhere, `T-e2e-` is this suite's, and
-`T-e2e-<run>-` is one run's.
+any of them:
 
-**The teardown deletes only its own run.** Two runs against one environment used
-to share `e2e-`, so whichever finished first deleted the other's accounts
-mid-run — failures that read as flaky tests. Run by hand,
-[`scripts/develop/e2e-clean.sh`](../scripts/develop/e2e-clean.sh) defaults to the suite's
-prefix, because wanting all of them is the normal case there.
+| prefix | matches |
+| --- | --- |
+| `T-` | every test account anywhere |
+| `T-e2e-` | this suite's accounts, from every run |
+| `T-e2e-<run>-` | one run's accounts |
 
-**The run id comes from `globalSetup`, not from a constant.** `fullyParallel`
-means several worker *processes*, and a module-level value would be computed
-once in each — every worker believing it was a separate run, with the failure
-looking exactly like the convention working.
-
-**A cleanup can still be refused**, and that is #295 rather than this: the admin
-CLI will not delete an account that is signed in, which a test that ends
-logged-in always is.
+- **The teardown deletes only its own run.** `global-teardown.ts` runs
+  `scripts/develop/e2e-clean.sh` with the run's prefix and the target
+  environment; two runs against one environment cannot delete each other's
+  accounts.
+- **A run by hand** of [`e2e-clean.sh`](../scripts/develop/e2e-clean.sh) defaults
+  to `T-e2e-`, the whole suite's.
+- **The run id comes from `globalSetup`, not a constant.** `fullyParallel` means
+  several worker *processes*, and a module-level value would be computed once in
+  each, every worker believing it a separate run. A run id already in
+  `E2E_RUN_ID` is kept.
+- **Where the cleanup acts:** `e2e-clean.sh` edits the local database file
+  directly for a local target. For any other target it calls
+  [`clean-test-accounts.sh`](../scripts/deliver/clean-test-accounts.sh), which
+  signs each account out and deletes it, and reports an account that still
+  holds a game it cannot remove.
+- **A failed cleanup warns and does not fail the suite**, so a green run can
+  leave accounts behind; read the `CLEANUP FAILED` line.
 
 ## Layout
 
-- `playwright.config.ts` — Chromium, `baseURL` from `PLAYWRIGHT_BASE_URL`, no `webServer` (the app is external).
-- `global-setup.ts` — computes this run's id before any worker starts.
-- `global-teardown.ts` — best-effort call to `scripts/develop/e2e-clean.sh`, for this run's accounts only.
-- `tests/helpers.ts` — auth flows (register/login/logout) and the `T-e2e-<run>-` naming.
-- `tests/smoke.spec.ts` — the first suite: register, login/logout, stay-logged-in, and Play-Greedy-Bot-renders-a-board (the flow whose skew bug prompted this suite).
+| file | holds |
+| --- | --- |
+| `playwright.config.ts` | Chromium, `baseURL`, the two projects, no `webServer` (the app is external), the rehearsal access cookie |
+| `global-setup.ts` | this run's id, computed before any worker starts |
+| `global-teardown.ts` | best-effort call to `scripts/develop/e2e-clean.sh` for this run's accounts |
+| `naming.ts` | the one definition of a test account's name |
+| `tests/helpers.ts` | auth flows (register, log in, log out), `startTwoPlayerGame` and the naming helpers |
+| `tests/smoke.spec.ts` | registering, logging in and out, staying logged in, a bot game's board, unread chat, cache headers and layout at phone widths |
+| `tests/ui-state.spec.ts` | the panes follow the selected game, including after Remove and log out |
+| `tests/live.spec.ts` | an accepted invitation is pushed to the inviter |
+| `tests/bundle.spec.ts` | an idle tab notices a new bundle after a deploy |
+| `tests/naming.spec.ts` | the account-name format, with no browser or server |
