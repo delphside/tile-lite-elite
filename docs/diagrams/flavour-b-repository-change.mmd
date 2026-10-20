@@ -6,7 +6,7 @@ config:
 ---
 flowchart TB
     %% Flavour B — a repository change with a branch. docs/4.3.3, the flavours
-    %% table. Runs 1.1, 1.2, then 1.9 and 1.10.
+    %% table. Runs 1.1, 1.2, then 1.9 steps 1 and 3, and 1.10.
     %% .
     %% Arrow numbers are docs/4.3.3 part 1 section numbers.
     %% .
@@ -17,9 +17,9 @@ flowchart TB
     %% Nothing is deployed. It is live when it lands on main, which is what
     %% 'Repository Change' means — the artefacts are compiled into nothing.
     %% .
-    %% 1.9 is drawn as two arrows because it is two commands and the order
-    %% matters: rebase first, so the SHA changes while it still can, then
-    %% merge --ff-only, which must not change it.
+    %% 1.9 is drawn as two arrows because it is two steps and the order
+    %% matters: step 1 rebases and re-stamps, so the SHA changes while it
+    %% still can, then step 3 merges --ff-only, which must not change it.
     DEV["Dev<br/>working tree"]
     LG["local git<br/>commit history"]
     subgraph GH["GitHub"]
@@ -37,11 +37,11 @@ flowchart TB
     ACT -.->|"`1.2.3 · **$ ci-status.sh --wait**`"| LG
     BR -->|"`**$ gh pr create --reviewer**`"| PR
     PR -.->|"the owner ticks and approves"| BR
-    BR -->|"`1.9.1 · **$ git rebase** origin/main
+    BR -->|"`1.9 · step 1: **$ git rebase** origin/main and re-stamp
 **$ git push --force-with-lease**`"| BR
-    BR -->|"`1.9.2 · **$ git merge --ff-only**`"| MAIN
+    BR -->|"`1.9 · step 3: **$ git merge --ff-only**`"| MAIN
     MAIN --> LIVE
-    MAIN -->|"`1.10 · **$ git push --delete**`"| BR
+    MAIN -->|"`1.10 · **$ git branch -d** locally; the repository deletes the remote`"| BR
 
     classDef gate fill:#fbe9dc,stroke:#b06a2c,color:#7a4318
     classDef env fill:#e4eff8,stroke:#39698c,color:#12303f
