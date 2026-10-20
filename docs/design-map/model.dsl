@@ -5,7 +5,10 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         player = person "Player" "Plays games in a browser or the desktop client."
         admin = person "System administrator" "Runs the admin CLI on the production host."
 
-        resend = softwareSystem "Resend" "Sends the service's emails." {
+        resend = softwareSystem "Resend" "Sends the service's emails, and holds mail sent to the support address." {
+            tags "External"
+        }
+        github = softwareSystem "GitHub" "Runs the service desk's intake workflow." {
             tags "External"
         }
 
@@ -20,7 +23,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "crates/ui"
                 }
             }
-            caddy = container "Web server" "Serves version.txt and the web client files. Reverse-proxies the API paths its Caddyfile lists." "Caddy" {
+            caddy = container "Web server" "Serves version.txt and the web client files. Reverse-proxies the API paths its Caddyfile lists. On rehearsal, refuses a browser without the access cookie." "Caddy" {
                 properties {
                     "artefact" "Caddyfile"
                 }
@@ -35,7 +38,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "crates/server-game"
                 }
 
-                api = component "Transport API" "The routes, and the extractors that say who is calling." "Axum" {
+                api = component "Transport API" "The routes, the functions that say who is calling, and the error responses." "Axum" {
                     properties {
                         "artefact" "crates/server-game/src/app.rs, crates/server-game/src/app/common.rs, crates/server-game/src/app/error.rs"
                     }
@@ -85,7 +88,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/app/admin.rs"
                     }
                 }
-                scheduler = component "Scheduler" "Periodic jobs: overdue turns, move-time reminders and stalled-job checks." {
+                scheduler = component "Scheduler" "Periodic jobs: overdue turns, move-time reminders and stalled-job checks and, when configured, the support-mail poll." {
                     properties {
                         "artefact" "crates/server-game/src/app/scheduler.rs, crates/server-game/src/app/scheduler_jobs.rs, crates/server-game/src/app/sweeps_game.rs"
                     }
@@ -110,9 +113,14 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/rules-shared"
                     }
                 }
-                store = component "Persistence" "Reads and writes games and accounts." "sqlx" {
+                store = component "Persistence" "Reads and writes games, accounts, sessions, invitations and the database-size history." "sqlx" {
                     properties {
                         "artefact" "crates/server-game/src/persistence.rs"
+                    }
+                }
+                supportMail = component "Support-mail poller" "Starts the service desk's intake workflow when new support mail arrives." {
+                    properties {
+                        "artefact" "crates/server-game/src/app/support_mail.rs"
                     }
                 }
                 email = component "Email" "Builds each email from its template and sends it." {
@@ -136,7 +144,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
 
         tle.web -> tle.caddy "sends requests, receives GameEventDto, polls version.txt for a new bundle" "HTTPS, WebSocket"
         tle.desktop -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
-        tle.caddy -> tle.server.throttle "reverse-proxies the API paths its Caddyfile lists" "HTTP"
+        tle.caddy -> tle.server.throttle "reverse-proxies the API paths its Caddyfile lists, but /health" "HTTP"
         tle.caddy -> tle.server.catalog "reverse-proxies /health" "HTTP"
         tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
 
@@ -188,6 +196,11 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.server.store -> tle.db "reads and writes rows" "SQL"
         tle.server.ratings -> tle.db "reads and writes rating rows" "SQL"
 
+        tle.server.auth -> tle.server.throttle "forgets a signed-out session"
+        tle.server.adminApi -> tle.server.auth "hashes a reset password with"
+        tle.server.scheduler -> tle.server.supportMail "polls for new support mail with"
+        tle.server.supportMail -> resend "reads the newest received message's id from" "HTTPS"
+        tle.server.supportMail -> github "dispatches the intake workflow on" "HTTPS"
         tle.server.auth -> tle.server.email "sends welcome and password-reset emails with"
         tle.server.games -> tle.server.email "sends invitation emails with"
         tle.server.invitations -> tle.server.email "sends invitation emails with"
