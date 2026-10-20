@@ -121,6 +121,39 @@ application_outside_docs = ["README.md"]
 # What the markdown linter skips, besides the programme's own folders.
 lint_ignore = ["#target", "#**/node_modules", "#old-crates", "#pipeline.md"]
 
+# The stamped reference documents, in order, for the reference reviewer and the
+# weekly reference-review (programme docs 1.4): `files` are what `git log
+# <stamp>..HEAD --` takes, and `read` is what in them to compare the document with.
+[[documents.reference]]
+document = "docs/4.4.1-configuration.md"
+files = ["crates/", "docker-compose.yml", "docker-compose.preview.yml", "Dockerfile", "Caddyfile", "Cargo.lock"]
+read = "every `env::var`, `option_env!` and `*_from_env` in `crates/`; `docker-compose.yml`, `docker-compose.preview.yml`, `Dockerfile`, `Caddyfile`; `crates/server-game/src/persistence.rs` (`connect`); `crates/server-game/src/app/throttle.rs`; for sqlx defaults, `sqlx-sqlite`'s `src/options/mod.rs` under `~/.cargo/registry/src/` at the version in `Cargo.lock`"
+
+[[documents.reference]]
+document = "docs/4.4.2-database-schema.md"
+files = ["crates/server-game/migrations/", "crates/server-game/src/persistence.rs"]
+read = "`crates/server-game/migrations/*.sql`, applied in order to a scratch SQLite database with Python's `sqlite3` module, then `pragma table_info` per table; `persistence.rs` for how columns are written"
+
+[[documents.reference]]
+document = "docs/4.4.3-api-schema.md"
+files = ["crates/server-game/src/app.rs", "crates/server-game/src/app/", "crates/api/src/lib.rs"]
+read = "the `.route(` calls in `crates/server-game/src/app.rs` and `app/*.rs` (not test modules); each handler's body for how it authenticates; `crates/api/src/lib.rs` for every DTO"
+
+[[documents.reference]]
+document = "docs/4.4.4-snapshot-json-schema.md"
+files = ["crates/server-game/src/persistence.rs", "crates/server-game/src/game_state.rs", "crates/rules-shared/src/model.rs"]
+read = "`PersistedGame` and `PersistedVariantRules` in `persistence.rs`; `ParticipantState`, `MoveRecord`, `ChatMessageRecord` in `game_state.rs`; `VariantRules::EDITION_NAMES` in `crates/rules-shared/src/model.rs`"
+
+[[documents.reference]]
+document = "docs/4.4.5-data-dictionary.md"
+files = ["crates/server-game/src/persistence.rs", "crates/server-game/src/game_state.rs", "crates/rules-shared/src/model.rs", "crates/api/src/lib.rs", "crates/server-game/migrations/", "crates/server-game/src/app/games.rs"]
+read = "the same structs as 4.4.4, the DTOs in `crates/api/src/lib.rs`, the migrations' columns, and `app/games.rs` for fields computed per request"
+
+[[documents.reference]]
+document = "docs/4.4.6-client-local-storage.md"
+files = ["crates/ui/src/local_storage.rs", "crates/ui/src/app.rs"]
+read = "`crates/ui/src/local_storage.rs` and its callers in `crates/ui/src/app.rs`"
+
 [source]
 # Where the source is, for the reviewers (`git log <stamp>..HEAD -- <globs>`).
 globs = ["crates/"]
