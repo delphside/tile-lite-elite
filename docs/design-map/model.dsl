@@ -20,7 +20,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "crates/ui"
                 }
             }
-            caddy = container "Web server" "Serves the web client and proxies the API routes it lists." "Caddy" {
+            caddy = container "Web server" "Serves the web client and its version file. Reverse-proxies the API paths its Caddyfile lists." "Caddy" {
                 properties {
                     "artefact" "Caddyfile"
                 }
@@ -134,10 +134,10 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         admin -> tle.cli "runs"
         tle.caddy -> tle.web "serves the wasm bundle"
 
-        tle.web -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
+        tle.web -> tle.caddy "sends requests, receives GameEventDto, polls version.txt for a new bundle" "HTTPS, WebSocket"
         tle.desktop -> tle.caddy "sends requests, receives GameEventDto" "HTTPS, WebSocket"
-        tle.caddy -> tle.server.throttle "proxies the API routes its matcher lists" "HTTP"
-        tle.caddy -> tle.server.catalog "proxies /health" "HTTP"
+        tle.caddy -> tle.server.throttle "reverse-proxies the API paths its Caddyfile lists" "HTTP"
+        tle.caddy -> tle.server.catalog "reverse-proxies /health" "HTTP"
         tle.cli -> tle.server.adminApi "sends admin requests" "HTTP, loopback"
 
         tle.server.throttle -> tle.server.api "passes requests within their limits"
