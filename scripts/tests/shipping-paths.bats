@@ -162,3 +162,14 @@ commit_file() {   # <path> <message>
   assert_equal "$status" 70
   assert_output --partial "could not be checked"
 }
+
+# The real profile, not the fakes: 4743613a renamed programme.toml to
+# app-profile.toml and left the old name in non_shipping, so the rename itself
+# was reported as reaching the image.
+@test "under the real profile, the profile file itself does not reach the image" {
+  local root
+  root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+  run env -u PROGRAMME_PROFILE python3 "$root/programme/scripts/board/board-shipping.py" -C "$root" paths <<< "app-profile.toml"
+  assert_success
+  assert_output ""
+}

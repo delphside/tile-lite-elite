@@ -59,7 +59,7 @@ non_shipping = [
   'programme$',
   'programme/',
   # this file: the Dockerfile copies named files and folders, never this one
-  'programme\.toml$',
+  'app-profile\.toml$',
 ]
 
 [scripts]
