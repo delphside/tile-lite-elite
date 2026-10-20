@@ -84,9 +84,10 @@ setup() {
 }
 
 # CLAUDE.md reserves Closes for a change that never leaves the repository, but
-# it is still a claim of ownership.
+# it is still a claim of ownership. It is rare, so the whole history is read:
+# a window of recent commits empties as soon as a long branch lands.
 @test "the history really does use Closes, so that arm is exercised" {
-  run bash -c "git -C '$REPO_DIR' log --format=%B -400 | grep -cE '^Closes #[0-9]+'"
+  run bash -c "git -C '$REPO_DIR' log --format=%B | grep -cE '^Closes #[0-9]+'"
   assert [ "$output" -gt 0 ]
 }
 
