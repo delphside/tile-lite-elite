@@ -67,11 +67,11 @@ any of them:
   narrow it; a value set by hand takes effect only on a hand run, because the
   teardown sets its own run's prefix. For a local target the match is
   case-insensitive (SQL `LIKE`).
-- **The run id comes from `globalSetup` (`global-setup.ts`).** Each worker process re-imports the
-  helper modules, and Playwright starts a new worker after a failed test, so a
-  module-level constant would give each worker its own id. `globalSetup` runs
-  once, and the workers inherit its environment. A run id already in
-  `E2E_RUN_ID` is kept.
+- **The run id comes from `globalSetup` (`global-setup.ts`).** Each worker
+  process re-imports the helper modules, and Playwright starts a new worker
+  after a failed test, so a module-level constant would give each worker its
+  own id. `globalSetup` runs once, and the workers inherit its environment. A
+  run id already in `E2E_RUN_ID` is kept.
 - **Where the cleanup acts** depends on the target:
   - local: `e2e-clean.sh` edits the database file directly, deleting every game
     a matching player took part in, even one with a real player in it, and
