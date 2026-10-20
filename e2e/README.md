@@ -25,10 +25,11 @@ npm run report                    # open the last HTML report
 
 | Variable | Effect |
 | --- | --- |
-| `PLAYWRIGHT_BASE_URL` | the environment to test, default `http://localhost:8080`; preview is `http://localhost:8081` |
+| `PLAYWRIGHT_BASE_URL` | the environment to test, default `http://localhost:8080` |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | a browser binary to use in place of Playwright's own; set in a cloud session by `.claude/cloud-setup.sh` |
 | `REHEARSAL_ACCESS_KEY` | rehearsal's access key; when the URL names rehearsal and this is unset, `playwright.config.ts` runs `scripts/deliver/rehearsal-key.sh` |
-| `EXPECT_DEPLOY` | set to run `bundle.spec.ts`, which polls for up to 20 minutes for a deploy to land underneath it, so it is for Rehearsal; it skips otherwise |
+| `EXPECT_DEPLOY` | set while a deploy to rehearsal is under way, to run `bundle.spec.ts`, which polls for up to 20 minutes for the deploy to land; the spec skips without it |
+| `E2E_PREFIX` | the prefix a hand run of `e2e-clean.sh` deletes, default `T-e2e-`; `T-e2e-<run>-` narrows it to one run |
 
 - **Projects:** every spec runs twice, as `chromium` (Desktop Chrome) and
   `mobile` (Pixel 5), because layout regressions show only at phone width.
@@ -61,19 +62,24 @@ any of them:
   `scripts/develop/e2e-clean.sh` with the run's prefix and the target
   environment; two runs against one environment cannot delete each other's
   accounts.
-- **A run by hand** of [`e2e-clean.sh`](../scripts/develop/e2e-clean.sh) defaults
-  to `T-e2e-`, the whole suite's, and deletes every account that matches it,
-  whoever made it. For a local target the match is case-insensitive (SQL `LIKE`).
-- **The run id comes from `globalSetup`, not a module-level constant**, because
-  `fullyParallel` starts several worker processes. A run id already in
-  `E2E_RUN_ID` is kept.
-- **Where the cleanup acts:** for a local target `e2e-clean.sh` edits the
-  database file directly, and prints `skipping` and exits 0 when `sqlite3` is not
-  installed. For any other target it calls
-  [`clean-test-accounts.sh`](../scripts/deliver/clean-test-accounts.sh), which
-  refuses production and a target it cannot identify. It deletes each game whose
-  human seats all match the prefix, then signs each account out and deletes it,
-  and reports an account that still holds a game it cannot remove.
+- **A run by hand** of [`e2e-clean.sh`](../scripts/develop/e2e-clean.sh)
+  defaults to `T-e2e-`, the whole suite's, and deletes every account that
+  matches it, whoever made it; `E2E_PREFIX` narrows it. For a local target the
+  match is case-insensitive (SQL `LIKE`).
+- **The run id comes from `globalSetup`, not a module-level constant.** Off CI,
+  `workers` is unset, so Playwright starts several worker processes and each
+  imports a module-level constant afresh, so each would compute its own.
+  `globalSetup` runs once, in the main process, and the workers inherit its
+  environment. A run id already in `E2E_RUN_ID` is kept.
+- **Where the cleanup acts** depends on the target:
+  - local: `e2e-clean.sh` edits the database file directly, and prints
+    `skipping` and exits 0 when `sqlite3` is not installed;
+  - any other: it calls
+    [`clean-test-accounts.sh`](../scripts/deliver/clean-test-accounts.sh), which
+    refuses production and a target it cannot identify, then:
+    1. deletes each game whose human seats all match the prefix;
+    2. signs each account out and deletes it;
+    3. reports an account that still holds a game it cannot remove.
 - **A failed cleanup warns and does not fail the suite**, so a green run can
   leave accounts behind; read the `CLEANUP FAILED` line.
 
