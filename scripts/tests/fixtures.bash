@@ -5,7 +5,7 @@
 export FAKES="$(cd "$BATS_TEST_DIRNAME/../../programme/scripts/board/tests/fixtures" && pwd)"
 
 use_fake_profiles() {
-  export PROGRAMME_PROFILE="$FAKES/programme.toml"
+  export PROGRAMME_PROFILE="$FAKES/app-profile.toml"
   export PROGRAMME_CONFIG="$FAKES/programme-config.toml"
   export PROGRAMME_DIR="$FAKES/live"
 }

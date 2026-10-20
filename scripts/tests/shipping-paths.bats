@@ -141,7 +141,7 @@ commit_file() {   # <path> <message>
 # exit 70 on a crash (`profile.run`) and `_ask_shipping` stops on it.
 @test "a malformed ships regex stops touches_image, touches_image_range and ships, rather than answering no" {
   commit_file crates/ui/src/x.rs "the image changes"
-  sed "s|^non_shipping = \[|non_shipping = [\n  'docs/(',|" "$FAKES/programme.toml" > "$BATS_TEST_TMPDIR/broken.toml"
+  sed "s|^non_shipping = \[|non_shipping = [\n  'docs/(',|" "$FAKES/app-profile.toml" > "$BATS_TEST_TMPDIR/broken.toml"
   export PROGRAMME_PROFILE="$BATS_TEST_TMPDIR/broken.toml"
   for call in "touches_image HEAD" "touches_image_range $BASE_SHA HEAD" "ships HEAD"; do
     run $call
