@@ -151,8 +151,8 @@ read = "the same structs as 4.4.4, the DTOs in `crates/api/src/lib.rs`, the migr
 
 [[documents.reference]]
 document = "docs/4.4.6-client-local-storage.md"
-files = ["crates/ui/src/local_storage.rs", "crates/ui/src/app.rs"]
-read = "`crates/ui/src/local_storage.rs` and its callers in `crates/ui/src/app.rs`"
+files = ["crates/ui/src/"]
+read = "`crates/ui/src/local_storage.rs` and its callers in `crates/ui/src/` (`app.rs` and the components)"
 
 [source]
 # Where the source is, for the reviewers (`git log <stamp>..HEAD -- <globs>`).
