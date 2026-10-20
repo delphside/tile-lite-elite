@@ -23,9 +23,9 @@ tables they create are in [4.4.2](../../../docs/4.4.2-database-schema.md#actual-
    migration meets
    ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)).
 4. **Drop or rename a column in two steps:**
-   1. ship code that reads only the new shape; for a rename, ship with it a
-      migration that adds the new column and backfills it from the old one,
-      and code that writes both;
+   1. ship code that reads only the new shape. For a rename, the same release
+      carries a migration that adds the new column and backfills it from the
+      old one, and its code writes both columns;
    2. drop the old column in a later migration.
 
 ## What is automatic
