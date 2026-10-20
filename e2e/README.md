@@ -64,10 +64,10 @@ any of them:
 - **A run by hand** of [`e2e-clean.sh`](../scripts/develop/e2e-clean.sh)
   defaults to `T-e2e-`, the whole suite's, and deletes every account that
   matches it, whoever made it. Set `E2E_PREFIX` (for example `T-e2e-<run>-`) to
-  narrow it; `e2e-clean.sh` reads it only on a hand run, because the teardown
-  overwrites it with the run's prefix. For a local target the match is
+  narrow it; a value set by hand takes effect only on a hand run, because the
+  teardown sets its own run's prefix. For a local target the match is
   case-insensitive (SQL `LIKE`).
-- **The run id comes from `globalSetup`, not a module-level constant.** Each
+- **The run id comes from `globalSetup`, once per run.** Each
   worker process re-imports the module, and Playwright starts a new worker after
   a failed test, so a constant would give each worker its own id. `globalSetup`
   runs once, and the workers inherit its environment. A run id already in
@@ -79,8 +79,7 @@ any of them:
   - any other: it calls
     [`clean-test-accounts.sh`](../scripts/deliver/clean-test-accounts.sh), which
     refuses production and a target it cannot identify, then:
-    1. deletes each game whose human seats all match the prefix, and keeps a
-       game with another player in it;
+    1. deletes each game whose human seats all match the prefix;
     2. signs each account out and deletes it;
     3. reports an account that still holds a game it cannot remove.
 - **A failed cleanup warns and does not fail the suite**, so a green run can

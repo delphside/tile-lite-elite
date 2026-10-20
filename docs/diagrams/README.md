@@ -156,7 +156,7 @@ renders it from source, and needs no rendering step.
   Rozanski and Woods' seven viewpoints are heavier than C4's views plus the
   five added here.
 - **Why a change diagram has four states and not two:** a key of affected and
-  unaffected also folds *removed* into affected, and loses the difference
+  unaffected also folds `removed` into affected, and loses the difference
   between a new box and a changed one, which matters in the Component and Code
   views.
 - **Why `roadmap.svg` is not Mermaid:** Mermaid has no swimlanes, and the three
