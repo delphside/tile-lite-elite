@@ -11,11 +11,12 @@ lists are generated and the runbooks for changing them.
 | File | Contains | A person may play it | An engine may choose it |
 | --- | --- | --- | --- |
 | `denylist.txt` | slurs and hate speech only | no: removed from the dictionaries, so it is not a valid word | no: no engine can enumerate it |
-| `greylist.txt` | what `rustrict` flags as `Type::ANY` (profane, offensive, sexual, mean, evasive and spam), and the words that match the stems, less the exclusions and the denylist ([formula](../../../../docs/4.3.5-word-lists-and-dictionaries.md#generating-the-greylist)) | yes: the dictionaries are unchanged | no |
+| `greylist.txt` | what `rustrict` flags as `Type::ANY` (`PROFANE`, `OFFENSIVE`, `SEXUAL`, `MEAN`, `EVASIVE` and `SPAM`), and the words `greylist-stems.txt` names, less its exclusions and the denylist ([how it is generated](../../../../docs/4.3.5-word-lists-and-dictionaries.md#generating-the-greylist)) | yes: the dictionaries are unchanged | no |
 
 `greylist-stems.txt` is the generator's input, which makes `greylist.txt`
-reproducible; no run-time code reads it. `is_avoided_by_engines` consults the
-first two files, so what a bot never plays is the union of both.
+reproducible; no run-time code reads it. `is_avoided_by_engines` consults
+`denylist.txt` and `greylist.txt`, so what a bot never plays is the union of
+both.
 
 **The difference is the subject, not the severity.** A person who plays a rude
 word is expressing themselves; a machine that does it reads as the game
@@ -61,12 +62,11 @@ again 2026-10-20):
 
 ## Say "not a word", never "that word is offensive"
 
-A player told a word is *banned* has learned where the boundary is and can probe
-it; a player told it is not in the dictionary has learned nothing. Denied words
-are removed from the dictionaries, so they fail the ordinary
+A player told a word is *banned* has learned where the boundary is and can
+probe it; a player told it is not in the dictionary has learned nothing. Denied
+words are removed from the dictionaries, so they fail the ordinary
 not-in-the-dictionary path and produce the message every other invalid word
-produces. Nothing
-special-cases them to say more.
+produces. Nothing special-cases them to say more.
 
 ## Not English
 

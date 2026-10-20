@@ -155,16 +155,17 @@ renders it from source, and needs no rendering step.
   twelve-section document template, which the numbered documents already are;
   Rozanski and Woods' seven viewpoints are heavier than C4's views plus the
   five added here.
-- **Why a change diagram has four states and not two:** an affected and
-  unaffected key loses the difference between a new box and a changed one, which
-  matters at the detail level.
-- **Why `roadmap.svg` is not Mermaid:** Mermaid has no swimlanes, and the two
+- **Why a change diagram has four states and not two:** a key of affected and
+  unaffected also folds *removed* into affected, and loses the difference
+  between a new box and a changed one, which matters in the Component and Code
+  views.
+- **Why `roadmap.svg` is not Mermaid:** Mermaid has no swimlanes, and the three
   ways to fake them fail:
   - a `flowchart` with a `subgraph` per lane draws a dependency inside a lane
     top to bottom;
-  - with `direction LR`, it lays the lanes out as columns once an edge crosses
-    lanes.
-
-  `gantt` has no dependency arrows. `roadmap.py` draws the SVG directly, with
-  presentation attributes and polygon arrowheads and no `<style>`, `<defs>` or
-  `<marker>`, which GitHub's SVG sanitiser removes as it does `foreignObject`.
+  - a `flowchart` with `direction LR` lays the lanes out as columns once an edge
+    crosses lanes;
+  - `gantt` has no dependency arrows.
+- **How `roadmap.py` draws the SVG:** directly, with presentation attributes and
+  polygon arrowheads and no `<style>`, `<defs>` or `<marker>`, which GitHub's
+  SVG sanitiser removes as it does `foreignObject`.

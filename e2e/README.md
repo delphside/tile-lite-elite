@@ -29,7 +29,6 @@ npm run report                    # open the last HTML report
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | a browser binary to use in place of Playwright's own; set in a cloud session by `.claude/cloud-setup.sh` |
 | `REHEARSAL_ACCESS_KEY` | rehearsal's access key; when the URL names rehearsal and this is unset, `playwright.config.ts` runs `scripts/deliver/rehearsal-key.sh` |
 | `EXPECT_DEPLOY` | set while a deploy to rehearsal is under way, to run `bundle.spec.ts`, which polls for up to 20 minutes for the deploy to land; the spec skips without it |
-| `E2E_PREFIX` | the prefix a hand run of `e2e-clean.sh` deletes, default `T-e2e-`; `T-e2e-<run>-` narrows it to one run |
 
 - **Projects:** every spec runs twice, as `chromium` (Desktop Chrome) and
   `mobile` (Pixel 5), because layout regressions show only at phone width.
@@ -64,20 +63,24 @@ any of them:
   accounts.
 - **A run by hand** of [`e2e-clean.sh`](../scripts/develop/e2e-clean.sh)
   defaults to `T-e2e-`, the whole suite's, and deletes every account that
-  matches it, whoever made it; `E2E_PREFIX` narrows it. For a local target the
-  match is case-insensitive (SQL `LIKE`).
-- **The run id comes from `globalSetup`, not a module-level constant.** Off CI,
-  `workers` is unset, so Playwright starts several worker processes and each
-  imports a module-level constant afresh, so each would compute its own.
-  `globalSetup` runs once, in the main process, and the workers inherit its
-  environment. A run id already in `E2E_RUN_ID` is kept.
+  matches it, whoever made it. Set `E2E_PREFIX` (for example `T-e2e-<run>-`) to
+  narrow it; `e2e-clean.sh` reads it only on a hand run, because the teardown
+  overwrites it with the run's prefix. For a local target the match is
+  case-insensitive (SQL `LIKE`).
+- **The run id comes from `globalSetup`, not a module-level constant.** Each
+  worker process re-imports the module, and Playwright starts a new worker after
+  a failed test, so a constant would give each worker its own id. `globalSetup`
+  runs once, and the workers inherit its environment. A run id already in
+  `E2E_RUN_ID` is kept.
 - **Where the cleanup acts** depends on the target:
-  - local: `e2e-clean.sh` edits the database file directly, and prints
-    `skipping` and exits 0 when `sqlite3` is not installed;
+  - local: `e2e-clean.sh` edits the database file directly, deleting every game
+    a matching player took part in, even one with a real player in it, and
+    prints `skipping` and exits 0 when `sqlite3` is not installed;
   - any other: it calls
     [`clean-test-accounts.sh`](../scripts/deliver/clean-test-accounts.sh), which
     refuses production and a target it cannot identify, then:
-    1. deletes each game whose human seats all match the prefix;
+    1. deletes each game whose human seats all match the prefix, and keeps a
+       game with another player in it;
     2. signs each account out and deletes it;
     3. reports an account that still holds a game it cannot remove.
 - **A failed cleanup warns and does not fail the suite**, so a green run can

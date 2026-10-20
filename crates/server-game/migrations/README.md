@@ -22,8 +22,9 @@ tables they create are in [4.4.2](../../../docs/4.4.2-database-schema.md#actual-
    image does not boot against a newer schema, which is what a rollback across a
    migration meets
    ([4.3.3](../../../docs/4.3.3-testing-ci-and-release.md#112-roll-back-across-a-migration)).
-4. **Drop or rename a column in two steps:** ship the new shape with the old
-   column still read, then remove the old column in a later migration.
+4. **Drop or rename a column in two steps:** first ship code that no longer
+   reads the old column (for a rename, add the new column and write both), then
+   drop the old column in a later migration.
 
 ## What is automatic
 
