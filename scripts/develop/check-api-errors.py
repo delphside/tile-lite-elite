@@ -90,8 +90,40 @@ STATE = SRC / "game_state.rs"
 # where the caller `expect`s it, so its errors panic and no client is told them.
 STATE_UNREACHED = re.compile(r"pub fn board_from_dto.*?\n}\n", re.S)
 STATE_ERR = re.compile(
-    rf"(?:\bErr\({GAP}|ok_or_else\(\|\|\s*)(format!\({GAP})?{LIT}", re.S
+    rf"(?:\bErr\({GAP}|ok_or_else\(\|\|\s*|map_err\(\|\w+\|\s*)(format!\({GAP})?{LIT}", re.S
 )
+
+# `format_move_error` words every refusal of the move rules, and `game_state.rs`
+# passes its text on with `map_err(|error| format_move_error(&error))`: a 400
+# from `actions` that no `ApiProblem::` or `Err(` names. Only its body is read,
+# and only the text it returns — not the `"is"`/`"are"` that choose a verb.
+FORMAT = ROOT / "crates" / "rules-shared" / "src" / "format.rs"
+MOVE_ARM = re.compile(rf"=>\s*{LIT}", re.S)
+MOVE_FORMAT = re.compile(rf"format!\({GAP}{LIT}", re.S)
+
+# **Messages the source builds that no caller receives**, each with the reason.
+# Named one by one: a rule such as *another status wins* would also hide a
+# message that really is lost, and each of these was traced by hand.
+UNREACHABLE = {
+    ("Only seated players can chat in this game", 400):
+        "`post_chat` answers 403 first, so the game's own guard never answers",
+    ("That seat isn't claimed", 400):
+        "`withdraw_from_seat` answers 401 for a caller who does not hold the seat first",
+    ("Rack no longer matches move", 400):
+        "`validate_rack_usage` refuses a tile outside the rack first, as `Incorrect tile placement.`",
+    ("Expected {} board cells, got {}", 400):
+        "`board_from_dto` runs only when a persisted game is loaded, and its caller `expect`s it",
+    ("{error:?}", 400):
+        "`apply_move_to_game` repeats checks `validate_game_move` has just passed",
+}
+
+# **A 500 whose body is another library's text.** `hash_password_bounded` passes
+# Argon2's own error through `map_err(ApiProblem::internal)`, with no literal for
+# the scan to see; 4.4.3 documents it by description. Named here so that
+# removing the pass-through, or adding another like it, is a decision.
+PASSED_ON = {
+    ("the Argon2 library's own error text", 500): ("app/auth.rs", ".map_err(ApiProblem::internal)"),
+}
 
 # Not an interface: `tests.rs` asserts against these strings, and counting a
 # test's copy would let a message be "documented" by being tested.
@@ -128,7 +160,7 @@ def unescape(raw: str) -> str:
     return re.sub(r"\\(.)", r"\1", runtime_text(raw))
 
 
-def wildcard(text: str, formatted: bool) -> re.Pattern:
+def wildcard(text: str, formatted: bool) -> re.Pattern | None:
     """The pattern a documented message must match.
 
     **4.4.3 writes a variable part as a placeholder**: `<x>` or `<n>` for a
@@ -141,12 +173,16 @@ def wildcard(text: str, formatted: bool) -> re.Pattern:
         return re.compile(re.escape(text))
     parts = re.split(r"(?<!\{)\{[^{}]*\}(?!\})", text)
     parts = [p.replace("{{", "{").replace("}}", "}") for p in parts]
+    if not "".join(parts).strip():
+        # Nothing fixed to look for: a wildcard alone matches every line, so
+        # this is never "documented" and can only be named in UNREACHABLE.
+        return None
     return re.compile("[^`\n]+?".join(re.escape(p) for p in parts))
 
 
-def messages() -> dict[tuple[str, int], tuple[re.Pattern, set[str]]]:
+def messages() -> dict[tuple[str, int], tuple[re.Pattern | None, set[str]]]:
     """(message as written in source, status) -> (its pattern, the files)."""
-    found: dict[tuple[str, int], tuple[re.Pattern, set[str]]] = {}
+    found: dict[tuple[str, int], tuple[re.Pattern | None, set[str]]] = {}
 
     def note(f: Path, raw: str, formatted: bool, status: int) -> None:
         text = unescape(raw)
@@ -165,16 +201,19 @@ def messages() -> dict[tuple[str, int], tuple[re.Pattern, set[str]]]:
         for m in DUPLICATE.finditer(source):
             note(f, m.group(1), False, 400)
         if f == STATE:
-            reached = STATE_UNREACHED.sub("", source.split("#[cfg(test)]")[0])
-            for m in STATE_ERR.finditer(reached):
+            for m in STATE_ERR.finditer(source.split("#[cfg(test)]")[0]):
                 note(f, m.group(2), bool(m.group(1)), 400)
-    # A handler that refuses with its own status before it calls the game answers
-    # first, so the game's 400 for the same words is a second guard no caller
-    # reaches. `Only seated players can chat in this game` is a 403 from
-    # `post_chat`, and the 400 behind it in `game_state.rs` never answers.
-    for (text, status) in list(found):
-        if status == 400 and any(t == text and st != 400 for (t, st) in found):
-            del found[(text, status)]
+    if FORMAT.exists():
+        body = FORMAT.read_text().split("pub fn format_move_error", 1)[1].split("\n}\n", 1)[0]
+        for m in MOVE_ARM.finditer(body):
+            note(FORMAT, m.group(1), False, 400)
+        for m in MOVE_FORMAT.finditer(body):
+            note(FORMAT, m.group(1), True, 400)
+    for (text, status), (file, needle) in PASSED_ON.items():
+        if needle in (SRC / file).read_text():
+            found[(text, status)] = (re.compile(re.escape(text)), {f"{(SRC / file).relative_to(ROOT)}"})
+    for key in UNREACHABLE:
+        found.pop(key, None)
     return found
 
 
@@ -204,7 +243,7 @@ def main() -> int:
     found = messages()
     missing, wrong, unstated = {}, {}, {}
     for (msg, status), (pattern, files) in found.items():
-        documented = statuses(doc, pattern)
+        documented = statuses(doc, pattern) if pattern else None
         if documented is None:
             missing[(msg, status)] = files
         elif not documented:
