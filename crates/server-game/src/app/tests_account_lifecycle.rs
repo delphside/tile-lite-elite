@@ -174,8 +174,9 @@ async fn trigger_sweeps(app: Router, state: &AppState, token: &str) {
 
 /// Backdate a terminal game past RET-1 and let the sweep take it.
 ///
-/// `ended_at` is a column and lives only in SQL, so this is a plain update —
-/// unlike `turn_started_at`, which is a field inside `snapshot_json`.
+/// The test writes the `ended_at` column directly, so this is a plain update
+/// that controls the exact age — unlike `turn_started_at`, which is a field
+/// inside `snapshot_json`.
 async fn sweep_away(app: Router, state: &AppState, game_id: &str, token: &str) {
     let ended = now_unix_seconds() - WELL_PAST_THE_WINDOW;
     sqlx::query("update games set ended_at = ?1 where id = ?2")
