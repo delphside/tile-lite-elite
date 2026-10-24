@@ -85,10 +85,6 @@ DUPLICATE = re.compile(rf"from_sqlx_or_duplicate\([^,]+,{GAP}{LIT}", re.S)
 # `map_err(ApiProblem::bad_request)` — 400 whatever it says, which is why the
 # call sites are not read. Anything before `#[cfg(test)]` can reach a caller.
 STATE = SRC / "game_state.rs"
-
-# `board_from_dto` is the exception: it runs only when a persisted game is loaded,
-# where the caller `expect`s it, so its errors panic and no client is told them.
-STATE_UNREACHED = re.compile(r"pub fn board_from_dto.*?\n}\n", re.S)
 STATE_ERR = re.compile(
     rf"(?:\bErr\({GAP}|ok_or_else\(\|\|\s*|map_err\(\|\w+\|\s*)(format!\({GAP})?{LIT}", re.S
 )
@@ -104,26 +100,33 @@ MOVE_FORMAT = re.compile(rf"format!\({GAP}{LIT}", re.S)
 # **Messages the source builds that no caller receives**, each with the reason.
 # Named one by one: a rule such as *another status wins* would also hide a
 # message that really is lost, and each of these was traced by hand.
+# Keyed by the file too, so the same words reachable from another file are still
+# held to the document. **A key the scan does not find fails the check**: the
+# message was reworded, moved or removed, and an exclusion left behind would
+# quietly hide whatever next takes those words.
 UNREACHABLE = {
-    ("Only seated players can chat in this game", 400):
+    ("game_state.rs", "Only seated players can chat in this game", 400):
         "`post_chat` answers 403 first, so the game's own guard never answers",
-    ("That seat isn't claimed", 400):
+    ("game_state.rs", "That seat isn't claimed", 400):
         "`withdraw_from_seat` answers 401 for a caller who does not hold the seat first",
-    ("Rack no longer matches move", 400):
+    ("game_state.rs", "Rack no longer matches move", 400):
         "`validate_rack_usage` refuses a tile outside the rack first, as `Incorrect tile placement.`",
-    ("Expected {} board cells, got {}", 400):
+    ("game_state.rs", "Expected {} board cells, got {}", 400):
         "`board_from_dto` runs only when a persisted game is loaded, and its caller `expect`s it",
-    ("{error:?}", 400):
+    ("game_state.rs", "{error:?}", 400):
         "`apply_move_to_game` repeats checks `validate_game_move` has just passed",
 }
 
-# **A 500 whose body is another library's text.** `hash_password_bounded` passes
-# Argon2's own error through `map_err(ApiProblem::internal)`, with no literal for
-# the scan to see; 4.4.3 documents it by description. Named here so that
-# removing the pass-through, or adding another like it, is a decision.
+# **A 500 whose body is another library's text.** A bare
+# `map_err(ApiProblem::internal)` passes a `String` on, with no literal for the
+# scan to see, so every one in the source must be named here — (file, constructor)
+# -> the description 4.4.3 gives it and the status — and one that is not fails the
+# check. `bad_request` is not looked for: its strings come from `game_state.rs`,
+# which is scanned. A name whose pass-through is gone fails too.
 PASSED_ON = {
-    ("the Argon2 library's own error text", 500): ("app/auth.rs", ".map_err(ApiProblem::internal)"),
+    ("app/auth.rs", "internal"): ("the Argon2 library's own error text", 500),
 }
+BARE = re.compile(r"map_err\(ApiProblem::(\w+)\)")
 
 # Not an interface: `tests.rs` asserts against these strings, and counting a
 # test's copy would let a message be "documented" by being tested.
@@ -180,14 +183,22 @@ def wildcard(text: str, formatted: bool) -> re.Pattern | None:
     return re.compile("[^`\n]+?".join(re.escape(p) for p in parts))
 
 
-def messages() -> dict[tuple[str, int], tuple[re.Pattern | None, set[str]]]:
-    """(message as written in source, status) -> (its pattern, the files)."""
+def messages():
+    """The messages, and what is wrong with the exclusions themselves.
+
+    Returns ({(message as written in source, status): (its pattern, the files)},
+    [what is stale or unnamed]).
+    """
     found: dict[tuple[str, int], tuple[re.Pattern | None, set[str]]] = {}
+    where: dict[tuple[str, str, int], str] = {}
+    stale: list[str] = []
+    passed_on = set()
 
     def note(f: Path, raw: str, formatted: bool, status: int) -> None:
         text = unescape(raw)
         pattern, files = found.setdefault((text, status), (wildcard(text, formatted), set()))
         files.add(f"{f.relative_to(ROOT)}")
+        where[(f"{f.relative_to(SRC) if f.is_relative_to(SRC) else f.name}", text, status)] = ""
 
     for f in sorted(SRC.rglob("*.rs")):
         if f.name in SKIP:
@@ -203,18 +214,34 @@ def messages() -> dict[tuple[str, int], tuple[re.Pattern | None, set[str]]]:
         if f == STATE:
             for m in STATE_ERR.finditer(source.split("#[cfg(test)]")[0]):
                 note(f, m.group(2), bool(m.group(1)), 400)
+        for m in BARE.finditer(source):
+            key = (str(f.relative_to(SRC)), m.group(1))
+            if m.group(1) in STATUS and m.group(1) != "bad_request":
+                passed_on.add(key)
+                if key not in PASSED_ON:
+                    stale.append(f"{key[0]}: map_err(ApiProblem::{key[1]}) passes on text this check cannot read; name it in PASSED_ON")
     if FORMAT.exists():
         body = FORMAT.read_text().split("pub fn format_move_error", 1)[1].split("\n}\n", 1)[0]
         for m in MOVE_ARM.finditer(body):
             note(FORMAT, m.group(1), False, 400)
         for m in MOVE_FORMAT.finditer(body):
             note(FORMAT, m.group(1), True, 400)
-    for (text, status), (file, needle) in PASSED_ON.items():
-        if needle in (SRC / file).read_text():
-            found[(text, status)] = (re.compile(re.escape(text)), {f"{(SRC / file).relative_to(ROOT)}"})
-    for key in UNREACHABLE:
-        found.pop(key, None)
-    return found
+    else:
+        stale.append(f"{FORMAT.relative_to(ROOT)} not found: the move-rule messages cannot be read")
+    for key, (text, status) in PASSED_ON.items():
+        if key in passed_on:
+            found[(text, status)] = (re.compile(re.escape(text)), {f"{(SRC / key[0]).relative_to(ROOT)}"})
+        else:
+            stale.append(f"PASSED_ON names {key[0]} {key[1]}, which no longer passes text on")
+    for (file, text, status) in UNREACHABLE:
+        if (file, text, status) not in where:
+            stale.append(f"UNREACHABLE names {text!r} ({status}) in {file}, which the scan does not find")
+            continue
+        entry = found[(text, status)]
+        entry[1].discard(f"{SRC.relative_to(ROOT)}/{file}")
+        if not entry[1]:
+            del found[(text, status)]
+    return found, stale
 
 
 def statuses(doc: str, pattern: re.Pattern) -> set[int] | None:
@@ -240,7 +267,7 @@ def main() -> int:
         print(f"check-api-errors: {DOC} not found", file=sys.stderr)
         return 0
     doc = DOC.read_text()
-    found = messages()
+    found, stale = messages()
     missing, wrong, unstated = {}, {}, {}
     for (msg, status), (pattern, files) in found.items():
         documented = statuses(doc, pattern) if pattern else None
@@ -257,11 +284,13 @@ def main() -> int:
         if "--unstated" in sys.argv:
             for msg, status in sorted(unstated):
                 print(f"    {status} {msg[:70]}")
-    if not missing and not wrong:
+    for problem in stale:
+        print(f"  STALE  {problem}")
+    if not missing and not wrong and not stale:
         print(f"  all {len(found)} error messages the API can return are documented, none with a wrong status")
         return 0
 
-    print(f"  checked: {len(found)}    undocumented: {len(missing)}    wrong status: {len(wrong)}")
+    print(f"  checked: {len(found)}    undocumented: {len(missing)}    wrong status: {len(wrong)}    stale exclusions: {len(stale)}")
     for msg, status in sorted(missing):
         where = ", ".join(sorted(f.split("/")[-1] for f in missing[(msg, status)]))
         print(f"    {status} {msg[:70]:72} {where}")
