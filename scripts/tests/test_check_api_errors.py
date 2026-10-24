@@ -45,7 +45,29 @@ mod tests {
 '''
 
 
-def check(doc, handler=HANDLER, state=STATE):
+FORMAT = '''
+pub fn format_move_error(error: &MoveError) -> String {
+    match error {
+        MoveError::InvalidWord(words) => {
+            let verb = if words.len() == 1 { "is" } else { "are" };
+            format!("{} {verb} not in the dictionary.", list(words))
+        }
+        MoveError::TilesDoNotFit => "Incorrect tile placement.".to_string(),
+    }
+}
+'''
+
+# Guards the check names as unreachable, and a message made only of placeholders.
+GUARDS = '''
+fn guards() -> Result<(), String> {
+    return Err("Rack no longer matches move".to_string());
+    return Err(format!("Expected {} board cells, got {}", a, b));
+    x.map_err(|error| format!("{error:?}"))?;
+}
+'''
+
+
+def check(doc, handler=HANDLER, state=STATE, unreachable=None):
     """Run the script's main() on a tree of these sources, and return (exit, output)."""
     spec = importlib.util.spec_from_file_location("check_api_errors", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -61,6 +83,11 @@ def check(doc, handler=HANDLER, state=STATE):
         module.ROOT, module.SRC = root, src
         module.DOC = root / "docs" / "4.4.3-api-schema.md"
         module.STATE = src / "game_state.rs"
+        (root / "format.rs").write_text(FORMAT)
+        module.FORMAT = root / "format.rs"
+        module.PASSED_ON = {}
+        if unreachable is not None:
+            module.UNREACHABLE = unreachable
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             status = module.main()
@@ -74,6 +101,7 @@ DOC = """
 | `The game has already started` | **400** |
 | `Unknown seat <n>` | **400** |
 | `It is not seat N's turn` | **400** |
+| `<words> is/are not in the dictionary.` · `Incorrect tile placement.` | **400** |
 """
 
 
@@ -97,7 +125,7 @@ class CheckApiErrors(Cases):
 
     def test_a_placeholder_is_a_wildcard(self):
         """the fixed text is matched against how the document writes the variable part"""
-        self.expect("all documented", (0, True), (lambda r: (r[0], "all 5 error messages" in r[1]))(check(DOC)))
+        self.expect("all documented", (0, True), (lambda r: (r[0], "all 7 error messages" in r[1]))(check(DOC)))
 
     def test_it_compares_the_status(self):
         """a message under the wrong status fails, and the report says what the document says"""
@@ -116,6 +144,28 @@ class CheckApiErrors(Cases):
         status, out = check(DOC.replace(" | **400**", " | fewer than two"))
         self.expect("exit", 0, status)
         self.assertIn("no status", out)
+
+    def test_the_move_rules_text_is_a_source(self):
+        """what format_move_error returns reaches a caller as a 400, so it is read"""
+        status, out = check("nothing is documented here\n")
+        for message in ("not in the dictionary.", "Incorrect tile placement."):
+            self.assertIn(message, out)
+        self.expect("the verb words are not messages", False, "  is " in out or " 400 is " in out)
+        self.expect("documented as 4.4.3 writes it", 0, check(DOC)[0])
+
+    def test_a_named_unreachable_guard_is_not_reported(self):
+        """a guard no caller reaches is named with a reason, and only then left out"""
+        state = STATE.replace("#[cfg(test)]", GUARDS + "\n#[cfg(test)]")
+        status, out = check(DOC, state=state)
+        self.expect("named", 0, status)
+        self.expect("rack guard", False, "Rack no longer" in out)
+        self.expect("board_from_dto", False, "board cells" in out)
+        self.expect("a placeholder-only format is named too", False, "{error:?}" in out)
+        # The same tree with nothing named is red: each guard, and the one made only of placeholders.
+        status, out = check(DOC, state=state, unreachable={})
+        self.expect("unnamed", 1, status)
+        for message in ("Rack no longer matches move", "Expected {} board cells", "{error:?}"):
+            self.assertIn(message, out)
 
 
 if __name__ == "__main__":
