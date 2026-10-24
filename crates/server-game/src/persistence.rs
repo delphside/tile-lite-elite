@@ -150,6 +150,12 @@ struct PersistedGame {
         deserialize_with = "crate::game_state::deserialize_i64_flexible"
     )]
     turn_started_at: i64,
+    // Missing on any game persisted before these fields existed — `None` for
+    // those, and `save_game` then leaves the `games` column as it was.
+    #[serde(default)]
+    started_at: Option<i64>,
+    #[serde(default)]
+    ended_at: Option<i64>,
     // Monotonic state version (see `GameSession.version`). `#[serde(default)]`
     // → 0 for a snapshot written before this field existed; it just resumes
     // incrementing from there on the next change.
@@ -251,6 +257,8 @@ pub async fn save_game(pool: &Pool<Sqlite>, session: &GameSession) -> Result<(),
         consecutive_scoreless_turns: session.consecutive_scoreless_turns,
         move_time_limit_seconds: session.move_time_limit_seconds,
         turn_started_at: session.turn_started_at,
+        started_at: session.started_at,
+        ended_at: session.ended_at,
         version: session.version,
     })
     .expect("game session should serialize");
@@ -261,8 +269,8 @@ pub async fn save_game(pool: &Pool<Sqlite>, session: &GameSession) -> Result<(),
             turn_number, current_seat, winner_seat, random_seed, snapshot_json
         ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         on conflict(id) do update set
-            started_at = excluded.started_at,
-            ended_at = excluded.ended_at,
+            started_at = coalesce(excluded.started_at, games.started_at),
+            ended_at = coalesce(excluded.ended_at, games.ended_at),
             status = excluded.status,
             variant = excluded.variant,
             language = excluded.language,
@@ -275,18 +283,11 @@ pub async fn save_game(pool: &Pool<Sqlite>, session: &GameSession) -> Result<(),
     )
     .bind(&session.id)
     .bind(now)
-    .bind(if session.status == GameStatus::Waiting {
-        None::<i64>
-    } else {
-        Some(now)
-    })
-    .bind(
-        if matches!(session.status, GameStatus::Finished | GameStatus::Aborted) {
-            Some(now)
-        } else {
-            None::<i64>
-        },
-    )
+    // The session's own times, not `now`: a save is not the start or the end.
+    // The `coalesce` above keeps an older row's value when the session has
+    // none (a game that began before the session carried them).
+    .bind(session.started_at)
+    .bind(session.ended_at)
     .bind(status_name(&session.status))
     .bind(&session.variant)
     .bind(&session.language)
@@ -388,7 +389,7 @@ pub async fn save_game(pool: &Pool<Sqlite>, session: &GameSession) -> Result<(),
         && prior_status.as_deref() != Some("finished")
         && prior_stats_settled_at.is_none()
     {
-        crate::stats::settle_ratings(&mut tx, session, now).await?;
+        crate::stats::settle_ratings(&mut tx, session, session.ended_at.unwrap_or(now)).await?;
         sqlx::query("update games set stats_settled_at = ?2 where id = ?1")
             .bind(&session.id)
             .bind(now)
@@ -439,6 +440,8 @@ pub async fn load_game(pool: &Pool<Sqlite>, id: &str) -> Result<Option<GameSessi
             consecutive_scoreless_turns: persisted.consecutive_scoreless_turns,
             move_time_limit_seconds: persisted.move_time_limit_seconds,
             turn_started_at: persisted.turn_started_at,
+            started_at: persisted.started_at,
+            ended_at: persisted.ended_at,
             version: persisted.version,
         }
     }))
@@ -455,9 +458,9 @@ pub async fn list_game_ids(pool: &Pool<Sqlite>) -> Result<Vec<String>, sqlx::Err
 }
 
 /// Games that reached a terminal state more than `cutoff` ago — `ended_at`
-/// is set in `save_game` the moment a game's status becomes `Finished` *or*
-/// `Aborted`; it's only ever tracked here in SQL, never on `GameSession`
-/// itself, since nothing else needs to read it back.
+/// is stamped on the `GameSession` by `end_game` the moment its status
+/// becomes `Finished` *or* `Aborted`, and `save_game` writes it to the column
+/// this reads.
 ///
 /// Both terminal states, not just `Finished`: an aborted game is every bit
 /// as dead as a finished one, and matching on `'finished'` alone (which this

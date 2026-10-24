@@ -3576,9 +3576,9 @@ async fn expire_old_terminal_games_deletes_stale_finished_and_aborted_but_not_re
     let old_aborted = create_and_start_engine_game(app.clone(), "ExpireOldAborted").await;
     let recent = create_and_start_engine_game(app.clone(), "ExpireRecent").await;
 
-    // `ended_at` is only ever set in SQL, by `save_game`, based on the
-    // status at save time — bypass the normal flow and write it directly
-    // so the test controls the exact age.
+    // `ended_at` is stamped on the session when the game ends and written by
+    // `save_game` — bypass the normal flow and write the column directly so
+    // the test controls the exact age.
     let now = now_unix_seconds();
     let eight_days_ago = now - 8 * 24 * 60 * 60;
     let one_day_ago = now - 24 * 60 * 60;
@@ -3632,6 +3632,100 @@ async fn expire_old_terminal_games_deletes_stale_finished_and_aborted_but_not_re
         !remaining_ids.contains(&old_aborted.id),
         "the stale aborted game's row should be gone from the database too"
     );
+}
+
+/// `started_at` and `ended_at` are the session's own times: saving again
+/// (chat after the end, a player removing the game) must not move either, and
+/// the retention sweep must measure from the real end, not the last save.
+#[tokio::test]
+async fn saves_keep_the_games_real_start_and_end_times_and_the_sweep_uses_the_end() {
+    let database_url = test_database_url();
+    let state = create_test_state(&database_url).await;
+    let app = build_router(state.clone());
+    let started = create_and_start_engine_game(app.clone(), "RealTimes").await;
+
+    let now = now_unix_seconds();
+    let long_ago = now - 8 * 24 * 60 * 60;
+    let columns = |id: String| {
+        let db = state.db.clone();
+        async move {
+            let row = sqlx::query("select started_at, ended_at from games where id = ?1")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .expect("row should exist");
+            (row.get::<Option<i64>, _>(0), row.get::<Option<i64>, _>(1))
+        }
+    };
+
+    // Started long ago, still running: a save now keeps that start, no end.
+    {
+        let mut games = state.games.write().await;
+        let game = games.get_mut(&started.id).expect("game should exist");
+        game.started_at = Some(long_ago - 60);
+        persistence::save_game(&state.db, game).await.expect("save");
+    }
+    assert_eq!(
+        columns(started.id.clone()).await,
+        (Some(long_ago - 60), None)
+    );
+
+    // Ended long ago, then saved again just now (as chat or a removal would).
+    {
+        let mut games = state.games.write().await;
+        let game = games.get_mut(&started.id).expect("game should exist");
+        game.admin_force_finish().expect("force finish");
+        game.ended_at = Some(long_ago);
+        persistence::save_game(&state.db, game).await.expect("save");
+        persistence::save_game(&state.db, game)
+            .await
+            .expect("re-save");
+    }
+    assert_eq!(
+        columns(started.id.clone()).await,
+        (Some(long_ago - 60), Some(long_ago))
+    );
+
+    // The reloaded session carries both, and the sweep (a week) collects it
+    // even though it was saved moments ago.
+    let loaded = persistence::load_game(&state.db, &started.id)
+        .await
+        .expect("load")
+        .expect("game should exist");
+    assert_eq!(loaded.started_at, Some(long_ago - 60));
+    assert_eq!(loaded.ended_at, Some(long_ago));
+    expire_old_terminal_games(&state).await;
+    assert!(!state.games.read().await.contains_key(&started.id));
+}
+
+/// A game saved before the session carried the times has none to write, so
+/// its row keeps what it already holds rather than being nulled.
+#[tokio::test]
+async fn a_session_without_times_leaves_the_rows_existing_values() {
+    let database_url = test_database_url();
+    let state = create_test_state(&database_url).await;
+    let app = build_router(state.clone());
+    let started = create_and_start_engine_game(app.clone(), "OldRow").await;
+
+    sqlx::query("update games set started_at = 111, ended_at = 222 where id = ?1")
+        .bind(&started.id)
+        .execute(&state.db)
+        .await
+        .expect("update");
+    {
+        let mut games = state.games.write().await;
+        let game = games.get_mut(&started.id).expect("game should exist");
+        game.started_at = None;
+        game.ended_at = None;
+        persistence::save_game(&state.db, game).await.expect("save");
+    }
+    let row = sqlx::query("select started_at, ended_at from games where id = ?1")
+        .bind(&started.id)
+        .fetch_one(&state.db)
+        .await
+        .expect("row");
+    assert_eq!(row.get::<Option<i64>, _>(0), Some(111));
+    assert_eq!(row.get::<Option<i64>, _>(1), Some(222));
 }
 
 fn empty_live_game_for_test(id: &str) -> GameStateDto {

@@ -329,6 +329,15 @@ pub struct GameSession {
     /// timestamp convention) when `current_seat`'s turn began — reset every
     /// time the turn advances. Meaningless until the game is `Active`.
     pub turn_started_at: i64,
+    /// Unix seconds when the game left `Waiting`, set once by `start`.
+    /// `None` while waiting, and for a game saved before this field existed
+    /// (its `games.started_at` column keeps whatever it already holds).
+    pub started_at: Option<i64>,
+    /// Unix seconds when the game became `Finished` or `Aborted`, set once
+    /// by `end_game`. Held on the session so a later save (chat, a player
+    /// removing the game) cannot move it; the retention sweep reads it back
+    /// from `games.ended_at`.
+    pub ended_at: Option<i64>,
     /// Monotonic counter bumped on every state mutation (see `mark_changed`),
     /// surfaced on `GameStateDto.version` so clients can drop stale snapshots.
     /// `#[serde(default)]` on the persisted mirror → `0` for old snapshots.
@@ -376,8 +385,18 @@ impl GameSession {
             consecutive_scoreless_turns: 0,
             move_time_limit_seconds,
             turn_started_at: now_unix_seconds(),
+            started_at: None,
+            ended_at: None,
             version: 0,
         }
+    }
+
+    /// The one way a game reaches `Finished` or `Aborted`: sets the terminal
+    /// status and stamps `ended_at` the first time, so every ending path
+    /// records the same moment and a repeat call cannot move it.
+    fn end_game(&mut self, status: GameStatus) {
+        self.status = status;
+        self.ended_at.get_or_insert_with(now_unix_seconds);
     }
 
     /// Bump the monotonic state version. Called from every mutation choke
@@ -599,6 +618,7 @@ impl GameSession {
         self.turn_number = 1;
         self.current_seat = 0;
         self.turn_started_at = now_unix_seconds();
+        self.started_at = Some(self.turn_started_at);
         self.mark_changed();
     }
 
@@ -1159,7 +1179,7 @@ impl GameSession {
             description: "Game force-ended by admin".to_string(),
             elapsed_us: None,
         });
-        self.status = GameStatus::Finished;
+        self.end_game(GameStatus::Finished);
         self.mark_changed();
         Ok(())
     }
@@ -1189,7 +1209,7 @@ impl GameSession {
             description: "Game aborted by the creator".to_string(),
             elapsed_us: None,
         });
-        self.status = GameStatus::Aborted;
+        self.end_game(GameStatus::Aborted);
         self.mark_changed();
         Ok(())
     }
@@ -1380,7 +1400,7 @@ impl GameSession {
             self.final_bonus_points = Some(opponents_total);
         }
 
-        self.status = GameStatus::Finished;
+        self.end_game(GameStatus::Finished);
         self.winner_seat = self.compute_winner_seat();
         self.mark_changed();
     }
@@ -1423,7 +1443,7 @@ impl GameSession {
         if self.participants.iter().filter(|p| !p.resigned).count() > 1 {
             return false;
         }
-        self.status = GameStatus::Finished;
+        self.end_game(GameStatus::Finished);
         self.winner_seat = self
             .participants
             .iter()
@@ -2177,6 +2197,49 @@ mod tests {
             !game.has_active_seat_for("alice"),
             "a resigned seat is not holding anyone up"
         );
+    }
+
+    /// `started_at` is the moment of the single Waiting-to-Active transition
+    /// and nothing later touches it: a move is not a start.
+    #[test]
+    fn started_at_is_set_by_start_and_unchanged_by_later_moves() {
+        let mut game = two_human_game(Some("alice"));
+        assert_eq!(game.started_at, None, "a waiting game has not started");
+
+        game.start();
+        let started = game.started_at.expect("start should stamp started_at");
+
+        game.started_at = Some(started - 1000);
+        game.apply_pass(0).expect("seat 0 should be able to pass");
+        game.start(); // already Active: a no-op
+        assert_eq!(game.started_at, Some(started - 1000));
+    }
+
+    /// Every ending path stamps `ended_at` once, and a repeat cannot move it.
+    #[test]
+    fn ended_at_is_set_by_each_ending_path_and_not_moved_by_a_repeat() {
+        let mut aborted = two_human_game(Some("alice"));
+        aborted.start();
+        aborted.abort().expect("abort");
+        assert!(aborted.ended_at.is_some(), "abort should stamp ended_at");
+
+        let mut forced = two_human_game(Some("alice"));
+        forced.start();
+        forced.admin_force_finish().expect("force finish");
+        assert!(forced.ended_at.is_some(), "force-end should stamp ended_at");
+
+        let mut resigned = two_human_game(Some("alice"));
+        resigned.start();
+        resigned.apply_resign(0).expect("resign");
+        assert_eq!(resigned.status, GameStatus::Finished);
+        assert!(
+            resigned.ended_at.is_some(),
+            "resignation should stamp ended_at"
+        );
+
+        resigned.ended_at = Some(100);
+        resigned.end_game(GameStatus::Finished);
+        assert_eq!(resigned.ended_at, Some(100));
     }
 
     #[test]
