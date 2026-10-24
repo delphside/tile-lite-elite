@@ -67,7 +67,7 @@ fn guards() -> Result<(), String> {
 '''
 
 
-def check(doc, handler=HANDLER, state=STATE, unreachable=None):
+def check(doc, handler=HANDLER, state=STATE, unreachable=None, passed_on=None, with_format=True):
     """Run the script's main() on a tree of these sources, and return (exit, output)."""
     spec = importlib.util.spec_from_file_location("check_api_errors", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -83,11 +83,11 @@ def check(doc, handler=HANDLER, state=STATE, unreachable=None):
         module.ROOT, module.SRC = root, src
         module.DOC = root / "docs" / "4.4.3-api-schema.md"
         module.STATE = src / "game_state.rs"
-        (root / "format.rs").write_text(FORMAT)
         module.FORMAT = root / "format.rs"
-        module.PASSED_ON = {}
-        if unreachable is not None:
-            module.UNREACHABLE = unreachable
+        if with_format:
+            module.FORMAT.write_text(FORMAT)
+        module.PASSED_ON = passed_on or {}
+        module.UNREACHABLE = unreachable or {}
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             status = module.main()
@@ -156,16 +156,45 @@ class CheckApiErrors(Cases):
     def test_a_named_unreachable_guard_is_not_reported(self):
         """a guard no caller reaches is named with a reason, and only then left out"""
         state = STATE.replace("#[cfg(test)]", GUARDS + "\n#[cfg(test)]")
-        status, out = check(DOC, state=state)
+        named = {("game_state.rs", text, 400): "reason" for text in (
+            "Rack no longer matches move", "Expected {} board cells, got {}", "{error:?}")}
+        status, out = check(DOC, state=state, unreachable=named)
         self.expect("named", 0, status)
         self.expect("rack guard", False, "Rack no longer" in out)
         self.expect("board_from_dto", False, "board cells" in out)
         self.expect("a placeholder-only format is named too", False, "{error:?}" in out)
         # The same tree with nothing named is red: each guard, and the one made only of placeholders.
-        status, out = check(DOC, state=state, unreachable={})
+        status, out = check(DOC, state=state)
         self.expect("unnamed", 1, status)
         for message in ("Rack no longer matches move", "Expected {} board cells", "{error:?}"):
             self.assertIn(message, out)
+
+    def test_a_stale_exclusion_fails(self):
+        """an exclusion the scan no longer finds would hide whatever takes its place"""
+        status, out = check(DOC, unreachable={("game_state.rs", "A message long gone", 400): "reason"})
+        self.expect("an UNREACHABLE key not found", (1, True), (status, "STALE" in out))
+        status, out = check(DOC, passed_on={("app/games.rs", "internal"): ("text from elsewhere", 500)})
+        self.expect("a PASSED_ON name with no pass-through", (1, True), (status, "STALE" in out))
+        status, out = check(DOC, with_format=False)
+        self.expect("format.rs missing", (1, True), (status, "format.rs not found" in out))
+
+    def test_an_unreachable_guard_is_named_by_file(self):
+        """the same words, reachable from another file, are still held to the document"""
+        handler = HANDLER + 'fn h() { ApiProblem::bad_request("Rack no longer matches move"); }'
+        state = STATE.replace("#[cfg(test)]", GUARDS + "\n#[cfg(test)]")
+        named = {("game_state.rs", text, 400): "reason" for text in (
+            "Rack no longer matches move", "Expected {} board cells, got {}", "{error:?}")}
+        status, out = check(DOC, handler=handler, state=state, unreachable=named)
+        self.expect("games.rs still reported", (1, True), (status, "Rack no longer matches move" in out))
+
+    def test_a_bare_pass_through_must_be_named(self):
+        """map_err(ApiProblem::internal) passes text the scan cannot read, so each is named"""
+        handler = HANDLER + "fn h() { x.map_err(ApiProblem::internal)?; }"
+        status, out = check(DOC, handler=handler)
+        self.expect("unnamed", (1, True), (status, "STALE" in out and "app/games.rs" in out))
+        named = {("app/games.rs", "internal"): ("the hashing library's own error text", 500)}
+        status, out = check(DOC + "| `the hashing library's own error text` | **500** |\n", handler=handler, passed_on=named)
+        self.expect("named", 0, status)
 
 
 if __name__ == "__main__":
