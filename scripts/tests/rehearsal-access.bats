@@ -83,10 +83,10 @@ writes() { grep -c "echo 'REHEARSAL_ACCESS_KEY=$1" "$CALLS" || true; }
   assert_equal "$status" 1
 }
 
-@test "status: no key in .env reports locked" {
+@test "status: no key in .env reports every device refused" {
   export ENV_KEY="" LIVE_KEY="no-rehearsal-key-configured"
   run "$ACCESS" status
-  assert_output --partial 'locked to everybody'
+  assert_output --partial 'refuses every device'
 }
 
 @test "status: a matching pair reports healthy" {

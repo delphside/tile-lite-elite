@@ -81,12 +81,25 @@ http://127.0.0.1:2020 {
 		# the browser's credentials, so Caddy would 401 behind the first page
 		# load. Both settled on #240.
 		#
-		# `REHEARSAL_ACCESS_KEY` **must be set on every host**, including production
-		# where it is unused. Unset, `{$REHEARSAL_ACCESS_KEY}` expands to nothing and
-		# a cookie of literally `rehearsal=` satisfies the matcher — measured,
-		# not feared. docker-compose.yml makes Compose refuse to start without
-		# it, which is what turns that into a stopped container rather than an
-		# open site.
+		# **A host with no key configured refuses every device**, whatever the
+		# device sends. docker-compose.yml passes the sentinel
+		# `no-rehearsal-key-configured` when the host's .env has no key, and
+		# that value is public in this repository, so comparing a cookie or
+		# the unlock path against it would let anybody in. Instead the
+		# first matcher below catches an empty key (a cookie of literally
+		# `rehearsal=` satisfies an empty comparison) and the sentinel, and
+		# answers 403 before the unlock path or the cookie is considered.
+		# `/health` stays exempt, as for a keyed host. It reads the key at
+		# request time (`{env.}`), so no parse-time expansion of an empty value
+		# is involved. scripts/tests/caddyfile-rehearsal-gate.bats runs this
+		# block against a real Caddy.
+		@rehearsal_nokey {
+			host rehearsal.tileliteelite.com 129.151.84.183.sslip.io
+			not path /health
+			vars_regexp {env.REHEARSAL_ACCESS_KEY} ^(no-rehearsal-key-configured)?$
+		}
+		respond @rehearsal_nokey "Rehearsal has no access key configured. Run ./scripts/deliver/rehearsal-access.sh grant." 403
+
 		@rehearsal_unlock {
 			host rehearsal.tileliteelite.com 129.151.84.183.sslip.io
 			path /unlock/{$REHEARSAL_ACCESS_KEY}
@@ -104,7 +117,8 @@ http://127.0.0.1:2020 {
 		#
 		# Ordering is what keeps this safe: `redir` is terminal and sits before
 		# the locked check below, so an unlock request never reaches it — while
-		# `/unlock/<anything-else>` does, and is refused.
+		# `/unlock/<anything-else>` does, and is refused. The no-key refusal
+		# above sits before both, so a keyless host never reaches either.
 		header @rehearsal_unlock Set-Cookie "rehearsal={$REHEARSAL_ACCESS_KEY}; Path=/; Max-Age=14400; Secure; HttpOnly; SameSite=Lax"
 		redir @rehearsal_unlock / 302
 
