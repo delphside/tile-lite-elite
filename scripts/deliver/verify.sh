@@ -249,7 +249,7 @@ check_rehearsal() {
   case "$code" in
     403)
       if [[ "$body" == *"no access key configured"* ]]; then
-        fail rehearsal "rehearsal has no access key — it is locked to everybody" \
+        fail rehearsal "rehearsal has no access key — it refuses every device" \
           "fix with: ./scripts/deliver/rehearsal-access.sh grant"
       else
         pass rehearsal "a key is configured and the gate is holding"

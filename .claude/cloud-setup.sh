@@ -81,11 +81,11 @@ elif [[ "$("$BIN/wasm-bindgen" --version 2>/dev/null)" != *"$WB_VERSION"* ]]; th
     || missing+=("wasm-bindgen $WB_VERSION")
 fi
 
-# --- bats, and sqlite3 for the e2e teardown's cleanup -----------------------
-if ! dpkg -s bats bats-support bats-assert sqlite3 >/dev/null 2>&1; then
-  echo "cloud-setup: bats, sqlite3" >&2
-  { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bats bats-support bats-assert sqlite3; } >&2 2>&1 \
-    || missing+=("bats/sqlite3")
+# --- bats, sqlite3 for the e2e teardown's cleanup, and caddy for the Caddyfile gate test ---
+if ! dpkg -s bats bats-support bats-assert sqlite3 caddy >/dev/null 2>&1; then
+  echo "cloud-setup: bats, sqlite3, caddy" >&2
+  { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bats bats-support bats-assert sqlite3 caddy; } >&2 2>&1 \
+    || missing+=("bats/sqlite3/caddy")
 fi
 
 # --- e2e dependencies --------------------------------------------------------
