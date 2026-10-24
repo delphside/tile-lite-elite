@@ -144,10 +144,18 @@ jobs:
       - name: Shell tooling tests (bats)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq bats bats-support bats-assert caddy
-          # The package starts a system Caddy on :80; the Caddyfile gate test
-          # runs its own on a high port and must find the binary (#530).
-          sudo systemctl disable --now caddy || true
+          sudo apt-get install -y -qq bats bats-support bats-assert
+          # The Caddyfile gate test (#530) runs against the Caddy the image
+          # ships, copied out of the Dockerfile's pinned runtime-web base, so a
+          # base-image bump is tested by the gate's own cases.
+          IMG="$(awk '/^FROM caddy:/ {print $2; exit}' Dockerfile)"
+          [ -n "$IMG" ]
+          CID="$(docker create "$IMG")"
+          mkdir -p "$RUNNER_TEMP/caddy-bin"
+          docker cp "$CID:/usr/bin/caddy" "$RUNNER_TEMP/caddy-bin/caddy"
+          docker rm "$CID" > /dev/null
+          export PATH="$RUNNER_TEMP/caddy-bin:$PATH"
+          caddy version
           REQUIRE_CADDY=1 bats scripts/tests
 
       # -D warnings makes any clippy or rustc warning fail the build. Scoped to

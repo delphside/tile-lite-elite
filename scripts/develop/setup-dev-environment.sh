@@ -129,13 +129,16 @@ EOF
     fi
 fi
 
-echo "==> System packages (build tools, dioxus-desktop's webview deps, and bats for the tooling's tests)"
+echo "==> System packages (build tools, dioxus-desktop's webview deps, bats for the tooling's tests, and caddy for the Caddyfile gate test)"
 sudo apt-get update -qq
 sudo apt-get install -y -qq \
     build-essential pkg-config curl ca-certificates git \
     libssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
     libayatana-appindicator3-dev librsvg2-dev \
-    bats bats-support bats-assert
+    bats bats-support bats-assert caddy
+# The package starts a system Caddy on :80; the gate test runs its own on a
+# high port, so the service is not wanted.
+sudo systemctl disable --now caddy >/dev/null 2>&1 || true
 
 echo "==> Rust toolchain"
 if ! command -v rustc >/dev/null 2>&1; then
