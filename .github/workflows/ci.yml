@@ -144,8 +144,11 @@ jobs:
       - name: Shell tooling tests (bats)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq bats bats-support bats-assert
-          bats scripts/tests
+          sudo apt-get install -y -qq bats bats-support bats-assert caddy
+          # The package starts a system Caddy on :80; the Caddyfile gate test
+          # runs its own on a high port and must find the binary (#530).
+          sudo systemctl disable --now caddy || true
+          REQUIRE_CADDY=1 bats scripts/tests
 
       # -D warnings makes any clippy or rustc warning fail the build. Scoped to
       # this repo's crates (old-crates carry many pre-existing warnings we don't

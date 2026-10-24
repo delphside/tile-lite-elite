@@ -10,7 +10,8 @@ set -euo pipefail
 # Rehearsal is a public site that may hold a clone of production's database
 # (#240), so it is closed by default: the Caddyfile refuses every request for
 # rehearsal's hostnames unless the browser carries a cookie holding the host's
-# `REHEARSAL_ACCESS_KEY`. Production is untouched — the gate is matched on hostname,
+# `REHEARSAL_ACCESS_KEY`, and a host with no key configured refuses every
+# device, the unlock path included (#530). Production is untouched — the gate is matched on hostname,
 # so it cannot fire there.
 #
 # **A cookie can only be set by the browser that will hold it**, so this script
@@ -31,8 +32,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/rehearsal-target.sh"
 
 # The value docker-compose.yml falls back to when the host's .env has no key.
-# Chosen to be a string nobody would hold as a cookie, so a rehearsal that was
-# never configured is *locked* rather than open — see the comment there.
+# It is public, so the Caddyfile never compares anything against it: a host
+# running it (or with no key at all) refuses every device — see the comment
+# there.
 SENTINEL="no-rehearsal-key-configured"
 UNLOCK_HOST="rehearsal.tileliteelite.com"
 
@@ -126,9 +128,9 @@ case "${1:-}" in
     CONFIGURED="$(configured_key)"
     LIVE="$(live_key)"
     if [[ -z "$CONFIGURED" ]]; then
-      echo "    .env:      no REHEARSAL_ACCESS_KEY — rehearsal is locked to everybody"
+      echo "    .env:      no REHEARSAL_ACCESS_KEY — rehearsal refuses every device"
     elif [[ "$CONFIGURED" == "$SENTINEL" ]]; then
-      echo "    .env:      the sentinel — rehearsal is locked to everybody"
+      echo "    .env:      the sentinel (no key) — rehearsal refuses every device"
     else
       echo "    .env:      a key is set"
     fi
@@ -137,7 +139,7 @@ case "${1:-}" in
     if [[ -z "$LIVE" ]]; then
       echo "    container: could not be read — is the web container running?"
     elif [[ "$LIVE" == "$SENTINEL" ]]; then
-      echo "    container: running on the sentinel — locked"
+      echo "    container: running on the sentinel (no key) — refusing every device"
     elif [[ "$LIVE" != "$CONFIGURED" ]]; then
       echo "    container: running a DIFFERENT key from .env — the file was" >&2
       echo "               changed without 'docker compose up -d web'." >&2
@@ -155,7 +157,8 @@ usage: rehearsal-access.sh grant    # print the unlock URL, as a QR code
 
 Rehearsal is closed by default (#240): the Caddyfile refuses every
 request for rehearsal's hostnames without a cookie holding the host's
-REHEARSAL_ACCESS_KEY. A cookie can only be set by the browser that
+REHEARSAL_ACCESS_KEY, and a host with no key configured refuses every
+device, the unlock path included. A cookie can only be set by the browser that
 will hold it, so this prints something to scan rather than reporting
 success. `grant` deliberately does not rotate — unlocking the phone
 would otherwise lock out the laptop.
@@ -176,7 +179,7 @@ Refuses (exit 1) when:
     which is why it is a refusal and not a line of output.
 
 `status` exits 0 for every other state it reports, including a
-rehearsal with no key at all: locked to everybody is a configuration,
+rehearsal with no key at all: refusing every device is a configuration,
 not a fault.
 EOF
     exit 0

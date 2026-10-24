@@ -228,20 +228,19 @@ check_unreleased() {
 }
 
 LABEL[rehearsal]="Rehearsal is closed"
-# Rehearsal's gate (#240) is closed by *default*: with no `REHEARSAL_ACCESS_KEY` in the
-# host's .env, docker-compose.yml supplies a sentinel and the Caddyfile compares
-# every cookie against a value nobody holds, so the site refuses everybody. That
-# is the safe failure, and it is also a silent one — a refusal looks the same
-# whether the key is missing or simply not held by this machine.
+# Rehearsal's gate (#240) refuses everybody when the host's .env has no
+# `REHEARSAL_ACCESS_KEY`: docker-compose.yml supplies a sentinel and the
+# Caddyfile answers 403 to every request on rehearsal's hostnames (except
+# /health), the unlock path included (#530). That is the safe failure, and it
+# is also a silent one — a refusal looks the same whether the key is missing or
+# simply not held by this machine.
 #
 # So the state is asserted here rather than discovered when somebody cannot get
-# in. The probe needs no ssh and no extra configuration: the unlock path is
-# `/unlock/{$REHEARSAL_ACCESS_KEY}`, so asking for the *sentinel's* unlock path answers
-# 200 if and only if the host is running the sentinel, and 403 once a real key
-# is set. Measured both ways, 2026-08-30.
+# in. The probe needs no ssh and no extra configuration: it asks for the
+# sentinel's unlock path. A keyed host answers 403 "Rehearsal is locked"; a
+# keyless one answers 403 with its own sentence, which is how the two are told
+# apart. Anything that lets the request through is the gate missing.
 #
-# It sets the sentinel's cookie on the way past, which is why this is a curl and
-# not a browser: nothing keeps it.
 check_rehearsal() {
   local url="https://rehearsal.tileliteelite.com" body code
   body="$(curl -s -w '\n%{http_code}' --max-time 10 \
@@ -249,21 +248,18 @@ check_rehearsal() {
   code="${body##*$'\n'}"
   case "$code" in
     403)
-      pass rehearsal "a key is configured and the gate is holding" ;;
-    200)
-      # 200 means two opposite things, and only the body tells them apart.
-      # The sentinel's unlock handler answers with its own sentence; anything
-      # else at this path is the SPA fallback, which means the gate is not in
-      # the deployment at all. Found by running this against the live host
-      # while the gate was still unmerged — it reported "locked" about a site
-      # that was wide open.
-      if [[ "$body" == *"Rehearsal unlocked"* ]]; then
+      if [[ "$body" == *"no access key configured"* ]]; then
         fail rehearsal "rehearsal has no access key — it is locked to everybody" \
           "fix with: ./scripts/deliver/rehearsal-access.sh grant"
       else
-        fail rehearsal "rehearsal has no access gate — it is OPEN to the internet" \
-          "the gate (#240) is not in the deployed image; deploy it"
+        pass rehearsal "a key is configured and the gate is holding"
       fi ;;
+    200|302)
+      # The request got past the gate. Either the deployed image has no gate
+      # (the SPA fallback answers 200), or it predates the keyless refusal and
+      # honoured the sentinel (302). Both leave rehearsal open.
+      fail rehearsal "rehearsal's gate let a request through — it is OPEN to the internet" \
+        "deploy an image with the gate and its keyless refusal (#240, #530)" ;;
     000)
       fail rehearsal "rehearsal did not answer" \
         "the host may be down; the environments check above says which" ;;
