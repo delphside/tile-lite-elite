@@ -7,7 +7,7 @@ find the one paragraph that is new.
 
 Add the owner as reviewer at creation.
 
-Refs #N — or Closes #N in the merge lane, where nothing else will ever close it.
+Refs #N, never Closes #N: no merge closes an issue.
 -->
 
 ## What is being requested
