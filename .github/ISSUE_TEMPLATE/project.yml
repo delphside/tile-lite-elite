@@ -225,3 +225,11 @@ body:
         | 1 | | |
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        **At `Project Closedown`, add a ninth heading, `## Lessons learnt`**:
+        the lessons themselves, or a work package's `Delegated to #<parent>`.
+        The weekly digest and `board-check.py` read it. See
+        [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#the-parents-lifecycle-is-shorter).
