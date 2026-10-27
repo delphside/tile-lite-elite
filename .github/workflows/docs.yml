@@ -68,9 +68,9 @@ jobs:
   #    beside them — #339 R1. A change needing no review says so under the
   #    heading; that sentence is evidence, and an absent section is not.
   #
-  #    **Advisory until a ruleset makes it required** — `main` is unprotected, so
-  #    a red check here is a red X somebody can merge past. That is deliberate
-  #    for now and worth revisiting with the ruleset question on #183.
+  #    **Advisory: the `main` ruleset requires only CI's `check` job** (its
+  #    settings are in programme 3.1.2), so a red check here is a red X somebody
+  #    can merge past. That is deliberate for now.
   #
   #    The body is read from the API into a file rather than interpolated into
   #    the shell: `${{ github.event.pull_request.body }}` in a `run:` block is a
