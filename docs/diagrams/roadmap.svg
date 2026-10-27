@@ -44,15 +44,16 @@
 <text x="175" y="430" font-size="10.5" fill="#111418">Server error handling</text>
 <text x="175" y="466" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
 <rect x="166" y="487" width="224" height="72" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
-<text x="175" y="502" font-size="11" font-weight="700" fill="#111418">#489</text>
-<text x="175" y="516" font-size="10.5" fill="#111418">MAIN PROJECT: Shared infrastructure</text>
-<text x="175" y="528" font-size="10.5" fill="#111418">run as an application</text>
-<text x="175" y="552" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
+<text x="175" y="502" font-size="11" font-weight="700" fill="#111418">#519</text>
+<text x="175" y="516" font-size="10.5" fill="#111418">MAIN PROJECT: Engine statistics</text>
+<text x="175" y="528" font-size="10.5" fill="#111418">routes proxied</text>
+<text x="175" y="552" font-size="9.5" font-style="italic" fill="#5a6472">0.10.2 · Scope</text>
 <rect x="166" y="573" width="224" height="72" rx="5" fill="#eef2f7" stroke="#8895a7" stroke-width="1"/>
-<text x="175" y="588" font-size="11" font-weight="700" fill="#111418">#519</text>
-<text x="175" y="602" font-size="10.5" fill="#111418">MAIN PROJECT: Engine statistics</text>
-<text x="175" y="614" font-size="10.5" fill="#111418">routes proxied</text>
-<text x="175" y="638" font-size="9.5" font-style="italic" fill="#5a6472">0.10.2 · Scope</text>
+<text x="175" y="588" font-size="11" font-weight="700" fill="#111418">#557 · WP A Del 2 of 2</text>
+<text x="175" y="602" font-size="10.5" fill="#111418">host documents and scripts moved out</text>
+<text x="175" y="614" font-size="10.5" fill="#111418">of Tile Lite Elite</text>
+<text x="175" y="625" font-size="9.5" fill="#5a6472">part of #489 Shared infrastructure run a…</text>
+<text x="175" y="638" font-size="9.5" font-style="italic" fill="#5a6472">milestone not set · Scope</text>
 <rect x="16" y="652" width="1184" height="172" fill="#ffffff"/>
 <line x1="16" y1="652" x2="1200" y2="652" stroke="#d8dee6" stroke-width="1"/>
 <text x="26" y="730" font-size="11.5" font-weight="700" fill="#111418">Process Definition</text>
