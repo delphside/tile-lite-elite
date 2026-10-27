@@ -189,11 +189,13 @@ body:
         artefacts by route, each marked new, modified or reuse with why, then
         its steps. Where a delivery has a sub-project of its own, that issue
         carries the subsection and this one links to it, never both. How to
-        fill it in, and when a delivery takes a sub-project, is
-        [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#deliveries-one-subsection-per-delivery-a-table-per-subsection).
+        fill it in is in
+        [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#deliveries-one-subsection-per-delivery-a-table-per-subsection),
+        and when a delivery takes a sub-project in
+        [its model](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#the-model-and-the-four-cases-that-follow-from-it).
 
         **The artefact list is a guess now, accurate once the design is
-        agreed.** Why it is listed early, and why reuse is marked, is
+        agreed.** Why it is listed early, and why reuse is marked, is in
         [docs/1.2 §2.13](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#213-the-impacted-artefacts-and-why-they-are-listed-early).
       value: |
         | # | what it delivers | route | milestone | work package or steps |
