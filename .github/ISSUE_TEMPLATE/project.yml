@@ -186,20 +186,16 @@ body:
       label: Deliveries
       description: >-
         The list, one row per delivery, then a subsection per delivery: its
-        artefacts by route, then its steps. A delivery has one route, so a table
-        with two routes marked yes, other than documents riding the delivery's
-        branch, is a delivery that needs splitting. Where a delivery has its own work package
-        (docs/1.2 says when), that issue carries its subsection and this one
-        keeps the list and links to it; where two or more packages share a
-        delivery, each carries its own share. Never both, because a runbook in two
-        places is two places to update, and one of them goes stale.
+        artefacts by route, each marked new, modified or reuse with why, then
+        its steps. Where a delivery has a work package of its own, that issue
+        carries the subsection and this one links to it, never both. How to
+        fill it in, and when a delivery takes its own work package, is
+        [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#deliveries-one-subsection-per-delivery-a-table-per-subsection).
 
-        **Each artefact is new, modified or reuse, with why**, written in its
-        route's cell, such as `deploy.sh (modified: reads the record)`. A guess
-        now, accurate once the design is agreed, and worth writing wrong, because it
-        is how two projects discover they collide. Reuse is the difference
-        between *we did not touch it* and *we considered it and it needed
-        nothing*, and only the second is a design decision.
+        **A guess now, accurate once the design is agreed**, and worth writing
+        wrong, because it is how two projects discover they collide. Reuse is
+        the difference between *we did not touch it* and *we considered it and
+        it needed nothing*, and only the second is a design decision.
       value: |
         | # | what it delivers | route | milestone | work package or steps |
         | --- | --- | --- | --- | --- |
