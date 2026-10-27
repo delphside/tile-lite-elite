@@ -18,6 +18,13 @@
 FROM rust:1-bookworm@sha256:e12566d5abc17a0da741628782cdb504b68b8961f5bfcf677936bf3e8b32de29 AS builder
 WORKDIR /workspace
 
+# The compiler is the one rust-toolchain.toml pins, not the one this base
+# image carries: copied in before the first rustup or cargo command, it makes
+# rustup install that channel, its components and the wasm32 target, so the
+# release build and CI use the same compiler (#559). Only the builder stage
+# has it; the runtime stages copy built output alone.
+COPY rust-toolchain.toml ./
+
 # dioxus-cli version pinned to match crates/ui's `dioxus`/`dioxus-web` deps
 # (0.6.3) — a mismatched dx/wasm-bindgen version is a known source of wasm
 # build failures in this project (see docs/operations.md). wasm-bindgen-cli
