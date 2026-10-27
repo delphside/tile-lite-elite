@@ -52,30 +52,6 @@ body:
       required: true
 
   - type: textarea
-    id: artefacts
-    attributes:
-      label: Impacted artefacts
-      description: >-
-        Everything it touches, each **new**, **modified** or **reuse**, grouped by
-        delivery. A guess now, accurate once the design is agreed — and worth
-        writing wrong, because it is how two projects discover they collide.
-        Route is derived from the artefact; show it as a column.
-
-        **Reuse is not padding.** It is the difference between *we did not touch
-        it* and *we considered it and it needed nothing*, and only the second is
-        a design decision. From the owner's prior art, 2026-09-22, whose
-        component table carried New, Update and Reuse and asked the presenter to
-        explain the decision behind each.
-      value: |
-        *Provisional until the design is agreed.*
-
-        | artefact | new · modified · reuse | why | route |
-        | --- | --- | --- | --- |
-        | | | | |
-    validations:
-      required: true
-
-  - type: textarea
     id: non-functional
     attributes:
       label: Non-functional design
@@ -208,18 +184,35 @@ body:
     attributes:
       label: Deliveries
       description: >-
-        One row per delivery, with its milestone. An earlier delivery that has its
-        own Project Delivery issue keeps its steps there and is linked from here;
-        the last delivery has no issue of its own, so its runbook is written below
-        the table. Never both — a runbook in two places is two places to update,
-        and one of them goes stale.
+        The list, one row per delivery, then a subsection per delivery: its
+        artefacts by route, then its steps. A delivery has one route, so a table
+        with two routes marked yes is a delivery that needs splitting. In a
+        project with more than one delivery, every delivery with a milestone has
+        its own work package, which carries its subsection; this then keeps the
+        list and links to it. Never both, because a runbook in two places is two
+        places to update, and one of them goes stale.
+
+        **Each artefact is new, modified or reuse, with why.** A guess now,
+        accurate once the design is agreed, and worth writing wrong, because it
+        is how two projects discover they collide. Reuse is the difference
+        between *we did not touch it* and *we considered it and it needed
+        nothing*, and only the second is a design decision.
       value: |
-        | # | what it delivers | milestone | steps |
-        | --- | --- | --- | --- |
-        | 1 | | | #nnn, or below if this is the last |
-        
-        ### Delivery 1 — steps
-        
+        | # | what it delivers | route | milestone | work package or steps |
+        | --- | --- | --- | --- | --- |
+        | 1 | | | | #nnn, or below |
+
+        ### Delivery 1 — what it delivers
+
+        *Provisional until the design is agreed.*
+
+        | route | in this delivery | artefacts | branch | PR |
+        | --- | --- | --- | --- | --- |
+        | **Production Release** | no | — | — | — |
+        | **Application Tooling** | no | — | — | — |
+        | **Docs and Programme Tooling** | no | — | — | — |
+        | **Other** | no | — | — | — |
+
         | # | step | route |
         | --- | --- | --- |
         | 1 | | |
@@ -229,7 +222,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **At `Project Closedown`, add a ninth heading, `## Lessons learnt`**:
+        **At `Project Closedown`, add an eighth heading, `## Lessons learnt`**:
         the lessons themselves, or a work package's `Delegated to #<parent>`.
         The weekly digest and `board-check.py` read it. See
         [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#the-parents-lifecycle-is-shorter).
