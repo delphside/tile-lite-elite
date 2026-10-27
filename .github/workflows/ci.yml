@@ -307,8 +307,8 @@ jobs:
       # Build the preview images with a GitHub Actions layer cache. The big,
       # stable win is the builder stage's `cargo install dioxus-cli`/
       # `wasm-bindgen-cli` layer (compiled from source, minutes) — invariant
-      # unless those pinned versions change, so it's restored from cache on
-      # every run. `bake` reads the same compose file (so image tags match the
+      # unless those pinned versions or `rust-toolchain.toml` change, so it's
+      # restored from cache on every run. `bake` reads the same compose file (so image tags match the
       # `up --no-build` below) and builds both services against the one shared,
       # cached `builder` stage. Deps/app still recompile on a source change (no
       # cargo-chef here).
