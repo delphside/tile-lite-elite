@@ -126,11 +126,11 @@ body:
         Write "None." under a heading that does not apply. Declining a heading
         honestly is better than inventing a test to fill it.
       value: |
-        ### Functional user tests — Preview
+        #### Functional user tests — Preview
 
         - [ ] **owner** —
 
-        ### Technical tests — Rehearsal
+        #### Technical tests — Rehearsal
 
         - [ ] **Claude** —
     validations:
@@ -139,7 +139,7 @@ body:
   - type: textarea
     id: post-deployment-check
     attributes:
-      label: Post-deployment check
+      label: Post-deployment checks against requirements
       description: >-
         **What would show this worked, once it is live?** Not the tests — those
         are above, and they run before it ships. This is what somebody looks at
@@ -186,13 +186,14 @@ body:
       description: >-
         The list, one row per delivery, then a subsection per delivery: its
         artefacts by route, then its steps. A delivery has one route, so a table
-        with two routes marked yes is a delivery that needs splitting. In a
-        project with more than one delivery, every delivery with a milestone has
-        its own work package, which carries its subsection; this then keeps the
-        list and links to it. Never both, because a runbook in two places is two
-        places to update, and one of them goes stale.
+        with two routes marked yes, other than documents riding the branch, is a
+        delivery that needs splitting. Where a delivery has its own work package
+        (docs/1.2 says when), that issue carries its subsection and this one
+        keeps the list and links to it. Never both, because a runbook in two
+        places is two places to update, and one of them goes stale.
 
-        **Each artefact is new, modified or reuse, with why.** A guess now,
+        **Each artefact is new, modified or reuse, with why**, written in its
+        route's cell, such as `deploy.sh (modified: reads the record)`. A guess now,
         accurate once the design is agreed, and worth writing wrong, because it
         is how two projects discover they collide. Reuse is the difference
         between *we did not touch it* and *we considered it and it needed
@@ -202,7 +203,7 @@ body:
         | --- | --- | --- | --- | --- |
         | 1 | | | | #nnn, or below |
 
-        ### Delivery 1 — what it delivers
+        #### Delivery 1 — what it delivers
 
         *Provisional until the design is agreed.*
 
@@ -213,9 +214,9 @@ body:
         | **Docs and Programme Tooling** | no | — | — | — |
         | **Other** | no | — | — | — |
 
-        | # | step | route |
-        | --- | --- | --- |
-        | 1 | | |
+        | # | step |
+        | --- | --- |
+        | 1 | |
     validations:
       required: true
 
