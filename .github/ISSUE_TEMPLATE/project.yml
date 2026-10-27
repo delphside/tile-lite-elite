@@ -170,8 +170,9 @@ body:
         Written now, while the intent is fresh, because by the time it falls due
         the project has been closed out of everybody's head.
 
-        For a `no-release` project it is often the **next application release**
-        behaving as expected — say so, and say what would count as it not.
+        For a project that ships no release it is often the **next application
+        release** behaving as expected — say so, and say what would count as it
+        not.
       placeholder: |
         The next production deploy settles its milestone with every project left
         open at Post-deployment rather than closed, and its version bump reaches
@@ -186,15 +187,16 @@ body:
       description: >-
         The list, one row per delivery, then a subsection per delivery: its
         artefacts by route, then its steps. A delivery has one route, so a table
-        with two routes marked yes, other than documents riding the branch, is a
-        delivery that needs splitting. Where a delivery has its own work package
+        with two routes marked yes, other than documents riding the delivery's
+        branch, is a delivery that needs splitting. Where a delivery has its own work package
         (docs/1.2 says when), that issue carries its subsection and this one
-        keeps the list and links to it. Never both, because a runbook in two
+        keeps the list and links to it; where two or more packages share a
+        delivery, each carries its own share. Never both, because a runbook in two
         places is two places to update, and one of them goes stale.
 
         **Each artefact is new, modified or reuse, with why**, written in its
-        route's cell, such as `deploy.sh (modified: reads the record)`. A guess now,
-        accurate once the design is agreed, and worth writing wrong, because it
+        route's cell, such as `deploy.sh (modified: reads the record)`. A guess
+        now, accurate once the design is agreed, and worth writing wrong, because it
         is how two projects discover they collide. Reuse is the difference
         between *we did not touch it* and *we considered it and it needed
         nothing*, and only the second is a design decision.
