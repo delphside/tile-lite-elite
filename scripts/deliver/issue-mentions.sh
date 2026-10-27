@@ -22,9 +22,9 @@
 
 # commits_mentioning <ref> <issue-number> -> prints a count, always 0 or more.
 #
-# **The trailer, not any mention.** D40 (#320). `CLAUDE.md`: *"Commits say
-# `Refs #N`, or `Closes #N` only when the change never leaves the repository."*
-# So the trailer is what claims a commit *belongs* to an issue, and a bare `#N`
+# **The trailer, not any mention.** D40 (#320). Commits say `Refs #N`, never
+# `Closes #N` (programme `CLAUDE.md`); a `Closes` trailer still counts here,
+# for older commits. So the trailer is what claims a commit *belongs* to an issue, and a bare `#N`
 # anywhere in the message is a citation.
 #
 # The owner, 2026-09-05: *"I thought that was already the convention, Closes #N
