@@ -187,15 +187,14 @@ body:
       description: >-
         The list, one row per delivery, then a subsection per delivery: its
         artefacts by route, each marked new, modified or reuse with why, then
-        its steps. Where a delivery has a work package of its own, that issue
+        its steps. Where a delivery has a sub-project of its own, that issue
         carries the subsection and this one links to it, never both. How to
-        fill it in, and when a delivery takes its own work package, is
+        fill it in, and when a delivery takes a sub-project, is
         [docs/1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#deliveries-one-subsection-per-delivery-a-table-per-subsection).
 
-        **A guess now, accurate once the design is agreed**, and worth writing
-        wrong, because it is how two projects discover they collide. Reuse is
-        the difference between *we did not touch it* and *we considered it and
-        it needed nothing*, and only the second is a design decision.
+        **The artefact list is a guess now, accurate once the design is
+        agreed.** Why it is listed early, and why reuse is marked, is
+        [docs/1.2 §2.13](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#213-the-impacted-artefacts-and-why-they-are-listed-early).
       value: |
         | # | what it delivers | route | milestone | work package or steps |
         | --- | --- | --- | --- | --- |

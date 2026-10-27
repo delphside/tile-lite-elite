@@ -16,7 +16,7 @@ body:
         | | |
         | --- | --- |
         | **Type of change** | one of seven. Set it if you know; triage will if you do not |
-        | **Milestone** | none: a requirement never carries one; its project's work package does |
+        | **Milestone** | leave it empty: a requirement never carries one |
         | **Effort**, **Priority** | leave blank unless you have a view. Empty means unknown |
 
         This form sets the **issue type** to *Requirement* on its own.
