@@ -126,8 +126,8 @@ lint_ignore = ["#target", "#**/node_modules", "#old-crates", "#pipeline.md"]
 # <stamp>..HEAD --` takes, and `read` is what in them to compare the document with.
 [[documents.reference]]
 document = "docs/4.4.1-configuration.md"
-files = ["crates/", "docker-compose.yml", "docker-compose.preview.yml", "Dockerfile", "Caddyfile", "Cargo.lock"]
-read = "every `env::var`, `option_env!` and `*_from_env` in `crates/`; `docker-compose.yml`, `docker-compose.preview.yml`, `Dockerfile`, `Caddyfile`; `crates/server-game/src/persistence.rs` (`connect`); `crates/server-game/src/app/throttle.rs`; for sqlx defaults, `sqlx-sqlite`'s `src/options/mod.rs` under `~/.cargo/registry/src/` at the version in `Cargo.lock`"
+files = ["crates/", "docker-compose.yml", "docker-compose.preview.yml", "Dockerfile", "Caddyfile", "Caddyfile.preview", "Cargo.lock", "rust-toolchain.toml", ".cargo/config.toml"]
+read = "every `env::var`, `option_env!` and `*_from_env` in `crates/`; `docker-compose.yml`, `docker-compose.preview.yml`, `Dockerfile`, `Caddyfile`, `Caddyfile.preview`, `rust-toolchain.toml`, `.cargo/config.toml`; `crates/server-game/src/persistence.rs` (`connect`); `crates/server-game/src/app/throttle.rs`; for sqlx defaults, `sqlx-sqlite`'s `src/options/mod.rs` under `~/.cargo/registry/src/` at the version in `Cargo.lock`"
 
 [[documents.reference]]
 document = "docs/4.4.2-database-schema.md"
