@@ -93,3 +93,28 @@ exit 4'
   run grep -q '"status":"4"' "$(record pretrap)"
   assert_success
 }
+
+# deploy-preview.sh starts its own record, then sources deploy.sh for its build
+# functions (#567). A start inside the sourced half wrote a second record under
+# deploy.sh's name, counted against deploy.sh's twenty, and replaced preview's
+# chained EXIT trap, so its worktree clean-up never ran.
+@test "a script sourcing deploy.sh for its functions keeps one record and its own trap" {
+  DEPLOY="$BATS_TEST_DIRNAME/../deliver/deploy.sh"
+  script sourcer 'cleanup() { echo "cleanup ran"; }
+run_log_start sourcer.sh
+trap '"'"'st=$?; cleanup; run_log_finish $st'"'"' EXIT
+DEPLOY_SH_FUNCTIONS_ONLY=1 . "'"$DEPLOY"'"
+run_log_event "after the source"
+exit 3'
+  run bash "$BATS_TEST_TMPDIR/sourcer.sh"
+  assert_output --partial "cleanup ran"
+  run ls -1 "$LOGS"
+  assert_output --regexp '^sourcer-[^/]*\.jsonl$'
+  file="$(record sourcer)"
+  run grep -c '"message":"run started"' "$file"
+  assert_output 1
+  run grep -q '"message":"after the source"' "$file"
+  assert_success
+  run grep -q '"message":"run finished","script":"sourcer.sh","status":"3"' "$file"
+  assert_success
+}
