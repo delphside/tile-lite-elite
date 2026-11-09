@@ -216,14 +216,6 @@ placeholder_shipping() {
 # shellcheck source=scripts/deliver/shipping-paths.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shipping-paths.sh"
 
-# A record of this run that outlives the terminal -- #328. Adds a second
-# channel and changes nothing printed. 0.7.2 is why: the deploy exited 1
-# having printed every success line, the milestone settling never ran, and
-# both facts were in the terminal and nowhere else.
-# shellcheck source=scripts/deliver/run-log.sh
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
-run_log_start deploy.sh "$@"
-
 ARTIFACT_DIR="${ARTIFACT_DIR:-$REPO_DIR/artifacts}"
 ARTIFACT_KEEP="${ARTIFACT_KEEP:-5}"
 
@@ -665,6 +657,19 @@ post_deploy() {
 if [[ "${DEPLOY_SH_FUNCTIONS_ONLY:-}" == "1" ]]; then
   return 0 2>/dev/null || exit 0
 fi
+
+# A record of this run that outlives the terminal -- #328. Adds a second
+# channel and changes nothing printed. 0.7.2 is why: the deploy exited 1
+# having printed every success line, the milestone settling never ran, and
+# both facts were in the terminal and nowhere else.
+#
+# **Below the guard**, so a script sourcing the functions above keeps its own
+# record: deploy-preview.sh starts one, and a start here wrote a second under
+# deploy.sh's name and replaced preview's EXIT trap, so its worktree was never
+# cleaned up (#567). Re-sourcing run-log.sh would also blank the caller's file.
+# shellcheck source=scripts/deliver/run-log.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-log.sh"
+run_log_start deploy.sh "$@"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
