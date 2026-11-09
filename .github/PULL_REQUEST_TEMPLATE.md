@@ -1,14 +1,16 @@
 <!-- markdownlint-disable-file MD041 -->
 <!--
-The body is the review surface. Say what is being asked for, not what the
-issue already says — the argument, the measurements and the design live there,
-and a body that restates them makes the reviewer read the same thing twice to
-find the one paragraph that is new.
+The body is the review surface. Say what is being asked for; the argument, the
+measurements and the design live on the issue.
 
 Add the owner as reviewer at creation.
 
-Refs #N, never Closes #N: no merge closes an issue.
+Replace `N` on the `Refs #N` line with the project or work package this
+delivers, or write `Activity: <id>` for a change that serves an activity.
+`Closes #N` is never used: no merge closes an issue.
 -->
+
+Refs #N
 
 ## What is being requested
 
@@ -21,26 +23,30 @@ a reviewer can tell what is now done from what is still owed.
 
 <!--
 Scope this pull request does not carry, and why — a later delivery, a
-dependency not ready, a decision still open. "Nothing" is a valid answer and is
-worth writing, because a blank heading reads as an oversight rather than as a
-decision.
+dependency not ready, a decision still open. "Nothing" is a valid answer, and a
+blank heading is not.
 -->
 
 ## Review
 
-Tick what is settled. **Write anything you want changed underneath its item**, as
-an indented `>` note — the body is the review surface, so the state and the
-comments stay together, and a review that produced changes still reads as one
-thing afterwards.
+**Write anything you want changed underneath its item**, as an indented `>` note, and tick what is settled.
 
-- [ ] **owner** — the change does what the issue asked
-      >
-- [ ] **owner** — what is left out is deliberate, and named above
-      >
+- [ ] **owner** — the change does what the issue or activity asks
+  >
+- [ ] **owner** — what is left out is deliberate, and named in *What is deliberately left out*
+  >
 
 ### Any other comments
 
-Anything that does not belong under an item above — including "this is fine",
-and including what nobody thought to ask about.
+Anything that does not belong under an item — including "this is fine", and including what nobody thought to ask about.
 
 >
+
+## Review rounds
+
+<!--
+The review record, at the end of the body: one line per material finding and
+a cost line per round, or `None owed` where no rounds are owed. Claude writes
+it. The form is in
+[1.1](https://github.com/delphside/programme/blob/main/docs/1.1-programme-tooling.md#claudes-tooling).
+-->
