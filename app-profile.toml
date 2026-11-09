@@ -154,6 +154,11 @@ document = "docs/4.4.6-client-local-storage.md"
 files = ["crates/ui/src/"]
 read = "`crates/ui/src/local_storage.rs` and its callers in `crates/ui/src/` (`app.rs` and the components)"
 
+[[documents.reference]]
+document = "docs/4.4.7-log-events.md"
+files = ["crates/", "scripts/"]
+read = "every `tracing` event in `crates/server-game/src/` (not test modules); every `run_log_event` call in `scripts/`; the schema block against `scripts/operate/check-log-hygiene.py` and `scripts/develop/check-run-log-events.py`"
+
 [source]
 # Where the source is, for the reviewers (`git log <stamp>..HEAD -- <globs>`).
 globs = ["crates/"]
