@@ -1,7 +1,8 @@
 <!-- markdownlint-disable-file MD041 -->
 <!--
 The body is the review surface. Say what is being asked for; the argument, the
-measurements and the design live on the issue.
+measurements and the design live on the issue. The rules for the body are
+[1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#35-pull-requests-and-what-they-are-for-here).
 
 Add the owner as reviewer at creation.
 
@@ -15,8 +16,9 @@ Refs #N
 ## What is being requested
 
 <!--
-Which part of the project's scope this delivers. Named against the project, so
-a reviewer can tell what is now done from what is still owed.
+Which part of the project's scope this delivers, or the scope of the activity
+where there is no project. Named against it, so a reviewer can tell what is now
+done from what is still owed.
 -->
 
 ## What is deliberately left out
