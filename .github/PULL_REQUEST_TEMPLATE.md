@@ -1,7 +1,8 @@
 <!-- markdownlint-disable-file MD041 -->
 <!--
 The body is the review surface. Say what is being asked for; the argument, the
-measurements and the design live on the issue. The rules for the body are in *Changes* in
+measurements and the design live on the issue. The rules for the body are in
+*Changes* in
 [the programme's `CLAUDE.md`](https://github.com/delphside/programme/blob/main/CLAUDE.md#changes).
 
 Add the owner as reviewer at creation.
