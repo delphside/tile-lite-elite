@@ -35,7 +35,7 @@
 
 - When `deploy.sh` warns that an issue that is not a project carries the
   milestone, the owner decides: fold it into a work package, move it out of
-  the milestone, or ship through
+  the milestone, or ship it in the milestone
   ([4.3.3 §1.6](docs/4.3.3-testing-ci-and-release.md#16-ship-it)).
 - Deploys build a fresh worktree at the target commit. The image goes Preview,
   then Rehearsal, then Production.
