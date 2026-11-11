@@ -123,18 +123,22 @@ except one section. That section, "Sexual and vulgar base words rustrict
 misses", is taken from the `en` list of LDNOOBW (List of Dirty, Naughty,
 Obscene, and Otherwise Bad Words), restricted to entries playable on a board.
 
+`denylist.txt` is empty and has no attribution to make. See
+[`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#filling-these-in)
+for why the greylist was filled first.
+
 ### LDNOOBW `en` list
 
 - **Upstream:** <https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words>
   (the `en` file)
-- **Licence:** CC BY 4.0, per the `LICENSE` file in that repository, read
-  2026-11-11. The attribution is this entry.
-- **Used as:** the source of one section of `greylist-stems.txt`, restricted to
-  entries playable on a board.
-
-`denylist.txt` is empty and has no attribution to make. See
-[`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#filling-these-in)
-for why the greylist was filled first.
+- **Licensor:** © 2012–2020 Shutterstock, Inc., per the upstream README.
+- **Licence:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), per
+  the `LICENSE` file in that repository, read 2026-11-11. The attribution is
+  this entry.
+- **Modified:** yes. A selection of its entries, those playable on a board, is
+  written as stems into `greylist-stems.txt`, which the generator expands to
+  dictionary words.
+- **Used as:** the source of one section of `greylist-stems.txt`.
 
 ## Rules and board
 
