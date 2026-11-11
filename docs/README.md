@@ -118,44 +118,5 @@ the records are read in the live checkout (`../programme`, or wherever
 - [1.0 Programme](https://github.com/delphside/programme/blob/main/docs/1.0-programme.md)
   — how the work is organised: who decides, the workstreams, how a change is
   made and where things are recorded
-- [1.1 Programme tooling](https://github.com/delphside/programme/blob/main/docs/1.1-programme-tooling.md)
-  — the two kinds of tooling, and every script that acts on the programme's
-  records
-- [1.2 The change lifecycle](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md)
-  — from an issue raised to production: triage, projects, branches, releases
-  and deliveries, and the rules that govern each
-- [1.3 Workstreams](https://github.com/delphside/programme/blob/main/docs/1.3-workstreams.md)
-  — programme and application, and the generic workstreams: what each owns,
-  and the boundaries between them
-- [1.4 Programme activities](https://github.com/delphside/programme/blob/main/docs/1.4-programme-activities.md)
-  — the recurring activities, their cadence and who does them
-- [1.5 Writing documents](https://github.com/delphside/programme/blob/main/docs/1.5-writing-documents.md)
-  — what each document holds, and how it is written
-- [1.6 GitHub project board](https://github.com/delphside/programme/blob/main/docs/1.6-github-project-board.md)
-  — the issue types, fields, board and accounts in GitHub, and the strings the
-  tooling reads from them
-- [1.7 Roles and responsibilities](https://github.com/delphside/programme/blob/main/docs/1.7-roles-and-responsibilities.md)
-  — each role's purpose, decisions and reading list, and who decides what
-- [1.8 Service desk](https://github.com/delphside/programme/blob/main/docs/1.8-service-desk.md)
-  — how a player's request, incident or complaint arrives as a Ticket, is
-  answered and is closed
-- [1.9 Testing standards](https://github.com/delphside/programme/blob/main/docs/1.9-testing-standards.md)
-  — the test policy and strategy, and the standards every test is held to
-- [1.10 Development standards](https://github.com/delphside/programme/blob/main/docs/1.10-development-standards.md)
-  — how code is built: settings, identifiers, exit statuses, comments and each
-  language's standard
-- [3.1.1 Delivery log](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.1-delivery-log.md)
-  — one row per delivery: which planned pieces of work reached their users,
-  and when
-- [3.1.2 Artefacts](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.2-artefacts.md)
-  — each artefact's route, and the register of things under change control
-  that leave no trace in git
-- [3.1.3 Capacity plan](https://github.com/delphside/programme/tree/main/applications/tile-lite-elite/3.1.3-capacity-plan),
-  [3.1.4 Workstreams](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.4-workstreams.md)
-  and [3.1.5 Roles](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.5-roles.md)
-  — this application's capacity plans, its workstreams and who holds each role
-  here
-- [3.1.6 Profile](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.6-profile.md)
-  — what the programme's processes need to know about this application
-- [3.1.7 Change documents](https://github.com/delphside/programme/tree/main/applications/tile-lite-elite/3.1.7-changes)
-  — the design and test documents for each change, kept after it ships
+- [2.1 Applications](https://github.com/delphside/programme/blob/main/records/2.1-applications.md)
+  — each application and where its records are, including this one's

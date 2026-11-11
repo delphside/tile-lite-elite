@@ -7,6 +7,8 @@ must know to avoid breaking something on its first change.
 
 ## Before you change anything
 
+- **Propose a change by pull request**, as a web session does, and never push
+  to `main`.
 - **Commit subjects start with the version stamp**, `app X.Y.Z api M.N:` and a
   space: `X.Y.Z` is the application version in `Cargo.toml`, `M.N` the API
   version in `crates/api/src/lib.rs`. CI refuses a commit without it

@@ -34,8 +34,8 @@
 ## Deliveries and releases
 
 - When `deploy.sh` warns that an issue that is not a project carries the
-  milestone, the owner stops, then folds it into a work package or moves it out
-  of the milestone before deploying
+  milestone, the owner decides: fold it into a work package, move it out of
+  the milestone, or ship through
   ([4.3.3 §1.6](docs/4.3.3-testing-ci-and-release.md#16-ship-it)).
 - Deploys build a fresh worktree at the target commit. The image goes Preview,
   then Rehearsal, then Production.
@@ -46,8 +46,10 @@
   next patch after a production deploy, and skips it in the cases
   [4.3.3 §2.4.2](docs/4.3.3-testing-ci-and-release.md#242-decide-whether-the-app-version-moves)
   lists.
-- `Caddyfile`, `docker-compose.yml` and the `Dockerfile` are this
-  application's own assets; changing one is a Production Release.
+- Changing an artefact that reaches the image, the `Caddyfile`,
+  `docker-compose.yml` and `Dockerfile` among them, is a Production Release;
+  [3.1.2](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.2-artefacts.md)
+  lists them.
 - Rehearsal is closed: `scripts/deliver/rehearsal-access.sh` grants access by
   QR code.
 - The next structural release takes the major slot: `1.0.0`.
