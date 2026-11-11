@@ -138,7 +138,6 @@ for why the greylist was filled first.
 - **Modified:** yes. A selection of its entries, those playable on a board, is
   written as stems into `greylist-stems.txt`, which the generator expands to
   dictionary words.
-- **Used as:** the source of one section of `greylist-stems.txt`.
 
 ## Rules and board
 
