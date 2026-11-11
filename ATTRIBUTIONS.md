@@ -122,7 +122,15 @@ against measured recall gaps in the tool (it flags `NEGROES` but not `NEGRO`),
 except one section. That section, "Sexual and vulgar base words rustrict
 misses", is taken from the `en` list of LDNOOBW (List of Dirty, Naughty,
 Obscene, and Otherwise Bad Words), restricted to entries playable on a board.
-The licence of that list is not recorded here.
+
+### LDNOOBW `en` list
+
+- **Upstream:** <https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words>
+  (the `en` file)
+- **Licence:** CC BY 4.0, per the `LICENSE` file in that repository, read
+  2026-11-11. The attribution is this entry.
+- **Used as:** the source of one section of `greylist-stems.txt`, restricted to
+  entries playable on a board.
 
 `denylist.txt` is empty and has no attribution to make. See
 [`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#filling-these-in)
@@ -138,7 +146,9 @@ Letter values and tile distributions for the `official` (which `spicy` also
 uses), `north_american` and `german` editions are the standard published sets
 for those games;
 `spanish` follows the traditional Castilian set including its CH/LL/RR
-digraph tiles. These are functional game data rather than creative work.
+digraph tiles. The retired `wordfeud` edition, which `model.rs` keeps so that
+games created under it still resolve, takes the same kind of data. These are
+functional game data rather than creative work.
 
 Scrabble is a trademark of Hasbro in the United States and Canada and of
 Mattel elsewhere. This project is not affiliated with, endorsed by or
