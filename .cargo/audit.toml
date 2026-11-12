@@ -56,6 +56,13 @@ ignore = [
   "RUSTSEC-2026-0371",  # zbus_names
   "RUSTSEC-2026-0372",  # zvariant_derive
 
+  # `rustix` 1.1.2, unsound xattr functions: reached only through `async-io`,
+  # `async-process`, `polling` and `tempfile` under `zbus` -> `ashpd` -> `rfd`
+  # -> `dioxus-desktop`. `cargo tree -i rustix --target all --all-features`
+  # finds no other path, and without `--all-features` it finds none at all.
+  # #584.
+  "RUSTSEC-2026-0486",
+
   # `proc-macro-error`, reached only as a build-time proc macro of
   # `glib-macros`, and only on the desktop path. It is not in any shipped
   # binary even when the desktop build is made.
