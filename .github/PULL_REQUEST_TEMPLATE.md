@@ -5,11 +5,21 @@ measurements and the design live on the issue. The rules for the body are in
 *Changes* in
 [the programme's `CLAUDE.md`](https://github.com/delphside/programme/blob/main/CLAUDE.md#changes).
 
-Add the owner as reviewer at creation.
+Who reviews, and when Claude merges, is
+[1.2 §2.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#22-when-to-branch-and-what-pre-approved-means).
+Where the change owes the owner's review, add him as reviewer at creation and
+ask for it in the chat; where it does not, replace the boxes under *Review*
+with `No review owed:` and the reason.
 
 Replace `N` on the `Refs #N` line with the project or work package this
-delivers, or write `Activity: <id>` for a change that serves an activity.
+delivers, or write `Activity: <id>`, and `Initiative: <id>` where there is
+one, for a change that serves an activity.
 `Closes #N` is never used: no merge closes an issue.
+
+*Review rounds* is the review record, in the form
+[1.1](https://github.com/delphside/programme/blob/main/docs/1.1-programme-tooling.md#claudes-tooling)
+gives. Keep `None owed:` where 1.1's *what owes none* row covers the change;
+otherwise replace it with the record.
 -->
 
 Refs #N
@@ -47,9 +57,4 @@ Anything that does not belong under an item — including "this is fine", and in
 
 ## Review rounds
 
-<!--
-The review record, at the end of the body: one line per material finding and
-a cost line per round, or `None owed` where no rounds are owed. Claude writes
-it. The form is in
-[1.1](https://github.com/delphside/programme/blob/main/docs/1.1-programme-tooling.md#claudes-tooling).
--->
+None owed:
