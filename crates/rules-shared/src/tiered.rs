@@ -752,8 +752,8 @@ impl TieredDictionary {
         let mut is_word = false;
         // One narrowing step per *character*, so a digraph tile consumes
         // two depths and `is_word` is only whatever the last one reports.
-        for index in 0..expansion.len as usize {
-            let step = self.advance_char(cursor, expansion.chars[index])?;
+        for &ch in &expansion.chars[..expansion.len as usize] {
+            let step = self.advance_char(cursor, ch)?;
             cursor = step.cursor;
             is_word = step.is_word;
         }
