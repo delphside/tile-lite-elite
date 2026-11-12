@@ -273,9 +273,9 @@ fn available_tiles_for_crosscheck(
 ) -> Vec<Tile> {
     let mut tiles = Vec::new();
 
-    for i in 0..alphabet_len {
+    for (i, &count) in rack.counts[..alphabet_len].iter().enumerate() {
         let letter = Letter::from(i as u8);
-        if rack.counts[i] > 0 && cross_check.allows(letter) {
+        if count > 0 && cross_check.allows(letter) {
             tiles.push(Tile::Letter(letter));
         }
     }
