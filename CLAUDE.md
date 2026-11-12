@@ -54,7 +54,8 @@
   QR code.
 - The next structural release takes the major slot: `1.0.0`.
 - The scripted production checks are `scripts/deliver/verify.sh`,
-  `scripts/operate/check-hosts.sh` and the `/health` reads. Anything else
+  `scripts/operate/check-hosts.sh` (the programme's `board-hosts.py`, which the
+  `host-currency` activity also runs) and the `/health` reads. Anything else
   against production (an admin CLI listing, a database query, a log dump) the
   owner runs.
 
