@@ -87,6 +87,20 @@ url_variable = "TARGET_URL"
 [environments.production]
 env = ["PROD_URL"]
 
+[hosts.production]
+# Read by programme/scripts/board/board-hosts.py over ssh, read-only (#360).
+# The hosts are the infrastructure application's; this says which are this
+# application's and how to reach them.
+ssh = "tile-lite-elite"
+env = ["PROD_SSH_HOST"]
+
+[hosts.rehearsal]
+ssh = "tile-lite-elite-rehearsal"
+env = ["REHEARSAL_SSH_HOST"]
+# Its kernel and Docker should match production's, except while an upgrade is
+# being proven here first.
+compare_with = "production"
+
 [release]
 # A release is tagged `<tag_prefix><X.Y.Z>`.
 tag_prefix = "prod-"

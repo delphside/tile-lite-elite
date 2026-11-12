@@ -378,11 +378,10 @@ print("" if left is None else left)
   fi
 }
 
-LABEL[hosts]="Rehearsal and production agree, and neither waits to reboot"
-# **The trigger for #360 R4's cadence.** The owner chose "when reboot-required
-# appears" over a calendar, which only works if something says when it appears.
-# `check-hosts.sh` reads it; this is what makes somebody see it, attached to a
-# command already run before a deploy rather than to a reminder.
+LABEL[hosts]="Rehearsal and production are current and alike"
+# **#360 R4's cadence is the weekly `host-currency` activity** (programme
+# docs/1.4), which runs the same read; this repeats it beside a command already
+# run before a deploy. `check-hosts.sh` calls the programme's `board-hosts.py`.
 #
 # The named failure: production ran nine kernel revisions behind what it had
 # installed, for weeks, and nothing reported it — measured 2026-09-19.
@@ -392,11 +391,12 @@ LABEL[hosts]="Rehearsal and production agree, and neither waits to reboot"
 check_hosts() {
   local out
   if out="$(timeout 90 "$(dirname "${BASH_SOURCE[0]}")/../operate/check-hosts.sh" 2>&1)"; then
-    pass hosts "same kernel, same Docker, neither waiting to reboot"
+    pass hosts "no host owes an upgrade or a reboot, and the two agree"
   else
-    case "$out" in
-      *"could not read"*) note hosts "a host could not be read" "$out" ;;
-      *) note hosts "the hosts differ, or one is waiting to reboot" "$out" ;;
+    case $? in
+      1) note hosts "a host owes an upgrade, a reboot or a repair, or the two differ" "$out" ;;
+      2) note hosts "a host could not be read" "$out" ;;
+      *) note hosts "the host check could not run" "$out" ;;
     esac
   fi
 }
