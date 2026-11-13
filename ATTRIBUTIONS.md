@@ -74,7 +74,9 @@ means upstream moved.
   `8fa1b8384c6121b2cd16697f68c46569570b788204ca2633a79b2b61ef71886b`)
 - **Verified 2026-08-12:** 267,751 words in, 267,752 out, identical after
   normalisation except for one added word (see *Deviation from that source*).
-- **Licence:** unrecorded. Identifying the source does not supply one.
+- **Licence:** unrecorded. Identifying the source does not supply one. The
+  gap is an accepted risk, R-1 in the programme's
+  [risk register](https://github.com/delphside/programme/blob/main/records/2.7-improvement-registers.md#the-risk-register).
 - **Edition:** Collins Scrabble Words 2007 (CSW2007), the list the name
   SOWPODS refers to. Dated from the data, not a label:
   - 124 two-letter words, with `OK`, `EW` and `ZE` absent: before CSW2019,
