@@ -1631,12 +1631,6 @@ if ! ssh "${SSH_OPTS[@]}" "$REMOTE" "
     set -e
     cd $DEPLOY_REMOTE_DIR
 
-    # Retag the live images as :previous *before* loading the new ones.
-    # Without this the old image becomes dangling the moment :latest moves,
-    # and the prune below destroys it — which is why rolling back used to
-    # mean a full local rebuild and re-transfer for an image that had been
-    # sitting here minutes earlier. Two generations, ~300MB, on a disk
-    # that is 13% used.
     # The live images' ids, so a failure before the switch can point :latest
     # back at exactly these (restore_after_failed_load). Written fresh here
     # and removed once the snapshot is taken, so a stale file never survives.
@@ -1646,6 +1640,12 @@ if ! ssh "${SSH_OPTS[@]}" "$REMOTE" "
         && echo \"\$i \$id\" >> .pre-load-images
     done
 
+    # Retag the live images as :previous *before* loading the new ones.
+    # Without this the old image becomes dangling the moment :latest moves,
+    # and the prune below destroys it — which is why rolling back used to
+    # mean a full local rebuild and re-transfer for an image that had been
+    # sitting here minutes earlier. Two generations, ~300MB, on a disk
+    # that is 13% used.
     docker image tag tile-lite-elite-server:latest tile-lite-elite-server:previous 2>/dev/null || true
     docker image tag tile-lite-elite-web:latest tile-lite-elite-web:previous 2>/dev/null || true
 
