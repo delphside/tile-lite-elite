@@ -651,6 +651,38 @@ post_deploy() {
   fi
 }
 
+# Puts production back as it was when loading the images or taking the
+# snapshot fails. Those steps run before the migrations and the switch, so
+# `roll_back` does not apply: there is no snapshot to restore, and the
+# database was never touched. What may have changed is that `:latest` now
+# names the new images rather than the live ones, and that
+# the server container is stopped. Both are put back, and the old container
+# is started again rather than recreated, so it keeps the image it had.
+# Each command is allowed to fail on its own (a first deploy has no images to
+# point back at; a server never stopped is already running), so one miss does
+# not skip the rest.
+restore_after_failed_load() {
+  echo "==> Putting production back: the images and the server as they were" >&2
+  if ssh "${SSH_OPTS[@]}" "$REMOTE" "
+      cd $DEPLOY_REMOTE_DIR || exit 1
+      # Only the ids recorded before the load: if the run never got that far,
+      # :latest was never moved, and :previous may be an older generation.
+      if [ -f .pre-load-images ]; then
+        while read -r name id; do
+          docker image tag \"\$id\" tile-lite-elite-\$name:latest || true
+        done < .pre-load-images
+        rm -f .pre-load-images
+      fi
+      rm -f snapshots/$SNAPSHOT_NAME
+      docker compose start server > /dev/null
+  "; then
+    echo "==> Production is running the version it had before this deploy." >&2
+  else
+    echo "error: COULD NOT RESTART THE SERVER. Production may be down." >&2
+    echo "       ssh in and run: cd $DEPLOY_REMOTE_DIR && docker compose start server" >&2
+  fi
+}
+
 # Sourced by scripts/tests/deploy-release.bats, which exercises the two
 # functions above directly. Everything below this line is the deploy itself and
 # must not run when sourced.
@@ -1595,7 +1627,7 @@ roll_back() {
 }
 
 echo "==> Loading images and snapshotting the database"
-ssh "${SSH_OPTS[@]}" "$REMOTE" "
+if ! ssh "${SSH_OPTS[@]}" "$REMOTE" "
     set -e
     cd $DEPLOY_REMOTE_DIR
 
@@ -1605,6 +1637,15 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" "
     # mean a full local rebuild and re-transfer for an image that had been
     # sitting here minutes earlier. Two generations, ~300MB, on a disk
     # that is 13% used.
+    # The live images' ids, so a failure before the switch can point :latest
+    # back at exactly these (restore_after_failed_load). Written fresh here
+    # and removed once the snapshot is taken, so a stale file never survives.
+    rm -f .pre-load-images
+    for i in server web; do
+      id=\$(docker image inspect -f '{{.Id}}' tile-lite-elite-\$i:latest 2>/dev/null) \
+        && echo \"\$i \$id\" >> .pre-load-images
+    done
+
     docker image tag tile-lite-elite-server:latest tile-lite-elite-server:previous 2>/dev/null || true
     docker image tag tile-lite-elite-web:latest tile-lite-elite-web:previous 2>/dev/null || true
 
@@ -1629,7 +1670,13 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" "
         tile-lite-elite-server:latest \
         czf /snapshots/$SNAPSHOT_NAME -C /data .
     echo \"    snapshot: \$(du -h snapshots/$SNAPSHOT_NAME | cut -f1)\"
-"
+    rm -f .pre-load-images
+"; then
+  echo "error: loading the images or taking the snapshot failed. Nothing was" >&2
+  echo "       migrated or switched, so production's database is unchanged." >&2
+  restore_after_failed_load
+  exit 1
+fi
 
 # Apply the schema change on its own, before the new build becomes the
 # server. Migrations otherwise run as a side effect of startup, which fuses
@@ -1707,8 +1754,12 @@ if (( SMOKE_OK == 0 )); then
 fi
 
 
+# Production is live from here on (the smoke test passed), so this step, like
+# every one after the marker below, reports a failure and carries on rather
+# than ending the run under `set -e`.
 echo "==> Ensuring the 'sa' alias for tile-lite-elite-admin is set up and current on the VM"
-ssh "${SSH_OPTS[@]}" "$REMOTE" "
+post_deploy "setting up the 'sa' alias" "rerun deploy, or add the alias to ~/.bashrc on the VM by hand" \
+  ssh "${SSH_OPTS[@]}" "$REMOTE" "
     # Drop any existing 'alias sa=' line first, then re-append the current
     # definition. A stale line (e.g. an old deploy dir, or the pre-rename
     # admin binary name) used to survive because the previous logic only
@@ -1718,7 +1769,7 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" "
     sed -i '/alias sa=/d' ~/.bashrc 2>/dev/null || true
     echo \"alias sa='docker compose -f ~/$DEPLOY_REMOTE_DIR/docker-compose.yml exec server tile-lite-elite-admin'\" >> ~/.bashrc \
         || echo \"    (warning: could not set up the 'sa' alias for tile-lite-elite-admin)\"
-"
+" || true
 
 # --- Past this line, production is live -------------------------------------
 #
@@ -1772,14 +1823,19 @@ fi
 # already ahead of what's now in production, and bumping it again would
 # claim a release that never happened — the version to move on from is the
 # newest one, not the one just redeployed.
-CURRENT_BRANCH="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)"
-BRANCH_TIP="$(git -C "$REPO_DIR" rev-parse HEAD)"
+# An empty value (git could not answer) falls into the "leaving the version
+# alone" branches below and is recorded there, rather than ending the run.
+CURRENT_BRANCH="$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)" || CURRENT_BRANCH=""
+BRANCH_TIP="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)" || BRANCH_TIP=""
 NEXT_VERSION="$(printf '%s' "$DEPLOYED_VERSION" | awk -F. '{printf "%s.%s.%d", $1, $2, $3 + 1}')"
 
 if (( ! IS_RELEASE )); then
   echo "==> No version bump: a $DEPLOY_ENV deploy does not consume a version"
 elif [[ "${DEPLOY_SKIP_BUMP:-}" == "1" ]]; then
   echo "==> Skipping the version bump (DEPLOY_SKIP_BUMP=1) — production is on $DEPLOYED_VERSION"
+elif [[ -z "$CURRENT_BRANCH" || -z "$BRANCH_TIP" ]]; then
+  POST_DEPLOY_FAILED+=("reading the branch for the version bump — bump to $NEXT_VERSION by hand")
+  echo "    warning: could not read the branch, so the version was not bumped — production is live on $DEPLOYED_VERSION, continuing" >&2
 elif [[ "$BRANCH_TIP" != "$TARGET_FULL_SHA" ]]; then
   echo "==> Deployed $DEPLOYED_VERSION from an earlier commit, so leaving the version alone."
   echo "    Your branch ($CURRENT_BRANCH) is already ahead of what's now in production."
@@ -1790,10 +1846,16 @@ elif ! git -C "$REPO_DIR" diff --quiet -- Cargo.toml Cargo.lock; then
   echo "    Bump to $NEXT_VERSION by hand once they're committed." >&2
 else
   echo "==> Bumping the working tree to $NEXT_VERSION (production now holds $DEPLOYED_VERSION)"
-  sed -i "0,/^version = \"$DEPLOYED_VERSION\"/s//version = \"$NEXT_VERSION\"/" "$REPO_DIR/Cargo.toml"
-  # Refreshes Cargo.lock's workspace versions so the bump commit is complete.
-  ( cd "$REPO_DIR" && cargo check --workspace --quiet > /dev/null 2>&1 || true )
-  git -C "$REPO_DIR" add Cargo.toml Cargo.lock
+  # Each step reports a failure and leaves the rest to do by hand, rather than
+  # ending the run under `set -e`: production is already live.
+  BUMP_STAGED=0
+  if post_deploy "writing $NEXT_VERSION into Cargo.toml" "set version = \"$NEXT_VERSION\" in Cargo.toml, then commit it" \
+       sed -i "0,/^version = \"$DEPLOYED_VERSION\"/s//version = \"$NEXT_VERSION\"/" "$REPO_DIR/Cargo.toml"; then
+    # Refreshes Cargo.lock's workspace versions so the bump commit is complete.
+    ( cd "$REPO_DIR" && cargo check --workspace --quiet > /dev/null 2>&1 || true )
+    post_deploy "staging the version bump" "git add Cargo.toml Cargo.lock, then commit it" \
+      git -C "$REPO_DIR" add Cargo.toml Cargo.lock && BUMP_STAGED=1
+  fi
   # Read API_VERSION from the commit, not the working tree. This commit
   # carries only Cargo.toml/Cargo.lock, so its api/src/lib.rs is HEAD's —
   # and check-commit-stamp.sh validates the stamp against the commit's own
@@ -1804,16 +1866,20 @@ else
   # and both readers assumed one line. It exits non-zero rather than
   # printing nothing, so a version that cannot be read stops the bump
   # instead of writing a stamp its own checker would reject.
-  BUMP_API="$(git -C "$REPO_DIR" show HEAD:crates/api/src/lib.rs \
-    | "$(dirname "$0")/read-api-version.sh")"
-  if post_deploy "the version bump commit" "Cargo.toml is staged at $NEXT_VERSION — commit it, --no-verify if the image rule refuses (see #316)" \
+  BUMP_API=""
+  if (( BUMP_STAGED )) && ! BUMP_API="$(git -C "$REPO_DIR" show HEAD:crates/api/src/lib.rs \
+    | "$(dirname "$0")/read-api-version.sh")"; then
+    POST_DEPLOY_FAILED+=("reading API_VERSION for the bump commit's stamp — Cargo.toml is staged at $NEXT_VERSION, commit it by hand")
+    echo "    warning: could not read API_VERSION, so the bump was not committed — production is live on $DEPLOYED_VERSION, continuing" >&2
+  fi
+  if [[ -n "$BUMP_API" ]] && post_deploy "the version bump commit" "Cargo.toml is staged at $NEXT_VERSION — commit it, --no-verify if the image rule refuses (see #316)" \
        git -C "$REPO_DIR" commit --quiet \
          -m "app $NEXT_VERSION api $BUMP_API: bump dev version following production release" \
          -m "Production now runs $DEPLOYED_VERSION+$TARGET_SHA."; then
     post_deploy "the version bump push" "git push origin $CURRENT_BRANCH" \
       git -C "$REPO_DIR" push --quiet origin "$CURRENT_BRANCH" \
       && echo "    committed and pushed"
-  else
+  elif (( BUMP_STAGED )); then
     echo "    the bump is staged but not committed — commit it by hand" >&2
   fi
 fi
@@ -1892,7 +1958,7 @@ fi
 
 # Only after a deploy has succeeded: a failed one may be about to be retried,
 # and the artefact it would reuse is the point.
-prune_artifacts
+post_deploy "pruning old artefacts" "remove old artifacts/*.tar.gz by hand" prune_artifacts || true
 
 post_deploy "the plan/build disagreement report" "read artifacts/$TARGET_FULL_SHA.manifest and compare with milestone $DEPLOYED_VERSION" \
   report_plan_disagreement "$TARGET_FULL_SHA" "$DEPLOYED_VERSION" || true
