@@ -49,6 +49,9 @@ jobs:
       - name: What is overdue
         id: check
         shell: bash
+        env:
+          # board-flow is judged from the stalled-list issue (delphside/programme#193).
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           export PROGRAMME_DIR="$GITHUB_WORKSPACE/.programme-live"
