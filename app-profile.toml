@@ -53,7 +53,7 @@ carries_payload = true
 # source an entry here and a case in scripts/tests/shipping-paths.bats.
 non_shipping = [
   'docs/(?!4\.4\.7-log-events\.md$)',
-  'scripts/(?!operate/(backup-to-oci\.sh$|check-log-hygiene-nightly\.sh$|check-log-hygiene\.py$|upload\.sh$|systemd/|profile\.d/))',
+  'scripts/(?!operate/(backup-to-oci\.sh$|check-log-hygiene-nightly\.sh$|check-log-hygiene\.py$|upload\.sh$|systemd/tile-lite-elite-(backup|log-check)\.(service|timer)$|profile\.d/tile-lite-elite-sa\.sh$))',
   'e2e/',
   '\.github/',
   '\.githooks/',

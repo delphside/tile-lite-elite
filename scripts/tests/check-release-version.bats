@@ -154,3 +154,66 @@ CHILD='{"data":{"search":{"nodes":[{"number":126,"title":"a work package",
   run grep -q -- subIssues "$QUERY_LOG"
   assert_success
 }
+
+# The previous release is the newest of the `v` and the `prod-` tags together,
+# by version: the project's older tags are `v`, its newer ones `prod-`.
+@test "the previous release is the newest of the v and prod- tags, so a newer v tag is it" {
+  git -C "$D/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+  git -C "$D/repo" tag prod-0.4.25
+  git -C "$D/repo" tag v0.5.1
+  with_gh "$FUNCTIONAL" 0.5.2
+  assert_equal "$status" 1
+  assert_output --partial "#123"
+}
+
+@test "the previous release is found by version order across both prefixes, not by name" {
+  git -C "$D/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+  git -C "$D/repo" tag v0.4.9
+  git -C "$D/repo" tag prod-0.4.10
+  git -C "$D/repo" tag v0.4.2
+  with_gh "$EMPTY" 0.5.0
+  assert_success
+  assert_output --partial "minor or major"
+  with_gh "$FUNCTIONAL" 0.4.11
+  assert_equal "$status" 1
+}
+
+# Under CHECK_RELEASE_STRICT=1 (Turpin's release-check hook) a check that cannot
+# read the milestone cannot judge: exit 2, not a pass.
+@test "strict: no gh is exit 2, where without it the check passes" {
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+  assert_output --partial "gh not available"
+  assert_output --partial "cannot judge"
+}
+
+@test "strict: GitHub's answer being an error is exit 2, and without strict it passes" {
+  cat > "$BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"repo view"*) printf '%s\n' "delphside/tile-lite-elite" ;;
+  *) echo "HTTP 502" >&2; exit 1 ;;
+esac
+STUB
+  chmod +x "$BIN/gh"
+  isolated 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+  assert_output --partial "was an error"
+}
+
+@test "strict: a gh that cannot name the repository is exit 2" {
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BIN/gh"
+  chmod +x "$BIN/gh"
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+}
+
+@test "strict: a readable milestone is judged as before" {
+  CHECK_RELEASE_STRICT=1 with_gh "$EMPTY" 0.4.26 0.4.25
+  assert_success
+  CHECK_RELEASE_STRICT=1 with_gh "$FUNCTIONAL" 0.4.26 0.4.25
+  assert_equal "$status" 1
+}

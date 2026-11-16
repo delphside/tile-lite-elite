@@ -23,10 +23,27 @@ set -euo pipefail
 #
 # Exit 0 if the version is fine or cannot be judged, 1 if it is wrong.
 #
-# **It never fails for want of information.** No milestone, no previous release,
-# no `gh`, no network — all of those print why and pass. A release must not be
-# blocked because GitHub is unreachable; the check exists to catch a mistake,
-# not to add a dependency to shipping.
+# **By default it never fails for want of information.** No milestone, no
+# previous release, no `gh`, no network — all of those print why and pass. A
+# release must not be blocked because GitHub is unreachable; the check exists to
+# catch a mistake, not to add a dependency to shipping.
+#
+# **Under CHECK_RELEASE_STRICT=1 it refuses instead** where it cannot read the
+# milestone (no `gh`, no repository name, GitHub's answer an error): exit 2, a
+# check that could not judge (docs/1.10). Turpin's `release-check` hook sets it,
+# because there the check is a gate, and a gate that cannot look must not pass.
+# No previous release still passes: that is a first release, not a failure to look.
+STRICT="${CHECK_RELEASE_STRICT:-}"
+
+# could_not_read MESSAGE: skip, or under strict mode refuse.
+could_not_read() {
+  if [[ -n "$STRICT" ]]; then
+    echo "check-release-version: $1, so it cannot judge $VERSION" >&2
+    exit 2
+  fi
+  echo "check-release-version: $1 — skipping"
+  exit 0
+}
 
 # The value of the **Type of change** issue field that means a user could
 # notice. It was a label until 2026-08-26; see the programme's docs/1.2 2.6.
@@ -47,12 +64,13 @@ Exits 1 (wrong) only when:
         milestone carries functional change: ..."
 
 Exits 2 (could not judge) when:
+  - CHECK_RELEASE_STRICT=1 and gh is missing or GitHub's answer is an error
   - no version is given
   - <version> is not an X.Y.Z version
     -> "error: 'X' is not an X.Y.Z version"
 
 Otherwise exits 0 and prints why it passed or skipped: no previous
-release to compare against, gh unavailable, a minor/major bump (fixes
+release to compare against, gh unavailable (unless CHECK_RELEASE_STRICT=1), a minor/major bump (fixes
 are allowed there), or nothing functional found in the milestone.
 EOF
   exit 0
@@ -72,14 +90,14 @@ this_major="${BASH_REMATCH[1]}"
 this_minor="${BASH_REMATCH[2]}"
 this_patch="${BASH_REMATCH[3]}"
 
-# The predecessor: given, or the newest `prod-X.Y.Z` tag. `|| true` on both the
+# The predecessor: given, or the newest `vX.Y.Z` or `prod-X.Y.Z` tag, by version. `|| true` on both the
 # tag listing and the sort, because an unguarded pipeline that matches nothing
 # exits non-zero under `set -o pipefail` and would abort a deploy — which has
 # happened twice on this project.
 PREVIOUS="${2:-}"
 if [[ -z "$PREVIOUS" ]]; then
-  PREVIOUS="$(git tag --list 'prod-[0-9]*' 2>/dev/null \
-    | sed 's/^prod-//' \
+  PREVIOUS="$(git tag --list 'v[0-9]*' 'prod-[0-9]*' 2>/dev/null \
+    | sed -E 's/^(v|prod-)//' \
     | sort -t. -k1,1n -k2,2n -k3,3n \
     | tail -1 || true)"
 fi
@@ -106,8 +124,7 @@ fi
 : "$this_patch"
 
 if ! command -v gh > /dev/null 2>&1; then
-  echo "check-release-version: gh not available — skipping"
-  exit 0
+  could_not_read "gh not available"
 fi
 
 # Milestones are named for the version they ship. `|| true` so an API failure,
@@ -137,6 +154,8 @@ fi
 # `subIssues.totalCount` is how the board tooling tells one (`board/sources.py`
 # reads the same field).
 NWO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+[[ -n "$NWO" || -z "$STRICT" ]] || could_not_read "gh could not name the repository"
+ISSUES_RC=0
 ISSUES="$(gh api graphql -f query="{
   search(query: \"repo:$NWO is:issue milestone:\\\"$VERSION\\\"\", type: ISSUE, first: 100) {
     nodes { ... on Issue { number title
@@ -148,7 +167,8 @@ ISSUES="$(gh api graphql -f query="{
           | select((.subIssues.totalCount // 0) == 0)
           | select([.issueFieldValues.nodes[]? | select(.field.name == \"Type of change\") | .value]
                    | any($FUNCTIONAL))
-          | \"#\(.number) \(.title)\"] | .[]" 2>/dev/null || true)"
+          | \"#\(.number) \(.title)\"] | .[]" 2>/dev/null)" || ISSUES_RC=$?
+[[ "$ISSUES_RC" == 0 || -z "$STRICT" ]] || could_not_read "GitHub's answer for milestone $VERSION was an error"
 
 if [[ -z "$ISSUES" ]]; then
   echo "check-release-version: nothing functional in milestone $VERSION — a patch release is right"
