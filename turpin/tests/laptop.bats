@@ -159,6 +159,7 @@ setup() {
 }
 
 @test "post-deploy with no address reads TARGET_URL from the repository's rehearsal-target.sh" {
+  export TURPIN_ENV=rehearsal
   printf 'export TARGET_URL=https://rehearsal.test\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
   export STUB_HEALTH='{"app_version":"0.10.2+0123456"}'
   cd "$TREE"
@@ -170,7 +171,40 @@ setup() {
 }
 
 @test "post-deploy with no address and a script that gives none refuses" {
+  export TURPIN_ENV=rehearsal
   printf 'export OTHER=1\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
+  cd "$TREE"
+  run "$HOOKS/post-deploy"
+  assert_failure 1
+  assert_output --partial "TURPIN_URL is not set"
+}
+
+@test "post-deploy: a TURPIN_URL that is set wins over rehearsal-target.sh" {
+  export TURPIN_ENV=rehearsal TURPIN_URL=https://given.test
+  printf 'export TARGET_URL=https://rehearsal.test\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
+  export STUB_HEALTH='{"app_version":"0.10.2+0123456"}'
+  cd "$TREE"
+  run "$HOOKS/post-deploy"
+  assert_success
+  run cat "$CURL_LOG"
+  assert_line --partial "https://given.test/health"
+  refute_line --partial "rehearsal.test"
+}
+
+@test "post-deploy on rehearsal takes REHEARSAL_URL before rehearsal-target.sh" {
+  export TURPIN_ENV=rehearsal REHEARSAL_URL=https://env.test
+  printf 'export TARGET_URL=https://rehearsal.test\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
+  export STUB_HEALTH='{"app_version":"0.10.2+0123456"}'
+  cd "$TREE"
+  run "$HOOKS/post-deploy"
+  assert_success
+  run cat "$CURL_LOG"
+  assert_line --partial "https://env.test/health"
+}
+
+@test "post-deploy off rehearsal never reads rehearsal-target.sh" {
+  export TURPIN_ENV=production
+  printf 'export TARGET_URL=https://rehearsal.test\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
   cd "$TREE"
   run "$HOOKS/post-deploy"
   assert_failure 1

@@ -9,10 +9,15 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 need TURPIN_VERSION TURPIN_SHA
-# Rehearsal's profile gives no address: read it the way the profile's `url_from`
-# does, from the repository (the working directory), in a subshell.
-if [[ -z "${TURPIN_URL:-}" && -f "$PWD/scripts/deliver/rehearsal-target.sh" ]]; then
-  TURPIN_URL="$(source "$PWD/scripts/deliver/rehearsal-target.sh" > /dev/null 2>&1 && printf '%s' "${TARGET_URL:-}")" || TURPIN_URL=""
+# Rehearsal's profile gives no address of its own: REHEARSAL_URL where it is set
+# (the profile's `[environments.rehearsal].env`), otherwise the way the profile's
+# `url_from` reads it, from the repository (the working directory), in a
+# subshell. Only rehearsal, and only where Turpin gave no address.
+if [[ "${TURPIN_ENV:-}" == rehearsal && -z "${TURPIN_URL:-}" ]]; then
+  TURPIN_URL="${REHEARSAL_URL:-}"
+  if [[ -z "$TURPIN_URL" && -f "$PWD/scripts/deliver/rehearsal-target.sh" ]]; then
+    TURPIN_URL="$(source "$PWD/scripts/deliver/rehearsal-target.sh" > /dev/null 2>&1 && printf '%s' "${TARGET_URL:-}")" || TURPIN_URL=""
+  fi
 fi
 need TURPIN_URL
 
