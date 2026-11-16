@@ -5,4 +5,4 @@
 # substring (see the README beside this file for why that matters).
 #
 # EMPTY ON PURPOSE. The mechanism is built and tested; the contents are not
-# invented. See README.md, "Filling these in".
+# invented. See README.md, "Why the denylist is empty".

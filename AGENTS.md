@@ -12,7 +12,7 @@ must know to avoid breaking something on its first change.
 - **Commit subjects start with the version stamp**, `app X.Y.Z api M.N:` and a
   space: `X.Y.Z` is the application version in `Cargo.toml`, `M.N` the API
   version in `crates/api/src/lib.rs`. CI refuses a commit without it
-  ([4.3.3](docs/4.3.3-testing-ci-and-release.md#241-check-the-commit-subject-carries-both-versions)).
+  ([4.3.7](docs/4.3.7-how-testing-and-release-work.md#41-check-the-commit-subject-carries-both-versions)).
 - **Name the issue a commit serves** with a `Refs #N` trailer, or
   `Activity: <id>` for an activity; never `Closes #N`, because no merge closes
   an issue. Name a branch `N-short-name` for the project or work package it
@@ -41,7 +41,7 @@ must know to avoid breaking something on its first change.
 ## Checking your change
 
 These are the commands in
-[4.3.3](docs/4.3.3-testing-ci-and-release.md#22-running-tests):
+[4.3.7](docs/4.3.7-how-testing-and-release-work.md#2-running-tests):
 
 ```bash
 programme/scripts/docs/check-docs.sh                  # documentation: lint, links, placement, the map

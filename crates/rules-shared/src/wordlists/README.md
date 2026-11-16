@@ -1,54 +1,60 @@
 # Word lists the engines avoid
 
-The bundled dictionaries contain slurs: `HONKY` and `WOP` are both in
-`sowpods.txt`, which predates the 2020 Collins removals. The denylist and the
-greylist deal with that.
+This folder holds the lists that keep slurs and rude words from the engines,
+and slurs from the dictionaries.
 
-The denylist is empty and the greylist is populated.
-[4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md) owns how the
-lists are generated and the runbooks for changing them.
-
-| File | Contains | A person may play it | An engine may choose it |
+| File | Contains | A player may play it | An engine may choose it |
 | --- | --- | --- | --- |
-| `denylist.txt` | slurs and hate speech only | no: removed from the dictionaries, so it is not a valid word | no: no engine can enumerate it |
-| `greylist.txt` | what `rustrict` flags as `Type::ANY` (`PROFANE`, `OFFENSIVE`, `SEXUAL`, `MEAN`, `EVASIVE` and `SPAM`), adjusted by `greylist-stems.txt` ([how it is generated](../../../../docs/4.3.5-word-lists-and-dictionaries.md#generating-the-greylist)) | yes: the dictionaries are unchanged | no |
+| [`denylist.txt`](denylist.txt) | slurs and hate speech only | no: removed from the dictionaries, so it is not a valid word | no: no engine can enumerate it |
+| [`greylist.txt`](greylist.txt) | what `rustrict` flags as `Type::ANY` (`PROFANE`, `OFFENSIVE`, `SEXUAL`, `MEAN`, `EVASIVE` and `SPAM`), adjusted by `greylist-stems.txt` ([how it is generated](../../../../docs/4.3.5-word-lists-and-dictionaries.md#generating-the-greylist)) | yes: the dictionaries are unchanged | no |
+| [`greylist-stems.txt`](greylist-stems.txt) | the stems and exclusions the generator reads, which make `greylist.txt` reproducible | yes | no for a stem, yes for an exclusion (`!WORD`), once regenerated into `greylist.txt` |
 
-`greylist-stems.txt` is the generator's input, which makes `greylist.txt`
-reproducible; no run-time code reads it. `is_avoided_by_engines` consults
-`denylist.txt` and `greylist.txt`, so what an engine avoids is the union of
-both.
+`is_avoided_by_engines` (`crates/rules-shared/src/wordlists.rs`) consults
+`denylist.txt` and `greylist.txt`. The bundled dictionaries contain slurs:
+`HONKY` and `WOP` are both in `sowpods.txt`, which predates *the slur
+removals* made by the North American Scrabble Players Association (NASPA) in 2020
+and by Collins Scrabble Words from its 2021 edition.
+The greylist holds `HONKY`; `WOP` is on neither list.
 
-**The difference is the subject, not the severity.** A person who plays a rude
-word is expressing themselves; a machine that does it reads as the game
-insulting you. Humans keep the vocabulary they enjoy and the computer stays a
-clean opponent.
+[4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md)
+owns how the greylist is generated, how the denylist is curated and the
+runbooks for changing them.
 
-**Keep the denylist narrow.** Widen it towards "rude" and it refuses words with
-ordinary meanings (`BITCH` is a female dog, `ASS` is a donkey), and a player
-blocked from a legitimate high-scoring word blames the game. The narrow line is
-the one the game's governing bodies drew in 2020, which can be defended without
-appeal to taste.
+**Who plays a rude word decides whether it is allowed.** A player who plays a
+rude word is expressing themselves; an engine that does it reads as the game
+insulting the player. Players keep the vocabulary they enjoy and the engines
+stay clean opponents.
+
+**The owner keeps the denylist narrow.** Widen it towards *rude* and it refuses
+words with ordinary meanings (`BITCH` is a female dog, `ASS` is a donkey), and
+a player blocked from a legitimate high-scoring word blames the game. The
+narrow line is the one the slur removals drew.
 
 ## Format
 
-- one word per line, in any case;
-- blank lines and `#` comments are ignored;
-- the list is read with each entry trimmed and uppercased;
-- a lookup is not normalised: callers pass the uppercase words the board forms.
+`denylist.txt` and `greylist.txt` are read the same way:
+
+- one word per line, upper or lower case;
+- blank lines, and lines starting with `#`, are ignored;
+- each entry is trimmed and uppercased;
+- a lookup is exact: callers pass the uppercase words the board forms.
+
+`greylist-stems.txt` has its own syntax, which
+[4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md#generating-the-greylist)
+gives.
 
 **A word is matched whole, never as a substring.** A substring match removes
 `SCUNTHORPE`, `ASSASSIN` and `BASEMENT`, silently.
 `matching_is_whole_word_never_substring`
 (`crates/rules-shared/src/wordlists.rs`) guards it.
 
-## Filling these in
+## Why the denylist is empty
 
-**The denylist is empty on purpose.** Its mechanism is built and tested, and its
-contents are not invented: a list assembled from memory is wrong and
-unaccountable. The greylist's count is in the header of `greylist.txt`. The
-owner curates the denylist, with its candidates and sources, as
+**The denylist stays empty until the owner curates it**, with each entry's
+candidates and sources, as
 [4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md#curating-the-denylist)
-says.
+says: a list assembled from memory is wrong and unaccountable. Its mechanism is
+built and tested.
 
 What was measured, with `rustrict` 0.7.38 over `sowpods.txt` (2026-08-11, and
 again 2026-10-20):
@@ -56,34 +62,29 @@ again 2026-10-20):
 | Check | Result |
 | --- | --- |
 | `Type::ANY` on the lowercased word | flags 2,431 words |
-| `Type::ANY` on `NEGROES`, `NEGROID` and `SMUTTY` | flagged, but not `NEGRO` or `SMUT`; `MONG` is missed entirely, so its recall gaps are arbitrary and `greylist-stems.txt` closes them |
-| `OFFENSIVE \| SEVERE` | flags 938 words, including `HOLOCAUST`, `SLAVERY`, `JEW`, `ANTIRACIST`, `AUTISTIC`, `NIGGARDLY` and `QUEER` |
-| rated both `OFFENSIVE` and `SEVERE` | 185 words, including `NIGGLE`, `NIGER`, `NIQAB`, `HOAR`, `FAGOTTO` and `TAONGA` |
+| `Type::ANY` on `NEGROES`, `NEGROID` and `SMUTTY` | flagged, but not `NEGRO` or `SMUT`; `MONG` is missed entirely |
+| `Type::OFFENSIVE \| Type::SEVERE` | flags 938 words, including `HOLOCAUST`, `SLAVERY`, `JEW`, `ANTIRACIST`, `AUTISTIC`, `NIGGARDLY` and `QUEER` |
+| `is(Type::OFFENSIVE) && is(Type::SEVERE)`: offensive at any level, and severe in any category | 185 words, including `NIGGLE`, `NIGER`, `NIQAB`, `HOAR`, `FAGOTTO` and `TAONGA` |
 
-## Say "not a word", never "that word is offensive"
+Why these results confine `rustrict` to the greylist is in
+[4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md#design-notes-on-the-word-lists).
 
-A player told a word is *banned* has learned where the boundary is and can
-probe it; a player told it is not in the dictionary has learned nothing. Denied
-words are removed from the dictionaries, so they fail the ordinary
-not-in-the-dictionary path and produce the message every other invalid word
-produces. Nothing special-cases them to say more.
+## Rejecting a denied word as not a word
 
-## Not English
+A denied word produces the message every other invalid word produces. A
+player told a word is *banned* has learned where the boundary is and can probe
+it; a player told it is not in the dictionary has learned nothing.
 
-German and Spanish are out of scope: neither can be reviewed by somebody who
-does not speak the language. The tiers differ too:
+## Languages
 
-- **German:** the denylist tier is dominated by historical, political and
-  xenophobic slurs, and is legally regulated there in a way English is not.
-- **Spanish:** the tier targets nationality, race and sexual orientation, and
-  the greylist varies so much by region that one global list is wrong at the
-  edges.
+Both lists are drawn from English words, because only a reviewer who speaks a
+language can review its candidates. A
+denied word is still removed from all four dictionaries, German and Spanish
+included.
 
 ## Design notes
 
-- **Lists are files, and the dictionaries are edited from them:** the lists stay
-  auditable, reviewable and re-appliable after a dictionary is re-sourced, and
-  the dictionary edit is a separate regenerated commit
-  ([4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md#removing-the-denied-words-from-a-list)).
-  An unexplained deletion of several hundred lines from a word file is worse for
-  review than a plain-text list with this note beside it.
+- **Why denied words are removed through a list file, not by hand**: the list
+  stays auditable, reviewable and re-appliable after a dictionary is re-sourced
+  ([4.3.5](../../../../docs/4.3.5-word-lists-and-dictionaries.md#removing-the-denied-words-from-a-list)),
+  where a bare deletion from a word file shows no reason.
