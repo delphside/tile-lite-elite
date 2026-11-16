@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# smoke (host): /health, through Caddy on this host, reports `TURPIN_VERSION+`
+# and a prefix of TURPIN_SHA, within 60 s (design 545 §2.2, *Limits*). Checking
+# the version rather than a 200 is what makes it a test of this deploy: a stale
+# container still answering would pass the latter.
+#
+# Production and rehearsal redirect :80 to HTTPS and need the site's name (SNI),
+# so it asks for https://HOST/health with HOST resolved to this host. Preview's
+# TURPIN_URL is plain HTTP and is used as it is. Where the environment has no
+# `url`, HOST is the first name in SITE_ADDRESS in its `.env`.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_VERSION TURPIN_SHA
+
+url="${TURPIN_URL:-}"
+if [[ -z "$url" ]]; then
+  host="$(env_value SITE_ADDRESS | cut -d, -f1 | tr -d '[:space:]')"
+  [[ -n "$host" ]] || die "the environment has no url and its .env no SITE_ADDRESS, so it cannot tell where Caddy answers"
+  url="https://$host"
+fi
+url="${url%/}"
+
+SMOKE_RESOLVE=""
+case "$url" in
+  http://*) ;;
+  https://*)
+    host="${url#https://}"
+    host="${host%%/*}"
+    SMOKE_RESOLVE="$host:443:127.0.0.1"
+    ;;
+  *) die "TURPIN_URL is '$url', which is neither http:// nor https://" ;;
+esac
+export SMOKE_URL="$url/health" SMOKE_RESOLVE
+
+probe() {
+  local body args=()
+  [[ -z "$SMOKE_RESOLVE" ]] || args=(--resolve "$SMOKE_RESOLVE")
+  body="$(curl -sf --max-time 5 "${args[@]}" "$SMOKE_URL" 2> /dev/null)" || return 1
+  version_ok "$(printf '%s' "$body" | app_version_of)"
+}
+
+rc=0
+bounded_poll 60 probe || rc=$?
+if ((rc != 0)); then
+  die "$SMOKE_URL did not report $TURPIN_VERSION+${TURPIN_SHA:0:7} within 60s"
+fi
+echo "smoke: $SMOKE_URL reports $TURPIN_VERSION" >&2

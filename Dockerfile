@@ -62,9 +62,9 @@ COPY old-crates ./old-crates
 
 # Baked into both binaries via `option_env!` (see each crate's
 # `app_version()`) as SemVer build metadata, e.g. `0.2.0+a1c9f02`. Passed
-# through from docker-compose.yml's `build.args`, which scripts/deploy.sh
-# sets to the current git short SHA — see docs/operations.md's
-# "Versioning" section. Placed just before the two build steps below
+# through from docker-compose.yml's `build.args`, which the `build` hook
+# (turpin/hooks/build) sets to the commit's short SHA — see
+# docs/operations.md's "Versioning" section. Placed just before the two build steps below
 # rather than at the top of the stage, so a rebuild of the same commit
 # (same ARG value) still hits Docker's layer cache.
 ARG TILE_LITE_ELITE_BUILD_ID
@@ -85,8 +85,8 @@ RUN cd crates/ui && CARGO_INCREMENTAL=0 TILE_LITE_ELITE_API_BASE_URL="" dx build
 # crates/ui/src/app.rs.
 #
 # Contents rather than a version number, so it changes when the client
-# changes and not otherwise. The workspace version moves on every deploy
-# (deploy.sh bumps the patch), so using it here would reload every open tab
+# changes and not otherwise. The workspace version moves on every release
+# (the patch moves), so using it here would reload every open tab
 # after a server-only release — 0.4.16 changed `games.rs` alone and left
 # `crates/ui` untouched, and nobody needed to reload for it. This also keeps
 # the signal off `API_VERSION`, which is a statement about the wire contract
@@ -142,6 +142,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=builder /workspace/target/release/server-game /usr/local/bin/server-game
 COPY --from=builder /workspace/target/release/tile-lite-elite-admin /usr/local/bin/tile-lite-elite-admin
 
+# Turpin's payload (delphside/programme#117): what a host runs to deploy this
+# image set, at /turpin/. `turpin build` assembles it into `.turpin-payload/`
+# before the build; a build by hand or in CI makes the folder empty first
+# (`mkdir -p .turpin-payload`), which copies nothing and still builds. It holds
+# no secret and no environment's configuration: the compose files and the
+# Caddyfiles are joined at deploy, from the payload, never from this image.
+COPY .turpin-payload/ /turpin/
+
 # Not published by docker-compose.yml — reachable only from the `web`
 # (Caddy) container over the compose network. `tile-lite-elite-admin` is run via
 # `docker compose exec server tile-lite-elite-admin ...`, which is a genuinely
@@ -159,7 +167,8 @@ ENTRYPOINT ["/usr/local/bin/server-game"]
 
 FROM caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f AS runtime-web
 COPY --from=builder /workspace/target/dx/tile-lite-elite-ui/release/web/public /srv
-COPY Caddyfile /etc/caddy/Caddyfile
+# No Caddyfile here: each environment's is mounted by its compose file, so one
+# image runs on every environment and a Caddyfile change is not an image change.
 EXPOSE 80
 # Probes the site's own files, through a loopback-only listener the Caddyfile
 # adds for exactly this (`http://127.0.0.1:2020`). It proves routing, the file

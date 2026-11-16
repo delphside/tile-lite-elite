@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# save-state (host): the snapshot, `turpin-N.tgz` for deploy N in the folder
+# TLE_SNAPSHOT_DIR names (design 545 §2.2.2). It stops the server, tars the data
+# volume (read-only) to a `.partial` name and renames it, keeps only the
+# snapshots of this deploy and of `current`, never touches `pre-*`, and on
+# preview empties the volume so each preview deploy starts empty. Safe to run
+# again: it removes the snapshot under its number first. Each Docker call is
+# within 120 s. The tar is the format `rollback.sh --db-only` reads.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_DEPLOY TURPIN_IMAGE_SERVER
+dir="$(snapshot_dir)"
+mkdir -p "$dir"
+name="turpin-$TURPIN_DEPLOY.tgz"
+
+rm -f "${dir:?}/${name:?}" "${dir:?}/${name:?}.partial"
+
+for container in $(server_containers 120); do
+  bounded 120 docker stop "$container" > /dev/null
+done
+
+bounded 120 docker run --rm \
+  -v "$(tle_volume):/data:ro" -v "$dir:/snapshots" \
+  --entrypoint tar "$TURPIN_IMAGE_SERVER" \
+  czf "/snapshots/$name.partial" -C /data . \
+  || die "could not take the snapshot of $(tle_volume)"
+mv "${dir:?}/${name:?}.partial" "${dir:?}/${name:?}"
+
+# A rollback needs `current`'s snapshot and a restore this deploy's: no other
+# of ours. The `pre-*` ones are deploy.sh's.
+for file in "$dir"/turpin-*.tgz "$dir"/turpin-*.tgz.partial; do
+  [[ -e "$file" ]] || continue
+  case "${file##*/}" in
+    "$name" | "turpin-${TURPIN_CURRENT:-none}.tgz") ;;
+    *) rm -f "${file:?}" ;;
+  esac
+done
+
+if [[ "${TURPIN_ROLE:-}" == preview ]]; then
+  bounded 120 docker run --rm -v "$(tle_volume):/data" --entrypoint sh "$TURPIN_IMAGE_SERVER" \
+    -c 'rm -rf /data/* /data/.[!.]*' \
+    || die "could not empty $(tle_volume)"
+fi
+echo "save-state: $dir/$name" >&2

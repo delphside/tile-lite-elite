@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# post-deploy (laptop): the public /health reports this version, and after
+# production the `Release Check` issues now waiting are listed. A check, not a
+# gate (Turpin's design §9): the second part reports and never refuses. Where the
+# address does not report the version yet it says not yet (75), since DNS and
+# caches can lag a deploy that has already passed.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_VERSION TURPIN_SHA TURPIN_URL
+
+body="$(curl -sf --max-time 10 "${TURPIN_URL%/}/health" 2> /dev/null || true)"
+got="$(printf '%s' "$body" | app_version_of)"
+if ! version_ok "$got"; then
+  echo "post-deploy: ${TURPIN_URL%/}/health reports '${got:-nothing}', not $TURPIN_VERSION+${TURPIN_SHA:0:7}" >&2
+  exit 75
+fi
+echo "post-deploy: ${TURPIN_URL%/}/health reports $got" >&2
+
+if [[ "${TURPIN_ENV:-}" == production ]]; then
+  listing="$(gh issue list --label "Release Check" --state open \
+    --json number,title --jq '.[] | "  #\(.number)  \(.title)"' 2> /dev/null || true)"
+  if [[ -n "$listing" ]]; then
+    {
+      echo "These were waiting for a release to check against; now they can be:"
+      printf '%s\n' "$listing"
+      echo "Answer each in its issue, then take the label off."
+    } >&2
+  fi
+fi

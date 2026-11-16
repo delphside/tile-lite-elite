@@ -1,20 +1,29 @@
 # Pinned explicitly rather than left to derive from the containing
-# directory's basename — that basename also determines the image tags
-# `docker compose build` produces (`<name>-server`, `<name>-web`), which
-# `scripts/deploy.sh` references by their exact tag, so an unpinned name
-# would silently break `docker save` the moment the directory's renamed.
+# directory's basename — that basename also determines the container names
+# Compose makes and the labels (`com.docker.compose.project`) the operational
+# scripts find the server container by, so an unpinned name would silently
+# start a fresh project the moment the directory's renamed.
 name: tile-lite-elite
+
+# **Images.** Turpin runs this file with `TURPIN_IMAGE_SERVER` and
+# `TURPIN_IMAGE_WEB` set to the digests it pulled, and `pull_policy: never` so
+# Compose never goes to a registry itself; the fallback names are what a
+# `docker compose build` by hand tags. The `build:` blocks are for Turpin's
+# builder and by-hand builds. One image set runs on every environment: what
+# differs between them is its `.env` and the Caddyfile mounted below.
 
 services:
   server:
+    image: ${TURPIN_IMAGE_SERVER:-tile-lite-elite-server}
+    pull_policy: never
     build:
       context: .
       target: runtime-server
       args:
-        # Git short SHA, set by scripts/deploy.sh — see docs/operations.md's
-        # "Versioning" section. Empty when built by hand (`docker compose
-        # build` directly), which is fine: it just means no `+build`
-        # suffix on the reported app version.
+        # The commit's short SHA, set by the `build` hook (turpin/hooks/build)
+        # — see docs/operations.md's "Versioning" section. Empty when built by
+        # hand (`docker compose build` directly), which is fine: it just means
+        # no `+build` suffix on the reported app version.
         TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
     environment:
       TILE_LITE_ELITE_BIND: 0.0.0.0:3000
@@ -85,6 +94,8 @@ services:
     # gets rejected by the app itself, same as it would locally.
 
   web:
+    image: ${TURPIN_IMAGE_WEB:-tile-lite-elite-web}
+    pull_policy: never
     build:
       context: .
       target: runtime-web
@@ -142,6 +153,9 @@ services:
       # empty one is a valid config that behaves wrongly.
       REHEARSAL_ACCESS_KEY: ${REHEARSAL_ACCESS_KEY:-no-rehearsal-key-configured}
     volumes:
+      # This environment's Caddyfile, from the project directory: Turpin joins
+      # the file into each deploy's folder, so the image carries none.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Caddy's obtained TLS certificates live here — without this, a
       # container recreation (not just a restart) would silently re-request
       # a fresh certificate from Let's Encrypt every time.
