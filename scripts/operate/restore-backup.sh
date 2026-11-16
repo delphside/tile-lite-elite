@@ -19,8 +19,9 @@
 #   restore-backup.sh <read-par-url> --object <name> a specific one
 #
 # **Run it on a schedule, not only in an emergency.** A backup nobody has
-# restored is a hypothesis, and the alarm on the restore marker exists to make
-# that happen about every hundred days.
+# restored is a hypothesis, and the alarm on the restore drill's age exists to make
+# that happen about every hundred days. It does not say so itself: the drill is
+# recorded from the production host, by record-restore-drill.sh (docs/4.3.4).
 set -euo pipefail
 # A record of this run that outlives the terminal -- #328.
 # shellcheck source=scripts/deliver/run-log.sh
@@ -29,19 +30,17 @@ run_log_start restore-backup.sh "$@"
 
 
 
-PAR=""; INTO=""; OBJECT=""; MARK=""
+PAR=""; INTO=""; OBJECT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --into)   INTO="$2"; shift 2 ;;
     --object) OBJECT="$2"; shift 2 ;;
-    --mark)   MARK="$2"; shift 2 ;;   # a write PAR, to refresh the restore marker
+    --mark)   echo "error: --mark is gone: record the drill on the host with scripts/operate/record-restore-drill.sh (docs/4.3.4)" >&2; exit 64 ;;
     -h|--help)
       cat <<'EOF'
 usage: restore-backup.sh <read-par-url>                 newest backup, into a file
        restore-backup.sh <read-par-url> --into <volume> and load it into a volume
        restore-backup.sh <read-par-url> --object <name> a specific one
-       restore-backup.sh <read-par-url> --mark <write-par-url>  also refresh
-                                          the 100-day restore-drill marker
 
 Restores from the offsite backups (#174). Never run on the production
 VM itself — its PAR is write-only and cannot read, list or delete; see
@@ -49,6 +48,8 @@ the header comment above. Make a short-lived read PAR in the console
 for this, and delete it after.
 
 Refuses (exit 1) when:
+  - --mark is given (removed; exit 64)
+    -> "error: --mark is gone: record the drill on the host ..."
   - no PAR URL is given
     -> "error: give me a read pre-authenticated request URL (see --help)"
   - the PAR URL doesn't end in /o/ (the bucket-listing form)
@@ -155,14 +156,4 @@ else
   cp "$WORK/db.sqlite3" "./restored-$OBJECT.sqlite3" 2>/dev/null \
     || cp "$WORK/db.sqlite3" "./restored.sqlite3"
   echo "written to ./restored-*.sqlite3 — not loaded anywhere"
-fi
-
-# --- say the drill happened ---------------------------------------------------
-if [[ -n "$MARK" ]]; then
-  # From a file, not stdin: OCI rejects chunked uploads with 501. See the note
-  # in backup-to-oci.sh.
-  printf '%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" > "$WORK/marker"
-  curl --fail --silent --show-error \
-    --max-time 60 -T "$WORK/marker" "${MARK}marker-restore-ok" \
-    && echo "restore marker refreshed — the 100-day alarm is reset"
 fi

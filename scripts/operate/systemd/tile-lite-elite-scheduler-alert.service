@@ -1,0 +1,14 @@
+# Report a scheduler job that panicked or stalled (#224 R4): reads the
+# application's journal since its last run and posts JobFailed job=scheduler
+# through post-metric.sh when an ERROR line from the scheduler appeared.
+#
+# Installed in /opt/tile-lite-elite/ with post-metric.sh, which it calls, and
+# needs the `oci` Python package for the system python3.
+[Unit]
+Description=Tile Lite Elite — post a metric when a scheduler job panicked or stalled
+
+[Service]
+Type=oneshot
+User=ubuntu
+# The user must be able to read the journal: `usermod -aG systemd-journal ubuntu`.
+ExecStart=/opt/tile-lite-elite/scheduler-alert.sh

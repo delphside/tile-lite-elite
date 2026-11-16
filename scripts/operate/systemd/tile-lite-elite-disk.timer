@@ -1,0 +1,12 @@
+# Every 15 minutes: a disk fills in hours, and the alarm needs a datapoint well
+# inside its 2-hour absence window and its 15-minute low-space window.
+[Unit]
+Description=Post the Tile Lite Elite disk figures every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

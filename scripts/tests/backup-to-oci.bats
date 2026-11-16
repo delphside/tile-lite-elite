@@ -6,14 +6,20 @@
 # otherwise be discovered by a restore that does not work.
 #
 # HOME is a scratch directory, so no real credential can be found; curl is a
-# stub, so nothing reaches a bucket either way.
+# stub, so nothing reaches a bucket either way. post-metric.sh is a stub beside a
+# copy of the script (which finds it by its own directory) that records its
+# arguments: the metric is on the success path only, so a failing run must leave
+# the record empty (#224 R1).
 
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
-  SCRIPT="$BATS_TEST_DIRNAME/../operate/backup-to-oci.sh"
   D="$BATS_TEST_TMPDIR"
-  mkdir -p "$D/bin"
+  mkdir -p "$D/bin" "$D/ops"
+  SCRIPT="$D/ops/backup-to-oci.sh"
+  cp "$BATS_TEST_DIRNAME/../operate/backup-to-oci.sh" "$SCRIPT"
+  printf '#!/usr/bin/env bash\necho "$*" >> "%s/posts"\nexit "${POST_EXIT:-0}"\n' "$D" > "$D/ops/post-metric.sh"
+  chmod +x "$D/ops/post-metric.sh"
   # docker: `cp` produces a file, anything else succeeds.
   cat > "$D/bin/docker" <<'STUB'
 #!/usr/bin/env bash
@@ -25,9 +31,10 @@ STUB
   chmod +x "$D/bin/docker"
 }
 
-tools() {   # <integrity> <upload-exit> <marker-exit>
+tools() {   # <integrity> <upload-exit> <post-exit>
   printf '#!/usr/bin/env bash\necho "%s"\n' "$1" > "$D/bin/sqlite3"
-  printf '#!/usr/bin/env bash\nif [[ "$*" == *marker-backup-ok* ]]; then exit %s; fi\nexit %s\n' "$3" "$2" > "$D/bin/curl"
+  printf '#!/usr/bin/env bash\nexit %s\n' "$2" > "$D/bin/curl"
+  export POST_EXIT="$3"
   chmod +x "$D/bin/sqlite3" "$D/bin/curl"
 }
 
@@ -36,11 +43,12 @@ backup() {  # [PAR_URL]
   run env -u PAR_URL PATH="$D/bin:$PATH" HOME="$D" ${1:+PAR_URL="$1"} COMPOSE="$D/compose.yml" bash "$SCRIPT"
 }
 
-@test "a good backup uploads and marks" {
+@test "a good backup uploads and posts JobSucceeded job=backup once" {
   tools ok 0 0
   backup "https://example.invalid/p/x/o/"
   assert_success
   assert_output --partial uploaded
+  assert_equal "$(cat "$D/posts")" "JobSucceeded 1 job=backup"
 }
 
 @test "a corrupt copy is never uploaded" {
@@ -48,6 +56,7 @@ backup() {  # [PAR_URL]
   backup "https://example.invalid/p/x/o/"
   assert_equal "$status" 1
   assert_output --partial "integrity check failed"
+  assert [ ! -e "$D/posts" ]
 }
 
 @test "a failed upload is an error" {
@@ -55,13 +64,24 @@ backup() {  # [PAR_URL]
   backup "https://example.invalid/p/x/o/"
   assert_equal "$status" 1
   assert_output --partial "upload failed"
+  assert [ ! -e "$D/posts" ]
 }
 
-@test "a failed marker warns but does not fail" {
+@test "a failed post warns but does not fail the backup" {
   tools ok 0 1
   backup "https://example.invalid/p/x/o/"
   assert_success
   assert_output --partial "the alarm will fire"
+}
+
+# The metric replaced the marker object: nothing but the database goes to the
+# bucket, and the old name is gone from the script.
+@test "no marker object is uploaded" {
+  tools ok 0 0
+  backup "https://example.invalid/p/x/o/"
+  assert_success
+  run grep -c "marker-" "$SCRIPT"
+  assert_output 0
 }
 
 # The one that would otherwise upload nothing, quietly.
@@ -70,6 +90,7 @@ backup() {  # [PAR_URL]
   backup
   assert_failure
   assert_output --partial "no PAR_URL"
+  assert [ ! -e "$D/posts" ]
 }
 
 # The one thing a stubbed curl can never check. Every case above answers

@@ -105,3 +105,19 @@ restore() { run bash -c 'cd "$1" && PATH="$1/bin:$PATH" bash "${@:2}"' _ "$D" "$
   # And before anything is fetched.
   assert [ ! -e "$D/curl-calls" ]
 }
+
+# The drill is recorded from the host (record-restore-drill.sh), so the write PAR
+# never reaches this machine. A caller still passing --mark must be told, not
+# have its write PAR read as the bucket to list.
+@test "--mark is refused, pointing at the host's helper, and nothing is fetched" {
+  bucket 3
+  restore "https://example.invalid/p/x/o/" --mark "https://example.invalid/p/w/o/"
+  assert_equal "$status" 64
+  assert_output --partial "record-restore-drill.sh"
+  assert [ ! -e "$D/curl-calls" ]
+}
+
+@test "the restore marker upload is gone from the script" {
+  run grep -c "marker-restore-ok" "$SCRIPT"
+  assert_output 0
+}

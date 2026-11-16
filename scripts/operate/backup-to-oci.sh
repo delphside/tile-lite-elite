@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Take a consistent copy of the production database and put it somewhere the
-# production machine cannot reach (#174).
+# production machine cannot reach (#174), then report it through post-metric.sh
+# (#224).
 #
 # **Why offsite at all.** `deploy.sh` already snapshots before every deploy and
 # keeps five — a good procedure that protects against a bad deploy, and useless
@@ -42,13 +43,15 @@ Refuses (exit 1) when:
   - the upload itself fails (the previous backup is left untouched)
     -> "error: upload failed; the previous backup is untouched"
 
-Only warns (exit 0) when the backup uploaded but the success marker
-did not — the alarm then fires on that absence:
-  -> "warning: backup uploaded but the marker did not; the alarm will fire"
+Only warns (exit 0) when the backup uploaded but the JobSucceeded
+metric did not post (post-metric.sh) — the alarm then fires on that
+absence:
+  -> "warning: backup uploaded but the metric did not post; the alarm will fire"
 EOF
   exit 0
 fi
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE="${COMPOSE:-$HOME/tile-lite-elite/docker-compose.yml}"
 PAR_URL="${PAR_URL:-}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -101,18 +104,10 @@ echo "uploaded db-$STAMP.sqlite3.gz ($SIZE bytes)"
 
 # --- 4. say that it worked ------------------------------------------------------
 #
-# A marker object refreshed only on success, so the alarm watches for **absence
-# of success** rather than for a failure message. That also catches this script
+# A metric posted only on success, so the alarm watches for **absence of
+# success** rather than for a failure message. That also catches this script
 # crashing, the timer never being enabled, the host being down, or the credential
-# expiring — none of which would ever send a failure.
-#
-# **Uploaded from a file, never from stdin.** `curl -T -` cannot know the length
-# in advance, so it sends `Transfer-Encoding: chunked` — which OCI Object
-# Storage rejects with **501 Not Implemented**. Measured on the production host,
-# 2026-08-23: stdin 501, the identical bytes from a file 200. All three markers
-# in this project had the same bug, so none of the three alarms could ever have
-# been satisfied.
-printf '%s\n' "$STAMP" > "$WORK/marker"
-curl --fail --silent --show-error --max-time 60 \
-  -T "$WORK/marker" "${PAR_URL}marker-backup-ok" \
-  || echo "warning: backup uploaded but the marker did not; the alarm will fire" >&2
+# expiring -- none of which would ever send a failure. Every earlier exit above
+# is a failure and posts nothing.
+"$HERE/post-metric.sh" JobSucceeded 1 job=backup \
+  || echo "warning: backup uploaded but the metric did not post; the alarm will fire" >&2

@@ -1,0 +1,13 @@
+# The disk and restore-drill figures (#224 R2): posts DiskFreePercent and
+# RestoreDrillAgeDays to OCI Monitoring through post-metric.sh. On its own timer,
+# apart from the nightly jobs, so neither silences the other's alarm.
+#
+# Installed in /opt/tile-lite-elite/ with post-metric.sh, which it calls, and
+# needs the `oci` Python package for the system python3.
+[Unit]
+Description=Tile Lite Elite — post disk free space and restore-drill age to OCI Monitoring
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/tile-lite-elite/post-disk-metrics.sh
