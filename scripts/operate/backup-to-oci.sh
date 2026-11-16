@@ -21,22 +21,30 @@
 # server still running — no downtime, and nothing to reassemble on restore.
 #
 # Usage: backup-to-oci.sh          (run by tile-lite-elite-backup.timer)
-#        PAR_URL=... backup-to-oci.sh
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 usage: backup-to-oci.sh
-       PAR_URL=... backup-to-oci.sh
 
-Takes a consistent VACUUM INTO copy of production's database and
-uploads it to OCI Object Storage via a write-only pre-authenticated
-request, so a backup exists somewhere the production host cannot
-itself delete.
+Takes a consistent VACUUM INTO copy of the environment's database and
+sends it through upload.sh, beside this script. TLE_UPLOAD in the one
+/var/lib/turpin/tile-lite-elite/*/.env chooses where it goes: `par`
+(OCI Object Storage via a write-only pre-authenticated request, from
+PAR_URL or ~/.tile-lite-elite-backup-par), `local` (uploads/ in that
+state folder) or `local-fail` (tests). It holds that folder's `lock`
+for the run, waiting up to TLE_LOCK_WAIT seconds (default 1800), and
+finds the server by its Compose labels.
 
 Refuses (exit 1) when:
-  - no PAR_URL is set and ~/.tile-lite-elite-backup-par is unreadable
+  - there is not exactly one /var/lib/turpin/tile-lite-elite/*/.env
+    (TLE_TURPIN_ROOT overrides the root)
+  - TLE_UPLOAD is not par, local or local-fail
+  - TLE_UPLOAD is par, no PAR_URL is set and
+    ~/.tile-lite-elite-backup-par is unreadable
     -> "error: no PAR_URL, and no ~/.tile-lite-elite-backup-par"
+  - the lock is not free within the wait
+  - there is not exactly one running server container
   - the fresh copy fails PRAGMA integrity_check
     -> "error: integrity check failed on the fresh copy: ..."
   - the upload itself fails (the previous backup is left untouched)
@@ -49,29 +57,42 @@ EOF
   exit 0
 fi
 
-COMPOSE="${COMPOSE:-$HOME/tile-lite-elite/docker-compose.yml}"
-PAR_URL="${PAR_URL:-}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=upload.sh
+. "$HERE/upload.sh"
+
+tle_upload_init || exit 1
+
+# A deploy holds the same lock, so a backup never reads a database mid-change.
+# Run again under it, waiting longer than a deploy takes.
+if [[ -z "${TLE_LOCKED:-}" ]]; then
+  exec env TLE_LOCKED=1 flock -w "${TLE_LOCK_WAIT:-1800}" "$STATE_DIR/lock" bash "$0" "$@"
+fi
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# `PAR_URL` is read from a file rather than the environment so the timer unit
-# does not carry a credential in `systemctl show` output, which is world
-# readable. 0600, owned by the user the timer runs as.
-if [[ -z "$PAR_URL" && -r "$HOME/.tile-lite-elite-backup-par" ]]; then
-  PAR_URL="$(< "$HOME/.tile-lite-elite-backup-par")"
+# The server by its Compose labels. Not `turpin-host compose`, which refuses
+# while the deploy lock is held, and this script holds it.
+mapfile -t SERVERS < <(docker ps -q \
+  --filter label=com.docker.compose.project=tile-lite-elite \
+  --filter label=com.docker.compose.service=server \
+  --filter status=running)
+if [[ ${#SERVERS[@]} -ne 1 ]]; then
+  echo "error: expected one running tile-lite-elite server container, found ${#SERVERS[@]}" >&2
+  exit 1
 fi
-[[ -n "$PAR_URL" ]] || { echo "error: no PAR_URL, and no ~/.tile-lite-elite-backup-par" >&2; exit 1; }
+SERVER="${SERVERS[0]}"
 
 # --- 1. a consistent copy, with the server still serving ---------------------
 #
 # Into /data so the file lands on the volume the container can write, then out
-# through `docker compose cp`. Writing to a bind mount would need one, and the
-# volume already exists.
-docker compose -f "$COMPOSE" exec -T server \
+# through `docker cp`.
+docker exec "$SERVER" \
   sqlite3 /data/tile-lite-elite.sqlite3 "VACUUM INTO '/data/backup-$STAMP.sqlite3'"
-docker compose -f "$COMPOSE" cp "server:/data/backup-$STAMP.sqlite3" "$WORK/db.sqlite3"
-docker compose -f "$COMPOSE" exec -T server rm -f "/data/backup-$STAMP.sqlite3"
+docker cp "$SERVER:/data/backup-$STAMP.sqlite3" "$WORK/db.sqlite3"
+docker exec "$SERVER" rm -f "/data/backup-$STAMP.sqlite3"
 
 # --- 2. verify it before trusting it ------------------------------------------
 #
@@ -89,10 +110,7 @@ SIZE="$(stat -c%s "$WORK/db.sqlite3.gz")"
 
 # --- 3. upload -----------------------------------------------------------------
 #
-# `--fail` so an HTTP error is an exit status rather than a page of HTML written
-# to a file nobody reads. The PAR URL ends in /o/, so the object name is appended.
-if ! curl --fail --silent --show-error --max-time 300 \
-     -T "$WORK/db.sqlite3.gz" "${PAR_URL}db-$STAMP.sqlite3.gz"; then
+if ! tle_upload "$WORK/db.sqlite3.gz" "db-$STAMP.sqlite3.gz" 300; then
   echo "error: upload failed; the previous backup is untouched" >&2
   exit 1
 fi
@@ -113,6 +131,5 @@ echo "uploaded db-$STAMP.sqlite3.gz ($SIZE bytes)"
 # in this project had the same bug, so none of the three alarms could ever have
 # been satisfied.
 printf '%s\n' "$STAMP" > "$WORK/marker"
-curl --fail --silent --show-error --max-time 60 \
-  -T "$WORK/marker" "${PAR_URL}marker-backup-ok" \
+tle_upload "$WORK/marker" marker-backup-ok 60 \
   || echo "warning: backup uploaded but the marker did not; the alarm will fire" >&2
