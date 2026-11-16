@@ -154,7 +154,7 @@ backup() {  # [PAR_URL]
   sleep 0.5
   backup "https://example.invalid/p/x/o/"
   kill "$holder" 2>/dev/null || true
-  assert_failure
+  assert_failure 75
   assert_equal "$(grep -c . "$CALLS" || true)" 0
 }
 

@@ -10,11 +10,11 @@
 # validator is useless without the schema and the schema is a repository
 # document: check-log-hygiene-nightly.sh, check-log-hygiene.py, upload.sh (shared
 # with the backup), and
-# docs/4.4.7-log-events.md. There is no checkout on this host — deploy.sh ships
-# images, not source — so they are copied by the delivery, which is also why they
-# appear in the project's artefact list as `production:` entries distinct from
-# their repository originals. A logging change that does not re-copy them leaves
-# the host validating against last month's schema.
+# docs/4.4.7-log-events.md. There is no checkout on this host, so they are the
+# image's payload: Turpin installs them as host files (`[[turpin.host_files]]`
+# in app-profile.toml) at each deploy, and a change to one ships in the image.
+# Until 0.10.3, the fallback deploy.sh still copies them. A deploy that does
+# not install them leaves the host validating against last month's schema.
 [Unit]
 Description=Tile Lite Elite — validate the day's log against docs/4.4.7
 
