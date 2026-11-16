@@ -128,6 +128,12 @@ pub(crate) async fn stream_events(
     mut deleted: broadcast::Receiver<String>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
+    // A socket upgraded after the stop was signalled subscribed to a value it
+    // has already seen, so `changed()` would never fire for it: close it now.
+    if *shutdown.borrow_and_update() {
+        close_with(&mut socket, CLOSE_GOING_AWAY).await;
+        return;
+    }
     loop {
         let event = tokio::select! {
             _ = shutdown.changed() => {
