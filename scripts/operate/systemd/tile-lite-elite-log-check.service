@@ -1,6 +1,6 @@
 # The nightly log hygiene check (#174). Reads the day's journal, validates it
-# against docs/4.4.7's schema, writes exceptions to its own log, and refreshes a
-# marker object only on a clean run.
+# against docs/4.4.7's schema, writes exceptions to its own log, and posts a
+# `JobSucceeded` metric only on a clean run.
 #
 # Reads and writes nothing else — no accounts, no email, no driving of flows.
 # The rare events are covered in CI, by the regression suite.

@@ -5,9 +5,9 @@
 # has no instance principal and will not be given one. So the last step of the
 # runbook calls this over ssh, and the host keeps the time:
 #
-#   ssh tile-lite-elite 'scripts/operate/record-restore-drill.sh'
+#   ssh tile-lite-elite /opt/tile-lite-elite/record-restore-drill.sh
 #
-# The disk timer (`post-disk-metrics.sh`) reads the file daily-ish and posts
+# The disk timer (`post-disk-metrics.sh`) reads the file every 15 minutes and posts
 # `RestoreDrillAgeDays`; the alarm is that age above 100. A file rather than a
 # metric posted from here, because an absence alarm cannot run to 100 days.
 #

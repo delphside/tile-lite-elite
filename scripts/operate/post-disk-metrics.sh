@@ -18,7 +18,8 @@
 # Both posts are attempted whatever the first does, so one failing cannot hide
 # the other.
 #
-# Exit: 0 both posted; 1 a post failed (the other was still tried);
+# Exit (docs/1.10): 0 both posted; 3 completed with errors: a post failed and the
+#       other was still tried;
 #       2 could not measure the disk.
 set -euo pipefail
 
@@ -32,7 +33,7 @@ RestoreDrillAgeDays (9999 when no drill is recorded).
 
 Exits:
   0  both posted
-  1  a post failed; the other was still attempted
+  3  completed with errors: a post failed; the other was still attempted
   2  could not measure the disk
      -> "error: cannot read free space for <mount>"
 EOF
@@ -62,7 +63,7 @@ if [[ -r "$DRILL_FILE" ]]; then
   fi
 fi
 
-STATUS=0
-"$HERE/post-metric.sh" DiskFreePercent "$FREE" "mount=$MOUNT" || STATUS=1
-"$HERE/post-metric.sh" RestoreDrillAgeDays "$AGE" || STATUS=1
+STATUS=0   # becomes 3: carried on past a failed post
+"$HERE/post-metric.sh" DiskFreePercent "$FREE" "mount=$MOUNT" || STATUS=3
+"$HERE/post-metric.sh" RestoreDrillAgeDays "$AGE" || STATUS=3
 exit "$STATUS"

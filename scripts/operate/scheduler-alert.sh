@@ -17,16 +17,24 @@
 # timer's interval. The cursor is saved only once the post has succeeded (or
 # nothing matched), so a failed post is retried by the next run rather than lost.
 #
-# What matches: `level` is `ERROR` and `target` starts with
-# `server_game::app::scheduler`. Both lines carry those at the top level of the
-# JSON line, which the application writes flattened (`main.rs`).
+# **What matches**, all three at once, at the top level of the application's JSON
+# line (which it writes flattened, `main.rs`): `level` is `ERROR`, `target`
+# starts with `server_game::app::scheduler`, and `message` is `job panicked` or
+# `job appears stalled`. The message is kept in the filter so that some other
+# `ERROR` the scheduler's modules come to log does not page; a new message that
+# should is added here.
+#
+# **A quiet first run still leaves a cursor.** With no cursor and nothing in the
+# window, the latest entry's cursor is saved anyway, so the next run reads from
+# there and a line written in the gap is not missed. Only a journal with no
+# entries at all leaves none.
 #
 # Usage: scheduler-alert.sh        (run by tile-lite-elite-scheduler-alert.timer)
 #        CURSOR_FILE=... scheduler-alert.sh
 #
-# Exit: 0 ran (posted or quiet); 1 a match was found and could not be posted
-#       (the cursor is kept, so the next run retries); 2 could not read the
-#       journal.
+# Exit (docs/1.10): 0 ran (posted or quiet); 2 could not read the journal; or,
+#       where a match could not be posted, post-metric.sh's own status (1, 2, 64
+#       or 75), with the cursor kept so the next run retries.
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -35,12 +43,15 @@ usage: scheduler-alert.sh
        CURSOR_FILE=... scheduler-alert.sh
 
 Reads the tle-server journal since the saved cursor (the last 10 minutes on
-the first run), and posts JobFailed job=scheduler once if any ERROR line
-from server_game::app::scheduler* appeared. Saves the new cursor.
+the first run), and posts JobFailed job=scheduler once if a line appeared
+with level ERROR, a target starting server_game::app::scheduler, and the
+message "job panicked" or "job appears stalled". Saves the new cursor.
 
 Exits:
   0  ran: posted, or nothing matched
-  1  a match could not be posted; the cursor is kept so the next run retries
+  1, 2, 64, 75
+     a match could not be posted: post-metric.sh's own status, passed
+     through; the cursor is kept so the next run retries
      -> "error: scheduler failure seen but the metric did not post; will retry"
   2  could not read the journal
      -> "error: cannot read the journal"
@@ -55,6 +66,7 @@ OUT="$(mktemp)"; trap 'rm -f "$OUT"' EXIT
 
 CURSOR=""
 if [[ -s "$CURSOR_FILE" ]]; then CURSOR="$(< "$CURSOR_FILE")"; fi
+NO_CURSOR=""   # set when this run reads by time, not from a cursor
 
 read_journal() {   # [journalctl option ...]
   journalctl CONTAINER_TAG=tle-server -o json --no-pager "$@" > "$OUT"
@@ -62,12 +74,15 @@ read_journal() {   # [journalctl option ...]
 
 if [[ -n "$CURSOR" ]]; then
   if ! read_journal --after-cursor="$CURSOR"; then
-    # A cursor the journal no longer holds (rotated away) must not wedge this
-    # for good: fall back to the first-run window and say so.
-    echo "warning: the saved cursor is not in the journal; reading the last 10 minutes" >&2
+    # A well-formed cursor whose entry has rotated away seeks to the nearest
+    # entry and does not fail; one that is malformed does, and must not wedge
+    # this for good: fall back to the first-run window and say so.
+    echo "warning: the saved cursor is not usable; reading the last 10 minutes" >&2
+    NO_CURSOR=1
     read_journal --since "$FIRST_WINDOW" || { echo "error: cannot read the journal" >&2; exit 2; }
   fi
 else
+  NO_CURSOR=1
   read_journal --since "$FIRST_WINDOW" || { echo "error: cannot read the journal" >&2; exit 2; }
 fi
 
@@ -103,10 +118,25 @@ print(cursor)
 MATCHED="$(sed -n 1p <<< "$RESULT")"
 NEW_CURSOR="$(sed -n 2p <<< "$RESULT")"
 
+# Reading by time and finding nothing: take the latest entry's cursor, so the
+# next run starts there rather than looking back over a window again.
+if [[ -z "$NEW_CURSOR" && -n "$NO_CURSOR" ]]; then
+  NEW_CURSOR="$(journalctl CONTAINER_TAG=tle-server -o json --no-pager -n 1 2>/dev/null \
+    | python3 -I -c '
+import json, sys
+for line in sys.stdin:
+    try:
+        print(json.loads(line).get("__CURSOR", ""))
+    except ValueError:
+        pass' || true)"
+fi
+
 if [[ "$MATCHED" -gt 0 ]]; then
-  if ! "$HERE/post-metric.sh" JobFailed 1 job=scheduler; then
+  STATUS=0
+  "$HERE/post-metric.sh" JobFailed 1 job=scheduler || STATUS=$?
+  if [[ "$STATUS" -ne 0 ]]; then
     echo "error: scheduler failure seen but the metric did not post; will retry" >&2
-    exit 1
+    exit "$STATUS"
   fi
   echo "posted JobFailed job=scheduler ($MATCHED matching lines)"
 fi

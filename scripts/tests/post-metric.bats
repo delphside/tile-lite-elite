@@ -6,8 +6,9 @@
 # helper that reports success without checking the response builds the alarm's
 # blind spot into the alarm (#224 R3).
 #
-# `python3 -I` ignores PYTHONPATH, so the stub `python3` drops the -I, records
-# that it was given, and puts the fake package in front. Nothing here can reach
+# `python3 -I` ignores PYTHONPATH, so the stub interpreter (named by OCI_PYTHON,
+# as on the host) drops the -I, records that it was given, and puts the fake
+# package in front. Nothing here can reach
 # OCI: the package is ours and curl is a stub.
 
 setup() {
@@ -22,6 +23,8 @@ setup() {
   cat > "$D/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 [[ -z "${IMDS_EXIT:-}" ]] || exit "$IMDS_EXIT"
+# The metadata service refuses a request without its header.
+[[ "$*" == *"Authorization: Bearer Oracle"* ]] || exit 22
 case "${@: -1}" in
   */instance/id)            printf 'ocid1.instance.test' ;;
   */instance/compartmentId) printf 'ocid1.compartment.test' ;;
@@ -29,13 +32,14 @@ case "${@: -1}" in
 esac
 STUB
 
-  cat > "$D/bin/python3" <<STUB
+  cat > "$D/bin/oci-python" <<STUB
 #!/usr/bin/env bash
 echo "\$1" > "$D/python-flag"
 [[ "\$1" == -I ]] && shift
 PYTHONPATH="$D/pylib" exec "$REAL_PY" "\$@"
 STUB
-  chmod +x "$D/bin/curl" "$D/bin/python3"
+  chmod +x "$D/bin/curl" "$D/bin/oci-python"
+  export OCI_PYTHON="$D/bin/oci-python"
 
   # A fake SDK. FAKE_OCI_MODE picks the response; the datapoint posted is
   # written to $FAKE_OCI_OUT as JSON.
@@ -43,6 +47,11 @@ STUB
 import json
 import os
 from types import SimpleNamespace as NS
+
+
+class ServiceError(Exception):
+    status = 404
+    code = "NotAuthorizedOrNotFound"
 
 
 class Signer:
@@ -61,7 +70,7 @@ class Client:
     def post_metric_data(self, details):
         mode = os.environ.get("FAKE_OCI_MODE", "accepted")
         if mode == "raises":
-            raise RuntimeError("NotAuthorizedOrNotFound")
+            raise ServiceError("ocid1.instance.secret is not authorised")
         metric = details.metric_data[0]
         with open(os.environ["FAKE_OCI_OUT"], "w") as out:
             json.dump({
@@ -128,7 +137,14 @@ field() {   # <python expression over d>
   assert_equal "$(field 'list(d["dimensions"])')" "['resourceId']"
 }
 
-@test "the program runs isolated, with python3 -I" {
+@test "without OCI_PYTHON it runs the ~/oci virtualenv's interpreter" {
+  mkdir -p "$D/home/oci/bin"
+  cp "$D/bin/oci-python" "$D/home/oci/bin/python3"
+  run env -u OCI_PYTHON HOME="$D/home" PATH="$D/bin:$PATH" bash "$SCRIPT" JobSucceeded 1 job=backup
+  assert_success
+}
+
+@test "the program runs isolated, with -I, under the interpreter OCI_PYTHON names" {
   post JobSucceeded 1 job=backup
   assert_equal "$(cat "$D/python-flag")" "-I"
 }
@@ -151,22 +167,36 @@ field() {   # <python expression over d>
   assert_equal "$status" 1
 }
 
-@test "a refused or failed call exits 2, naming the error" {
+@test "a refused or failed call exits 75, naming the type, status and code and no more" {
   FAKE_OCI_MODE=raises post JobSucceeded 1 job=backup
-  assert_equal "$status" 2
-  assert_output --partial "could not post JobSucceeded: RuntimeError: NotAuthorizedOrNotFound"
+  assert_equal "$status" 75
+  assert_output --partial "could not post JobSucceeded: ServiceError status 404 code NotAuthorizedOrNotFound"
+  refute_output --partial "ocid1"
 }
 
-@test "no oci package is a failure, not a silent success" {
+@test "no oci package is exit 2, not a silent success" {
   rm -rf "$D/pylib/oci"
   post JobSucceeded 1 job=backup
   assert_equal "$status" 2
-  assert_output --partial "could not post"
+  assert_output --partial "not importable"
 }
 
-@test "no metadata service is a failure, and nothing is posted" {
+@test "the output names the dimensions given and never the instance or compartment" {
+  post JobSucceeded 1 job=backup
+  assert_output --partial "'job': 'backup'"
+  refute_output --partial "ocid1"
+}
+
+@test "arguments are validated before the metadata service is asked" {
+  IMDS_EXIT=7 post JobSucceeded notanumber
+  assert_equal "$status" 64
+  IMDS_EXIT=7 post JobSucceeded 1 job
+  assert_equal "$status" 64
+}
+
+@test "no metadata service is a retryable failure, and nothing is posted" {
   IMDS_EXIT=7 post JobSucceeded 1 job=backup
-  assert_equal "$status" 2
+  assert_equal "$status" 75
   assert_output --partial "metadata service"
   assert [ ! -e "$FAKE_OCI_OUT" ]
 }

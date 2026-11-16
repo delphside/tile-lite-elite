@@ -16,6 +16,13 @@
 # a failure message only ever catches the failure somebody thought of.
 #
 # Usage: check-log-hygiene-nightly.sh      (run by tile-lite-elite-log-check.timer)
+#
+# Exit (docs/1.10): 0 the run was clean and the metric posted;
+#       1 the validator reported exceptions, or failed (the report is appended to
+#         the exceptions file and printed; nothing is posted, which is what makes
+#         the alarm fire);
+#       otherwise a clean run whose post failed exits with post-metric.sh's own
+#       status (1, 2, 64 or 75).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

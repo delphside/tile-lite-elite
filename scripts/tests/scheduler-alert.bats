@@ -8,7 +8,7 @@
 # ten minutes. Each entry carries the application's own JSON line in MESSAGE,
 # which is how the `journald` logging driver stores it, and a __CURSOR.
 #
-# What matters is across runs: a failure is posted once, not again, and a line
+# `-n 1` gives the latest entry. What matters is across runs: a failure is posted once, not again, and a line
 # between two runs is not missed (#224 R4).
 
 setup() {
@@ -36,6 +36,8 @@ if after:
     if after[0] not in cursors:
         sys.exit(1)
     entries = entries[cursors.index(after[0]) + 1:]
+elif "-n" in args:
+    entries = entries[-int(args[args.index("-n") + 1]):]
 elif "--since" in args:
     entries = [e for e in entries if e["_AGE_MIN"] <= 10]
 for e in entries:
@@ -141,8 +143,36 @@ posts() { if [[ -e "$D/posts" ]]; then wc -l < "$D/posts"; else echo 0; fi; }
   alert
   assert_success
   assert_equal "$(posts)" 0
-  assert_equal "$(cat "$D/journalctl-calls" | grep -c -- '--since')" 1
+  # The look-back is the timer's interval, ten minutes, by the argument itself.
+  run grep -c -- '--since 10 minutes ago' "$D/journalctl-calls"
+  assert_output 1
   assert_equal "$(cat "$CURSOR_FILE")" c2
+}
+
+# The gap: a first run that finds nothing in its window must still leave a
+# cursor, so a line written before the second run is read from there.
+@test "a quiet first run saves the latest entry's cursor, so a later line is not missed" {
+  journal 40 INFO server_game::app::auth "player registered"
+  alert
+  assert_equal "$(posts)" 0
+  assert_equal "$(cat "$CURSOR_FILE")" c1
+  journal 25 ERROR server_game::app::scheduler "job panicked"
+  alert
+  assert_equal "$(posts)" 1
+  run grep -c -- '--after-cursor=c1' "$D/journalctl-calls"
+  assert_output 1
+}
+
+@test "only the scheduler's two messages match, whatever else it logs at ERROR" {
+  journal 2 ERROR server_game::app::scheduler "job queue closed"
+  alert
+  assert_equal "$(posts)" 0
+}
+
+@test "a failed post exits with post-metric.sh's own status" {
+  journal 1 ERROR server_game::app::scheduler "job panicked"
+  POST_EXIT=75 alert
+  assert_equal "$status" 75
 }
 
 @test "a first run posts a failure inside its window" {
@@ -163,8 +193,8 @@ posts() { if [[ -e "$D/posts" ]]; then wc -l < "$D/posts"; else echo 0; fi; }
   journal 2 INFO server_game::app::auth "player registered"
   alert
   journal 1 ERROR server_game::app::scheduler "job panicked"
-  POST_EXIT=1 alert
-  assert_equal "$status" 1
+  POST_EXIT=75 alert
+  assert_equal "$status" 75
   assert_output --partial "will retry"
   assert_equal "$(cat "$CURSOR_FILE")" c1
   alert
@@ -178,7 +208,7 @@ posts() { if [[ -e "$D/posts" ]]; then wc -l < "$D/posts"; else echo 0; fi; }
   journal 2 ERROR server_game::app::scheduler "job panicked"
   alert
   assert_success
-  assert_output --partial "not in the journal"
+  assert_output --partial "not usable"
   assert_equal "$(posts)" 1
   assert_equal "$(cat "$CURSOR_FILE")" c1
 }
@@ -192,6 +222,7 @@ posts() { if [[ -e "$D/posts" ]]; then wc -l < "$D/posts"; else echo 0; fi; }
 
 @test "the application's own journal is the one read" {
   alert
-  run grep -c 'CONTAINER_TAG=tle-server' "$D/journalctl-calls"
-  assert_output 1
+  # Every call names the tag: none reads the whole journal.
+  run grep -c -v 'CONTAINER_TAG=tle-server' "$D/journalctl-calls"
+  assert_output 0
 }

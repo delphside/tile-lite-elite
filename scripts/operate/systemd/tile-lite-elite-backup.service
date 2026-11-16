@@ -3,8 +3,8 @@
 #
 # `Type=oneshot` because it runs and finishes; the timer beside it decides when.
 # A failure exits non-zero and lands in the journal, but **nothing watches for
-# that** — the alarm watches the marker object this refreshes on success, which
-# also catches the cases a failure message never covers.
+# that** — the alarm watches for the `JobSucceeded` metric this posts on success
+# going absent, which also catches the cases a failure message never covers.
 [Unit]
 Description=Tile Lite Elite — nightly database backup to OCI object storage
 After=docker.service

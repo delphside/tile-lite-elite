@@ -3,7 +3,7 @@
 # through post-metric.sh when an ERROR line from the scheduler appeared.
 #
 # Installed in /opt/tile-lite-elite/ with post-metric.sh, which it calls, and
-# needs the `oci` Python package for the system python3.
+# needs the OCI SDK, which the ~/oci/ virtualenv carries.
 [Unit]
 Description=Tile Lite Elite — post a metric when a scheduler job panicked or stalled
 

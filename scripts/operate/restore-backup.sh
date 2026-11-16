@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --into)   INTO="$2"; shift 2 ;;
     --object) OBJECT="$2"; shift 2 ;;
-    --mark)   echo "error: --mark is gone: record the drill on the host with scripts/operate/record-restore-drill.sh (docs/4.3.4)" >&2; exit 64 ;;
+    --mark)   echo "error: --mark is gone: record the drill on the host with /opt/tile-lite-elite/record-restore-drill.sh (docs/4.3.4)" >&2; exit 64 ;;
     -h|--help)
       cat <<'EOF'
 usage: restore-backup.sh <read-par-url>                 newest backup, into a file
@@ -47,9 +47,11 @@ VM itself — its PAR is write-only and cannot read, list or delete; see
 the header comment above. Make a short-lived read PAR in the console
 for this, and delete it after.
 
-Refuses (exit 1) when:
-  - --mark is given (removed; exit 64)
+Exits 64 when:
+  - --mark is given (removed)
     -> "error: --mark is gone: record the drill on the host ..."
+
+Refuses (exit 1) when:
   - no PAR URL is given
     -> "error: give me a read pre-authenticated request URL (see --help)"
   - the PAR URL doesn't end in /o/ (the bucket-listing form)

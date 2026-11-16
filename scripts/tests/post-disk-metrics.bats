@@ -107,9 +107,9 @@ drill_days_ago() { echo $(( NOW - $1 * 86400 - ${2:-0} )) > "$DRILL_FILE"; }
   assert_equal "$(grep '^RestoreDrillAgeDays' "$D/posts")" "RestoreDrillAgeDays 9999"
 }
 
-@test "a failed disk post still posts the drill age, and the run fails" {
+@test "a failed disk post still posts the drill age, and the run exits 3, completed with errors" {
   POST_FAIL=DiskFreePercent disk
-  assert_equal "$status" 1
+  assert_equal "$status" 3
   run grep -c '^RestoreDrillAgeDays' "$D/posts"
   assert_output 1
 }
