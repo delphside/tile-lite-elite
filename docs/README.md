@@ -17,7 +17,7 @@ programme-wide numbering
 | Task | Read |
 | --- | --- |
 | set up a development machine | [4.3.1 Setup](4.3.1-setup.md) |
-| build a production or rehearsal host | [4.3.8 Building a host](4.3.8-building-and-maintaining-a-host.md#building-a-host) |
+| build a production or rehearsal host | Infrastructure's [6.3.4](https://github.com/delphside/infrastructure/blob/main/docs/6.3.4-hosts.md#building-a-host), then [4.3.8 Building a host](4.3.8-building-and-maintaining-a-host.md#building-a-host) |
 | run it locally | [4.3.2 Development](4.3.2-development.md) |
 | test or release | [4.3.3 Testing, CI and release](4.3.3-testing-ci-and-release.md), and the test policy in [1.9](https://github.com/delphside/programme/blob/main/docs/1.9-testing-standards.md) |
 | roll back, ship an emergency change or diagnose a failing step | [4.3.6 When a release goes wrong](4.3.6-when-a-release-goes-wrong.md) |
@@ -93,7 +93,8 @@ programme-wide numbering
   — the environments, the tests, CI, version numbers, how `deploy.sh` ships an
   image and how a change is merged
 - [4.3.8 Building and maintaining a host](4.3.8-building-and-maintaining-a-host.md)
-  — building a production or rehearsal host, and keeping it patched
+  — building this application's stack on a production or rehearsal host,
+  and keeping the application current
 - [4.3.9 Backups and restores](4.3.9-backups-and-restores.md) — the manual
   backup, pre-deploy snapshots, the nightly offsite copy, checking them and
   restoring
