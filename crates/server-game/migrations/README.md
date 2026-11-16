@@ -1,10 +1,11 @@
 # Migrations
 
-Versioned schema migrations, run by sqlx's `Migrator` (`persistence::migrate`)
-at server startup, and by a deploy as a step of its own
+This folder holds the versioned schema migrations, which sqlx's `Migrator`
+(`persistence::migrate`) runs at server startup, and which a deploy also
+runs as a step of its own
 ([4.3.7 §5](../../../docs/4.3.7-how-testing-and-release-work.md#5-how-deploysh-ships-an-image)).
 
-The folder holds one `NNNN_description.sql` per schema change, from
+Each schema change is one `NNNN_description.sql`, from
 `0001_baseline.sql` on, applied in number order. The tables they create are in
 [4.4.2](../../../docs/4.4.2-database-schema.md#actual-current-shape).
 
@@ -15,7 +16,7 @@ The folder holds one `NNNN_description.sql` per schema change, from
    makes the next start fail with `MigrateError::VersionMismatch`
    ([4.4.2](../../../docs/4.4.2-database-schema.md#notes)).
 2. **To change the schema, add a file** named `NNNN_description.sql`, `NNNN`
-   being the next 4-digit number and `description` in lower-case snake case.
+   being the next four-digit number and `description` in lower-case snake case.
    - Write ordinary schema statements: `alter table ... add column ...`, or a
      plain `create table ...` for a new table.
    - Leave out `if not exists`, which only `0001_baseline.sql` uses, because it
@@ -45,6 +46,5 @@ the snapshot taken before it
 
 - `build.rs` reruns the build when anything in `migrations/` changes, so the
   next `cargo build` or `cargo run` embeds a new file.
-- Each test in `crates/server-game/src/app/` opens and migrates a database file
-  of its own (`test_database_url`), so parallel test runs share none; sqlx's
-  cross-connection migration lock is a no-op for SQLite.
+- Each test in `crates/server-game/src/app/` that needs a database opens and
+  migrates a file of its own (`test_database_url`): sqlx's cross-connection migration lock is a no-op for SQLite.

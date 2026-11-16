@@ -126,7 +126,7 @@ misses", is taken from the `en` list of LDNOOBW (List of Dirty, Naughty,
 Obscene, and Otherwise Bad Words), restricted to entries playable on a board.
 
 `denylist.txt` is empty and has no attribution to make. See
-[`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#filling-these-in)
+[`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#why-the-denylist-is-empty)
 for why the denylist is empty.
 
 ### LDNOOBW `en` list

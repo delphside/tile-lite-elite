@@ -8,19 +8,20 @@ desktop client, are thin presentation layers over one HTTP and WebSocket API.
 
 ## What it does
 
-- **Play by turn or in one sitting**: games persist server-side, so a turn can
-  be taken now or next week. The server retires a seat that overruns its move
-  time limit; on a limit longer than a day, a player gets an email reminder
-  first.
-- **Fill a table however you like**: you can claim a seat, invite a named
-  player to it, open it to anyone signed in or email a join link to somebody
-  with no account yet. The creator can reorder, add and remove seats until the
+- **Play by turn or in one sitting**: games persist server-side, so a player
+  can take a turn now or next week. The server takes a seat out of the game when it
+  overruns its move time limit; on a limit longer than a day, a player gets an email
+  reminder first.
+- **Fill a table however you like**: the creator can claim a seat, invite a
+  named player to it, open it to anyone signed in or email a join link to
+  somebody with no account yet, and can reorder, add and remove seats until the
   game starts.
 - **Five editions and four dictionaries**: the editions are listed in
-  [4.4.4](docs/4.4.4-snapshot-json-schema.md#top-level-persistedgame) and the dictionaries in
-  [4.3.5](docs/4.3.5-word-lists-and-dictionaries.md). Spanish's CH/LL/RR
-  digraph tiles each occupy one square but display two letters. Word-list
-  sources and licences are recorded in [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+  [4.4.4](docs/4.4.4-snapshot-json-schema.md#top-level-persistedgame)
+  and the dictionaries in [4.3.5](docs/4.3.5-word-lists-and-dictionaries.md).
+  Spanish's CH/LL/RR digraph tiles each occupy one square but display two
+  letters. [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) records the word-list sources and
+  licences.
 - **Engines as first-class players**: an engine plugs in behind a `GameEngine`
   trait and its moves go through the same validation path as a human's.
 - **Elo ratings and statistics**, per player and per engine, with a
@@ -50,8 +51,8 @@ denormalised tables alongside it for querying.
 
 [4.1.1 Architecture](docs/4.1.1-architecture.md) has the full picture, including
 deployment and the [crates](docs/4.1.1-architecture.md#crates), and
-[4.1.3 Technology decisions](docs/4.1.3-technology-decisions.md) explains why
-each piece was chosen.
+[4.1.3 Technology decisions](docs/4.1.3-technology-decisions.md) gives the reason
+for each choice.
 
 ## Documentation
 
@@ -68,7 +69,7 @@ How to run each suite is in
 what CI runs is in
 [§3](docs/4.3.7-how-testing-and-release-work.md#3-continuous-integration). The
 browser tests, which need a running environment, are in
-[e2e/README.md](e2e/README.md).
+[`e2e/README.md`](e2e/README.md).
 
 ## Status
 
@@ -79,8 +80,8 @@ A hobby project, in production and actively developed.
 
 Dual-licensed, at your option, under either of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE))
+- MIT License ([`LICENSE-MIT`](LICENSE-MIT))
 
 This is the Rust ecosystem's usual pairing. Unless you explicitly state
 otherwise, any contribution you intentionally submit for inclusion in this work

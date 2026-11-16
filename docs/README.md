@@ -84,8 +84,8 @@ programme-wide numbering
   wiping production
 - [4.3.5 Word lists and dictionaries](4.3.5-word-lists-and-dictionaries.md) —
   how a published word list becomes the trie the engine searches: sourcing,
-  normalising, generating the denylist and greylist, and the runbooks for
-  changing either
+  normalising, generating the greylist and curating the denylist, and the
+  runbooks for changing either
 - [4.3.6 When a release goes wrong](4.3.6-when-a-release-goes-wrong.md) —
   rolling back, an emergency change, the read-only diagnostics and what to do
   when a release step fails

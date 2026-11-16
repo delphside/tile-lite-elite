@@ -36,7 +36,7 @@
 - When `deploy.sh` warns that an issue that is not a project carries the
   milestone, the owner decides: fold it into a work package, move it out of
   the milestone, or ship it in the milestone
-  ([4.3.3 §1.6](docs/4.3.3-testing-ci-and-release.md#16-ship-it)).
+  ([4.3.7 §5.6](docs/4.3.7-how-testing-and-release-work.md#56-where-a-gate-meets-a-limit)).
 - Deploys build a fresh worktree at the target commit. The image goes Preview,
   then Rehearsal, then Production.
 - After deploying, wait for CI on the version bump commit `deploy.sh` pushed,
@@ -63,6 +63,7 @@
 
 | For | Read |
 | --- | --- |
-| what to type: release, rollback, emergency | [4.3.3](docs/4.3.3-testing-ci-and-release.md) |
+| what to type: a release | [4.3.3](docs/4.3.3-testing-ci-and-release.md) |
+| a rollback, an emergency, a failing step | [4.3.6](docs/4.3.6-when-a-release-goes-wrong.md) |
 | where a fact belongs, before writing it | [4.1.6](docs/4.1.6-document-map.md), and the change-a-document skill |
 | the product's rules, which come to the owner in any workstream | [4.1.0](docs/4.1.0-rules.md) |

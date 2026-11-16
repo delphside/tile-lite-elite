@@ -119,7 +119,7 @@ git config core.hooksPath .githooks || missing+=("git hooks")
 PROGRAMME_NOTE=$(programme/scripts/board/board-records.py check 2>/dev/null || true)
 
 # --- session environment -----------------------------------------------------
-CHROMIUM=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | sort -V | tail -1)
+CHROMIUM=$(ls -d /opt/pw-browsers/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -1)
 if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
   {
     echo 'export RUSTC_WRAPPER=""'

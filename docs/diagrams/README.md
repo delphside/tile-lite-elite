@@ -3,32 +3,34 @@
 The Mermaid sources of the pre-rendered diagrams, how to re-render them and the
 conventions every Tile Lite Elite diagram follows, inline or here.
 
-| Diagram | Source | Shows | Embedded in |
+| Diagram | Source | Shows | Used in |
 | --- | --- | --- | --- |
 | [`release-flow.svg`](release-flow.svg) | [`release-flow.mmd`](release-flow.mmd) | the release runbook's steps as numbered arrows between the environments and the repositories | [4.3.3](../4.3.3-testing-ci-and-release.md#the-pipeline) |
-| [`flavour-a-pre-approved.svg`](flavour-a-pre-approved.svg), [`flavour-b-repository-change.svg`](flavour-b-repository-change.svg), [`flavour-c-single-delivery-release.svg`](flavour-c-single-delivery-release.svg), [`flavour-d-multi-delivery-release.svg`](flavour-d-multi-delivery-release.svg) | the `.mmd` of the same name | the steps each shape of delivery runs | [4.3.3](../4.3.3-testing-ci-and-release.md#which-steps-each-shape-runs) |
+| [`flavour-a-pre-approved.svg`](flavour-a-pre-approved.svg), [`flavour-b-repository-change.svg`](flavour-b-repository-change.svg), [`flavour-c-single-delivery-release.svg`](flavour-c-single-delivery-release.svg), [`flavour-d-multi-delivery-release.svg`](flavour-d-multi-delivery-release.svg) | [`flavour-a-pre-approved.mmd`](flavour-a-pre-approved.mmd), [`flavour-b-repository-change.mmd`](flavour-b-repository-change.mmd), [`flavour-c-single-delivery-release.mmd`](flavour-c-single-delivery-release.mmd), [`flavour-d-multi-delivery-release.mmd`](flavour-d-multi-delivery-release.mmd) | the steps each shape of delivery runs | [4.3.3](../4.3.3-testing-ci-and-release.md#which-steps-each-shape-runs) |
 | [`version-lifecycle.svg`](version-lifecycle.svg) | [`version-lifecycle.mmd`](version-lifecycle.mmd) | where each version comes from, and the two comparisons a running tab makes | [4.4.1](../4.4.1-configuration.md) |
 | [`roadmap.svg`](roadmap.svg) | the board ([the roadmap](#the-roadmap)) | when work happens: workstreams as swimlanes, sequencing left to right | [4.1.5](../4.1.5-work-in-progress.md) |
 | [`mermaid-config.json`](mermaid-config.json) | itself | the render settings ([settings](#settings)) | none |
 
-These are process diagrams, which take no view.
+The diagrams are process diagrams: they take none of the
+[views](#which-view-a-diagram-takes-and-saying-so).
 
 ## Which view a diagram takes, and saying so
 
 **A diagram of the system declares its view in the line above it**, so a reader
 knows what they are looking at without inferring it from the contents. The
-views are C4's, with five from other frameworks that C4 lacks:
+views are C4's, apart from System Landscape (one system has no landscape),
+with five from other frameworks that C4 lacks:
 
 | View | From | Shows | Drawn in |
 | --- | --- | --- | --- |
 | System Context | C4 | the service and who uses it | none yet |
-| Container | C4 | the deployable processes and what each is responsible for (logical) | [4.2.0](../4.2.0-design-map.md) |
+| Container | C4 | the deployable processes and what each is responsible for (logical) | [4.2.0](../4.2.0-design-map.md), [4.3.4](../4.3.4-production-environment.md) |
 | Component | C4 | what is inside one container | [4.2.0](../4.2.0-design-map.md) |
 | Code | C4 | inside one component: the modules and functions that own its logic | none yet |
-| Deployment | C4 | which containers run on which infrastructure, per environment (physical) | [4.1.1](../4.1.1-architecture.md), [4.3.4](../4.3.4-production-environment.md) |
+| Deployment | C4 | which containers run on which infrastructure, per environment (physical) | [4.1.1](../4.1.1-architecture.md) |
 | Dynamic | C4 | how elements interact over time: a sequence or a collaboration | [4.1.2](../4.1.2-components-and-interactions.md), [4.4.3](../4.4.3-api-schema.md#sequence-diagrams-every-endpoint-with-context)'s sequence diagrams |
 | Concurrency | Rozanski and Woods | what can run at the same time and how it is bounded: the semaphores, the sweeps, the scheduler | none yet |
-| Information | Rozanski and Woods | the data: what is stored, its shape and who owns it, and how it flows | [4.4.2](../4.4.2-database-schema.md)'s entity-relationship diagram, [4.4.4](../4.4.4-snapshot-json-schema.md)'s class diagram |
+| Information | Rozanski and Woods | the data: what is stored, its shape and who owns it, and how it flows | [4.4.2](../4.4.2-database-schema.md)'s entity-relationship diagram, [4.4.4](../4.4.4-snapshot-json-schema.md)'s class diagram, [4.3.5](../4.3.5-word-lists-and-dictionaries.md#from-upstream-to-dictionary)'s data flow diagram |
 | State machine | UML | the lifecycle of one thing: its states and the transitions between them | none yet |
 | Use case | UML | who uses the service, and what each may do | none yet |
 | Activity | UML | a user's journey through the service, step by step | none yet |
@@ -55,11 +57,14 @@ views are C4's, with five from other frameworks that C4 lacks:
   service or the rules engine.
 - **Container and Deployment**: a missing environment shows only in a
   Deployment view.
+- **Boxes**: a C4 view labels its boxes as the programme's
+  [*Label each box in a diagram as C4 does*](https://github.com/delphside/programme/blob/main/docs/1.5-writing-documents.md#label-each-box-in-a-diagram-as-c4-does)
+  says.
 
 ### Change state
 
 **A diagram of a change colours every box by what happens to it**, in these
-classes. A diagram of a change is one in a change document that shows what the
+classes. A *diagram of a change* is one in a change document that shows what the
 change does to the system; a process diagram keeps its
 [category colours](#conventions-of-the-process-diagrams). A line's state goes
 in its label (`-- new -->`, `-- changed -->`); a removed line is dotted with a
@@ -88,9 +93,8 @@ classDef removed      fill:#ffebe9,stroke:#cf222e,color:#6e0a12
 - **Bold is an action somebody takes**; normal weight happens on its own. Bold
   is a Mermaid markdown string (a backtick-quoted label, `**bold**` inside), as
   `<b>` is printed literally while `htmlLabels` is false.
-- **Line shape carries meaning structurally**: a solid arrow moves code, a
-  dotted arrow returns an answer, and a diamond is a decision taken during an
-  action.
+- **Shape carries meaning**: a solid arrow moves code, a dotted arrow returns
+  an answer, and a diamond is a decision taken during an action.
 - **Marks in a label**:
 
   | Mark | Means |
@@ -125,9 +129,13 @@ Each `.mmd` here is the source for the `.svg` beside it.
 
 3. Commit both.
 
+If the render fails:
+
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | the command writes nothing and exits 1 with no message | empty version directories in `~/.cache/puppeteer`: Puppeteer launches no Chromium and `mermaid-cli` swallows the error; clearing the cache does not help when the re-download fails | render in Docker, which carries its own browser (the Docker command, with `d` as in step 2) |
+
+The Docker command:
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/docs/diagrams":/data \
@@ -137,19 +145,24 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/docs/diagrams":/data \
 
 ### The roadmap
 
-**`roadmap.svg` has no `.mmd`.** The board is its source:
-`programme/scripts/board/roadmap-diagram.py --write` regenerates it and the
-block in [4.1.5](../4.1.5-work-in-progress.md) that embeds it, and the next run
-overwrites a hand edit. `programme/scripts/board/roadmap.py` draws it with
-presentation attributes and polygon arrowheads, because GitHub's SVG sanitiser
-removes `<style>`, `<defs>` and `<marker>`.
+**`roadmap.svg` has no `.mmd`.** The board is its source.
+Regenerate it, and the block in [4.1.5](../4.1.5-work-in-progress.md) that
+embeds it, with:
+
+```bash
+programme/scripts/board/roadmap-diagram.py --write
+```
+
+The next run overwrites a hand edit. `programme/scripts/board/roadmap.py` draws
+it with presentation attributes and polygon arrowheads, because GitHub's SVG
+sanitiser removes `<style>`, `<defs>` and `<marker>`.
 
 ### Settings
 
 | Setting | Where | Why |
 | --- | --- | --- |
 | `htmlLabels: false` | `mermaid-config.json` | GitHub shows an embedded SVG containing `foreignObject`, which Mermaid emits for HTML labels, as a blank box. |
-| `wrappingWidth: 320` | `mermaid-config.json` | It keeps a long command on one line. |
+| `wrappingWidth: 320` | `mermaid-config.json` | Wide enough for the commands. |
 | `layout: elk` | the `.mmd` header | ELK (Eclipse Layout Kernel) routes orthogonally and places labels without collisions, which dagre does not for these graphs. It needs `@mermaid-js/layout-elk`, which `mermaid-cli` 11.17.0 bundles and GitHub's Mermaid does not, so these diagrams are pre-rendered. |
 
 ### Mermaid parse errors
@@ -172,10 +185,10 @@ line number and nothing on stderr; bisect the source to find the line.
   twelve-section document template, which the numbered documents already are;
   Rozanski and Woods' seven viewpoints are heavier than C4's views plus the
   five added here.
-- **Why a change diagram has four states and not two**: a key of affected and
-  unaffected also folds `removed` into affected, and loses the difference
-  between a new box and a changed one, which matters in the Component and Code
-  views.
+- **Why a diagram of a change has four classes and not two**: a key of
+  affected and unaffected also folds `removed` into affected, and loses the
+  difference between a new box and a changed one, which matters in the Component
+  and Code views.
 - **Why `roadmap.svg` is not Mermaid**: Mermaid has no swimlanes, and the three
   ways to fake them fail:
   - a `flowchart` with a `subgraph` per lane draws a dependency inside a lane
