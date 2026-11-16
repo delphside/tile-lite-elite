@@ -64,6 +64,13 @@ EMPTY='{"data":{"search":{"nodes":[]}}}'
 TOOLING='{"data":{"search":{"nodes":[{"number":124,"title":"a script change",
   "issueFieldValues":{"nodes":[{"value":"tooling","field":{"name":"Type of change"}}]}}]}}}'
 
+PARENT='{"data":{"search":{"nodes":[{"number":125,"title":"a parent project",
+  "subIssues":{"totalCount":3},
+  "issueFieldValues":{"nodes":[{"value":"functional","field":{"name":"Type of change"}}]}}]}}}'
+CHILD='{"data":{"search":{"nodes":[{"number":126,"title":"a work package",
+  "subIssues":{"totalCount":0},
+  "issueFieldValues":{"nodes":[{"value":"functional","field":{"name":"Type of change"}}]}}]}}}'
+
 # Each of these is a release that must go ahead.
 @test "no previous release passes, and says why" {
   isolated 0.4.26
@@ -128,5 +135,22 @@ TOOLING='{"data":{"search":{"nodes":[{"number":124,"title":"a script change",
   run grep -q -- is:issue "$QUERY_LOG"
   assert_success
   run grep -q -- milestone: "$QUERY_LOG"
+  assert_success
+}
+
+# R9 (#545): a parent project has sub-issues and ships through them, so it is
+# not judged itself; an issue with none still is.
+@test "a parent project with sub-issues is skipped, and a work package is not" {
+  with_gh "$PARENT" 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
+  with_gh "$CHILD" 0.4.26 0.4.25
+  assert_equal "$status" 1
+  assert_output --partial "#126"
+}
+
+@test "the query asks for the sub-issues, so a parent can be told" {
+  with_gh "$EMPTY" 0.4.26 0.4.25
+  run grep -q -- subIssues "$QUERY_LOG"
   assert_success
 }

@@ -35,7 +35,7 @@
 #
 # Matching any `#N` refused the 0.7.2 release: `b231721` changed one
 # documentation file, carried `Refs #299`, and named #224 and #241 in its prose
-# as examples of projects sitting in `no-release`. The milestone gate read that
+# as examples of projects that shipped nothing. The milestone gate read that
 # as both of them shipping, and its advice — move them into the release
 # milestone — would have closed two projects that had shipped nothing.
 #
