@@ -1,4 +1,4 @@
-# 03:10 UTC, with a jitter, because it shares a machine with the log check and
+# 03:10 UTC on rehearsal and production, with a jitter, because it shares a machine with the log check and
 # neither wants to meet the other on a 1 GB box.
 [Unit]
 Description=Run the Tile Lite Elite backup nightly
