@@ -318,9 +318,9 @@ check_tests() {
   else pass tests "the shell and Python tooling tests pass"; fi
 }
 
-LABEL[gates]="A production deploy would be allowed"
+LABEL[gates]="turpin release --check passes for HEAD, the commit rehearsal runs"
 check_gates() {
-  if (( QUICK )); then skip gates "deploy gates skipped (--quick)"; return; fi
+  if (( QUICK )); then skip gates "turpin release --check skipped (--quick)"; return; fi
   # **Nothing to judge when nothing ships** (#421). Straight after a release
   # `HEAD` is the next version's bump, which preview and rehearsal never hold,
   # so asking whether it could deploy failed after every release by
@@ -339,10 +339,10 @@ check_gates() {
   if (( status == 124 )); then
     fail gates "gate check timed out after 120s (CI probably still running)"
   elif (( status == 0 )); then
-    pass gates "a release of HEAD would pass its gates" \
+    pass gates "turpin release --check passed for HEAD" \
       "$(printf '%s' "$out" | tail -2)"
   else
-    fail gates "a release of HEAD would be refused" \
+    fail gates "turpin release --check refused HEAD" \
       "$(printf '%s' "$out" | tail -3)"
   fi
 }
@@ -354,29 +354,49 @@ LABEL[deploys]="Rehearsal and production run what their records say"
 # says the difference in a line (`turpinlib/commands/status.py`), so those lines
 # are what is asserted; a read that fails exits non-zero and is red too, because
 # an absent answer must never read as a pass.
+#
+# Three things are not red. An environment with no Turpin deploy yet (`current:
+# none`, or Turpin not installed on its host, as rehearsal and production are
+# until 0.10.3) is skipped as "no Turpin deploy yet". A record no release matches
+# is red on production only: rehearsal runs unreleased builds as a matter of
+# course. The two timers are not checked: `turpin status` does not show whether
+# a host file's unit is enabled, so this says nothing of them.
+# A `state:` of `changing` or `failed...` is red even where a `current` exists.
 check_deploys() {
-  local env out status bad="" lines="" l
+  local env out status bad="" lines="" waiting="" state l
   for env in rehearsal production; do
     status=0
     out="$(timeout 90 "$TURPIN" status "$env" 2>&1 < /dev/null)" || status=$?
     if (( status != 0 )); then
+      if grep -q 'turpin-host is not on' <<< "$out"; then
+        waiting="$waiting $env"; continue
+      fi
       bad="$bad $env"; lines+="$env: status could not be read (exit $status)"$'\n'
       lines+="$(printf '%s' "$out" | tail -2)"$'\n'
       continue
     fi
+    state="$(sed -n 's/^state: //p' <<< "$out" | head -1)"
+    case "$state" in
+      changing*|failed*) bad="$bad $env"; lines+="$env: state: $state"$'\n' ;;
+    esac
     if grep -q '^current: none' <<< "$out"; then
-      bad="$bad $env"; lines+="$env: no current turpin deploy"$'\n'
+      case "$state" in changing*|failed*) ;; *) waiting="$waiting $env" ;; esac
       continue
     fi
     while IFS= read -r l; do
       [[ -n "$l" ]] || continue
+      if [[ "$l" == "record: none matches" && "$env" != production ]]; then continue; fi
       bad="$bad $env"; lines+="$env: $l"$'\n'
     done < <(grep -E '^(running: DIFFERS|record: none matches|host file .*: ([^e]|e[^q]))' <<< "$out")
   done
-  if [[ -z "$bad" ]]; then
-    pass deploys "rehearsal and production run their record, and their host files match"
-  else
+  if [[ -n "$bad" ]]; then
     fail deploys "an environment differs from its record or payload:$(printf '%s\n' $bad | sort -u | tr '\n' ' ')" "$lines"
+  elif [[ "$(printf '%s\n' $waiting | wc -l)" -ge 2 ]]; then
+    skip deploys "no Turpin deploy yet on rehearsal or production"
+  elif [[ -n "$waiting" ]]; then
+    pass deploys "the other environment runs its record, and its host files match; no Turpin deploy yet on$waiting"
+  else
+    pass deploys "rehearsal and production run their record, and their host files match"
   fi
 }
 
@@ -570,12 +590,12 @@ note_suffix=""
 printf '\n'
 if (( failures > 0 )); then
   printf '%s%s\n' "$(red "$failures check(s) failed")" "$note_suffix"
-  (( QUICK )) && printf '%s\n' "$(amber '(quick run: tooling tests and deploy gates were not run)')"
+  (( QUICK )) && printf '%s\n' "$(amber '(quick run: the tooling tests and turpin release --check were not run)')"
   exit 1
 fi
 if (( QUICK )); then
   printf '%s — %s%s\n' "$(green 'Everything checked is in place')" \
-    "$(amber 'quick run: tooling tests and deploy gates not run')" "$note_suffix"
+    "$(amber 'quick run: the tooling tests and turpin release --check not run')" "$note_suffix"
 else
   printf '%s%s\n' "$(green 'Everything in place.')" "$note_suffix"
 fi

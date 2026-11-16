@@ -19,10 +19,11 @@ if [[ "$1" == release ]]; then
   exit "${RELEASE_EXIT:-0}"
 fi
 env="$2"
+[[ "${NOT_INSTALLED:-}" != "$env" ]] || { echo "turpin: turpin-host is not on the machine: run turpin host-install for its environment" >&2; exit 1; }
 [[ "${STATUS_EXIT:-0}" == 0 ]] || { echo "turpin: host unreachable" >&2; exit "$STATUS_EXIT"; }
-[[ "${CURRENT_NONE:-}" != "$env" ]] || { printf 'environment: %s\nstate: none\ncurrent: none\n' "$env"; exit 0; }
+[[ "${CURRENT_NONE:-}" != "$env" ]] || { printf 'environment: %s\nstate: %s\ncurrent: none\n' "$env" "${STATE:-none (no turpin deploy yet)}"; exit 0; }
 echo "environment: $env"
-echo "state: deployed"
+echo "state: ${STATE:-deployed}"
 echo "current: deploy 3 commit abc version 0.10.2 record 0.10.2 smoke passed t"
 echo "image server sha256:aa"
 if [[ "${IMAGE_DIFFERS:-}" == "$env" ]]; then echo "running: DIFFERS from the current digests (sha256:bb)"
@@ -68,18 +69,54 @@ check() {   # FUNCTION
   assert_output --partial 'running: DIFFERS'
 }
 
-@test "deploys is red where no record matches" {
+@test "deploys is red where no record matches production" {
   export NO_RECORD=production
   check check_deploys
   assert_line --regexp '^FAIL '
   assert_output --partial 'record: none matches'
 }
 
-@test "deploys is red where there is no current deploy" {
+@test "deploys is not red where no record matches rehearsal, which runs unreleased builds" {
+  export NO_RECORD=rehearsal
+  check check_deploys
+  assert_line --regexp '^PASS '
+  refute_output --partial 'record: none matches'
+}
+
+@test "deploys skips an environment with no current deploy yet, and passes the other" {
   export CURRENT_NONE=rehearsal
   check check_deploys
+  assert_line --regexp '^PASS '
+  assert_output --partial 'no Turpin deploy yet on rehearsal'
+}
+
+@test "deploys skips where neither environment has a Turpin deploy yet" {
+  export CURRENT_NONE=rehearsal
+  export NOT_INSTALLED=production
+  check check_deploys
+  assert_line --regexp '^SKIP '
+  refute_line --regexp '^FAIL '
+}
+
+@test "deploys skips an environment whose host has no Turpin installed yet, rather than red" {
+  export NOT_INSTALLED=production
+  check check_deploys
+  assert_line --regexp '^PASS '
+  assert_output --partial 'no Turpin deploy yet on production'
+}
+
+@test "deploys is red where the state is changing, even where a current exists" {
+  export STATE="changing: deploy 4"
+  check check_deploys
   assert_line --regexp '^FAIL '
-  assert_output --partial 'no current turpin deploy'
+  assert_output --partial 'state: changing: deploy 4'
+}
+
+@test "deploys is red where the state is failed, even with no current" {
+  export CURRENT_NONE=rehearsal STATE="failed, no previous deploy"
+  check check_deploys
+  assert_line --regexp '^FAIL '
+  assert_output --partial 'state: failed, no previous deploy'
 }
 
 @test "deploys is red where status cannot be read" {
@@ -89,9 +126,11 @@ check() {   # FUNCTION
   assert_output --partial 'could not be read'
 }
 
-@test "gates runs turpin release --check, and passes where it does" {
+@test "gates runs turpin release --check, and passes where it does, saying so" {
   check check_gates
   assert_line --regexp '^PASS '
+  assert_output --partial 'turpin release --check passed for HEAD'
+  refute_output --partial 'would'
   assert_equal "$(grep -c '^release --check$' "$CALLS")" 1
 }
 
@@ -100,6 +139,24 @@ check() {   # FUNCTION
   check check_gates
   assert_line --regexp '^FAIL '
   assert_output --partial 'the milestone is unconfirmed'
+  assert_output --partial 'turpin release --check refused HEAD'
+}
+
+@test "gates under --quick says what it skipped, turpin release --check, and not deploy gates" {
+  run bash -c '
+    source <(sed -n "/^check_gates()/,/^}/p" "$1")
+    pass() { echo "PASS $2"; }; fail() { echo "FAIL $2"; }; skip() { echo "SKIP $2"; }
+    QUICK=1
+    check_gates' _ "$VERIFY"
+  assert_output "SKIP turpin release --check skipped (--quick)"
+}
+
+@test "the gates label and the quick verdict name what is checked or skipped, not a production deploy" {
+  run grep -n 'LABEL\[gates\]' "$VERIFY"
+  assert_output --partial 'turpin release --check passes for HEAD'
+  refute_output --partial 'production deploy would'
+  run grep -c 'quick run: the tooling tests and turpin release --check' "$VERIFY"
+  assert_output 2
 }
 
 @test "gates does not call deploy.sh" {

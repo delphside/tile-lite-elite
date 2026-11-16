@@ -101,19 +101,20 @@ scp "${REH_SCP[@]}" "$TMP/$SNAPSHOT" "ubuntu@$REHEARSAL_HOST:$REMOTE_DIR/snapsho
 # volume before unpacking rather than untarring over the top, or the WAL and
 # shm sidecars of the *current* database survive and replay onto the
 # restored file.
-# The stop and the start go through `turpin-host compose`, which runs Compose
-# against the current deploy under the environment's lock; the old folder's
-# compose file would start the old images. It refuses where rehearsal has no
-# current deploy or the lock is held, and then this stops.
+# The stop, the restore and the start all go through `turpin-host compose`,
+# which runs Compose against the current deploy under the environment's lock,
+# so the restore runs in the current deploy's own server image (not a
+# `:latest` that may be another build's) and the old folder's compose file
+# never starts the old images. It refuses where rehearsal has no current
+# deploy or the lock is held, and then this stops.
 ssh "${REH_SSH[@]}" "ubuntu@$REHEARSAL_HOST" "
     set -e
     cd $REMOTE_DIR
     $REHEARSAL_COMPOSE stop server > /dev/null
-    docker run --rm \
-        -v tile-lite-elite-data:/data \
+    $REHEARSAL_COMPOSE run --rm --no-deps \
         -v \"\$PWD/snapshots\":/snapshots:ro \
         --entrypoint sh \
-        tile-lite-elite-server:latest \
+        server \
         -c 'rm -rf /data/* /data/.[!.]* 2>/dev/null; tar xzf /snapshots/seeded-$SNAPSHOT -C /data'
     $REHEARSAL_COMPOSE up -d
 " || { echo "seed-rehearsal: the restore did not complete (turpin-host compose refused, or ssh failed): rehearsal may be stopped." >&2; exit 1; }

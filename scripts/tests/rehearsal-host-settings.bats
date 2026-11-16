@@ -76,6 +76,16 @@ ENVF=/var/lib/turpin/tile-lite-elite/rehearsal/.env
   assert_equal "$(grep -c 'docker compose' "$CALLS")" 0
 }
 
+@test "seed restores in the current deploy's server image, through turpin-host compose, and runs no bare docker" {
+  run "$DELIVER/seed-rehearsal.sh"
+  assert_success
+  assert_equal "$(grep -c 'turpin-host compose tile-lite-elite rehearsal run --rm --no-deps' "$CALLS")" 1
+  assert_equal "$(grep -c -- '--entrypoint sh' "$CALLS")" 1
+  assert_equal "$(grep -c 'tar xzf /snapshots/seeded-' "$CALLS")" 1
+  assert_equal "$(grep -c 'docker run' "$CALLS")" 0
+  assert_equal "$(grep -c 'tile-lite-elite-server:latest' "$CALLS")" 0
+}
+
 @test "seed stops non-zero and says so where turpin-host compose refuses" {
   export COMPOSE_REFUSES=1
   run "$DELIVER/seed-rehearsal.sh"

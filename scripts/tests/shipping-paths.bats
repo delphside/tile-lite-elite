@@ -207,6 +207,8 @@ real_paths() {   # <path>... -> the ones the real profile says reach the image
 
 @test "under the real profile, every other script, document and markdown file, and the hooks' tests, do not" {
   run real_paths scripts/deliver/verify.sh \
+    scripts/operate/systemd/notes.txt \
+    scripts/operate/profile.d/notes.txt \
     docs/4.3.3-testing-ci-and-release.md \
     docs/4.4.1-configuration.md \
     README.md \
@@ -217,6 +219,36 @@ real_paths() {   # <path>... -> the ones the real profile says reach the image
     turpin/tests/helpers.bash
   assert_success
   assert_output ""
+}
+
+# T13: the real profile, edited between two commits of a scratch repository. An
+# edit to a key only the board reads ships nothing; one to a key a host reads
+# (`shipping.HOST_READS`) ships.
+profile_edit_range() {   # <sed expression> -> the status of `board-shipping.py range` for that edit
+  local root repo
+  root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+  repo="$BATS_TEST_TMPDIR/profile-repo"
+  rm -rf "$repo"
+  git init -q "$repo"
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  cp "$root/app-profile.toml" "$repo/app-profile.toml"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m base
+  sed -i "$1" "$repo/app-profile.toml"
+  git -C "$repo" diff --quiet && { echo "the edit changed nothing" >&2; return 99; }
+  git -C "$repo" commit -q -am edit
+  env -u PROGRAMME_PROFILE python3 "$root/programme/scripts/board/board-shipping.py" -C "$repo" range HEAD^ HEAD
+}
+
+@test "under the real profile, an edit to a key only the board reads does not ship" {
+  run profile_edit_range 's|^stamp_form = .*|stamp_form = "app <X.Y.Z> api <M.N>: <what>"|'
+  assert_equal "$status" 1
+}
+
+@test "under the real profile, an edit to a key a host reads ships" {
+  run profile_edit_range 's|^fallback = .*|fallback = "see docs/4.3.6"|'
+  assert_success
 }
 
 @test "under the real profile, the Dockerfile and a crate still reach the image" {
