@@ -548,6 +548,10 @@ pub enum ErrorType {
     Technical,
     /// A defect: 500.
     Unexpected,
+    /// A type this build does not know: a newer server's. Read as a defect,
+    /// since nothing is known of it. Never sent.
+    #[serde(other)]
+    Unknown,
 }
 
 /// **The one classification of a failure.** A refusal names a `Reason`, and
@@ -738,7 +742,7 @@ impl Reason {
             Self::MoveRefused => (400, ErrorType::Business, false),
             Self::ChatEmpty => (400, ErrorType::Business, false),
             Self::ChatTooLong => (400, ErrorType::Business, false),
-            Self::EngineFailed => (400, ErrorType::Business, false),
+            Self::EngineFailed => (500, ErrorType::Unexpected, false),
             Self::NoSeatToSuggestFor => (400, ErrorType::Business, false),
             Self::InvitationTargetAmbiguous => (400, ErrorType::Business, false),
             Self::SeatNotInvitable => (400, ErrorType::Business, false),
@@ -1292,7 +1296,7 @@ mod reason_tests {
                     (400..500).contains(&status) && status != 401 && status != 429
                 }
                 ErrorType::Technical => matches!(status, 401 | 429 | 503),
-                ErrorType::Unexpected => status == 500,
+                ErrorType::Unexpected | ErrorType::Unknown => status == 500,
             };
             assert!(
                 allowed,
@@ -1331,6 +1335,20 @@ mod reason_tests {
             serde_json::to_string(&Reason::NotGameCreator).unwrap(),
             "\"NOT_GAME_CREATOR\""
         );
+    }
+
+    #[test]
+    fn an_error_type_this_build_does_not_know_reads_as_unknown() {
+        let kind: ErrorType = serde_json::from_str("\"a_newer_type\"").unwrap();
+        assert_eq!(kind, ErrorType::Unknown);
+        let body: ApiError =
+            serde_json::from_str(r#"{"detail":"d","error_type":"a_newer_type","status":418}"#)
+                .unwrap();
+        assert_eq!(body.error_type, Some(ErrorType::Unknown));
+        assert_eq!(body.sentence(), "d");
+        // The engine's faults are defects, whatever they were once.
+        assert_eq!(Reason::EngineFailed.status(), 500);
+        assert_eq!(Reason::EngineFailed.error_type(), ErrorType::Unexpected);
     }
 
     #[test]

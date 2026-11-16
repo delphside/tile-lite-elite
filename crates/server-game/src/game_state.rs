@@ -40,6 +40,18 @@ impl Refusal {
         }
     }
 
+    /// **A defect the caller cannot fix**: the body says the one 500 sentence
+    /// and nothing of the cause, which goes to the log under the request's ID
+    /// (an engine's id, a join error, a `Debug` of a rule's own error).
+    pub fn defect(reason: Reason, cause: impl std::fmt::Display) -> Self {
+        tracing::error!(
+            %cause,
+            request_id = crate::app::error::current_request_id(),
+            "a game rule reached a state it should not"
+        );
+        Self::new(reason, crate::app::error::INTERNAL_MESSAGE)
+    }
+
     /// Says which value crossed which limit.
     pub fn with_violation(mut self, field: &str, value: u64, limit: u64) -> Self {
         self.violation = Some(api::Violation {
@@ -988,7 +1000,7 @@ impl GameSession {
 
         rules_engine
             .apply_move_to_game(&mut self.state, &validated)
-            .map_err(|error| refusal!(Reason::MoveRefused, "{error:?}"))?;
+            .map_err(|error| Refusal::defect(Reason::Internal, format!("{error:?}")))?;
 
         participant.score += validated.score.total as i32;
         refill_rack(&mut participant.rack, &mut self.bag, self.rules.rack_size);
@@ -1395,29 +1407,32 @@ impl GameSession {
         let current = self
             .participants
             .get(self.current_seat as usize)
-            .ok_or_else(|| Refusal::new(Reason::NoSeatToSuggestFor, "Current seat missing"))?;
+            .ok_or_else(|| {
+                Refusal::defect(Reason::Internal, "the current seat is not in the game")
+            })?;
 
         if current.kind != SeatKind::Engine {
             return Ok(false);
         }
 
-        let engine_id = current
-            .engine_id
-            .clone()
-            .ok_or_else(|| Refusal::new(Reason::EngineFailed, "Engine seat missing engine id"))?;
-        let engine = engines
-            .find(&engine_id)
-            .ok_or_else(|| refusal!(Reason::EngineFailed, "Unknown engine: {engine_id}"))?;
+        let engine_id = current.engine_id.clone().ok_or_else(|| {
+            Refusal::defect(Reason::EngineFailed, "an engine seat has no engine id")
+        })?;
+        let engine = engines.find(&engine_id).ok_or_else(|| {
+            Refusal::defect(Reason::EngineFailed, format!("unknown engine {engine_id}"))
+        })?;
         if !engine
             .metadata()
             .supported_variants
             .iter()
             .any(|variant| variant == &self.variant)
         {
-            return Err(refusal!(
+            return Err(Refusal::defect(
                 Reason::EngineFailed,
-                "Engine '{engine_id}' does not support the '{}' variant",
-                self.variant
+                format!(
+                    "engine {engine_id} does not support the {} variant",
+                    self.variant
+                ),
             ));
         }
         let rack = current.rack;
@@ -1449,9 +1464,9 @@ impl GameSession {
         let response = match outcome {
             Ok(Ok(response)) => response,
             Ok(Err(join_error)) => {
-                return Err(refusal!(
+                return Err(Refusal::defect(
                     Reason::EngineFailed,
-                    "Engine '{engine_id}' panicked while choosing a move: {join_error}"
+                    format!("engine {engine_id} panicked while choosing a move: {join_error}"),
                 ));
             }
             Err(_elapsed) => {

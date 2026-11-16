@@ -466,6 +466,7 @@ mod tests {
     /// the global floor, and a success through the same router carries an ID too.
     #[tokio::test]
     async fn both_refusals_carry_the_body_retry_after_and_a_request_id() {
+        let log = crate::app::tests::start_capturing_log_on_this_thread();
         for (refuse, status, reason) in [
             (
                 keyed_refusal as fn(u32) -> ApiProblem,
@@ -523,6 +524,24 @@ mod tests {
             assert_eq!(body["blip"], true);
             assert_eq!(body["error_type"], "technical");
             assert_eq!(body["correlation_id"], id.to_str().unwrap());
+
+            // T8: one `request refused` line, at `warn` (a technical error),
+            // naming the reason and carrying the same ID.
+            let text = log.text();
+            let lines: Vec<&str> = text
+                .lines()
+                .filter(|line| {
+                    line.contains("request refused") && line.contains(id.to_str().unwrap())
+                })
+                .collect();
+            assert_eq!(lines.len(), 1, "{text}");
+            assert!(lines[0].contains("WARN"), "{}", lines[0]);
+            assert!(lines[0].contains(reason), "{}", lines[0]);
+            assert!(
+                lines[0].contains(&status.as_u16().to_string()),
+                "{}",
+                lines[0]
+            );
         }
     }
 

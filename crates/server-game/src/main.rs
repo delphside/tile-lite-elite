@@ -125,9 +125,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The platform asks a container to stop with SIGTERM. Telling the
     // WebSockets first lets each close with 1001, *going away*, which a client
-    // reads as "reconnect"; the listener's own drain waits for upgraded
-    // connections, so it would otherwise wait on them for as long as they stay
-    // open.
+    // reads as "reconnect". The listener's drain does not wait for upgraded
+    // connections (hyper hands them to the application), so `begin_shutdown`
+    // itself waits a bounded moment for the sockets to write the frame.
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_graceful_shutdown(async move {
         stop_requested().await;
         tracing::info!("stop requested; closing WebSockets and draining");
-        shutdown_state.begin_shutdown();
+        shutdown_state.begin_shutdown().await;
     })
     .await?;
     Ok(())

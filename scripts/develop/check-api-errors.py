@@ -37,7 +37,8 @@ entry and this verifies nothing was missed.
 
 **What it reads.** `ApiProblem::new(Reason::X, "literal")`, `Refusal::new` and
 `refusal!` (the `game_state.rs` refusals the handlers pass on), the sign-in
-helpers `require_session` and `no_session` (reason `SignInRequired`), a message
+helpers `require_session` and `no_session` (reason `SignInRequired`), `Refusal::defect`
+(the fixed 500 sentence under the reason it names), a message
 held in a constant such as `INTERNAL_MESSAGE`, `from_sqlx_or_duplicate`, and the
 move-rule text `format_move_error` returns (reason `MoveRefused`). Anything
 before an inline `#[cfg(test)] mod` is read, since that is what can reach a
@@ -71,6 +72,10 @@ CALL = re.compile(
     rf"(?:(format!\({GAP})?{LIT}|([A-Z][A-Z_]*)\b)",
     re.S,
 )
+
+# `Refusal::defect(Reason::X, cause)`: a defect in the game rules. The caller
+# is told the one 500 sentence, `INTERNAL_MESSAGE`, whatever the cause was.
+DEFECT = re.compile(rf"Refusal::defect\({GAP}Reason::(\w+),")
 
 # `from_sqlx_or_duplicate(error, Reason::X, "literal")`: a unique violation
 # answers it.
@@ -111,8 +116,6 @@ UNREACHABLE = {
         "`validate_rack_usage` refuses a tile outside the rack first, as `Incorrect tile placement.`",
     ("game_state.rs", "Expected {} board cells, got {}", "MoveRefused"):
         "`board_from_dto` runs only when a persisted game is loaded, and its caller `expect`s it",
-    ("game_state.rs", "{error:?}", "MoveRefused"):
-        "`apply_move_to_game` repeats checks `validate_game_move` has just passed",
 }
 
 # A Rust string literal broken with a trailing `\` continues on the next line,
@@ -279,6 +282,9 @@ def messages():
                 note(f, literal, bool(formatted) or kind == "refusal!", reason)
             elif name in constants:
                 note(f, constants[name], False, reason)
+        for m in DEFECT.finditer(source):
+            if "INTERNAL_MESSAGE" in constants:
+                note(f, constants["INTERNAL_MESSAGE"], False, m.group(1))
         for m in DUPLICATE.finditer(source):
             note(f, m.group(2), False, m.group(1))
         for m in SIGN_IN.finditer(source):

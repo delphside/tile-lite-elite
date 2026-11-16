@@ -838,10 +838,13 @@ pub(crate) async fn suggest_move(
             return Err(ApiProblem::new(Reason::GameNotActive, "Game is not active"));
         }
         let current_seat = game.current_seat as usize;
-        let participant = game
-            .participants
-            .get(current_seat)
-            .ok_or_else(|| ApiProblem::new(Reason::NoSeatToSuggestFor, "Current seat missing"))?;
+        let participant = game.participants.get(current_seat).ok_or_else(|| {
+            tracing::error!(
+                request_id = current_request_id(),
+                "the current seat is not in the game"
+            );
+            ApiProblem::internal()
+        })?;
         if participant.kind != api::SeatKind::Human {
             return Err(ApiProblem::new(
                 Reason::NoSeatToSuggestFor,

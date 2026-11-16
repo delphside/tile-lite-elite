@@ -76,6 +76,12 @@ pub(crate) const CLOSE_SERVER_ERROR: u16 = 4500;
 pub(crate) const CLOSE_GAME_DELETED: u16 = 4404;
 /// Close code for the server stopping.
 pub(crate) const CLOSE_GOING_AWAY: u16 = 1001;
+/// How long the server waits, once it has told the sockets it is stopping, for
+/// each to write its `1001` before the listener drains. A setting of the
+/// WebSocket area: a close frame is one small write on a connection that is
+/// already open, so half a second is long enough for the open sockets of one
+/// instance, and short beside the platform's own grace period for a stop.
+pub(crate) const SHUTDOWN_GRACE: Duration = Duration::from_millis(500);
 
 /// `state.events` is a single broadcast channel shared by every game on the
 /// server, not one per game — every subscriber sees every game's events

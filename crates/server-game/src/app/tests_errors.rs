@@ -101,6 +101,35 @@ fn code(reason: Reason) -> String {
         .to_string()
 }
 
+/// The status each reason answers, written out here from docs/4.4.3 rather
+/// than read from `Reason::status`, so a wrong classification fails a test
+/// instead of being agreed with by it.
+fn pinned_status(reason: Reason) -> u16 {
+    match reason {
+        Reason::SignInRequired | Reason::SessionExpired => 401,
+        Reason::NotGameCreator
+        | Reason::NotYourSeat
+        | Reason::NotSeated
+        | Reason::NotInGame
+        | Reason::NotYourInvitation
+        | Reason::NotYourInvitations
+        | Reason::AdminLoopbackOnly => 403,
+        Reason::GameNotFound
+        | Reason::PlayerNotFound
+        | Reason::InvitationNotFound
+        | Reason::DictionaryNotFound
+        | Reason::NoSuchRoute => 404,
+        Reason::MethodNotAllowed => 405,
+        Reason::BodyTooLarge => 413,
+        Reason::UnsupportedMediaType => 415,
+        Reason::InvalidBody => 422,
+        Reason::TooManyRequests => 429,
+        Reason::Internal | Reason::EngineFailed | Reason::Unknown => 500,
+        Reason::ServiceBusy => 503,
+        _ => 400,
+    }
+}
+
 /// T3's body conditions, for any error from anywhere.
 fn assert_problem(reply: &Reply, reason: Reason) -> Value {
     assert_eq!(
@@ -111,7 +140,12 @@ fn assert_problem(reply: &Reply, reason: Reason) -> Value {
         reply.text
     );
     let body = reply.json();
-    let status = reason.status();
+    let status = pinned_status(reason);
+    assert_eq!(
+        reason.status(),
+        status,
+        "{reason:?}: the enum and 4.4.3 agree"
+    );
     assert_eq!(reply.status.as_u16(), status, "{}", reply.text);
     assert_eq!(body["status"], status);
     assert_eq!(body["reason"], code(reason), "{}", reply.text);
@@ -378,6 +412,24 @@ async fn every_refusal_is_a_classified_problem_and_leaks_no_words() {
             assert_eq!(violation["reason"], "CHAT_TOO_LONG");
         }
     }
+
+    // And the same game, asked for by one who may see it, is no problem.
+    let ok = call(
+        &app,
+        Method::GET,
+        &format!("/games/{gid}"),
+        Some(alice),
+        None,
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
+    assert!(
+        !ok.content_type().contains("problem"),
+        "{}",
+        ok.content_type()
+    );
+    assert!(ok.json().get("reason").is_none(), "{}", ok.text);
+    assert!(crockford(&ok.request_id()), "a success carries an ID too");
 }
 
 fn api_chat_limit() -> usize {
@@ -426,7 +478,7 @@ async fn a_refusal_from_outside_loopback_answers_the_admin_reason() {
     let (app, _state) = fresh_app().await;
     let reply = read(
         send_admin::<()>(
-            app,
+            app.clone(),
             Method::GET,
             "/admin/users",
             crate::app::tests::remote_peer(),
@@ -435,7 +487,22 @@ async fn a_refusal_from_outside_loopback_answers_the_admin_reason() {
         .await,
     )
     .await;
+    assert_eq!(reply.status, StatusCode::FORBIDDEN);
     assert_problem(&reply, Reason::AdminLoopbackOnly);
+
+    // The same call from the machine itself is served.
+    let ok = read(
+        send_admin::<()>(
+            app,
+            Method::GET,
+            "/admin/users",
+            crate::app::tests::loopback_peer(),
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
 }
 
 /// T16: the answers that stay vague for security stay vague.
@@ -478,6 +545,18 @@ async fn a_wrong_password_and_an_unknown_account_answer_alike() {
         .await;
         assert_eq!(reply.status, StatusCode::NO_CONTENT, "{email}");
     }
+
+    // And the right password signs in.
+    let ok = call(
+        &app,
+        Method::POST,
+        "/auth/login",
+        None,
+        Some(json!({"display_name":"Alice","password":"correct horse battery staple","stay_logged_in":false})),
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
+    assert!(ok.json()["session_token"].is_string(), "{}", ok.text);
 }
 
 // --- T4: 401 is only "no valid credential"; a rule's refusal is 403 -------------
@@ -539,6 +618,11 @@ async fn a_missing_token_and_a_dead_one_are_told_apart() {
         deleted.text
     );
     assert_problem(&deleted, Reason::SessionExpired);
+
+    // And a live one is served.
+    let dave = register(&app, "Dave").await;
+    let ok = call(&app, Method::GET, "/games", Some(&dave.session_token), None).await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
 }
 
 /// Each refusal by the application's own rule, once 401 and now 403, followed
@@ -563,6 +647,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         Some(swap.clone()),
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -583,6 +668,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         Some(add.clone()),
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -602,6 +688,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         None,
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -622,6 +709,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         None,
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotYourSeat);
     let ok = call(
         &app,
@@ -641,6 +729,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         None,
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -664,6 +753,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         None,
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -725,6 +815,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         Some(invite("Carol", 2)),
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotGameCreator);
     let ok = call(
         &app,
@@ -745,6 +836,7 @@ async fn rule_refusals_are_403_and_the_same_call_succeeds_for_the_right_caller()
         None,
     )
     .await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
     assert_problem(&refused, Reason::NotYourInvitation);
     let ok = call(&app, Method::POST, &accept, Some(&bob.session_token), None).await;
     assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
@@ -1120,14 +1212,15 @@ async fn each_error_writes_one_request_refused_line_at_the_level_of_its_type() {
     let log = start_capturing_log_on_this_thread();
     let (app, _state) = router_with_odd_routes().await;
 
-    // (request, expected level) — a 401 is technical, so `warn`.
-    let business = call(&app, Method::GET, "/games", Some("bad"), None).await; // 401
-    let not_found = call(&app, Method::GET, "/dictionaries/x", None, None).await; // 401 again
-    let panic = call(&app, Method::GET, "/__panic", None, None).await; // 500
+    // (request, expected level): technical is `warn`, unexpected `error`,
+    // business `info`.
+    let dead_token = call(&app, Method::GET, "/games", Some("bad"), None).await; // 401 technical
+    let no_token = call(&app, Method::GET, "/dictionaries/x", None, None).await; // 401 technical
+    let panic = call(&app, Method::GET, "/__panic", None, None).await; // 500 unexpected
     let route = call(&app, Method::GET, "/nowhere", None, None).await; // 404 business
     let replies = [
-        (business, "WARN"),
-        (not_found, "WARN"),
+        (dead_token, "WARN"),
+        (no_token, "WARN"),
         (panic, "ERROR"),
         (route, "INFO"),
     ];
@@ -1162,6 +1255,8 @@ async fn each_error_writes_one_request_refused_line_at_the_level_of_its_type() {
     call(&app, Method::GET, "/__ok", None, None).await;
     assert_eq!(log.text().matches("request refused").count(), before);
 
+    // The 429 is written at `warn` too; the limiters are off under `cfg(test)`,
+    // so that line is asserted where a limiter is built, in `throttle.rs`.
     let _ = ErrorType::Business;
 }
 
@@ -1180,6 +1275,7 @@ async fn a_busy_database_answers_503_service_busy_with_retry_after() {
         Some(json!({"display_name":"Zed","email":"z@example.com","password":"pw","stay_logged_in":false})),
     )
     .await;
+    assert_eq!(reply.status, StatusCode::SERVICE_UNAVAILABLE);
     assert_problem(&reply, Reason::ServiceBusy);
     let retry: u32 = reply
         .headers
@@ -1190,6 +1286,18 @@ async fn a_busy_database_answers_503_service_busy_with_retry_after() {
         .parse()
         .unwrap();
     assert_eq!(retry, 2);
+
+    // A service whose database is there registers the same caller.
+    let (healthy, _state) = fresh_app().await;
+    let ok = call(
+        &healthy,
+        Method::POST,
+        "/auth/register",
+        None,
+        Some(json!({"display_name":"Zed","email":"z@example.com","password":"pw","stay_logged_in":false})),
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
 }
 
 /// The hashing pool's 503 is the same reason, with its own jittered wait.
@@ -1197,6 +1305,7 @@ async fn a_busy_database_answers_503_service_busy_with_retry_after() {
 async fn a_full_hashing_pool_answers_503_service_busy() {
     let mut state = create_test_state(&test_database_url()).await;
     state.hash_limit = std::sync::Arc::new(tokio::sync::Semaphore::new(0));
+    let pool = state.hash_limit.clone();
     let app = build_router(state);
     let reply = call(
         &app,
@@ -1216,6 +1325,18 @@ async fn a_full_hashing_pool_answers_503_service_busy() {
         .parse()
         .unwrap();
     assert!((1..=3).contains(&retry));
+
+    // With a permit free, the same registration is served.
+    pool.add_permits(1);
+    let ok = call(
+        &app,
+        Method::POST,
+        "/auth/register",
+        None,
+        Some(json!({"display_name":"Zed","email":"z@example.com","password":"pw","stay_logged_in":false})),
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
 }
 
 /// T15: every 500 says the one sentence, which 4.4.3's `Internal` row states.
@@ -1477,7 +1598,133 @@ mod websocket {
         );
         let mut socket = connect(addr, &path).await;
         assert_eq!(socket.status, 101);
-        state.begin_shutdown();
+        state.begin_shutdown().await;
         assert_eq!(close_code(&mut socket.stream).await, 1001);
     }
+}
+
+// --- T6: an engine's fault is a defect, said in the one sentence ------------------
+
+/// An engine that always panics, under the id the registry already lists.
+struct PanickingEngine(engine_core::EngineMetadata);
+
+impl engine_core::GameEngine for PanickingEngine {
+    fn metadata(&self) -> &engine_core::EngineMetadata {
+        &self.0
+    }
+
+    fn choose_action(&self, _: engine_core::EngineRequest<'_>) -> engine_core::EngineResponse {
+        panic!("the engine blew up on its own words")
+    }
+}
+
+/// A started game, a human and the engine, with the engine to move.
+async fn engine_to_move(panicking: bool) -> (AppState, String) {
+    let mut state = create_test_state(&test_database_url()).await;
+    let app = build_router_with(state.clone(), Router::new());
+    let ann = register(&app, "Ann").await.session_token;
+    let engine = CreateSeatRequest {
+        kind: SeatKind::Engine,
+        display_name: "Greedy".to_string(),
+        engine_id: Some("greedy-v1".to_string()),
+        claim: None,
+    };
+    let seats = vec![
+        seat(SeatKind::Human, "Ann", Some(SeatClaim::Creator)),
+        engine,
+    ];
+    let created = call(
+        &app,
+        Method::POST,
+        "/games",
+        Some(&ann),
+        Some(game_request(seats, None)),
+    )
+    .await;
+    let game_id = created.json()["id"].as_str().unwrap().to_string();
+    // Started with the engine that works; the registry is swapped after.
+    call(
+        &app,
+        Method::POST,
+        &format!("/games/{game_id}/start"),
+        Some(&ann),
+        Some(json!({})),
+    )
+    .await;
+    {
+        let mut games = state.games.write().await;
+        let game = games.get_mut(&game_id).expect("the game is in memory");
+        assert_eq!(game.status, api::GameStatus::Active);
+        game.current_seat = 1;
+    }
+    if panicking {
+        let metadata = engine_core::GameEngine::metadata(&engine_core::GreedyEngine::new()).clone();
+        state.engines = crate::game_state::EngineRegistry {
+            engines: vec![std::sync::Arc::new(PanickingEngine(metadata))],
+        };
+    }
+    (state, game_id)
+}
+
+/// The route that runs the engine's turn the way a handler does, so the answer
+/// goes through the request-ID layer and the body is the real one.
+fn engine_route(state: AppState) -> Router {
+    let extra = Router::new().route(
+        "/__engine/{id}",
+        get(
+            |State(state): State<AppState>, Path(id): Path<String>| async move {
+                games::run_engine_turns(&state, &id).await?;
+                Ok::<_, ApiProblem>("played")
+            },
+        ),
+    );
+    build_router_with(state, extra)
+}
+
+#[tokio::test]
+async fn an_engine_that_panics_answers_the_one_sentence_and_logs_the_cause() {
+    let log = start_capturing_log_on_this_thread();
+    let (state, game_id) = engine_to_move(true).await;
+    let app = engine_route(state);
+    let reply = call(
+        &app,
+        Method::GET,
+        &format!("/__engine/{game_id}"),
+        None,
+        None,
+    )
+    .await;
+    let body = assert_problem(&reply, Reason::EngineFailed);
+    assert_eq!(body["detail"], INTERNAL_MESSAGE);
+    for word in ["greedy-v1", "panicked", "blew up"] {
+        assert!(
+            !reply.text.to_lowercase().contains(word),
+            "{word}: {}",
+            reply.text
+        );
+    }
+    let logged = log.text();
+    let line = logged
+        .lines()
+        .find(|line| line.contains("a game rule reached a state it should not"))
+        .unwrap_or_else(|| panic!("no defect line in {logged}"));
+    assert!(line.contains("ERROR"), "{line}");
+    assert!(
+        line.contains("greedy-v1") && line.contains("blew up"),
+        "{line}"
+    );
+    assert!(line.contains(&reply.request_id()), "{line}");
+
+    // The same turn, with an engine that works, is served.
+    let (state, game_id) = engine_to_move(false).await;
+    let app = engine_route(state);
+    let ok = call(
+        &app,
+        Method::GET,
+        &format!("/__engine/{game_id}"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.text);
 }

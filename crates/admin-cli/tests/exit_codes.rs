@@ -210,3 +210,45 @@ fn a_success_exits_0() {
     let output = admin(address, &["size"]);
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
 }
+
+/// An address that is not a URL is the operator's setting at fault (2), not a
+/// server that is down (75), and says so without reqwest's words.
+#[test]
+fn a_malformed_server_address_is_a_fundamental_error() {
+    for server in ["not a url", "ftp://127.0.0.1", ""] {
+        let output = Command::new(env!("CARGO_BIN_EXE_tile-lite-elite-admin"))
+            .arg("--server")
+            .arg(server)
+            .arg("size")
+            .output()
+            .expect("the CLI should run");
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{server:?}: {}",
+            text(&output.stderr)
+        );
+        let stderr = text(&output.stderr);
+        assert!(stderr.contains("--server"), "{stderr}");
+        assert!(
+            !stderr.contains("reqwest") && !stderr.contains("builder"),
+            "{stderr}"
+        );
+    }
+    // And with --json the body is the technical, fundamental one.
+    let output = Command::new(env!("CARGO_BIN_EXE_tile-lite-elite-admin"))
+        .args(["--server", "not a url", "--json", "size"])
+        .output()
+        .expect("the CLI should run");
+    assert_eq!(output.status.code(), Some(2));
+    let printed: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("JSON on stdout");
+    assert_eq!(printed["error_type"], "technical");
+    assert_eq!(printed["blip"], false);
+    // A refused connection to a good address is still a blip (75).
+    let dead = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    assert_eq!(admin(dead, &["size"]).status.code(), Some(75));
+}

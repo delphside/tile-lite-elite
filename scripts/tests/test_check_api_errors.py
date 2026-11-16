@@ -280,6 +280,19 @@ class CheckApiErrors(Cases):
         for message in ("Rack no longer matches move", "Expected {} board cells", "{error:?}"):
             self.assertIn(message, out)
 
+    def test_a_defect_is_documented_as_the_one_500_sentence_under_its_reason(self):
+        """Refusal::defect answers INTERNAL_MESSAGE, so its reason needs a line saying so"""
+        state = STATE.replace(
+            "#[cfg(test)]",
+            'fn d() { Refusal::defect(Reason::NotYourTurn, format!("{error:?}")); }\n#[cfg(test)]',
+        )
+        status, out = check(state=state)
+        self.expect("undocumented", 1, status)
+        self.assertIn("Something went wrong on the server.", out)
+        self.assertIn("names no NOT_YOUR_TURN", out)
+        line = "| `Something went wrong on the server.` | `NOT_YOUR_TURN` **400** |\n"
+        self.expect("documented", (0, ""), check(DOC + line, state=state))
+
     def test_a_stale_exclusion_fails(self):
         """an exclusion the scan no longer finds would hide whatever takes its place"""
         status, out = check(unreachable={("game_state.rs", "A message long gone", "MoveRefused"): "reason"})

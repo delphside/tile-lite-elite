@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(target_arch = "wasm32")]
 use gloo_net::{
     http::Request,
-    websocket::{Message as WsMessage, futures::WebSocket},
+    websocket::{Message as WsMessage, WebSocketError, futures::WebSocket},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -44,6 +44,28 @@ const RECONNECT_POLL_SECS: u64 = 3;
 const PROBE_LABEL_MS: u64 = 800;
 /// Delay between WebSocket reconnect attempts.
 const WEBSOCKET_RETRY_MS: u64 = 3000;
+/// The close code the server sends when the game being watched is deleted:
+/// 4000 plus the status (docs/4.4.3 *WebSocket*).
+const WEBSOCKET_GAME_DELETED: u16 = 4404;
+
+/// How a game's WebSocket ended, for the loop that keeps it open.
+#[derive(Debug, PartialEq, Eq)]
+enum Subscription {
+    /// Dropped or closed for any reason a reconnect may cure.
+    Ended,
+    /// The server said the game is gone (`4404`): there is nothing to
+    /// reconnect to, so the loop stops, and the connection is not offline.
+    GameGone,
+}
+
+/// What a close code means for the reconnect loop.
+fn subscription_after_close(code: u16) -> Subscription {
+    if code == WEBSOCKET_GAME_DELETED {
+        Subscription::GameGone
+    } else {
+        Subscription::Ended
+    }
+}
 /// How often the games list (and with it, unread-chat mail icons) is
 /// re-fetched in the background. The live WebSocket only covers the one
 /// game currently open, so activity in any other game — a new chat
@@ -390,7 +412,7 @@ pub fn RootApp() -> Element {
             // `IS_ONLINE` on connect/disconnect (see `mark_online` /
             // `mark_offline`); this loop just keeps trying.
             while websocket_game_id().as_deref() == Some(game_id.as_str()) {
-                let _ = subscribe_to_game_events(
+                let ended = subscribe_to_game_events(
                     &server_url,
                     &game_id,
                     token.as_deref(),
@@ -398,6 +420,11 @@ pub fn RootApp() -> Element {
                     websocket_game_id,
                 )
                 .await;
+                // `4404`: the game was deleted. Stop, as docs/4.4.3 says,
+                // rather than mark the app offline and retry every 3 s.
+                if matches!(ended, Ok(Subscription::GameGone)) {
+                    break;
+                }
                 if websocket_game_id().as_deref() != Some(game_id.as_str()) {
                     break;
                 }
@@ -3123,7 +3150,10 @@ fn refusal_message(status: u16, retry_after: Option<String>, body: String) -> St
 fn error_sentence(status: u16, body: &api::ApiError) -> String {
     let sentence = body.sentence().to_string();
     match (&body.correlation_id, status) {
-        (Some(id), 500) if !id.is_empty() => format!("{sentence} Reference: {id}"),
+        (Some(id), 500) if !id.is_empty() => format!(
+            "{}; quote reference {id} if you report it.",
+            sentence.trim_end_matches('.')
+        ),
         _ => sentence,
     }
 }
@@ -3169,6 +3199,25 @@ fn get_failure(
 }
 
 #[cfg(test)]
+mod websocket_close_tests {
+    use super::*;
+
+    /// docs/4.4.3 *WebSocket*: `4404` stops the loop; every other close,
+    /// including the server's own `4500` and `1001`, is retried.
+    #[test]
+    fn only_a_deleted_game_stops_the_reconnect_loop() {
+        assert_eq!(subscription_after_close(4404), Subscription::GameGone);
+        for code in [1000, 1001, 1006, 4401, 4500] {
+            assert_eq!(
+                subscription_after_close(code),
+                Subscription::Ended,
+                "{code}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod error_body_tests {
     use super::{GetFailure, error_sentence, get_failure};
     use api::{ApiError, Reason};
@@ -3207,12 +3256,12 @@ mod error_body_tests {
         let internal = new_body(
             500,
             Reason::Internal,
-            "Something went wrong.",
+            "Something went wrong on the server. It has been logged.",
             "7F3K9QWX2M4D",
         );
         assert_eq!(
             error_sentence(500, &internal),
-            "Something went wrong. Reference: 7F3K9QWX2M4D"
+            "Something went wrong on the server. It has been logged; quote reference 7F3K9QWX2M4D if you report it."
         );
         let refused = new_body(
             400,
@@ -4049,7 +4098,7 @@ async fn subscribe_to_game_events(
     token: Option<&str>,
     game_signal: Signal<Option<GameStateDto>>,
     websocket_game_id: Signal<Option<String>>,
-) -> Result<(), String> {
+) -> Result<Subscription, String> {
     subscribe_to_game_events_impl(server_url, game_id, token, game_signal, websocket_game_id).await
 }
 
@@ -4060,7 +4109,7 @@ async fn subscribe_to_game_events_impl(
     token: Option<&str>,
     game_signal: Signal<Option<GameStateDto>>,
     websocket_game_id: Signal<Option<String>>,
-) -> Result<(), String> {
+) -> Result<Subscription, String> {
     let ws_url = websocket_url(server_url, game_id, token)?;
     let (stream, _) = connect_async(ws_url).await.map_err(|_| mark_offline())?;
     mark_online();
@@ -4075,6 +4124,11 @@ async fn subscribe_to_game_events_impl(
             break;
         }
         let message = message.map_err(|_| mark_offline())?;
+        if let tokio_tungstenite::tungstenite::Message::Close(frame) = &message {
+            return Ok(frame.as_ref().map_or(Subscription::Ended, |frame| {
+                subscription_after_close(u16::from(frame.code))
+            }));
+        }
         let text = match message.to_text() {
             Ok(text) => text,
             Err(_) => continue,
@@ -4091,7 +4145,7 @@ async fn subscribe_to_game_events_impl(
         }
     }
 
-    Ok(())
+    Ok(Subscription::Ended)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -4101,7 +4155,7 @@ async fn subscribe_to_game_events_impl(
     token: Option<&str>,
     game_signal: Signal<Option<GameStateDto>>,
     websocket_game_id: Signal<Option<String>>,
-) -> Result<(), String> {
+) -> Result<Subscription, String> {
     let ws_url = websocket_url(server_url, game_id, token)?;
     let mut read = WebSocket::open(&ws_url).map_err(|_| mark_offline())?;
     mark_online();
@@ -4114,7 +4168,15 @@ async fn subscribe_to_game_events_impl(
         if websocket_game_id.peek().as_deref() != Some(game_id) {
             break;
         }
-        let message = message.map_err(|_| mark_offline())?;
+        let message = match message {
+            Ok(message) => message,
+            Err(WebSocketError::ConnectionClose(event))
+                if subscription_after_close(event.code) == Subscription::GameGone =>
+            {
+                return Ok(Subscription::GameGone);
+            }
+            Err(_) => return Err(mark_offline()),
+        };
         let text = match message {
             WsMessage::Text(text) => text,
             WsMessage::Bytes(_) => continue,
@@ -4131,7 +4193,7 @@ async fn subscribe_to_game_events_impl(
         }
     }
 
-    Ok(())
+    Ok(Subscription::Ended)
 }
 
 /// `token` travels as a query parameter, not the `Authorization` header

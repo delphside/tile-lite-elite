@@ -324,13 +324,16 @@ impl IntoResponse for ApiProblem {
 
 /// **A panic answers 500 with the body**, through `CatchPanicLayer`, instead
 /// of dropping the connection, which a client would retry as a blip. The
-/// panic's words are logged and never sent.
+/// panic's words are logged, cut before the first quoted value, and never sent.
 pub(crate) fn panic_response(panic: Box<dyn std::any::Any + Send + 'static>) -> Response {
     let words = panic
         .downcast_ref::<&str>()
         .map(|words| (*words).to_string())
         .or_else(|| panic.downcast_ref::<String>().cloned())
         .unwrap_or_else(|| "a panic with no message".to_string());
+    // Cut before the first quoted value, as the framework's words are: a
+    // panic's text can echo a value (an `unwrap` on a parse of the caller's).
+    let words = without_values(&words);
     tracing::error!(panic = %words, request_id = current_request_id(), "a handler panicked");
     ApiProblem::internal().into_response()
 }

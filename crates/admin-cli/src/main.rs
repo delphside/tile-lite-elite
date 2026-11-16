@@ -16,26 +16,24 @@
 //! the full record rather than whatever the table had room for.
 //!
 //! **Exit status says why the run stopped** (docs/1.10 *What a script's exit
-//! status means*), read from the reason the server answers with: `1` for a
-//! *business* refusal, `2` for a *technical, fundamental* one, `75` for a
-//! *blip* or a connection that was refused or timed out, `70` for an
-//! *unexpected* error, a body the tool cannot read, or a panic in the tool
-//! itself, `64` for a usage error. `--help` lists them. A failure prints the
-//! body's `detail`, never reqwest's text; under `--json` it prints the body to
-//! stdout, as a success does.
+//! status means*), read from the reason the server answers with (`exit_for`).
+//! `EXIT_CODES` below is the one list of the codes, and what `--help` prints.
+//! A failure prints the body's `detail`, never reqwest's text; under `--json`
+//! it prints the body to stdout, as a success does.
 
 use api::{ErrorType, Reason};
 use clap::{Parser, Subcommand};
 use unicode_width::UnicodeWidthStr;
 
-/// What `--help` says about the exit status; docs/1.10's table, as this tool
-/// reads it.
+/// **The one list of this tool's exit codes**, as `--help` prints it:
+/// docs/1.10's table as this tool reads it. The module doc and 4.3.4 point
+/// here rather than restating it.
 const EXIT_CODES: &str = "\
 Exit codes:
   0   completed
   1   the server refused the request: a business error, such as a missing user
   2   a fundamental error: a credential or a setting is at fault, such as a
-      server address that is not loopback
+      server address that is not loopback or not a URL
   64  a usage error: a bad flag or a missing argument
   70  an unexpected error: a defect, or an answer this tool cannot read
   75  the server was busy or unreachable; a later retry may work";
@@ -238,13 +236,24 @@ impl Failure {
         }
     }
 
+    /// A setting of the operator's is at fault, and a retry will not clear it:
+    /// a *fundamental* technical error, exit 2.
+    fn misconfigured(detail: impl Into<String>) -> Self {
+        Self {
+            exit: EXIT_FUNDAMENTAL,
+            detail: detail.into(),
+            status: None,
+            body: None,
+        }
+    }
+
     /// What `--json` prints: the server's own body, or one in the same shape
     /// for a failure that never reached the server's answer.
     fn body_for_json(&self) -> api::ApiError {
         if let Some(body) = &self.body {
             return (**body).clone();
         }
-        let error_type = if self.exit == EXIT_BLIP {
+        let error_type = if self.exit == EXIT_BLIP || self.exit == EXIT_FUNDAMENTAL {
             ErrorType::Technical
         } else {
             ErrorType::Unexpected
@@ -727,16 +736,19 @@ fn format_timestamp_seconds(epoch_seconds: i64) -> String {
         .unwrap_or_else(|| epoch_seconds.to_string())
 }
 
-/// A transport failure, in the operator's words and never reqwest's: a
-/// connection that was refused or timed out is a blip, anything else is a
-/// failure to read what came back.
+/// A transport failure, in the operator's words and never reqwest's. **Only a
+/// connection that was refused or timed out is a blip** (75). An address that
+/// is not a usable URL is the operator's setting at fault (2); anything else,
+/// such as an answer this tool cannot read, is unexpected (70).
 fn fmt_err(error: reqwest::Error) -> Failure {
-    if error.is_connect() || error.is_timeout() {
+    if error.is_builder() {
+        Failure::misconfigured("The server address is not a usable URL. Check --server.")
+    } else if error.is_connect() || error.is_timeout() {
         Failure::unreachable(error.url().map(|u| u.as_str()).unwrap_or("the server"))
     } else if error.is_decode() || error.is_body() {
         Failure::unexpected("The server answered with something this tool cannot read.")
     } else {
-        Failure::unreachable(error.url().map(|u| u.as_str()).unwrap_or("the server"))
+        Failure::unexpected("The request to the server failed in a way this tool did not expect.")
     }
 }
 

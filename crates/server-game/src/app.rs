@@ -42,7 +42,7 @@ mod admin;
 mod auth;
 mod catalog;
 mod common;
-mod error;
+pub(crate) mod error;
 mod events;
 mod games;
 mod invitations;
@@ -199,10 +199,14 @@ impl AppState {
 
     /// Tells every open WebSocket the server is stopping: each closes with
     /// 1001, *going away*, which a client reads as "reconnect", not as a
-    /// failure. `main` calls it when the stop signal arrives, before the
-    /// listener drains, because the drain waits for upgraded connections.
-    pub fn begin_shutdown(&self) {
+    /// failure. `main` calls it when the stop signal arrives. **It then waits
+    /// `SHUTDOWN_GRACE`**: the listener's graceful drain waits for ordinary
+    /// requests only (hyper does not wait for an upgraded connection, whose
+    /// task is the application's), so without the wait the process could exit
+    /// before a socket had written its close frame.
+    pub async fn begin_shutdown(&self) {
         let _ = self.shutdown.send(true);
+        tokio::time::sleep(events::SHUTDOWN_GRACE).await;
     }
 
     /// Switches the support-mail poller on when `main.rs` found its settings.
