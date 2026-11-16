@@ -63,6 +63,12 @@ ignore = [
   # #584.
   "RUSTSEC-2026-0486",
 
+  # `quinn-udp` 0.5.15, receive loop can spin: reached only through `quinn` ->
+  # `reqwest`'s optional `http3` feature, which no crate here enables.
+  # `cargo tree -i quinn-udp --target all --all-features` finds it in no build
+  # graph: it is a lockfile entry rather than a dependency. #584.
+  "RUSTSEC-2026-0538",
+
   # `proc-macro-error`, reached only as a build-time proc macro of
   # `glib-macros`, and only on the desktop path. It is not in any shipped
   # binary even when the desktop build is made.
