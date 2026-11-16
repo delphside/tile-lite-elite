@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# release-check (laptop): is this version the right kind for what its milestone
+# holds? Runs check-release-version.sh, which exits 1 for a patch carrying
+# functional change and 2 where it cannot judge; either refuses. Design 545 §2.2.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_VERSION
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[[ -x "$root/scripts/deliver/check-release-version.sh" ]] \
+  || die "$root/scripts/deliver/check-release-version.sh is missing, so it cannot judge the version"
+(cd "$root" && ./scripts/deliver/check-release-version.sh "$TURPIN_VERSION") >&2 \
+  || die "check-release-version.sh refused $TURPIN_VERSION"

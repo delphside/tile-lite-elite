@@ -39,11 +39,21 @@ path = "/health"
 field = "app_version"
 
 [ships]
+# The image carries Turpin's payload (the hooks, the host files' sources, the
+# joined files and the profile keys a host reads), so a move of the programme
+# pin or an edit to this file ships only where it changes what a host reads
+# (delphside/tile-lite-elite#556).
+carries_payload = true
 # What does NOT reach the image; every other path does. Regular expressions,
 # each matched from the start of the path.
+#
+# `docs/`, `scripts/` and `.*\.md$` do not ship, except the host files' sources
+# (`[[turpin.host_files]]`): those are copied into the payload, so they are the
+# image's. Each exception is a negative lookahead; a new host file owes its
+# source an entry here and a case in scripts/tests/shipping-paths.bats.
 non_shipping = [
-  'docs/',
-  'scripts/',
+  'docs/(?!4\.4\.7-log-events\.md$)',
+  'scripts/(?!operate/(backup-to-oci\.sh$|check-log-hygiene-nightly\.sh$|check-log-hygiene\.py$|upload\.sh$|systemd/|profile\.d/))',
   'e2e/',
   '\.github/',
   '\.githooks/',
@@ -53,13 +63,13 @@ non_shipping = [
   'LICENSE',
   '\.gitignore$',
   '\.markdownlint',
-  '.*\.md$',
+  '(?!docs/4\.4\.7-log-events\.md$).*\.md$',
   # the programme submodule (#485): the Dockerfile copies named folders, never this one
   '\.gitmodules$',
   'programme$',
   'programme/',
-  # this file: the Dockerfile copies named files and folders, never this one
-  'app-profile\.toml$',
+  # the hooks' tests; the hooks themselves are the payload's
+  'turpin/tests/',
 ]
 
 [scripts]
@@ -77,15 +87,34 @@ groups = [
 # A variable that overrides, in order, then the default.
 env = ["PREVIEW_URL", "STAGING_URL"]
 url = "http://localhost:8081"
+# Turpin's keys: the laptop is its host, Compose runs under this project name,
+# and the environment joins its own compose file and Caddyfile.
+role = "preview"
+host = "controller"
+project = "tile-lite-elite-preview"
+join = ["docker-compose.preview.yml", "Caddyfile.preview"]
 
 [environments.rehearsal]
 env = ["REHEARSAL_URL"]
 # The script is sourced in a subshell and `url_variable` read from it.
 url_from = "scripts/deliver/rehearsal-target.sh"
 url_variable = "TARGET_URL"
+# Turpin's keys. The project is the name docker-compose.yml pins, so the first
+# deploy recreates the running containers in place; the volumes keep their names.
+role = "rehearsal"
+login = "oci-instance-principal"
+project = "tile-lite-elite"
 
 [environments.production]
 env = ["PROD_URL"]
+# Turpin's keys. `url` is where `/health` is read and what a host's `smoke`
+# and `post-deploy` hooks are given.
+role = "production"
+login = "oci-instance-principal"
+project = "tile-lite-elite"
+url = "https://tileliteelite.com"
+# Turpin's default, unmeasured; set from rehearsal's first cold pull.
+pull_timeout = 300
 
 [hosts.production]
 # Read by programme/scripts/board/board-hosts.py over ssh, read-only (#360).
@@ -103,13 +132,97 @@ compare_with = "production"
 
 [release]
 # A release is tagged `<tag_prefix><X.Y.Z>`.
-tag_prefix = "prod-"
-# What a deploy announces on an issue: a comment starting with `announcement`,
-# or with `deploy_marker`.
-announcement = "Released in prod-"
+tag_prefix = "v"
+# Earlier tags: history, release notes, version order, production's tag.
+history_prefixes = ["prod-"]
+# What a deploy announces on an issue: a comment starting with `announcement`
+# (also matched with each history prefix), or with `deploy_marker`.
+announcement = "Released in v"
 deploy_marker = "[deploy.sh]"
 # Prints why CI is red on main and exits non-zero, or exits 0.
 ci_status = "scripts/deliver/ci-status.sh --run push:main"
+# The check names are the CI jobs' `name:` values, which the release gate and
+# GitHub match: the jobs keep them.
+required_checks = [
+  "fmt · clippy · test · wasm · docs",
+  "commit stamp (app/api versions)",
+  "e2e (Playwright · preview stack)",
+]
+# Hooks in turpin/hooks/ that a release or a deploy refuses without.
+required_hooks = ["build", "pre-deploy", "save-state", "migrate", "smoke", "restore-state", "release-check", "bump"]
+overridable = ["milestone"]
+
+[turpin]
+# Turpin's registry repositories, the image set, and which image carries the
+# payload at /turpin/. `join` names the files a deploy joins into its folder,
+# taken from the payload, never a working tree; an environment adds its own.
+candidates = "tile-lite-elite/candidates"
+releases = "tile-lite-elite/releases"
+images = ["server", "web"]
+payload_image = "server"
+join = ["docker-compose.yml", "Caddyfile"]
+# What a failed first deploy on an adopted host prints.
+fallback = "see docs/4.3.3, Roll back a first Turpin deploy"
+
+[turpin.build]
+# Build arguments, each taken from a value of the build (`SHORT_SHA` is the
+# commit's first seven characters). The `build` hook sets this one itself too.
+args = { TILE_LITE_ELITE_BUILD_ID = "SHORT_SHA" }
+
+# The host files (scripts/operate/): installed on rehearsal and production at
+# each deploy. A unit marked `enable` is enabled and restarted. Their sources
+# ship in the image, which `[ships]` above says.
+[[turpin.host_files]]
+src = "scripts/operate/backup-to-oci.sh"
+dest = "/opt/tile-lite-elite/backup-to-oci.sh"
+mode = "0755"
+
+[[turpin.host_files]]
+src = "scripts/operate/check-log-hygiene-nightly.sh"
+dest = "/opt/tile-lite-elite/check-log-hygiene-nightly.sh"
+mode = "0755"
+
+[[turpin.host_files]]
+src = "scripts/operate/upload.sh"
+dest = "/opt/tile-lite-elite/upload.sh"
+mode = "0755"
+
+[[turpin.host_files]]
+src = "scripts/operate/check-log-hygiene.py"
+dest = "/opt/tile-lite-elite/check-log-hygiene.py"
+mode = "0755"
+
+[[turpin.host_files]]
+src = "docs/4.4.7-log-events.md"
+dest = "/opt/tile-lite-elite/4.4.7-log-events.md"
+mode = "0644"
+
+[[turpin.host_files]]
+src = "scripts/operate/systemd/tile-lite-elite-backup.service"
+dest = "/etc/systemd/system/tile-lite-elite-backup.service"
+mode = "0644"
+
+[[turpin.host_files]]
+src = "scripts/operate/systemd/tile-lite-elite-log-check.service"
+dest = "/etc/systemd/system/tile-lite-elite-log-check.service"
+mode = "0644"
+
+[[turpin.host_files]]
+src = "scripts/operate/systemd/tile-lite-elite-backup.timer"
+dest = "/etc/systemd/system/tile-lite-elite-backup.timer"
+mode = "0644"
+enable = true
+
+[[turpin.host_files]]
+src = "scripts/operate/systemd/tile-lite-elite-log-check.timer"
+dest = "/etc/systemd/system/tile-lite-elite-log-check.timer"
+mode = "0644"
+enable = true
+
+[[turpin.host_files]]
+src = "scripts/operate/profile.d/tile-lite-elite-sa.sh"
+dest = "/etc/profile.d/tile-lite-elite-sa.sh"
+mode = "0644"
 
 [documents]
 # Generated from the code or the board: neither the programme's nor the

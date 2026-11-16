@@ -8,3 +8,4 @@ data
 .dioxus
 *.log
 node_modules
+.turpin/

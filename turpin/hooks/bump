@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# bump (laptop): after the version file moved to the next patch, Cargo.lock
+# follows it. Runs in the worktree that bumps main. Design 545 §2.2.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_VERSION
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+cargo update --workspace --offline >&2 \
+  || die "cargo update --workspace --offline failed, so Cargo.lock does not follow $TURPIN_VERSION"
