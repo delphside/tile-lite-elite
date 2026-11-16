@@ -38,6 +38,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SENTINEL="no-rehearsal-key-configured"
 UNLOCK_HOST="rehearsal.tileliteelite.com"
 
+ENV_FILE="$REHEARSAL_ENV_FILE"
+COMPOSE="$REHEARSAL_COMPOSE"
+
 remote() {
   ssh -n -i "$DEPLOY_SSH_KEY" -o BatchMode=yes -o ConnectTimeout=10 \
     "$DEPLOY_USER@$DEPLOY_HOST" "$@"
@@ -48,12 +51,12 @@ remote() {
 # to .env but never applied is exactly the state that looks configured and
 # behaves locked.
 configured_key() {
-  remote "cd $DEPLOY_REMOTE_DIR && grep -m1 '^REHEARSAL_ACCESS_KEY=' .env 2>/dev/null | cut -d= -f2-" \
+  remote "grep -m1 '^REHEARSAL_ACCESS_KEY=' $ENV_FILE 2>/dev/null | cut -d= -f2-" \
     || true
 }
 
 live_key() {
-  remote "cd $DEPLOY_REMOTE_DIR && docker compose exec -T web printenv REHEARSAL_ACCESS_KEY 2>/dev/null" \
+  remote "$COMPOSE exec -T web printenv REHEARSAL_ACCESS_KEY 2>/dev/null" \
     || true
 }
 
@@ -65,17 +68,18 @@ new_key() {
 
 write_key() {
   local key="$1"
-  # Rewrite the line if it is there, append it if it is not. `docker compose
-  # up -d web` rather than `restart`: restart reuses the container's existing
+  # Rewrite the line if it is there, append it if it is not. `up -d web`
+  # rather than `restart`: restart reuses the container's existing
   # environment, so it would report success and change nothing.
+  # Applied through `turpin-host compose`, which refuses where rehearsal has no
+  # current deploy or its lock is held; its refusal reaches stderr.
   # The file holds the key, so it is the owner's to read and nobody else's —
   # `touch` alone would create it with the login's umask.
-  remote "cd $DEPLOY_REMOTE_DIR \
-    && touch .env \
-    && chmod 600 .env \
-    && sed -i '/^REHEARSAL_ACCESS_KEY=/d' .env \
-    && echo 'REHEARSAL_ACCESS_KEY=$key' >> .env \
-    && docker compose up -d web > /dev/null 2>&1 \
+  remote "touch $ENV_FILE \
+    && chmod 600 $ENV_FILE \
+    && sed -i '/^REHEARSAL_ACCESS_KEY=/d' $ENV_FILE \
+    && echo 'REHEARSAL_ACCESS_KEY=$key' >> $ENV_FILE \
+    && $COMPOSE up -d web > /dev/null \
     && echo applied"
 }
 
@@ -109,8 +113,8 @@ case "${1:-}" in
       KEY="$(new_key)"
       [[ -n "$KEY" ]] || { echo "rehearsal-access: could not generate a key" >&2; exit 1; }
       [[ "$(write_key "$KEY")" == "applied" ]] \
-        || { echo "rehearsal-access: could not write the key to the host" >&2; exit 1; }
-      echo "    written to $DEPLOY_REMOTE_DIR/.env and applied"
+        || { echo "rehearsal-access: could not write the key to the host or apply it (turpin-host compose refused, or ssh failed)" >&2; exit 1; }
+      echo "    written to $ENV_FILE and applied"
     fi
     show_unlock "$KEY"
     ;;
@@ -120,7 +124,7 @@ case "${1:-}" in
     KEY="$(new_key)"
     [[ -n "$KEY" ]] || { echo "rehearsal-access: could not generate a key" >&2; exit 1; }
     [[ "$(write_key "$KEY")" == "applied" ]] \
-      || { echo "rehearsal-access: could not write the key to the host" >&2; exit 1; }
+      || { echo "rehearsal-access: could not write the key to the host or apply it (turpin-host compose refused, or ssh failed)" >&2; exit 1; }
     echo "    done. Run 'grant' to let a device back in."
     ;;
 
@@ -142,7 +146,7 @@ case "${1:-}" in
       echo "    container: running on the sentinel (no key) — refusing every device"
     elif [[ "$LIVE" != "$CONFIGURED" ]]; then
       echo "    container: running a DIFFERENT key from .env — the file was" >&2
-      echo "               changed without 'docker compose up -d web'." >&2
+      echo "               changed without 'turpin-host compose ... up -d web'." >&2
       exit 1
     else
       echo "    container: running the key from .env"
@@ -170,11 +174,13 @@ Refuses (exit 2) when:
 Refuses (exit 1) when:
   - `grant` or `revoke` cannot generate a key on the host
     -> "rehearsal-access: could not generate a key"
-  - the new key cannot be written to the host's .env and applied
-    -> "rehearsal-access: could not write the key to the host"
+  - the new key cannot be written to the host's .env, or `turpin-host
+    compose` refuses to apply it (no current deploy, lock held)
+    -> "rehearsal-access: could not write the key to the host or apply
+        it (turpin-host compose refused, or ssh failed)"
   - `status` finds the container running a different key from .env
     -> "container: running a DIFFERENT key from .env — the file was
-        changed without 'docker compose up -d web'."
+        changed without 'turpin-host compose ... up -d web'."
     This reads exactly like a wrong key when a device is refused,
     which is why it is a refusal and not a line of output.
 

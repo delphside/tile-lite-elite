@@ -39,7 +39,8 @@ Refuses (exit 1) when:
     The only way this fires is that rehearsal-target.sh is wrong,
     since it exports DEPLOY_HOST unconditionally and a caller cannot
     set it from outside.
-  - the remote `docker compose down -v && up -d` fails
+  - the remote `turpin-host compose ... down -v`, or `up -d`, fails or is refused
+    (no current deploy, lock held)
     -> "deploy-rehearsal: the reset failed — rehearsal may be down."
   - the host does not answer /health within 60s of a reset
     -> "deploy-rehearsal: it did not come back within 60s — check the
@@ -99,7 +100,10 @@ if [[ "${1:-}" == "reset" ]]; then
   # same images again; the server applies its migrations on boot, so an empty
   # volume comes back as an empty *schema* rather than an empty file the server
   # cannot open. `--migrate-only` is deploy.sh's business, not this script's.
-  ssh "${SSH[@]}" "$REMOTE"     "cd ~/$DEPLOY_REMOTE_DIR && docker compose down -v && docker compose up -d"     || { echo "deploy-rehearsal: the reset failed — rehearsal may be down." >&2; exit 1; }
+  # Through `turpin-host compose`, which refuses where rehearsal has no current
+  # deploy or its lock is held; its reason reaches stderr above this message.
+  ssh "${SSH[@]}" "$REMOTE" "$REHEARSAL_COMPOSE down -v && $REHEARSAL_COMPOSE up -d" \
+    || { echo "deploy-rehearsal: the reset failed — rehearsal may be down." >&2; exit 1; }
 
   echo "==> Waiting for it to answer"
   for _ in $(seq 1 30); do

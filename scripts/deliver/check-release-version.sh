@@ -132,14 +132,20 @@ fi
 # labels and nothing else. Search filters by milestone server-side; the field
 # values come back on each result and are matched exactly, so this no longer
 # depends on a label spelling.
+# **A parent project is skipped** (R9, #545): it has sub-issues, carries no
+# milestone of its own, and its work packages are what ship, each judged here.
+# `subIssues.totalCount` is how the board tooling tells one (`board/sources.py`
+# reads the same field).
 NWO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
 ISSUES="$(gh api graphql -f query="{
   search(query: \"repo:$NWO is:issue milestone:\\\"$VERSION\\\"\", type: ISSUE, first: 100) {
     nodes { ... on Issue { number title
+      subIssues(first: 1) { totalCount }
       issueFieldValues(first: 10) {
         nodes { ... on IssueFieldSingleSelectValue {
                   value field { ... on IssueFieldCommon { name } } } } } } } } }" \
   --jq "[.data.search.nodes[]
+          | select((.subIssues.totalCount // 0) == 0)
           | select([.issueFieldValues.nodes[]? | select(.field.name == \"Type of change\") | .value]
                    | any($FUNCTIONAL))
           | \"#\(.number) \(.title)\"] | .[]" 2>/dev/null || true)"
