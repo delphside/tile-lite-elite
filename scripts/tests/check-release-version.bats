@@ -156,7 +156,8 @@ CHILD='{"data":{"search":{"nodes":[{"number":126,"title":"a work package",
 }
 
 # The previous release is the newest of the `v` and the `prod-` tags together,
-# by version: the project's older tags are `v`, its newer ones `prod-`.
+# by version: the project's older tags are `prod-` (`prod-0.4.14` to
+# `prod-0.10.1`), its newer ones `v` (`v0.10.1` onward).
 @test "the previous release is the newest of the v and prod- tags, so a newer v tag is it" {
   git -C "$D/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
   git -C "$D/repo" tag prod-0.4.25
@@ -204,11 +205,23 @@ STUB
   assert_output --partial "was an error"
 }
 
-@test "strict: a gh that cannot name the repository is exit 2" {
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$BIN/gh"
+@test "strict: a gh that cannot name the repository is exit 2, though the query would answer" {
+  # Only `repo view` fails; the GraphQL call answers with nothing, which would
+  # read as "nothing functional" and pass if the repository name were not checked.
+  cat > "$BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"repo view"*) exit 1 ;;
+  *) exit 0 ;;
+esac
+STUB
   chmod +x "$BIN/gh"
+  isolated 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
   CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
   assert_equal "$status" 2
+  assert_output --partial "could not name the repository"
 }
 
 @test "strict: a readable milestone is judged as before" {

@@ -357,7 +357,9 @@ LABEL[deploys]="Rehearsal and production run what their records say"
 #
 # Three things are not red. An environment with no Turpin deploy yet (`current:
 # none`, or Turpin not installed on its host, as rehearsal and production are
-# until 0.10.3) is skipped as "no Turpin deploy yet". A record no release matches
+# until their first Turpin deploy) is skipped as "no Turpin deploy yet". The
+# "turpin-host is not on" skip lasts until 0.10.3, when the fallback retires and
+# a host without Turpin is a failure to read. A record no release matches
 # is red on production only: rehearsal runs unreleased builds as a matter of
 # course. The two timers are not checked: `turpin status` does not show whether
 # a host file's unit is enabled, so this says nothing of them.
@@ -368,6 +370,8 @@ check_deploys() {
     status=0
     out="$(timeout 90 "$TURPIN" status "$env" 2>&1 < /dev/null)" || status=$?
     if (( status != 0 )); then
+      # Skipped, not red, until 0.10.3 retires the fallback; after it a host
+      # without Turpin is an environment that cannot be read.
       if grep -q 'turpin-host is not on' <<< "$out"; then
         waiting="$waiting $env"; continue
       fi
@@ -392,9 +396,9 @@ check_deploys() {
   if [[ -n "$bad" ]]; then
     fail deploys "an environment differs from its record or payload:$(printf '%s\n' $bad | sort -u | tr '\n' ' ')" "$lines"
   elif [[ "$(printf '%s\n' $waiting | wc -l)" -ge 2 ]]; then
-    skip deploys "no Turpin deploy yet on rehearsal or production"
+    skip deploys "no Turpin deploy yet on rehearsal or production (a host without Turpin is skipped until 0.10.3)"
   elif [[ -n "$waiting" ]]; then
-    pass deploys "the other environment runs its record, and its host files match; no Turpin deploy yet on$waiting"
+    pass deploys "the other environment runs its record, and its host files match; no Turpin deploy yet on$waiting (a host without Turpin is skipped until 0.10.3)"
   else
     pass deploys "rehearsal and production run their record, and their host files match"
   fi

@@ -21,7 +21,9 @@ set -euo pipefail
 #   ./scripts/deliver/check-release-version.sh 0.4.26
 #   ./scripts/deliver/check-release-version.sh 0.4.26 0.4.25   # explicit predecessor
 #
-# Exit 0 if the version is fine or cannot be judged, 1 if it is wrong.
+# Exit 0 if the version is fine, or cannot be judged and CHECK_RELEASE_STRICT is
+# not set; 1 if it is wrong; 2 under CHECK_RELEASE_STRICT=1 where it cannot read
+# the milestone (below).
 #
 # **By default it never fails for want of information.** No milestone, no
 # previous release, no `gh`, no network — all of those print why and pass. A
@@ -128,9 +130,11 @@ if ! command -v gh > /dev/null 2>&1; then
 fi
 
 # Milestones are named for the version they ship. `|| true` so an API failure,
-# an expired token or no network prints nothing and falls through to the skip
-# below rather than aborting — the check exists to catch a mistake, not to add
-# a dependency to shipping.
+# an expired token or no network does not abort here under `set -e`: the failure
+# is caught below, where it is a skip by default and exit 2 under
+# CHECK_RELEASE_STRICT=1 (`could_not_read`). The check exists to catch a
+# mistake, not to add a dependency to shipping, except where Turpin's gate sets
+# strict.
 #
 # **`is:issue` is load-bearing, and its absence made this gate blind.** Without
 # it the milestone qualifier matches nothing at all: measured 2026-09-09 against
