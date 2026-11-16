@@ -3,11 +3,18 @@
 # production the `Release Check` issues now waiting are listed. A check, not a
 # gate (Turpin's design §9): the second part reports and never refuses. Where the
 # address does not report the version yet it says not yet (75), since DNS and
-# caches can lag a deploy that has already passed.
+# caches can lag a deploy that has already passed. Rehearsal has no address in
+# the profile, so it is read from scripts/deliver/rehearsal-target.sh (below).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need TURPIN_VERSION TURPIN_SHA TURPIN_URL
+need TURPIN_VERSION TURPIN_SHA
+# Rehearsal's profile gives no address: read it the way the profile's `url_from`
+# does, from the repository (the working directory), in a subshell.
+if [[ -z "${TURPIN_URL:-}" && -f "$PWD/scripts/deliver/rehearsal-target.sh" ]]; then
+  TURPIN_URL="$(source "$PWD/scripts/deliver/rehearsal-target.sh" > /dev/null 2>&1 && printf '%s' "${TARGET_URL:-}")" || TURPIN_URL=""
+fi
+need TURPIN_URL
 
 body="$(curl -sf --max-time 10 "${TURPIN_URL%/}/health" 2> /dev/null || true)"
 got="$(printf '%s' "$body" | app_version_of)"

@@ -32,8 +32,10 @@ services:
       # Rate limits — how often a caller may ask, tunable without a rebuild.
       # Read once when the router is built, so a change takes a container
       # restart (`docker compose up -d server`) rather than a new image. Set
-      # them in `.env` beside the secrets, which deploy.sh never touches, so a
-      # tuned host keeps its numbers across every redeploy.
+      # them in the preview's `.env`, in its Turpin state folder, beside the
+      # secrets. A deploy never touches that file, so a tuned host keeps its
+      # numbers across every redeploy (the data volume is another matter:
+      # each preview deploy starts it empty).
       #
       # Defaults live in crates/server-game/src/app/throttle.rs and are a
       # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
@@ -131,11 +133,10 @@ services:
         tag: "tle-preview-web"
 
 volumes:
-  # Deliberately persists across `docker compose down` / re-runs, same as
-  # production's tile-lite-elite-data — running deploy-preview.sh again
-  # against an already-seeded preview DB is what actually exercises "does a
-  # new migration apply to an existing database", not just a fresh one.
-  # `./scripts/deploy-preview.sh reset` wipes it on purpose when you want a
-  # clean slate.
+  # Preview is deployed by `turpin deploy preview`, and each deploy starts this
+  # volume empty: the `save-state` hook snapshots it and then empties it
+  # (docs/4.3.3). It persists across `docker compose down` and a restart,
+  # but not across a deploy, so a preview exercises a fresh database; "does a
+  # new migration apply to an existing database" is rehearsal's question.
   tile-lite-elite-preview-data:
     name: tile-lite-elite-preview-data

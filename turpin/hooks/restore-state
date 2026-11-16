@@ -7,7 +7,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-need TURPIN_DEPLOY TURPIN_IMAGE_SERVER
+need TURPIN_DEPLOY
 dir="$(snapshot_dir)"
 name="turpin-$TURPIN_DEPLOY.tgz"
 
@@ -16,14 +16,13 @@ if [[ ! -f "$dir/$name" ]]; then
   exit 0
 fi
 
-for container in $(server_containers 120); do
-  bounded 120 docker stop "$container" > /dev/null
-done
+image="$(image_server)"
+stop_servers 120
 
 # Clear the volume before unpacking rather than untarring over the top.
 bounded 120 docker run --rm \
   -v "$(tle_volume):/data" -v "$dir:/snapshots:ro" \
-  --entrypoint sh "$TURPIN_IMAGE_SERVER" \
+  --entrypoint sh "$image" \
   -c "rm -rf /data/* /data/.[!.]* 2>/dev/null; tar xzf /snapshots/$name -C /data" \
   || die "could not restore $(tle_volume) from $dir/$name"
 echo "restore-state: $(tle_volume) restored from $dir/$name" >&2

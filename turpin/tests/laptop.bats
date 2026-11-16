@@ -97,28 +97,47 @@ setup() {
 # --------------------------------------------------------- release-check
 
 @test "release-check refuses a version check-release-version.sh refuses, and passes one it passes" {
+  cd "$TREE"
   export STUB_RELEASE_CHECK_RC=1
-  run "$TREE/turpin/hooks/release-check"
+  run "$EXPORT_HOOKS/release-check"
   assert_failure 1
   assert_output --partial "refused 0.10.2"
   export STUB_RELEASE_CHECK_RC=0
-  run "$TREE/turpin/hooks/release-check"
+  run "$EXPORT_HOOKS/release-check"
   assert_success
   run cat "$RELEASE_CHECK_LOG"
-  assert_output "0.10.2"
+  assert_output "0.10.2 strict=1"
 }
 
 @test "release-check refuses where the script that judges is not there" {
+  cd "$TREE"
   rm "$TREE/scripts/deliver/check-release-version.sh"
-  run "$TREE/turpin/hooks/release-check"
+  run "$EXPORT_HOOKS/release-check"
   assert_failure 1
   assert_output --partial "cannot judge"
 }
 
 @test "release-check refuses where it cannot tell what the version is" {
+  cd "$TREE"
   unset TURPIN_VERSION
-  run "$TREE/turpin/hooks/release-check"
+  run "$EXPORT_HOOKS/release-check"
   assert_failure 1
+}
+
+@test "release-check finds the repository from the working directory, with the hooks exported apart from it, and asks for strict" {
+  cd "$TREE"
+  [[ ! -e "$EXPORT_HOOKS/../../scripts" ]]
+  run "$EXPORT_HOOKS/release-check"
+  assert_success
+  run cat "$RELEASE_CHECK_LOG"
+  assert_output "0.10.2 strict=1"
+}
+
+@test "release-check refuses where the working directory is no repository" {
+  cd "$BATS_TEST_TMPDIR"
+  run "$EXPORT_HOOKS/release-check"
+  assert_failure 1
+  assert_output --partial "not in a git repository"
 }
 
 # ----------------------------------------------------------- post-deploy
@@ -133,6 +152,26 @@ setup() {
 }
 
 @test "post-deploy refuses where the environment has no address" {
+  cd "$TREE"
+  run "$HOOKS/post-deploy"
+  assert_failure 1
+  assert_output --partial "TURPIN_URL is not set"
+}
+
+@test "post-deploy with no address reads TARGET_URL from the repository's rehearsal-target.sh" {
+  printf 'export TARGET_URL=https://rehearsal.test\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
+  export STUB_HEALTH='{"app_version":"0.10.2+0123456"}'
+  cd "$TREE"
+  run "$HOOKS/post-deploy"
+  assert_success
+  assert_output --partial "https://rehearsal.test/health reports"
+  run cat "$CURL_LOG"
+  assert_line --partial "https://rehearsal.test/health"
+}
+
+@test "post-deploy with no address and a script that gives none refuses" {
+  printf 'export OTHER=1\n' > "$TREE/scripts/deliver/rehearsal-target.sh"
+  cd "$TREE"
   run "$HOOKS/post-deploy"
   assert_failure 1
   assert_output --partial "TURPIN_URL is not set"

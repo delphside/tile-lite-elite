@@ -43,12 +43,13 @@ Refuses (exit 1) when:
   - TLE_UPLOAD is par, no PAR_URL is set and
     ~/.tile-lite-elite-backup-par is unreadable
     -> "error: no PAR_URL, and no ~/.tile-lite-elite-backup-par"
-  - the lock is not free within the wait
   - there is not exactly one running server container
   - the fresh copy fails PRAGMA integrity_check
     -> "error: integrity check failed on the fresh copy: ..."
   - the upload itself fails (the previous backup is left untouched)
     -> "error: upload failed; the previous backup is untouched"
+
+Exits 75 (a blip: try again later) when the lock is not free within the wait.
 
 Only warns (exit 0) when the backup uploaded but the success marker
 did not — the alarm then fires on that absence:
@@ -66,7 +67,8 @@ tle_upload_init || exit 1
 # A deploy holds the same lock, so a backup never reads a database mid-change.
 # Run again under it, waiting longer than a deploy takes.
 if [[ -z "${TLE_LOCKED:-}" ]]; then
-  exec env TLE_LOCKED=1 flock -w "${TLE_LOCK_WAIT:-1800}" "$STATE_DIR/lock" bash "$0" "$@"
+  # A wait that runs out exits 75, a blip (docs/1.10): the next run may find it free.
+  exec env TLE_LOCKED=1 flock -w "${TLE_LOCK_WAIT:-1800}" -E 75 "$STATE_DIR/lock" bash "$0" "$@"
 fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"

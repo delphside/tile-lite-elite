@@ -6,6 +6,7 @@
 setup() {
   load helpers
   common_setup
+  with_image
   a_data_folder
   export STUB_CONTAINER=abc123
   export TURPIN_DEPLOY=3 TURPIN_CURRENT=2
@@ -162,4 +163,47 @@ setup() {
   run "$HOOKS/restore-state"
   assert_failure 1
   assert_output --partial "did not finish within 120s"
+}
+
+# A rollback's request names no images, so Turpin gives restore-state no
+# TURPIN_IMAGE_SERVER; the deploy's own turpin.env has it.
+
+@test "restore-state under a rollback reads the image from the deploy's turpin.env" {
+  run "$HOOKS/save-state"
+  assert_success
+  echo "game two" > "$DATA_DIR/second.txt"
+  unset TURPIN_IMAGE_SERVER
+  export TURPIN_DEPLOY_DIR="$BATS_TEST_TMPDIR/deploy3"
+  mkdir -p "$TURPIN_DEPLOY_DIR"
+  printf 'TURPIN_IMAGE_WEB=registry.test/web@sha256:bbbb\nTURPIN_IMAGE_SERVER=registry.test/tle/releases@sha256:cccc\n' > "$TURPIN_DEPLOY_DIR/turpin.env"
+  : > "$DOCKER_LOG"
+  run "$HOOKS/restore-state"
+  assert_success
+  [[ ! -e "$DATA_DIR/second.txt" ]]
+  run cat "$DOCKER_LOG"
+  assert_line --partial "--entrypoint sh registry.test/tle/releases@sha256:cccc"
+}
+
+@test "restore-state refuses where neither Turpin nor turpin.env gives the image" {
+  touch "$SNAP_DIR/turpin-3.tgz"
+  unset TURPIN_IMAGE_SERVER
+  export TURPIN_DEPLOY_DIR="$BATS_TEST_TMPDIR/deploy3"
+  mkdir -p "$TURPIN_DEPLOY_DIR"
+  echo "TURPIN_IMAGE_WEB=registry.test/web@sha256:bbbb" > "$TURPIN_DEPLOY_DIR/turpin.env"
+  run "$HOOKS/restore-state"
+  assert_failure 1
+  assert_output --partial "TURPIN_IMAGE_SERVER is not set"
+}
+
+@test "save-state and restore-state refuse where docker ps fails, rather than leave the server running" {
+  run "$HOOKS/save-state"
+  assert_success
+  export STUB_PS_RC=1
+  run "$HOOKS/save-state"
+  assert_failure 1
+  assert_output --partial "could not list the server containers"
+  touch "$SNAP_DIR/turpin-3.tgz"
+  run "$HOOKS/restore-state"
+  assert_failure 1
+  assert_output --partial "could not list the server containers"
 }

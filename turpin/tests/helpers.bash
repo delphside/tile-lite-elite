@@ -9,7 +9,8 @@
 # snapshot is taken and restored with the commands the hook gives, not a copy of them.
 #
 #   STUB_CONTAINER     the id `docker ps` prints; empty means no server is running
-#   STUB_SCHEMA_LABEL  what `docker image inspect` prints
+#   STUB_PS_RC         the status of `docker ps`
+#   STUB_SCHEMA_LABEL what `docker image inspect` prints
 #   STUB_VOLUME_RC     the status of `docker volume inspect` (1 = no volume)
 #   STUB_APPLIED       what the migration query prints (a number, or `none`)
 #   STUB_DOCKER_RC     the status of `docker compose` and `docker buildx`
@@ -34,7 +35,7 @@ common_setup() {
 #!/usr/bin/env bash
 echo "$*" >> "$DOCKER_LOG"
 case "$1" in
-  ps) [[ -z "${STUB_CONTAINER:-}" ]] || echo "$STUB_CONTAINER" ;;
+  ps) [[ -z "${STUB_CONTAINER:-}" ]] || echo "$STUB_CONTAINER"; exit "${STUB_PS_RC:-0}" ;;
   image) echo "${STUB_SCHEMA_LABEL:-}" ;;
   volume) exit "${STUB_VOLUME_RC:-0}" ;;
   exec) echo "${STUB_APPLIED:-none}" ;;
@@ -88,8 +89,14 @@ STUB
   export TURPIN_SHA=0123456789abcdef0123456789abcdef01234567 TURPIN_VERSION=0.10.2
   export TURPIN_STATE="$BATS_TEST_TMPDIR/state"
   mkdir -p "$TURPIN_STATE"
+  # Not every hook is given an image (a rollback's request names none): a test
+  # that wants one calls `with_image`.
+  unset TURPIN_IMAGE_SERVER TURPIN_DEPLOY_DIR TURPIN_URL TURPIN_COMPOSE TURPIN_DEPLOY TURPIN_CURRENT TURPIN_LOCAL
+}
+
+# with_image: the TURPIN_IMAGE_SERVER an apply or a deploy gives its hooks.
+with_image() {
   export TURPIN_IMAGE_SERVER=registry.test/tile-lite-elite/candidates@sha256:aaaa
-  unset TURPIN_URL TURPIN_COMPOSE TURPIN_DEPLOY TURPIN_CURRENT TURPIN_LOCAL
 }
 
 # a_data_folder: the volume's contents and the snapshot folder, as folders here.
@@ -100,19 +107,25 @@ a_data_folder() {
   echo "TLE_SNAPSHOT_DIR=$SNAP_DIR" > "$TURPIN_STATE/.env"
 }
 
-# a_tree: a scratch checkout with the hooks and the migrations, and a script
-# `check-release-version.sh` that logs what it was given.
+# a_tree: a scratch git checkout with the hooks and the migrations, and a script
+# `check-release-version.sh` that logs what it was given. EXPORT_HOOKS is the
+# hooks as Turpin runs `release-check`: exported to a scratch folder apart from
+# the repository, with the repository as the working directory.
 a_tree() {
   TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$TREE/turpin" "$TREE/crates/server-game/migrations" "$TREE/scripts/deliver"
   cp -r "$HOOKS" "$TREE/turpin/hooks"
+  EXPORT_HOOKS="$BATS_TEST_TMPDIR/export/turpin/hooks"
+  mkdir -p "$BATS_TEST_TMPDIR/export/turpin"
+  cp -r "$HOOKS" "$EXPORT_HOOKS"
+  git init -q "$TREE"
   touch "$TREE/crates/server-game/migrations/0001_first.sql" \
     "$TREE/crates/server-game/migrations/0007_database_size_history.sql" \
     "$TREE/crates/server-game/migrations/0009_ninth.sql"
   touch "$TREE/docker-compose.yml"
   cat > "$TREE/scripts/deliver/check-release-version.sh" <<'STUB'
 #!/usr/bin/env bash
-echo "$*" > "$RELEASE_CHECK_LOG"
+echo "$* strict=${CHECK_RELEASE_STRICT:-}" > "$RELEASE_CHECK_LOG"
 exit "${STUB_RELEASE_CHECK_RC:-0}"
 STUB
   chmod +x "$TREE/scripts/deliver/check-release-version.sh"

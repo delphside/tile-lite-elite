@@ -83,6 +83,34 @@ snapshot_dir() {
   printf '%s' "$dir"
 }
 
+# stop_servers SECONDS: stops each running server container. A `docker ps` that
+# fails is a refusal, not an empty list: a server left running over a volume
+# being saved or replaced would go unnoticed.
+stop_servers() {
+  local ids container
+  ids="$(server_containers "$1")" || die "could not list the server containers, so cannot stop them"
+  for container in $ids; do
+    bounded "$1" docker stop "$container" > /dev/null
+  done
+}
+
+# image_server: the server image of this deploy, by digest. Turpin gives it as
+# TURPIN_IMAGE_SERVER, except to a hook a rollback runs, whose request names no
+# images; then it is the deploy's own `turpin.env`. Refuses where neither gives it.
+image_server() {
+  local file="${TURPIN_DEPLOY_DIR:-}/turpin.env" line=""
+  if [[ -n "${TURPIN_IMAGE_SERVER:-}" ]]; then
+    printf '%s' "$TURPIN_IMAGE_SERVER"
+    return 0
+  fi
+  if [[ -n "${TURPIN_DEPLOY_DIR:-}" && -f "$file" ]]; then
+    line="$(grep -E '^TURPIN_IMAGE_SERVER=' "$file" | tail -n 1 || true)"
+  fi
+  line="${line#*=}"
+  [[ -n "$line" ]] || die "TURPIN_IMAGE_SERVER is not set and ${TURPIN_DEPLOY_DIR:-the deploy folder}/turpin.env does not give it, so there is no image to run in"
+  printf '%s' "$line"
+}
+
 # app_version_of: reads /health's JSON on standard input, prints its app_version.
 app_version_of() {
   grep -o '"app_version":"[^"]*"' | cut -d'"' -f4 || true

@@ -6,6 +6,7 @@
 setup() {
   load helpers
   common_setup
+  with_image
   export STUB_SCHEMA_LABEL=7
 }
 
