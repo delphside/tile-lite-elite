@@ -213,7 +213,14 @@ posts() { if [[ -e "$D/posts" ]]; then wc -l < "$D/posts"; else echo 0; fi; }
   assert_equal "$(cat "$CURSOR_FILE")" c1
 }
 
-@test "an unreadable journal exits 2 and posts nothing" {
+@test "the tail cursor is taken before the read by time, so a line between them is inside the window" {
+  journal 1 INFO server_game::app::auth "player registered"
+  alert
+  assert_equal "$(sed -n 1p "$D/journalctl-calls" | grep -c -- '-n 1')" 1
+  assert_equal "$(sed -n 2p "$D/journalctl-calls" | grep -c -- '--since')" 1
+}
+
+@test "an unreadable journal exits 2 with its own message, and posts nothing" {
   JOURNAL_FAIL=1 alert
   assert_equal "$status" 2
   assert_output --partial "cannot read the journal"

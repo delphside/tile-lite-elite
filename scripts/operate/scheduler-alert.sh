@@ -32,9 +32,11 @@
 # Usage: scheduler-alert.sh        (run by tile-lite-elite-scheduler-alert.timer)
 #        CURSOR_FILE=... scheduler-alert.sh
 #
-# Exit (docs/1.10): 0 ran (posted or quiet); 2 could not read the journal; or,
-#       where a match could not be posted, post-metric.sh's own status (1, 2, 64
-#       or 75), with the cursor kept so the next run retries.
+# Exit (docs/1.10): 0 ran (posted or quiet);
+#       2 could not read the journal (a technical, fundamental error; its
+#         message tells it apart from post-metric.sh's own 2);
+#       or, where a match could not be posted, post-metric.sh's own status (1, 2,
+#       64, 70 or 75), with the cursor kept so the next run retries.
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -49,11 +51,11 @@ message "job panicked" or "job appears stalled". Saves the new cursor.
 
 Exits:
   0  ran: posted, or nothing matched
-  1, 2, 64, 75
+  1, 2, 64, 70, 75
      a match could not be posted: post-metric.sh's own status, passed
      through; the cursor is kept so the next run retries
      -> "error: scheduler failure seen but the metric did not post; will retry"
-  2  could not read the journal
+  2  could not read the journal (also post-metric.sh's 2; the message differs)
      -> "error: cannot read the journal"
 EOF
   exit 0
@@ -66,10 +68,26 @@ OUT="$(mktemp)"; trap 'rm -f "$OUT"' EXIT
 
 CURSOR=""
 if [[ -s "$CURSOR_FILE" ]]; then CURSOR="$(< "$CURSOR_FILE")"; fi
-NO_CURSOR=""   # set when this run reads by time, not from a cursor
+TAIL_CURSOR="" # the latest entry's cursor, taken before a read by time
 
 read_journal() {   # [journalctl option ...]
   journalctl CONTAINER_TAG=tle-server -o json --no-pager "$@" > "$OUT"
+}
+
+# A read by time, which has no cursor to start from. The latest entry's cursor
+# is taken **first**: a line landing between the two reads is then inside the
+# window read next, and is not lost to a cursor taken after it.
+read_by_time() {
+  TAIL_CURSOR="$(journalctl CONTAINER_TAG=tle-server -o json --no-pager -n 1 2>/dev/null \
+    | python3 -I -c '
+import json, sys
+for line in sys.stdin:
+    try:
+        print(json.loads(line).get("__CURSOR", ""))
+    except ValueError:
+        pass' || true)"
+  read_journal --since "$FIRST_WINDOW" \
+    || { echo "error: cannot read the journal" >&2; exit 2; }
 }
 
 if [[ -n "$CURSOR" ]]; then
@@ -78,12 +96,10 @@ if [[ -n "$CURSOR" ]]; then
     # entry and does not fail; one that is malformed does, and must not wedge
     # this for good: fall back to the first-run window and say so.
     echo "warning: the saved cursor is not usable; reading the last 10 minutes" >&2
-    NO_CURSOR=1
-    read_journal --since "$FIRST_WINDOW" || { echo "error: cannot read the journal" >&2; exit 2; }
+    read_by_time
   fi
 else
-  NO_CURSOR=1
-  read_journal --since "$FIRST_WINDOW" || { echo "error: cannot read the journal" >&2; exit 2; }
+  read_by_time
 fi
 
 # Two lines out: the number of matching entries, then the cursor of the last
@@ -118,18 +134,9 @@ print(cursor)
 MATCHED="$(sed -n 1p <<< "$RESULT")"
 NEW_CURSOR="$(sed -n 2p <<< "$RESULT")"
 
-# Reading by time and finding nothing: take the latest entry's cursor, so the
+# Reading by time and finding nothing: the cursor taken before the read, so the
 # next run starts there rather than looking back over a window again.
-if [[ -z "$NEW_CURSOR" && -n "$NO_CURSOR" ]]; then
-  NEW_CURSOR="$(journalctl CONTAINER_TAG=tle-server -o json --no-pager -n 1 2>/dev/null \
-    | python3 -I -c '
-import json, sys
-for line in sys.stdin:
-    try:
-        print(json.loads(line).get("__CURSOR", ""))
-    except ValueError:
-        pass' || true)"
-fi
+if [[ -z "$NEW_CURSOR" ]]; then NEW_CURSOR="$TAIL_CURSOR"; fi
 
 if [[ "$MATCHED" -gt 0 ]]; then
   STATUS=0

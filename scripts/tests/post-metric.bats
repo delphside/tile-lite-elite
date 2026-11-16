@@ -50,8 +50,18 @@ from types import SimpleNamespace as NS
 
 
 class ServiceError(Exception):
-    status = 404
-    code = "NotAuthorizedOrNotFound"
+    def __init__(self, message, status=404, code="NotAuthorizedOrNotFound"):
+        super().__init__(message)
+        self.status = status
+        self.code = code
+
+
+class RequestException(Exception):
+    pass
+
+
+class ConnectTimeout(Exception):
+    pass
 
 
 class Signer:
@@ -71,6 +81,18 @@ class Client:
         mode = os.environ.get("FAKE_OCI_MODE", "accepted")
         if mode == "raises":
             raise ServiceError("ocid1.instance.secret is not authorised")
+        if mode == "raises-429":
+            raise ServiceError("slow down", 429, "TooManyRequests")
+        if mode == "raises-503":
+            raise ServiceError("down", 503, "InternalServerError")
+        if mode == "raises-connect":
+            raise RequestException("ocid1.x unreachable")
+        if mode == "raises-connect-timeout":
+            raise ConnectTimeout("ocid1.x")
+        if mode == "raises-timeout":
+            raise TimeoutError("ocid1.x")
+        if mode == "raises-other":
+            raise ValueError("ocid1.x surprise")
         metric = details.metric_data[0]
         with open(os.environ["FAKE_OCI_OUT"], "w") as out:
             json.dump({
@@ -92,6 +114,8 @@ class Client:
         return NS(status=200, data=NS(failed_metrics_count=0, failed_metrics=[]))
 
 
+exceptions = NS(ServiceError=ServiceError, RequestException=RequestException,
+                ConnectTimeout=ConnectTimeout)
 auth = NS(signers=NS(InstancePrincipalsSecurityTokenSigner=Signer))
 monitoring = NS(
     MonitoringClient=Client,
@@ -167,11 +191,41 @@ field() {   # <python expression over d>
   assert_equal "$status" 1
 }
 
-@test "a refused or failed call exits 75, naming the type, status and code and no more" {
+@test "a refusal a retry will not change exits 2, naming the type, status and code and no more" {
   FAKE_OCI_MODE=raises post JobSucceeded 1 job=backup
-  assert_equal "$status" 75
+  assert_equal "$status" 2
   assert_output --partial "could not post JobSucceeded: ServiceError status 404 code NotAuthorizedOrNotFound"
   refute_output --partial "ocid1"
+}
+
+@test "throttling and server errors exit 75" {
+  FAKE_OCI_MODE=raises-429 post JobSucceeded 1 job=backup
+  assert_equal "$status" 75
+  FAKE_OCI_MODE=raises-503 post JobSucceeded 1 job=backup
+  assert_equal "$status" 75
+  assert_output --partial "status 503"
+}
+
+@test "connection and timeout errors exit 75" {
+  local mode
+  for mode in raises-connect raises-connect-timeout raises-timeout; do
+    FAKE_OCI_MODE=$mode post JobSucceeded 1 job=backup
+    assert_equal "$status" 75
+    refute_output --partial "ocid1"
+  done
+}
+
+@test "anything else the SDK raises is unexpected, exit 70" {
+  FAKE_OCI_MODE=raises-other post JobSucceeded 1 job=backup
+  assert_equal "$status" 70
+  assert_output --partial "ValueError"
+  refute_output --partial "ocid1"
+}
+
+@test "an interpreter that is not executable is exit 2, with the SDK-missing message" {
+  OCI_PYTHON="$D/bin/no-such-python" post JobSucceeded 1 job=backup
+  assert_equal "$status" 2
+  assert_output --partial "the OCI SDK is not importable"
 }
 
 @test "no oci package is exit 2, not a silent success" {

@@ -29,10 +29,14 @@
 #
 # Exit (docs/1.10): 0 accepted;
 #       1 the response did not report the datapoint accepted;
-#       2 the SDK is not importable;
+#       2 the SDK is not importable, or the service refused the post for a reason
+#         a retry will not change (a ServiceError other than 429 or 5xx: not
+#         authorised, a bad request);
 #       64 usage error;
+#       70 the SDK raised something unexpected;
 #       75 could not post, and a retry may work: the metadata service did not
-#          answer, or the SDK's call raised (network, throttling, a refusal).
+#          answer, the connection or the call timed out, or the service answered
+#          429 or 5xx.
 set -euo pipefail
 
 usage() {
@@ -49,11 +53,16 @@ Exits:
   0   the response reported the datapoint accepted, no failed metrics
   1   the response did not
       -> "error: datapoint not accepted: ..."
-  2   the SDK cannot be imported
+  2   the SDK cannot be imported or run, or the service refused the post
+      for a reason a retry will not change (a ServiceError other than 429
+      or 5xx)
       -> "error: the OCI SDK is not importable: ..."
+      -> "error: could not post <metric>: <type> status <n> code <c>"
   64  usage error
+  70  the SDK raised something unexpected
+      -> "error: could not post <metric>: <type>"
   75  could not post, and a retry may work: no answer from the metadata
-      service, or the SDK's call raised
+      service, a connection or timeout error, or a 429 or 5xx answer
       -> "error: could not post <metric>: <type> status <n> code <c>"
 EOF
 }
@@ -89,7 +98,10 @@ COMPARTMENT_ID="$(imds instance/compartmentId)" \
 
 # -I: isolated mode, so nothing in the environment or the working directory can
 # put a module of its own in front of the SDK.
-"${OCI_PYTHON:-$HOME/oci/bin/python3}" -I -c '
+PYTHON="${OCI_PYTHON:-$HOME/oci/bin/python3}"
+[[ -x "$PYTHON" ]] \
+  || { echo "error: the OCI SDK is not importable: $PYTHON is not an executable interpreter" >&2; exit 2; }
+"$PYTHON" -I -c '
 import sys
 from datetime import datetime, timezone
 
@@ -136,7 +148,20 @@ except Exception as error:
     for field in ("status", "code"):
         if getattr(error, field, None) is not None:
             why += " %s %s" % (field, getattr(error, field))
-    refuse(75, "could not post %s: %s" % (metric, why))
+    exceptions = getattr(oci, "exceptions", None)
+    service_error = getattr(exceptions, "ServiceError", ())
+    transport = tuple(
+        getattr(exceptions, name) for name in ("RequestException", "ConnectTimeout")
+        if hasattr(exceptions, name)
+    ) + (ConnectionError, TimeoutError)
+    if isinstance(error, service_error):
+        status = getattr(error, "status", 0) or 0
+        code = 75 if status == 429 or status >= 500 else 2
+    elif isinstance(error, transport):
+        code = 75
+    else:
+        code = 70
+    refuse(code, "could not post %s: %s" % (metric, why))
 
 data = response.data
 failed = getattr(data, "failed_metrics_count", None)
