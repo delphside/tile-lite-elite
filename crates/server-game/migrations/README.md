@@ -3,7 +3,7 @@
 This folder holds the versioned schema migrations, which sqlx's `Migrator`
 (`persistence::migrate`) runs at server startup, and which a deploy also
 runs as a step of its own
-([4.3.7 §5](../../../docs/4.3.7-how-testing-and-release-work.md#5-how-deploysh-ships-an-image)).
+([4.3.7 §5](../../../docs/4.3.7-how-testing-and-release-work.md#5-how-deploysh-ships-an-image-the-fallback)).
 
 Each schema change is one `NNNN_description.sql`, from
 `0001_baseline.sql` on, applied in number order. The tables they create are in
