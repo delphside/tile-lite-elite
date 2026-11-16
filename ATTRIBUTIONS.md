@@ -127,7 +127,7 @@ Obscene, and Otherwise Bad Words), restricted to entries playable on a board.
 
 `denylist.txt` is empty and has no attribution to make. See
 [`wordlists/README.md`](crates/rules-shared/src/wordlists/README.md#filling-these-in)
-for why the greylist was filled first.
+for why the denylist is empty.
 
 ### LDNOOBW `en` list
 

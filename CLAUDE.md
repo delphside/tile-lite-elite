@@ -44,7 +44,7 @@
   ([4.3.3 §1.7](docs/4.3.3-testing-ci-and-release.md#17-verify-what-is-live)).
 - **Dev leads production by one**: `deploy.sh` bumps `main`'s version to the
   next patch after a production deploy, and skips it in the cases
-  [4.3.3 §2.4.2](docs/4.3.3-testing-ci-and-release.md#242-decide-whether-the-app-version-moves)
+  [4.3.7 §4.2](docs/4.3.7-how-testing-and-release-work.md#42-decide-whether-the-app-version-moves)
   lists.
 - Changing an artefact that reaches the image, the `Caddyfile`,
   `docker-compose.yml` and `Dockerfile` among them, is a Production Release;
