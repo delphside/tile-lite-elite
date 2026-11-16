@@ -4942,7 +4942,7 @@ async fn reorder_seats_is_rejected_for_a_seated_non_creator() {
     .await;
     assert_eq!(
         response.status(),
-        StatusCode::UNAUTHORIZED,
+        StatusCode::FORBIDDEN,
         "Bob holds a seat, but only the creator (Alice) may reorder"
     );
 }
@@ -4989,7 +4989,7 @@ async fn add_seat_appends_a_not_sent_seat_and_is_creator_only() {
         },
     )
     .await;
-    assert_eq!(non_creator.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(non_creator.status(), StatusCode::FORBIDDEN);
 
     let response = send_json_auth(
         app,
@@ -5139,7 +5139,7 @@ async fn remove_seat_can_kick_an_already_claimed_seat_and_is_creator_only() {
         Some(&waiting.bob.session_token),
     )
     .await;
-    assert_eq!(non_creator.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(non_creator.status(), StatusCode::FORBIDDEN);
 
     let response = send_empty_auth(
         app.clone(),
@@ -5185,7 +5185,7 @@ async fn withdraw_clears_the_claim_and_flips_the_invitation_to_rejected() {
         Some(&waiting.alice.session_token),
     )
     .await;
-    assert_eq!(not_the_seat_holder.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(not_the_seat_holder.status(), StatusCode::FORBIDDEN);
 
     let response = send_empty_auth(
         app.clone(),
@@ -5228,7 +5228,7 @@ async fn force_resign_ends_the_game_regardless_of_whose_turn_it_is() {
         Some(&started.bob.session_token),
     )
     .await;
-    assert_eq!(non_creator.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(non_creator.status(), StatusCode::FORBIDDEN);
 
     // Alice force-resigns Bob (seat 1) even though it's currently seat
     // 0's turn — the whole point of force-resign over self-resign.
@@ -5298,7 +5298,7 @@ async fn reorder_seats_is_rejected_for_a_caller_with_no_claimed_seat() {
         },
     )
     .await;
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -6091,10 +6091,10 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for ThreadLocalWriter {
 /// with `.text()`, and clears this thread's capture slot on drop
 /// (including on an assertion panic) so a later test whose OS thread
 /// gets reused by the harness never inherits a stale sink.
-struct LogCapture(CapturedLog);
+pub(super) struct LogCapture(CapturedLog);
 
 impl LogCapture {
-    fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         self.0.text()
     }
 }
@@ -6107,7 +6107,7 @@ impl Drop for LogCapture {
 
 /// Starts capturing this thread's `tracing` output, readable via the
 /// returned guard's `.text()` once the request under test has completed.
-fn start_capturing_log_on_this_thread() -> LogCapture {
+pub(super) fn start_capturing_log_on_this_thread() -> LogCapture {
     install_test_subscriber();
     let log = CapturedLog::default();
     LOG_SINK.with(|sink| *sink.borrow_mut() = Some(log.clone()));
@@ -6660,7 +6660,7 @@ async fn named_invitation_shows_up_and_claims_the_seat_on_accept() {
         Some(&mallory.session_token),
     )
     .await;
-    assert_eq!(stolen.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(stolen.status(), StatusCode::FORBIDDEN);
 
     let accepted: GameStateDto = read_json(
         send_empty_auth(
@@ -7559,7 +7559,7 @@ async fn creator_can_abort_an_active_game() {
         Some(&started.bob.session_token),
     )
     .await;
-    assert_eq!(non_creator.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(non_creator.status(), StatusCode::FORBIDDEN);
 
     // The creator aborts the whole game.
     let response = send_empty_auth(

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use std::net::SocketAddr;
 
+use api::Reason;
 use api::{
     AdminGameSummaryDto, AdminResetPasswordRequest, ApiError, ChangePasswordRequest,
     CreateGameRequest, GameActionRequest, GameEventDto, GameInvitationDto, InvitationStatus,
@@ -57,6 +58,8 @@ mod tests;
 #[cfg(test)]
 mod tests_account_lifecycle;
 #[cfg(test)]
+mod tests_errors;
+#[cfg(test)]
 mod tests_hardening;
 mod throttle;
 
@@ -81,6 +84,13 @@ pub struct AppState {
     pub db: Pool<Sqlite>,
     pub games: Arc<RwLock<HashMap<String, GameSession>>>,
     pub events: broadcast::Sender<GameEventDto>,
+    /// The id of each game deleted, by the admin or the sweep, so a WebSocket
+    /// open on it can close with 4404 rather than sit silent for a game that
+    /// no longer exists.
+    pub(crate) deleted_games: broadcast::Sender<String>,
+    /// Set when the server begins to stop, so each open WebSocket can say
+    /// *going away* (1001) rather than vanish. See `begin_shutdown`.
+    pub(crate) shutdown: tokio::sync::watch::Sender<bool>,
     pub engines: EngineRegistry,
     /// Where the web client is actually served from — needed server-side
     /// only for building an absolute link into a password-reset email
@@ -154,6 +164,8 @@ impl AppState {
         }
 
         let (events, _) = broadcast::channel(64);
+        let (deleted_games, _) = broadcast::channel(16);
+        let (shutdown, _) = tokio::sync::watch::channel(false);
 
         // Defaults sized for the production VM: 2 CPUs, ~438 MB free. Four
         // concurrent hashes is ~76 MB and keeps both cores busy without
@@ -172,6 +184,8 @@ impl AppState {
             db,
             games: Arc::new(RwLock::new(games)),
             events,
+            deleted_games,
+            shutdown,
             engines,
             public_base_url,
             email,
@@ -181,6 +195,14 @@ impl AppState {
             scheduler_health: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             support_mail: None,
         })
+    }
+
+    /// Tells every open WebSocket the server is stopping: each closes with
+    /// 1001, *going away*, which a client reads as "reconnect", not as a
+    /// failure. `main` calls it when the stop signal arrives, before the
+    /// listener drains, because the drain waits for upgraded connections.
+    pub fn begin_shutdown(&self) {
+        let _ = self.shutdown.send(true);
     }
 
     /// Switches the support-mail poller on when `main.rs` found its settings.
@@ -193,6 +215,13 @@ impl AppState {
 }
 
 pub fn build_router(state: AppState) -> Router {
+    build_router_with(state, Router::new())
+}
+
+/// `build_router`, with `extra` routes merged in before the layers go on, so a
+/// test can add a route that panics or answers oddly and meet the same
+/// middleware production does. Production passes none.
+fn build_router_with(state: AppState, extra: Router<AppState>) -> Router {
     // Admin routes are for operating the server, not for players — no
     // token or account, just "you're on the same machine as the server."
     // The guard below enforces that regardless of what TILE_LITE_ELITE_BIND is
@@ -316,6 +345,16 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .merge(limited)
         .merge(admin_routes)
+        .merge(extra)
+        // **Every response is a result** (docs/1.10): axum's own rejections are
+        // rewritten into the Problem Details body, innermost so that a handler's
+        // own `ApiProblem` is left as it is, and a panic answers 500 with the
+        // body instead of dropping the connection, which a client would retry
+        // as a blip.
+        .layer(middleware::map_response(rewrite_framework_errors))
+        .layer(tower_http::catch_panic::CatchPanicLayer::custom(
+            panic_response,
+        ))
         .layer(CorsLayer::permissive())
         // Every response says which build produced it, so a client can notice
         // that the server has moved without asking a question of its own. It
@@ -340,6 +379,9 @@ pub fn build_router(state: AppState) -> Router {
         // through individual handlers below are for the *why* on top of it
         // (which player, which game, why a request was rejected).
         .layer(TraceLayer::new_for_http())
+        // Outermost, so that every layer above and every response, a CORS
+        // preflight and a panic's 500 included, runs inside the request's ID.
+        .layer(middleware::from_fn(request_id_layer))
         .with_state(state)
 }
 

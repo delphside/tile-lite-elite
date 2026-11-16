@@ -11,9 +11,7 @@ pub(crate) async fn list_games(
 ) -> Result<Json<Vec<api::GameSummaryDto>>, ApiProblem> {
     // The list is inherently personal — which games show up depends on who's
     // asking — so there's no meaningful "browse everything" mode anymore.
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to see your games"))?;
+    let caller_player_id = require_session(&state, &headers, "Sign in to see your games").await?;
 
     // Turn expiry and move-time reminders run on the scheduler now (#400,
     // `scheduler::spawn_scheduler`), not here. Retention and the daily size
@@ -136,9 +134,7 @@ pub(crate) async fn create_game(
     // themselves, a named invitee, or a stranger who accepts an open
     // invitation) — there's no more "anonymous, open to whoever clicks it"
     // seat, so creating a game requires being signed in.
-    let creator_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to create a game"))?;
+    let creator_player_id = require_session(&state, &headers, "Sign in to create a game").await?;
 
     // Two, not one. A single-seat game is not merely pointless: the game ends
     // as soon as one seat or fewer is still unresigned, which is true of a
@@ -146,7 +142,10 @@ pub(crate) async fn create_game(
     // declared that seat the winner. The finish rule is right — somebody left
     // and one remains — and this is the precondition it always assumed.
     if request.seats.len() < MINIMUM_SEATS {
-        return Err(ApiProblem::bad_request("A game needs at least two seats"));
+        return Err(ApiProblem::new(
+            Reason::TooFewSeats,
+            "A game needs at least two seats",
+        ));
     }
 
     let creator_claims = request
@@ -157,7 +156,8 @@ pub(crate) async fn create_game(
         })
         .count();
     if creator_claims > 1 {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::CreatorClaimMisused,
             "Only one seat can be claimed by the creator",
         ));
     }
@@ -166,7 +166,8 @@ pub(crate) async fn create_game(
         .iter()
         .any(|seat| seat.kind == api::SeatKind::Human && seat.claim.is_none())
     {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::SeatClaimMissing,
             "Every human seat needs a claim: creator, named, or open",
         ));
     }
@@ -180,15 +181,22 @@ pub(crate) async fn create_game(
                 .await
                 .map_err(ApiProblem::from_sqlx)?
                 .ok_or_else(|| {
-                    ApiProblem::not_found(format!("No player named '{display_name}'"))
+                    ApiProblem::new(
+                        Reason::PlayerNotFound,
+                        format!("No player named '{display_name}'"),
+                    )
                 })?;
             named_invitees.insert(seat_number as u8, player);
         }
     }
 
     let variant_name = request.variant.as_deref().unwrap_or("official");
-    let rules = rules_shared::VariantRules::by_name(variant_name)
-        .ok_or_else(|| ApiProblem::bad_request(format!("Unknown game variant '{variant_name}'")))?;
+    let rules = rules_shared::VariantRules::by_name(variant_name).ok_or_else(|| {
+        ApiProblem::new(
+            Reason::UnknownVariant,
+            format!("Unknown game variant '{variant_name}'"),
+        )
+    })?;
     let participants = request
         .seats
         .into_iter()
@@ -247,11 +255,21 @@ pub(crate) async fn create_game(
             requested
         }
         Some(requested) => {
-            return Err(ApiProblem::bad_request(format!(
-                "move_time_limit_seconds must be between {} and {} seconds (got {requested})",
-                crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS,
-                crate::game_state::MAX_MOVE_TIME_LIMIT_SECONDS,
-            )));
+            let (limit, field_value) = if requested < crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS
+            {
+                (crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS, requested)
+            } else {
+                (crate::game_state::MAX_MOVE_TIME_LIMIT_SECONDS, requested)
+            };
+            return Err(ApiProblem::new(
+                Reason::MoveTimeLimitOutOfRange,
+                format!(
+                    "move_time_limit_seconds must be between {} and {} seconds (got {requested})",
+                    crate::game_state::MIN_MOVE_TIME_LIMIT_SECONDS,
+                    crate::game_state::MAX_MOVE_TIME_LIMIT_SECONDS,
+                ),
+            )
+            .with_violation("move_time_limit_seconds", field_value, limit));
         }
     };
     let game = GameSession::new(
@@ -362,7 +380,7 @@ pub(crate) async fn get_game(
     let games = state.games.read().await;
     let game = games
         .get(&game_id)
-        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
     let access = resolve_viewer_access(game, caller_player_id.as_deref());
     if access == ViewerAccess::Rejected {
         // 401 only when there is nobody to be. A signed-in caller who is not
@@ -372,8 +390,8 @@ pub(crate) async fn get_game(
         // opening somebody else's game. Every new player meets this, because
         // the games list includes open invitations they may not view.
         return Err(match caller_player_id {
-            None => ApiProblem::unauthorized("Sign in to view this game"),
-            Some(_) => ApiProblem::forbidden("You are not part of this game"),
+            None => no_session(&headers, "Sign in to view this game"),
+            Some(_) => ApiProblem::new(Reason::NotInGame, "You are not part of this game"),
         });
     }
     let mut dto = game_dto_with_invitation_status(&state, game).await?;
@@ -403,13 +421,16 @@ pub(crate) async fn start_game(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         // Checked again here, not only at creation: seats can be removed
         // afterwards, and a roster taken down to one would otherwise reach
         // the board and end on its first turn.
         if game.participants.len() < MINIMUM_SEATS {
-            return Err(ApiProblem::bad_request("A game needs at least two seats"));
+            return Err(ApiProblem::new(
+                Reason::TooFewSeats,
+                "A game needs at least two seats",
+            ));
         }
 
         // Every human seat needs a real occupant (creator or an accepted
@@ -420,15 +441,23 @@ pub(crate) async fn start_game(
             .iter()
             .any(|p| p.kind == api::SeatKind::Human && p.player_id.is_none())
         {
-            return Err(ApiProblem::bad_request(
+            return Err(ApiProblem::new(
+                Reason::SeatsNotFilled,
                 "Every seat must be filled before the game can start",
             ));
         }
 
         if !caller_may_manage_game(game, caller_player_id.as_deref()) {
-            return Err(ApiProblem::forbidden(
-                "Only the game's creator can start it",
-            ));
+            // 401 for a caller with no session, 403 for one who is not the
+            // creator: the status says which credential is missing.
+            return Err(if caller_player_id.is_none() {
+                no_session(&headers, "Sign in to start a game")
+            } else {
+                ApiProblem::new(
+                    Reason::NotGameCreator,
+                    "Only the game's creator can start it",
+                )
+            });
         }
 
         game.start();
@@ -444,7 +473,7 @@ pub(crate) async fn start_game(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await
@@ -508,9 +537,10 @@ fn require_own_seat(
     game: &GameSession,
     seat_number: u8,
     caller_player_id: Option<&str>,
+    headers: &HeaderMap,
 ) -> Result<(), ApiProblem> {
     let caller_player_id =
-        caller_player_id.ok_or_else(|| ApiProblem::unauthorized("Sign in to play this game"))?;
+        caller_player_id.ok_or_else(|| no_session(headers, "Sign in to play this game"))?;
     let holds_seat = game.participants.iter().any(|participant| {
         participant.seat_number == seat_number
             && participant.kind == api::SeatKind::Human
@@ -519,7 +549,8 @@ fn require_own_seat(
     if holds_seat {
         Ok(())
     } else {
-        Err(ApiProblem::forbidden(
+        Err(ApiProblem::new(
+            Reason::NotYourSeat,
             "This seat belongs to a different player",
         ))
     }
@@ -539,9 +570,14 @@ pub(crate) async fn submit_action(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
-        require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
+        require_own_seat(
+            game,
+            request.seat_number,
+            caller_player_id.as_deref(),
+            &headers,
+        )?;
 
         // Converted before anything is applied, so a request the wire accepts
         // but the rules cannot index with is refused here rather than reaching
@@ -549,26 +585,26 @@ pub(crate) async fn submit_action(
         let action_alphabet = game.rules.alphabet.clone();
         match request.action {
             PlayerActionDto::Place { candidate } => {
-                let candidate = move_candidate_from_dto(candidate, &game.rules)
-                    .map_err(ApiProblem::bad_request)?;
+                let candidate =
+                    move_candidate_from_dto(candidate, &game.rules).map_err(ApiProblem::from)?;
                 game.apply_place_move(request.seat_number, candidate)
-                    .map_err(ApiProblem::bad_request)?
+                    .map_err(ApiProblem::from)?
             }
             PlayerActionDto::Pass => game
                 .apply_pass(request.seat_number)
-                .map_err(ApiProblem::bad_request)?,
+                .map_err(ApiProblem::from)?,
             PlayerActionDto::Exchange { tiles } => {
                 let tiles = tiles
                     .into_iter()
                     .map(|tile| tile_from_dto(tile, &action_alphabet))
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(ApiProblem::bad_request)?;
+                    .map_err(ApiProblem::from)?;
                 game.apply_exchange(request.seat_number, tiles)
-                    .map_err(ApiProblem::bad_request)?
+                    .map_err(ApiProblem::from)?
             }
             PlayerActionDto::Resign => game
                 .apply_resign(request.seat_number)
-                .map_err(ApiProblem::bad_request)?,
+                .map_err(ApiProblem::from)?,
         }
     }
 
@@ -581,7 +617,7 @@ pub(crate) async fn submit_action(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await
@@ -629,25 +665,28 @@ pub(crate) async fn post_chat_message(
     headers: HeaderMap,
     Json(request): Json<PostChatMessageRequest>,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to chat"))?;
+    let caller_player_id = require_session(&state, &headers, "Sign in to chat").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         let display_name = game
             .participants
             .iter()
             .find(|participant| participant.player_id.as_deref() == Some(caller_player_id.as_str()))
             .map(|participant| participant.display_name.clone())
-            .ok_or_else(|| ApiProblem::forbidden("Only seated players can chat in this game"))?;
+            .ok_or_else(|| {
+                ApiProblem::new(
+                    Reason::NotSeated,
+                    "Only seated players can chat in this game",
+                )
+            })?;
 
         game.post_chat_message(&caller_player_id, &display_name, request.body)
-            .map_err(ApiProblem::bad_request)?;
+            .map_err(ApiProblem::from)?;
 
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
@@ -678,17 +717,20 @@ pub(crate) async fn remove_game_for_player(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to remove this game from your list"))?;
+    let caller_player_id = require_session(
+        &state,
+        &headers,
+        "Sign in to remove this game from your list",
+    )
+    .await?;
 
     let mut games = state.games.write().await;
     let game = games
         .get_mut(&game_id)
-        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
     game.remove_for_player(&caller_player_id)
-        .map_err(ApiProblem::bad_request)?;
+        .map_err(ApiProblem::from)?;
 
     persistence::save_game(&state.db, game)
         .await
@@ -708,12 +750,17 @@ pub(crate) async fn preview_move(
     let games = state.games.read().await;
     let game = games
         .get(&game_id)
-        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
     // Previewing a seat you don't own would otherwise let a caller probe
     // an opponent's exact rack contents by repeatedly guessing candidate
     // placements and reading back legality/score.
-    require_own_seat(game, request.seat_number, caller_player_id.as_deref())?;
+    require_own_seat(
+        game,
+        request.seat_number,
+        caller_player_id.as_deref(),
+        &headers,
+    )?;
 
     if game.status != api::GameStatus::Active {
         return Ok(Json(api::PreviewMoveResponse {
@@ -731,7 +778,7 @@ pub(crate) async fn preview_move(
         .unwrap_or_default();
 
     let candidate =
-        move_candidate_from_dto(request.candidate, &game.rules).map_err(ApiProblem::bad_request)?;
+        move_candidate_from_dto(request.candidate, &game.rules).map_err(ApiProblem::from)?;
     let engine = rules_shared::RulesEngine {
         rules: &game.rules,
         dictionary: rules_shared::dictionary_by_name(&game.rules.language)
@@ -785,26 +832,33 @@ pub(crate) async fn suggest_move(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         if game.status != api::GameStatus::Active {
-            return Err(ApiProblem::bad_request("Game is not active"));
+            return Err(ApiProblem::new(Reason::GameNotActive, "Game is not active"));
         }
         let current_seat = game.current_seat as usize;
         let participant = game
             .participants
             .get(current_seat)
-            .ok_or_else(|| ApiProblem::bad_request("Current seat missing"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::NoSeatToSuggestFor, "Current seat missing"))?;
         if participant.kind != api::SeatKind::Human {
-            return Err(ApiProblem::bad_request(
+            return Err(ApiProblem::new(
+                Reason::NoSeatToSuggestFor,
                 "Current seat is not human-controlled",
             ));
         }
         if caller_player_id.as_deref() != participant.player_id.as_deref() {
-            // 403, not 401 — #379, as above.
-            return Err(ApiProblem::forbidden(
-                "This seat belongs to a different player",
-            ));
+            // 403, not 401 — #379, as above; a caller with no session at all
+            // is 401, whichever seat is to move.
+            return Err(if caller_player_id.is_none() {
+                no_session(&headers, "Sign in to play this game")
+            } else {
+                ApiProblem::new(
+                    Reason::NotYourSeat,
+                    "This seat belongs to a different player",
+                )
+            });
         }
 
         let rack = participant.rack;
@@ -830,8 +884,8 @@ pub(crate) async fn suggest_move(
         match best_candidate {
             Some(candidate) => game
                 .apply_place_move(seat, candidate)
-                .map_err(ApiProblem::bad_request)?,
-            None => game.apply_pass(seat).map_err(ApiProblem::bad_request)?,
+                .map_err(ApiProblem::from)?,
+            None => game.apply_pass(seat).map_err(ApiProblem::from)?,
         }
     }
 
@@ -844,7 +898,7 @@ pub(crate) async fn suggest_move(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await
@@ -958,7 +1012,7 @@ pub(crate) async fn run_engine_turns(
             let advanced = game
                 .maybe_run_engine_turn(&state.engines, ENGINE_TURN_TIMEOUT)
                 .await
-                .map_err(ApiProblem::bad_request)?;
+                .map_err(ApiProblem::from)?;
             advanced.then(|| {
                 let dto = game.to_dto();
                 let finished = game.status == api::GameStatus::Finished;

@@ -66,6 +66,31 @@ pub(crate) async fn authenticated_player_id(
     player_id_for_token(state, bearer_token(headers)?).await
 }
 
+/// **The sign-in check every route that needs a session makes**, answering 401
+/// either way and saying which: `SignInRequired` for a caller who sent no
+/// token, `SessionExpired` for one whose token names no session (unknown,
+/// expired or idle). 401 is only ever "no valid credential"; a refusal by a
+/// rule is 403.
+pub(crate) async fn require_session(
+    state: &AppState,
+    headers: &HeaderMap,
+    sign_in_message: &str,
+) -> Result<String, ApiProblem> {
+    authenticated_player_id(state, headers)
+        .await
+        .ok_or_else(|| no_session(headers, sign_in_message))
+}
+
+/// The 401 for a caller with no session, for the handlers that resolve the
+/// session themselves because a caller with none may be acceptable.
+pub(crate) fn no_session(headers: &HeaderMap, sign_in_message: &str) -> ApiProblem {
+    if bearer_token(headers).is_some() {
+        ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+    } else {
+        ApiProblem::new(Reason::SignInRequired, sign_in_message)
+    }
+}
+
 /// Resolves a session token to a player id, enforcing both session limits
 /// and keeping the session's — and the player's — `last_seen_at` fresh.
 /// Shared by

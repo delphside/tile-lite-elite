@@ -111,6 +111,7 @@ name = "api"
 version = "0.10.2"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5700,6 +5701,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body",
+ "http-body-util",
  "iri-string",
  "pin-project-lite",
  "tower",

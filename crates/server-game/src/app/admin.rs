@@ -55,8 +55,11 @@ pub(crate) async fn require_loopback(
     next: Next,
 ) -> Response {
     if !addr.ip().is_loopback() {
-        return ApiProblem::forbidden("Admin endpoints are only reachable from the server itself")
-            .into_response();
+        return ApiProblem::new(
+            Reason::AdminLoopbackOnly,
+            "Admin endpoints are only reachable from the server itself",
+        )
+        .into_response();
     }
     next.run(request).await
 }
@@ -155,13 +158,14 @@ pub(crate) async fn admin_delete_user(
             // describe them ends up either wrong or written three ways — while
             // the rows say all of it already, including why each one counts:
             // the account is visible in the seats.
-            return Err(ApiProblem::blocked_by_games(
+            return Err(ApiProblem::new(
+                Reason::AccountHasGames,
                 "That account cannot be deleted yet. The games below still refer to \
                  it. Please wait until they are gone, then delete the account. Games \
                  are removed automatically from a week after their last activity, and \
                  an invitation goes with the game holding it.",
-                blocking,
-            ));
+            )
+            .with_blocking_games(blocking));
         }
     }
 
@@ -180,7 +184,8 @@ pub(crate) async fn admin_delete_user(
         .await
         .map_err(ApiProblem::from_sqlx)?
     {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::AccountSignedIn,
             "That account is signed in somewhere. Deleting it now would take an \
              account that is in use, and one that is about to create the very \
              games this command refuses to orphan. Sessions end on their own: \
@@ -194,7 +199,7 @@ pub(crate) async fn admin_delete_user(
         .await
         .map_err(ApiProblem::from_sqlx)?;
     if !deleted {
-        return Err(ApiProblem::not_found("Player not found"));
+        return Err(ApiProblem::new(Reason::PlayerNotFound, "Player not found"));
     }
 
     // `delete_player` nulls `game_participants.player_id` in the database, but
@@ -254,7 +259,7 @@ pub(crate) async fn admin_sign_out_user(
         .map_err(ApiProblem::from_sqlx)?
         .is_none()
     {
-        return Err(ApiProblem::not_found("Player not found"));
+        return Err(ApiProblem::new(Reason::PlayerNotFound, "Player not found"));
     }
     persistence::invalidate_sessions_for_player(&state.db, &player_id)
         .await
@@ -269,7 +274,10 @@ pub(crate) async fn admin_reset_password(
     Json(request): Json<AdminResetPasswordRequest>,
 ) -> Result<StatusCode, ApiProblem> {
     if request.new_password.is_empty() {
-        return Err(ApiProblem::bad_request("A new password is required"));
+        return Err(ApiProblem::new(
+            Reason::NewPasswordRequired,
+            "A new password is required",
+        ));
     }
     // Bounded like every other hash, though this endpoint is loopback-only
     // with a single client: the work costs the same 19 MiB either way, and an
@@ -280,7 +288,7 @@ pub(crate) async fn admin_reset_password(
         .await
         .map_err(ApiProblem::from_sqlx)?;
     if !updated {
-        return Err(ApiProblem::not_found("Player not found"));
+        return Err(ApiProblem::new(Reason::PlayerNotFound, "Player not found"));
     }
     tracing::warn!(player_id, "admin: password reset");
     Ok(StatusCode::NO_CONTENT)
@@ -309,9 +317,10 @@ pub(crate) async fn admin_list_games(
         Some("finished") => Some(api::GameStatus::Finished),
         Some("aborted") => Some(api::GameStatus::Aborted),
         Some(other) => {
-            return Err(ApiProblem::bad_request(format!(
-                "Unknown status '{other}', expected waiting/active/finished/aborted"
-            )));
+            return Err(ApiProblem::new(
+                Reason::UnknownStatusFilter,
+                format!("Unknown status '{other}', expected waiting/active/finished/aborted"),
+            ));
         }
         None => None,
     };
@@ -384,9 +393,10 @@ pub(crate) async fn admin_delete_game(
         .await
         .map_err(ApiProblem::from_sqlx)?;
     if !deleted {
-        return Err(ApiProblem::not_found("Game not found"));
+        return Err(ApiProblem::new(Reason::GameNotFound, "Game not found"));
     }
     state.games.write().await.remove(&game_id);
+    let _ = state.deleted_games.send(game_id.clone());
     tracing::warn!(game_id, "admin: game deleted");
     Ok(StatusCode::NO_CONTENT)
 }
@@ -404,8 +414,8 @@ pub(crate) async fn admin_force_end_game(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
-        game.admin_force_finish().map_err(ApiProblem::bad_request)?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
+        game.admin_force_finish().map_err(ApiProblem::from)?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await

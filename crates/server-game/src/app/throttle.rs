@@ -25,6 +25,7 @@
 //! decent error instead of a growing queue; bad behaviour is dealt with by
 //! stopping the account behind it.
 
+use api::Reason;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -286,11 +287,25 @@ where
         let config = Arc::clone(&config);
         move || config.limiter().retain_recent()
     });
-    router.layer(GovernorLayer::new(config).error_handler(|error| {
-        refusal(error, |wait| {
-            ApiProblem::too_many_requests("You are asking too often — please slow down.", wait)
-        })
-    }))
+    router.layer(GovernorLayer::new(config).error_handler(|error| refusal(error, keyed_refusal)))
+}
+
+/// A keyed limit's refusal: the caller's own doing, so a 429.
+fn keyed_refusal(wait: u32) -> ApiProblem {
+    ApiProblem::new(
+        Reason::TooManyRequests,
+        "You are asking too often — please slow down.",
+    )
+    .with_retry_after(wait)
+}
+
+/// The global floor's refusal: everybody together, so a 503.
+fn floor_refusal(wait: u32) -> ApiProblem {
+    ApiProblem::new(
+        Reason::ServiceBusy,
+        "The server is busy — please try again.",
+    )
+    .with_retry_after(wait)
 }
 
 /// Both families answer in the shape every other error uses: an `ApiError`
@@ -303,7 +318,10 @@ fn refusal(error: GovernorError, problem: impl Fn(u32) -> ApiProblem) -> axum::r
         GovernorError::TooManyRequests { wait_time, .. } => {
             problem(retry_after(wait_time)).into_response()
         }
-        other => ApiProblem::internal(format!("rate limiting failed: {other}")).into_response(),
+        other => {
+            tracing::error!(error = %other, request_id = super::current_request_id(), "rate limiting failed");
+            ApiProblem::internal().into_response()
+        }
     }
 }
 
@@ -404,7 +422,7 @@ pub fn authenticated(router: Router<AppState>) -> Router<AppState> {
 /// **Refuses with 503, not 429**, unlike the three keyed tiers. A caller who
 /// meets this one has done nothing wrong — everybody together is asking for
 /// more than there is room for — and the two answers mean different things to
-/// whoever reads them. `ApiProblem::unavailable` makes the same distinction
+/// whoever reads them. `Reason::ServiceBusy` makes the same distinction
 /// for the hashing semaphore, and a log that cannot tell an attack from a
 /// capacity shortfall is worth less than one that can.
 pub fn global(router: Router<AppState>) -> Router<AppState> {
@@ -422,11 +440,9 @@ pub fn global(router: Router<AppState>) -> Router<AppState> {
         .key_extractor(Everything)
         .finish()
         .expect("a positive period and burst make a valid governor config");
-    router.layer(GovernorLayer::new(Arc::new(config)).error_handler(|error| {
-        refusal(error, |wait| {
-            ApiProblem::unavailable("The server is busy — please try again.", wait)
-        })
-    }))
+    router.layer(
+        GovernorLayer::new(Arc::new(config)).error_handler(|error| refusal(error, floor_refusal)),
+    )
 }
 
 #[cfg(test)]
@@ -443,6 +459,71 @@ mod tests {
             .header("x-forwarded-for", address)
             .body(Body::empty())
             .expect("request should build")
+    }
+
+    /// T7 and T17: a limiter's refusal is the problem body with an integer
+    /// `Retry-After` and the request's ID, a 429 for a keyed limit and a 503 for
+    /// the global floor, and a success through the same router carries an ID too.
+    #[tokio::test]
+    async fn both_refusals_carry_the_body_retry_after_and_a_request_id() {
+        for (refuse, status, reason) in [
+            (
+                keyed_refusal as fn(u32) -> ApiProblem,
+                StatusCode::TOO_MANY_REQUESTS,
+                "TOO_MANY_REQUESTS",
+            ),
+            (
+                floor_refusal as fn(u32) -> ApiProblem,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "SERVICE_BUSY",
+            ),
+        ] {
+            let config = GovernorConfigBuilder::default()
+                .period(std::time::Duration::from_millis(3000))
+                .burst_size(1)
+                .key_extractor(ClientAddress)
+                .finish()
+                .expect("a valid config");
+            let app = Router::new()
+                .route("/", get(|| async { "ok" }))
+                .layer(
+                    GovernorLayer::new(std::sync::Arc::new(config))
+                        .error_handler(move |error| refusal(error, refuse)),
+                )
+                .layer(axum::middleware::from_fn(
+                    crate::app::error::request_id_layer,
+                ));
+
+            let served = app
+                .clone()
+                .oneshot(forwarded("203.0.113.40"))
+                .await
+                .expect("the router should answer");
+            assert_eq!(served.status(), StatusCode::OK);
+            assert!(served.headers().contains_key("x-request-id"));
+
+            let refused = app
+                .oneshot(forwarded("203.0.113.40"))
+                .await
+                .expect("the router should answer");
+            assert_eq!(refused.status(), status);
+            assert_eq!(
+                refused.headers().get("content-type").unwrap(),
+                "application/problem+json"
+            );
+            let retry = refused.headers().get("retry-after").expect("Retry-After");
+            assert!(retry.to_str().unwrap().parse::<u32>().is_ok(), "an integer");
+            let id = refused.headers().get("x-request-id").unwrap().clone();
+            let bytes = axum::body::to_bytes(refused.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["reason"], reason);
+            assert_eq!(body["status"], status.as_u16());
+            assert_eq!(body["blip"], true);
+            assert_eq!(body["error_type"], "technical");
+            assert_eq!(body["correlation_id"], id.to_str().unwrap());
+        }
     }
 
     /// The key is the caller Caddy reports, not the proxy that relayed it —
@@ -705,13 +786,15 @@ mod tests {
             .key_extractor(ClientAddress)
             .finish()
             .expect("a valid config");
-        let app = Router::new().route("/", get(|| async { "ok" })).layer(
-            GovernorLayer::new(std::sync::Arc::new(config)).error_handler(|error| {
-                refusal(error, |wait| {
-                    ApiProblem::too_many_requests("too often", wait)
-                })
-            }),
-        );
+        let app = Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(
+                GovernorLayer::new(std::sync::Arc::new(config))
+                    .error_handler(|error| refusal(error, keyed_refusal)),
+            )
+            .layer(axum::middleware::from_fn(
+                crate::app::error::request_id_layer,
+            ));
         let call = async |app: Router| {
             app.oneshot(forwarded("203.0.113.12"))
                 .await

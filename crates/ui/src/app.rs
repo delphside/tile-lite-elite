@@ -3116,6 +3116,152 @@ fn refusal_message(status: u16, retry_after: Option<String>, body: String) -> St
     }
 }
 
+/// The sentence to show for an error body: `detail`, then `message`, so the
+/// client reads a body from either server. **A 500 also shows its reference**,
+/// the request's ID the server logged the failure under, so a player can quote
+/// it; no other status does, because nobody can act on one.
+fn error_sentence(status: u16, body: &api::ApiError) -> String {
+    let sentence = body.sentence().to_string();
+    match (&body.correlation_id, status) {
+        (Some(id), 500) if !id.is_empty() => format!("{sentence} Reference: {id}"),
+        _ => sentence,
+    }
+}
+
+/// What a failed GET means for the session and for the screen.
+#[derive(Debug, PartialEq, Eq)]
+enum GetFailure {
+    /// A 401 on a request that carried a token: the session is over.
+    SessionEnded,
+    /// A 401 on a request with no token: this needs signing in.
+    NotSignedIn,
+    /// Anything else, with the sentence to show. A 403 is here: the caller is
+    /// signed in and refused, and a refusal never ends the session.
+    Shown(String),
+}
+
+/// Decides from the status alone what to do, as every client of the API does
+/// (docs/4.4.3 *Status codes*); the body only supplies the words.
+///
+/// Only a request that *carried* a token can be told its session died. Without
+/// one a 401 means "this needs signing in", which is ordinary on a signed-out
+/// tab, and reporting it as a session ending told somebody who had just opened
+/// the app that their session had expired, over a login form they had not used
+/// yet.
+fn get_failure(
+    status: u16,
+    carried_token: bool,
+    retry_after: Option<String>,
+    body: Option<api::ApiError>,
+    fallback: String,
+) -> GetFailure {
+    if status == 401 {
+        return if carried_token {
+            GetFailure::SessionEnded
+        } else {
+            GetFailure::NotSignedIn
+        };
+    }
+    let sentence = body
+        .map(|body| error_sentence(status, &body))
+        .unwrap_or(fallback);
+    GetFailure::Shown(refusal_message(status, retry_after, sentence))
+}
+
+#[cfg(test)]
+mod error_body_tests {
+    use super::{GetFailure, error_sentence, get_failure};
+    use api::{ApiError, Reason};
+
+    fn new_body(status: u16, reason: Reason, detail: &str, id: &str) -> ApiError {
+        ApiError {
+            message: detail.to_string(),
+            status,
+            detail: detail.to_string(),
+            reason: Some(reason),
+            correlation_id: Some(id.to_string()),
+            ..ApiError::default()
+        }
+    }
+
+    /// T11: the client reads `detail`, then `message`, and an unknown reason.
+    #[test]
+    fn a_new_body_an_old_body_and_an_unknown_reason_all_read() {
+        let new = new_body(403, Reason::NotGameCreator, "Only the creator can.", "ID1");
+        assert_eq!(error_sentence(403, &new), "Only the creator can.");
+
+        let old: ApiError = serde_json::from_str(r#"{"message":"Game not found"}"#).unwrap();
+        assert_eq!(error_sentence(404, &old), "Game not found");
+
+        let unknown: ApiError = serde_json::from_str(
+            r#"{"detail":"A newer sentence.","message":"m","reason":"A_REASON_FROM_THE_FUTURE","status":400}"#,
+        )
+        .unwrap();
+        assert_eq!(unknown.reason, Some(Reason::Unknown));
+        assert_eq!(error_sentence(400, &unknown), "A newer sentence.");
+    }
+
+    /// Decision 2: the correlation ID is shown on a 500 and on nothing else.
+    #[test]
+    fn only_a_500_shows_the_reference() {
+        let internal = new_body(
+            500,
+            Reason::Internal,
+            "Something went wrong.",
+            "7F3K9QWX2M4D",
+        );
+        assert_eq!(
+            error_sentence(500, &internal),
+            "Something went wrong. Reference: 7F3K9QWX2M4D"
+        );
+        let refused = new_body(
+            400,
+            Reason::MoveRefused,
+            "QI is not in the dictionary.",
+            "7F3K9QWX2M4D",
+        );
+        assert_eq!(
+            error_sentence(400, &refused),
+            "QI is not in the dictionary."
+        );
+        let busy = new_body(503, Reason::ServiceBusy, "Busy.", "7F3K9QWX2M4D");
+        assert_eq!(error_sentence(503, &busy), "Busy.");
+        // An older server's 500 has no ID to show.
+        let old: ApiError = serde_json::from_str(r#"{"message":"Something went wrong."}"#).unwrap();
+        assert_eq!(error_sentence(500, &old), "Something went wrong.");
+    }
+
+    /// The client decides from the status alone: a 403 never ends the session,
+    /// a 401 on a GET that carried a token does.
+    #[test]
+    fn a_403_keeps_the_session_and_a_401_with_a_token_ends_it() {
+        let refused = new_body(403, Reason::NotGameCreator, "Only the creator can.", "ID");
+        assert_eq!(
+            get_failure(403, true, None, Some(refused), "x".into()),
+            GetFailure::Shown("Only the creator can.".into())
+        );
+        let expired = new_body(
+            401,
+            Reason::SessionExpired,
+            "Session is invalid or has expired",
+            "ID",
+        );
+        assert_eq!(
+            get_failure(401, true, None, Some(expired.clone()), "x".into()),
+            GetFailure::SessionEnded
+        );
+        assert_eq!(
+            get_failure(401, false, None, Some(expired), "x".into()),
+            GetFailure::NotSignedIn
+        );
+        // No readable body: the fallback, and the status still decides.
+        assert_eq!(
+            get_failure(500, true, None, None, "Request failed".into()),
+            GetFailure::Shown("Request failed".into())
+        );
+    }
+}
+
 #[cfg(test)]
 mod refusal_message_tests {
     use super::refusal_message;
@@ -3583,26 +3729,24 @@ where
     }
     .handle();
     if !response.status().is_success() {
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            // Only a request that *carried* a token can be told its session
-            // died. Without one a 401 means "this needs signing in", which is
-            // ordinary on a signed-out tab — and reporting it as a session
-            // ending told somebody who had just opened the app that their
-            // session had expired, over a login form they had not used yet.
-            if token.is_some() {
-                *SESSION_INVALID.write() = true;
-                return Err(SESSION_INVALID_MESSAGE.to_string());
-            }
-            return Err(NOT_SIGNED_IN_MESSAGE.to_string());
-        }
         let status = response.status().as_u16();
-        let msg = response
-            .json::<api::ApiError>()
-            .await
-            .map(|e| e.message)
-            .unwrap_or_else(|_| "Request failed".to_string());
-        let msg = refusal_message(status, retry_after, msg);
-        return Err(msg);
+        let body = response.json::<api::ApiError>().await.ok();
+        return Err(
+            match get_failure(
+                status,
+                token.is_some(),
+                retry_after,
+                body,
+                "Request failed".to_string(),
+            ) {
+                GetFailure::SessionEnded => {
+                    *SESSION_INVALID.write() = true;
+                    SESSION_INVALID_MESSAGE.to_string()
+                }
+                GetFailure::NotSignedIn => NOT_SIGNED_IN_MESSAGE.to_string(),
+                GetFailure::Shown(message) => message,
+            },
+        );
     }
     response.json::<R>().await.map_err(|e| e.to_string())
 }
@@ -3641,26 +3785,24 @@ where
     }
     .handle();
     if !response.ok() {
-        if response.status() == 401 {
-            // Only a request that *carried* a token can be told its session
-            // died. Without one a 401 means "this needs signing in", which is
-            // ordinary on a signed-out tab — and reporting it as a session
-            // ending told somebody who had just opened the app that their
-            // session had expired, over a login form they had not used yet.
-            if token.is_some() {
-                *SESSION_INVALID.write() = true;
-                return Err(SESSION_INVALID_MESSAGE.to_string());
-            }
-            return Err(NOT_SIGNED_IN_MESSAGE.to_string());
-        }
         let status = response.status();
-        let msg = response
-            .json::<api::ApiError>()
-            .await
-            .map(|e| e.message)
-            .unwrap_or_else(|_| format!("HTTP {status}"));
-        let msg = refusal_message(status, retry_after, msg);
-        return Err(msg);
+        let body = response.json::<api::ApiError>().await.ok();
+        return Err(
+            match get_failure(
+                status,
+                token.is_some(),
+                retry_after,
+                body,
+                format!("HTTP {status}"),
+            ) {
+                GetFailure::SessionEnded => {
+                    *SESSION_INVALID.write() = true;
+                    SESSION_INVALID_MESSAGE.to_string()
+                }
+                GetFailure::NotSignedIn => NOT_SIGNED_IN_MESSAGE.to_string(),
+                GetFailure::Shown(message) => message,
+            },
+        );
     }
     response
         .json::<R>()
@@ -3765,7 +3907,7 @@ where
         let msg = response
             .json::<api::ApiError>()
             .await
-            .map(|e| e.message)
+            .map(|e| error_sentence(status, &e))
             .unwrap_or_else(|_| "Request failed".to_string());
         let msg = refusal_message(status, retry_after, msg);
         return Err(msg);
@@ -3809,7 +3951,7 @@ where
         let msg = response
             .json::<api::ApiError>()
             .await
-            .map(|e| e.message)
+            .map(|e| error_sentence(status, &e))
             .unwrap_or_else(|_| format!("HTTP {status}"));
         let msg = refusal_message(status, retry_after, msg);
         return Err(msg);
@@ -3850,7 +3992,7 @@ where
         let msg = response
             .json::<api::ApiError>()
             .await
-            .map(|e| e.message)
+            .map(|e| error_sentence(status, &e))
             .unwrap_or_else(|_| "Request failed".to_string());
         let msg = refusal_message(status, retry_after, msg);
         return Err(msg);
@@ -3893,7 +4035,7 @@ where
         let msg = response
             .json::<api::ApiError>()
             .await
-            .map(|e| e.message)
+            .map(|e| error_sentence(status, &e))
             .unwrap_or_else(|_| format!("HTTP {status}"));
         let msg = refusal_message(status, retry_after, msg);
         return Err(msg);
