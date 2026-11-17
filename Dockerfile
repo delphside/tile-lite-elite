@@ -79,31 +79,25 @@ RUN cargo build --release -p server-game -p admin-cli
 # actual IP or domain, with no rebuild needed if that changes.
 RUN cd crates/ui && CARGO_INCREMENTAL=0 TILE_LITE_ELITE_API_BASE_URL="" dx build --platform web --release
 
-# Identifies the bundle in /srv by its *contents* — a hash of every file dx
-# produced. An already-running tab fetches this to decide whether reloading
-# would land it on different code; see `watch_for_new_bundle` in
-# crates/ui/src/app.rs.
+# Identifies the bundle in /srv by the build id, the commit it was built from.
+# An already-running tab fetches this to decide whether reloading would land
+# it on different code; see `watch_for_new_bundle` in crates/ui/src/app.rs.
 #
-# Contents rather than a version number, so it changes when the client
-# changes and not otherwise. The workspace version moves on every release
-# (the patch moves), so using it here would reload every open tab
-# after a server-only release — 0.4.16 changed `games.rs` alone and left
-# `crates/ui` untouched, and nobody needed to reload for it. This also keeps
-# the signal off `API_VERSION`, which is a statement about the wire contract
-# and has no business moving because a button was fixed.
+# So every deploy of a new commit asks open tabs to reload, a server-only one
+# included. A hash of the bundle would not avoid that: the build id is compiled
+# into the wasm, so the bundle changes on every commit anyway. The workspace
+# version is not used either: a rebuild of the same version at another commit
+# would then go unnoticed. And the signal stays off `API_VERSION`, which is a
+# statement about the wire contract.
 #
 # It has to come from the *web* container rather than /health, because the
 # one moment it matters is the deploy window where the new server is already
 # up and this container still serves the old bundle; /health would report the
 # new version and send the tab into a reload loop against unchanged code.
 #
-# It holds the **build id** — the commit — rather than a hash of the bundle.
-# A hash was the same information the long way round: it only ever changed
-# because the build id is compiled into the wasm, so it was an indirection over
-# the commit that could not tell you which commit it meant. The id can, which
-# lets a tab compare three things it now knows — its own build, this
-# container's, and the server's — and tell "a deploy is in flight" apart from
-# "there is new code for me".
+# The tab compares three ids it knows, its own build, this container's and
+# the server's, which tells "a deploy is in flight" apart from "there is new
+# code for me".
 #
 # Written only when there is an id to write. A dev build sets no
 # TILE_LITE_ELITE_BUILD_ID, and no file is better than an empty one: Caddy's
