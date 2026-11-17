@@ -33,21 +33,29 @@
 
 ## Deliveries and releases
 
-- When `deploy.sh` warns that an issue that is not a project carries the
-  milestone, the owner decides: fold it into a work package, move it out of
-  the milestone, or ship it in the milestone
-  ([4.3.7 §5.6](docs/4.3.7-how-testing-and-release-work.md#56-where-a-gate-meets-a-limit)).
-- Deploys build a fresh worktree at the target commit. The image goes Preview,
-  then Rehearsal, then Production.
-- After deploying, wait for CI on the version bump commit `deploy.sh` pushed,
-  then run `scripts/deliver/verify.sh`
+- A deploy is `turpin deploy ENV REF`. `turpin build SHA` builds a commit once,
+  and each environment pulls that build by digest: Preview, then Rehearsal,
+  then the release step (`turpin release`, run in the `main` worktree), then
+  Production. What to type is
+  [4.3.3](docs/4.3.3-testing-ci-and-release.md); what each command checks is
+  [1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#making-a-release-then-deploying-it).
+- After `turpin release`, wait for CI on the bump commit it pushed. After a
+  production deploy, run `scripts/deliver/verify.sh`
   ([4.3.3 §1.7](docs/4.3.3-testing-ci-and-release.md#17-verify-what-is-live)).
-- **Dev leads production by one**: `deploy.sh` bumps `main`'s version to the
-  next patch after a production deploy, and skips it in the cases
-  [4.3.7 §4.2](docs/4.3.7-how-testing-and-release-work.md#42-decide-whether-the-app-version-moves)
-  lists.
+- **`main`'s versions are provisional until a release fixes them** (owner,
+  2026-11-16): `turpin release` bumps the app version to the next patch, and
+  later changes may move it
+  ([4.3.7 §4.2](docs/4.3.7-how-testing-and-release-work.md#42-decide-whether-the-app-version-moves)).
+- When `turpin release` asks about an issue in the milestone that no commit
+  names (`Confirm that #N is in this build [y/N]`), and the issue is not a
+  project, the owner decides: fold it into a work package, move it out of the
+  milestone, or ship it in the milestone
+  ([4.3.7 §5.6](docs/4.3.7-how-testing-and-release-work.md#56-where-a-gate-meets-a-limit)).
+  `--confirm N` answers ahead, and `--set-aside milestone REASON` carries the
+  milestone as it stands.
 - Changing an artefact that reaches the image, the `Caddyfile`,
-  `docker-compose.yml` and `Dockerfile` among them, is a Production Release;
+  `docker-compose.yml`, `Dockerfile`, the hooks in `turpin/hooks/` and the
+  host files' sources among them, is a Production Release;
   [3.1.2](https://github.com/delphside/programme/blob/main/applications/tile-lite-elite/3.1.2-artefacts.md)
   lists them.
 - Rehearsal is closed: `scripts/deliver/rehearsal-access.sh` grants access by
@@ -55,9 +63,10 @@
 - The next structural release takes the major slot: `1.0.0`.
 - The scripted production checks are `scripts/deliver/verify.sh`,
   `scripts/operate/check-hosts.sh` (the programme's `board-hosts.py`, which the
-  `host-currency` activity also runs) and the `/health` reads. Anything else
-  against production (an admin CLI listing, a database query, a log dump) the
-  owner runs.
+  `host-currency` activity also runs), `turpin status ENV` with Turpin's reads
+  of production's state, and the `/health` reads. Anything else against
+  production (an admin CLI listing, a database query, a log dump) the owner
+  runs.
 
 ## Where the detail is
 
