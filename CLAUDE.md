@@ -55,9 +55,9 @@
 - The next structural release takes the major slot: `1.0.0`.
 - The scripted production checks are `scripts/deliver/verify.sh`,
   `scripts/operate/check-hosts.sh` (the programme's `board-hosts.py`, which the
-  `host-currency` activity also runs) and the `/health` reads. Claude may
-  read production beyond them and seed rehearsal with
-  `scripts/deliver/seed-rehearsal.sh` (the programme's rule).
+  `host-currency` activity also runs) and the `/health` reads. Rehearsal's
+  access is closed, so `scripts/deliver/seed-rehearsal.sh` falls under the
+  programme's rule on copying production's data.
 
 ## Where the detail is
 
