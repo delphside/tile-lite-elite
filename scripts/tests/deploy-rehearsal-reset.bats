@@ -24,6 +24,7 @@ setup() {
   # host can be production: rehearsal-target.sh exports DEPLOY_HOST
   # unconditionally, so a caller cannot set it from outside. The first version
   # of this test tried and the guard never fired.
+  export CALLS="$D/calls"; : > "$CALLS"
   cp "$REAL" "$D/scripts/deliver/"
   printf '#!/usr/bin/env bash\necho "REACHED deploy.sh" >&2\n' > "$D/scripts/deliver/deploy.sh"
   chmod +x "$D/scripts/deliver/deploy.sh"
@@ -37,6 +38,7 @@ export DEPLOY_USER=ubuntu
 export DEPLOY_SSH_KEY=/dev/null
 export DEPLOY_REMOTE_DIR=tile-lite-elite
 export TARGET_URL=https://example.invalid
+export REHEARSAL_COMPOSE="turpin-host compose tile-lite-elite rehearsal"
 TARGET
   PATH="$D/bin:$PATH" run "$D/scripts/deliver/deploy-rehearsal.sh" reset
 }
@@ -60,6 +62,27 @@ TARGET
   refute_output --partial 'refusing to reset'
   assert_output --partial 'including any seeded production data'
   refute_output --partial 'REACHED deploy.sh'
+}
+
+# The reset goes through turpin-host compose on the host, down -v then up -d, and
+# not through the old folder's compose file.
+@test "reset runs turpin-host compose down -v then up -d over ssh" {
+  printf '#!/usr/bin/env bash\necho "$*" >> "$CALLS"\n' > "$D/bin/ssh"
+  reset_against 129.151.84.183
+  run grep -c 'turpin-host compose tile-lite-elite rehearsal down -v && turpin-host compose tile-lite-elite rehearsal up -d' "$CALLS"
+  assert_output 1
+  run grep -c 'docker compose' "$CALLS"
+  assert_output 0
+}
+
+# Turpin refuses where rehearsal has no current deploy or the lock is held: ssh
+# exits non-zero, and the script stops, says so and never waits for /health.
+@test "reset stops non-zero and says so where turpin-host compose refuses" {
+  printf '#!/usr/bin/env bash\necho "turpin-host: lock held" >&2\nexit 1\n' > "$D/bin/ssh"
+  reset_against 129.151.84.183
+  assert_failure
+  assert_output --partial 'the reset failed'
+  refute_output --partial 'Waiting for it to answer'
 }
 
 @test "the reset branch exits rather than falling through" {

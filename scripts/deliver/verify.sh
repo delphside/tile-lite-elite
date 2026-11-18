@@ -53,6 +53,8 @@ QUICK=0
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 
 cd "$HERE"
+# Turpin, the programme's deploy tool, as the pin has it. A test names a stub.
+TURPIN="${TURPIN:-$HERE/programme/scripts/deliver/turpin}"
 # shellcheck source=shipping-paths.sh
 source "$HERE/scripts/deliver/shipping-paths.sh"
 
@@ -293,6 +295,16 @@ check_tests() {
     printf '       %s %s\n' "$(red FAIL)" "bats                     "
     bad="$bad bats"; lines+="$(grep '^not ok' <<< "$out" | head -5)"$'\n'
   fi
+  # The hooks' tests, which ride in the payload (#555). Where the folder is not
+  # there the check has nothing to run and says nothing.
+  if [[ -d turpin/tests ]]; then
+    if out="$(bats turpin/tests 2>&1)"; then
+      printf '       %s %s\n' "$(green ok)" "bats turpin/tests: $(grep -c '^ok ' <<< "$out") tests"
+    else
+      printf '       %s %s\n' "$(red FAIL)" "bats turpin/tests"
+      bad="$bad bats:turpin/tests"; lines+="$(grep '^not ok' <<< "$out" | head -5)"$'\n'
+    fi
+  fi
   # This repository's own Python tests. The board model's are the programme's:
   # they run in its repository's CI (#485), not here.
   local top=scripts
@@ -306,9 +318,9 @@ check_tests() {
   else pass tests "the shell and Python tooling tests pass"; fi
 }
 
-LABEL[gates]="A production deploy would be allowed"
+LABEL[gates]="turpin release --check passes for HEAD, the commit rehearsal runs"
 check_gates() {
-  if (( QUICK )); then skip gates "deploy gates skipped (--quick)"; return; fi
+  if (( QUICK )); then skip gates "turpin release --check skipped (--quick)"; return; fi
   # **Nothing to judge when nothing ships** (#421). Straight after a release
   # `HEAD` is the next version's bump, which preview and rehearsal never hold,
   # so asking whether it could deploy failed after every release by
@@ -319,18 +331,76 @@ check_gates() {
     return
   fi
   local out status=0
-  # Bounded. deploy.sh's CI gate polls with --wait, which is right for a deploy
-  # and wrong here — it once made this sit for ten minutes against a run that
-  # was still going.
-  out="$(timeout 120 env DEPLOY_GATES_ONLY=1 ./scripts/deliver/deploy.sh 2>&1)" || status=$?
+  # `turpin release --check` runs the release's gates and changes nothing: the
+  # commit, CI, the milestone and the application's release-check hook. Bounded,
+  # because a gate that waits on a CI run still going is right for a release and
+  # wrong here — the old deploy gate once made this sit for ten minutes.
+  out="$(timeout 120 "$TURPIN" release --check 2>&1 < /dev/null)" || status=$?
   if (( status == 124 )); then
     fail gates "gate check timed out after 120s (CI probably still running)"
   elif (( status == 0 )); then
-    pass gates "a production deploy of HEAD would be allowed" \
-      "$(printf '%s' "$out" | grep -E '^==> Gates run:')"
+    pass gates "turpin release --check passed for HEAD" \
+      "$(printf '%s' "$out" | tail -2)"
   else
-    fail gates "a production deploy of HEAD would be refused" \
-      "$(printf '%s' "$out" | grep -E '^error:' | tail -3)"
+    fail gates "turpin release --check refused HEAD" \
+      "$(printf '%s' "$out" | tail -3)"
+  fi
+}
+
+LABEL[deploys]="Rehearsal and production run what their records say"
+# `turpin status ENV` reads the host: the build `current` is, the digests the
+# containers run, the release record those digests match, and the host files
+# against the payload's (R8, #545). It exits 0 for every state it can read and
+# says the difference in a line (`turpinlib/commands/status.py`), so those lines
+# are what is asserted; a read that fails exits non-zero and is red too, because
+# an absent answer must never read as a pass.
+#
+# Three things are not red. An environment with no Turpin deploy yet (`current:
+# none`, or Turpin not installed on its host, as rehearsal and production are
+# until their first Turpin deploy) is skipped as "no Turpin deploy yet". The
+# "turpin-host is not on" skip lasts until 0.10.3, when the fallback retires and
+# a host without Turpin is a failure to read. A record no release matches
+# is red on production only: rehearsal runs unreleased builds as a matter of
+# course. The two timers are not checked: `turpin status` does not show whether
+# a host file's unit is enabled, so this says nothing of them.
+# A `state:` of `changing` or `failed...` is red even where a `current` exists.
+check_deploys() {
+  local env out status bad="" lines="" waiting="" state l
+  for env in rehearsal production; do
+    status=0
+    out="$(timeout 90 "$TURPIN" status "$env" 2>&1 < /dev/null)" || status=$?
+    if (( status != 0 )); then
+      # Skipped, not red, until 0.10.3 retires the fallback; after it a host
+      # without Turpin is an environment that cannot be read.
+      if grep -q 'turpin-host is not on' <<< "$out"; then
+        waiting="$waiting $env"; continue
+      fi
+      bad="$bad $env"; lines+="$env: status could not be read (exit $status)"$'\n'
+      lines+="$(printf '%s' "$out" | tail -2)"$'\n'
+      continue
+    fi
+    state="$(sed -n 's/^state: //p' <<< "$out" | head -1)"
+    case "$state" in
+      changing*|failed*) bad="$bad $env"; lines+="$env: state: $state"$'\n' ;;
+    esac
+    if grep -q '^current: none' <<< "$out"; then
+      case "$state" in changing*|failed*) ;; *) waiting="$waiting $env" ;; esac
+      continue
+    fi
+    while IFS= read -r l; do
+      [[ -n "$l" ]] || continue
+      if [[ "$l" == "record: none matches" && "$env" != production ]]; then continue; fi
+      bad="$bad $env"; lines+="$env: $l"$'\n'
+    done < <(grep -E '^(running: DIFFERS|record: none matches|host file .*: ([^e]|e[^q]))' <<< "$out")
+  done
+  if [[ -n "$bad" ]]; then
+    fail deploys "an environment differs from its record or payload:$(printf '%s\n' $bad | sort -u | tr '\n' ' ')" "$lines"
+  elif [[ "$(printf '%s\n' $waiting | wc -l)" -ge 2 ]]; then
+    skip deploys "no Turpin deploy yet on rehearsal or production (a host without Turpin is skipped until 0.10.3)"
+  elif [[ -n "$waiting" ]]; then
+    pass deploys "the other environment runs its record, and its host files match; no Turpin deploy yet on$waiting (a host without Turpin is skipped until 0.10.3)"
+  else
+    pass deploys "rehearsal and production run their record, and their host files match"
   fi
 }
 
@@ -491,8 +561,8 @@ check_transitions() {
 # compares against origin/main and would otherwise read a stale one. In process
 # order it comes last: tidying up after a change has shipped is the final step,
 # and it is the only line here that is housekeeping rather than readiness.
-RUN_ORDER=(tree pushed branches token envs unreleased hosts rehearsal transitions prstate ci tests gates)
-PROCESS_ORDER=(tree pushed ci tests token envs unreleased hosts rehearsal transitions prstate gates branches)
+RUN_ORDER=(tree pushed branches token envs deploys unreleased hosts rehearsal transitions prstate ci tests gates)
+PROCESS_ORDER=(tree pushed ci tests token envs deploys unreleased hosts rehearsal transitions prstate gates branches)
 
 printf '\n\033[1mChecking\033[0m  (fastest first, so a failure shows early)\n'
 for key in "${RUN_ORDER[@]}"; do "check_$key"; done
@@ -524,12 +594,12 @@ note_suffix=""
 printf '\n'
 if (( failures > 0 )); then
   printf '%s%s\n' "$(red "$failures check(s) failed")" "$note_suffix"
-  (( QUICK )) && printf '%s\n' "$(amber '(quick run: tooling tests and deploy gates were not run)')"
+  (( QUICK )) && printf '%s\n' "$(amber '(quick run: the tooling tests and turpin release --check were not run)')"
   exit 1
 fi
 if (( QUICK )); then
   printf '%s — %s%s\n' "$(green 'Everything checked is in place')" \
-    "$(amber 'quick run: tooling tests and deploy gates not run')" "$note_suffix"
+    "$(amber 'quick run: the tooling tests and turpin release --check not run')" "$note_suffix"
 else
   printf '%s%s\n' "$(green 'Everything in place.')" "$note_suffix"
 fi

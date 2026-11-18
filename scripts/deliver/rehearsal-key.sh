@@ -43,6 +43,9 @@ EOF
   exit 0
 fi
 
+# shellcheck source=scripts/deliver/rehearsal-target.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rehearsal-target.sh"
+
 if [[ -n "${REHEARSAL_ACCESS_KEY:-}" ]]; then
   printf '%s\n' "$REHEARSAL_ACCESS_KEY"
   exit 0
@@ -53,7 +56,7 @@ fi
 # the lines it has not read yet. The same trap deploy.sh records.
 KEY="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 \
   "${REHEARSAL_SSH_HOST:-tile-lite-elite-rehearsal}" \
-  "grep -m1 '^REHEARSAL_ACCESS_KEY=' ~/tile-lite-elite/.env | cut -d= -f2-" \
+  "grep -m1 '^REHEARSAL_ACCESS_KEY=' $REHEARSAL_ENV_FILE | cut -d= -f2-" \
   2>/dev/null | tr -d '\r' || true)"
 
 if [[ -z "$KEY" ]]; then

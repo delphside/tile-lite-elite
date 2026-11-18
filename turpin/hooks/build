@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# build (laptop): one `docker buildx bake` of the server and the web image from
+# docker-compose.yml, each to an OCI layout in .turpin/oci/IMAGE, or loaded into
+# local Docker under TURPIN_LOCAL. Prints `IMAGE DIR` a line (just `IMAGE` under
+# TURPIN_LOCAL). Design 545 §2.2.1.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_SHA TURPIN_VERSION TURPIN_CREATED
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+# The build ID the binaries report after the `+`: the commit's short SHA.
+short="${TURPIN_SHORT_SHA:-}"
+[[ -n "$short" ]] || short="$(git rev-parse --short "$TURPIN_SHA")"
+export TILE_LITE_ELITE_BUILD_ID="$short"
+
+# The highest migration this build knows: pre-deploy compares the database's with it.
+schema=0
+for file in crates/server-game/migrations/*.sql; do
+  [[ -e "$file" ]] || die "crates/server-game/migrations/ holds no migration, so it cannot name the schema"
+  number="${file##*/}"
+  number=$((10#${number%%_*}))
+  ((number > schema)) && schema="$number"
+done
+
+read -r -a images <<< "${TURPIN_BUILD_IMAGES:-server web}"
+
+args=(buildx bake --builder turpin -f docker-compose.yml)
+[[ -z "${TURPIN_LOCAL:-}" ]] || args+=(--load)
+for image in "${images[@]}"; do
+  labels=(
+    "org.opencontainers.image.revision=$TURPIN_SHA"
+    "org.opencontainers.image.version=$TURPIN_VERSION"
+    "org.opencontainers.image.created=$TURPIN_CREATED"
+    "org.tileliteelite.schema=$schema"
+  )
+  for label in "${labels[@]}"; do
+    args+=(--set "$image.labels.$label")
+  done
+  args+=(--set "$image.args.TILE_LITE_ELITE_BUILD_ID=$short")
+  if [[ -n "${TURPIN_LOCAL:-}" ]]; then
+    tag_variable="TURPIN_BUILD_TAG_$(printf '%s' "$image" | tr 'a-z-' 'A-Z_')"
+    [[ -n "${!tag_variable:-}" ]] || die "$tag_variable is not set, so it cannot tag the local image"
+    args+=(--set "$image.tags=${!tag_variable}")
+  else
+    rm -rf ".turpin/oci/${image:?}"
+    args+=(--set "$image.output=type=oci,dest=.turpin/oci/$image,tar=false")
+  fi
+done
+
+# Docker's progress is for the person watching: standard output is the list below.
+docker "${args[@]}" "${images[@]}" >&2
+
+for image in "${images[@]}"; do
+  if [[ -n "${TURPIN_LOCAL:-}" ]]; then echo "$image"; else echo "$image .turpin/oci/$image"; fi
+done

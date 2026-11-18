@@ -37,13 +37,15 @@ run_log_start rehearsal-limits.sh "$@"
 #   ./scripts/deliver/rehearsal-limits.sh regression   # relax, for an e2e run
 #   ./scripts/deliver/rehearsal-limits.sh production   # restore, and leave it restored
 #
-# `.env` is created by hand and `deploy.sh` never touches it, so a setting
+# `.env` is in Turpin's state folder and a deploy never rewrites it, so a setting
 # survives a redeploy — which is the hazard this is shaped around. Restore.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST="${REHEARSAL_SSH_HOST:-tile-lite-elite-rehearsal}"
-ENV_FILE='~/tile-lite-elite/.env'
-COMPOSE='~/tile-lite-elite/docker-compose.yml'
+# shellcheck source=scripts/deliver/rehearsal-target.sh
+. "$HERE/rehearsal-target.sh"
+ENV_FILE="$REHEARSAL_ENV_FILE"
+COMPOSE="$REHEARSAL_COMPOSE"
 
 # The keys this script owns. Anything else in `.env` is left alone: it holds
 # the access key and the secrets Compose reads, and a careless rewrite of it
@@ -61,6 +63,14 @@ KEYS=(
 RELAXED=(6000 1000 6000 1000 6000 1000 60000 10000)
 
 on_host() { ssh -n -o BatchMode=yes -o ConnectTimeout=10 "$HOST" "$@"; }
+
+# Edits the .env, then applies it through `turpin-host compose`, which refuses
+# where rehearsal has no current deploy or its lock is held (its reason reaches
+# stderr). Stops non-zero and says so.
+apply() {
+  on_host "$1 $COMPOSE up -d server" >/dev/null \
+    || { echo "rehearsal-limits: could not apply the change on $HOST (turpin-host compose refused, or ssh failed)" >&2; exit 1; }
+}
 
 case "${1:-show}" in
   show)
@@ -86,14 +96,14 @@ case "${1:-show}" in
       cmd+="sed -i '/^${KEYS[$i]}=/d' $ENV_FILE; "
       cmd+="echo '${KEYS[$i]}=${RELAXED[$i]}' >> $ENV_FILE; "
     done
-    on_host "$cmd docker compose -f $COMPOSE up -d server" >/dev/null
+    apply "$cmd"
     echo "==> rehearsal relaxed for a regression run — restore with: $0 production"
     ;;
 
   production)
     cmd=""
     for key in "${KEYS[@]}"; do cmd+="sed -i '/^${key}=/d' $ENV_FILE; "; done
-    on_host "$cmd docker compose -f $COMPOSE up -d server" >/dev/null
+    apply "$cmd"
     echo "==> rehearsal restored to production's limits"
     ;;
 
@@ -116,6 +126,9 @@ Refuses (exit 2) when:
 Refuses (exit 1) when:
   - `show` cannot reach the host over ssh
     -> "rehearsal-limits: could not reach <host>"
+  - `regression` or `production` cannot edit .env and apply it, because ssh
+    failed or `turpin-host compose` refused (no current deploy, lock held)
+    -> "rehearsal-limits: could not apply the change on <host>"
 
 `regression` leaves rehearsal on numbers nobody ships. Run
 `rehearsal-limits.sh production` when the run is done, or

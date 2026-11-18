@@ -110,3 +110,8 @@ crates/server-game/examples/moves/[0-9]*.csv
 
 # CI checks the programme repository's live copy out here (#485); PROGRAMME_DIR points at it.
 /.programme-live/
+
+# Turpin's build scratch: the payload the Dockerfile copies to /turpin/, and the
+# OCI layouts the `build` hook writes (delphside/programme#117).
+.turpin-payload/
+.turpin/

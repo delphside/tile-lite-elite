@@ -64,6 +64,13 @@ EMPTY='{"data":{"search":{"nodes":[]}}}'
 TOOLING='{"data":{"search":{"nodes":[{"number":124,"title":"a script change",
   "issueFieldValues":{"nodes":[{"value":"tooling","field":{"name":"Type of change"}}]}}]}}}'
 
+PARENT='{"data":{"search":{"nodes":[{"number":125,"title":"a parent project",
+  "subIssues":{"totalCount":3},
+  "issueFieldValues":{"nodes":[{"value":"functional","field":{"name":"Type of change"}}]}}]}}}'
+CHILD='{"data":{"search":{"nodes":[{"number":126,"title":"a work package",
+  "subIssues":{"totalCount":0},
+  "issueFieldValues":{"nodes":[{"value":"functional","field":{"name":"Type of change"}}]}}]}}}'
+
 # Each of these is a release that must go ahead.
 @test "no previous release passes, and says why" {
   isolated 0.4.26
@@ -129,4 +136,97 @@ TOOLING='{"data":{"search":{"nodes":[{"number":124,"title":"a script change",
   assert_success
   run grep -q -- milestone: "$QUERY_LOG"
   assert_success
+}
+
+# R9 (#545): a parent project has sub-issues and ships through them, so it is
+# not judged itself; an issue with none still is.
+@test "a parent project with sub-issues is skipped, and a work package is not" {
+  with_gh "$PARENT" 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
+  with_gh "$CHILD" 0.4.26 0.4.25
+  assert_equal "$status" 1
+  assert_output --partial "#126"
+}
+
+@test "the query asks for the sub-issues, so a parent can be told" {
+  with_gh "$EMPTY" 0.4.26 0.4.25
+  run grep -q -- subIssues "$QUERY_LOG"
+  assert_success
+}
+
+# The previous release is the newest of the `v` and the `prod-` tags together,
+# by version: the project's older tags are `prod-` (`prod-0.4.14` to
+# `prod-0.10.1`), its newer ones `v` (`v0.10.1` onward).
+@test "the previous release is the newest of the v and prod- tags, so a newer v tag is it" {
+  git -C "$D/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+  git -C "$D/repo" tag prod-0.4.25
+  git -C "$D/repo" tag v0.5.1
+  with_gh "$FUNCTIONAL" 0.5.2
+  assert_equal "$status" 1
+  assert_output --partial "#123"
+}
+
+@test "the previous release is found by version order across both prefixes, not by name" {
+  git -C "$D/repo" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+  git -C "$D/repo" tag v0.4.9
+  git -C "$D/repo" tag prod-0.4.10
+  git -C "$D/repo" tag v0.4.2
+  with_gh "$EMPTY" 0.5.0
+  assert_success
+  assert_output --partial "minor or major"
+  with_gh "$FUNCTIONAL" 0.4.11
+  assert_equal "$status" 1
+}
+
+# Under CHECK_RELEASE_STRICT=1 (Turpin's release-check hook) a check that cannot
+# read the milestone cannot judge: exit 2, not a pass.
+@test "strict: no gh is exit 2, where without it the check passes" {
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+  assert_output --partial "gh not available"
+  assert_output --partial "cannot judge"
+}
+
+@test "strict: GitHub's answer being an error is exit 2, and without strict it passes" {
+  cat > "$BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"repo view"*) printf '%s\n' "delphside/tile-lite-elite" ;;
+  *) echo "HTTP 502" >&2; exit 1 ;;
+esac
+STUB
+  chmod +x "$BIN/gh"
+  isolated 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+  assert_output --partial "was an error"
+}
+
+@test "strict: a gh that cannot name the repository is exit 2, though the query would answer" {
+  # Only `repo view` fails; the GraphQL call answers with nothing, which would
+  # read as "nothing functional" and pass if the repository name were not checked.
+  cat > "$BIN/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  *"repo view"*) exit 1 ;;
+  *) exit 0 ;;
+esac
+STUB
+  chmod +x "$BIN/gh"
+  isolated 0.4.26 0.4.25
+  assert_success
+  assert_output --partial "a patch release is right"
+  CHECK_RELEASE_STRICT=1 isolated 0.4.26 0.4.25
+  assert_equal "$status" 2
+  assert_output --partial "could not name the repository"
+}
+
+@test "strict: a readable milestone is judged as before" {
+  CHECK_RELEASE_STRICT=1 with_gh "$EMPTY" 0.4.26 0.4.25
+  assert_success
+  CHECK_RELEASE_STRICT=1 with_gh "$FUNCTIONAL" 0.4.26 0.4.25
+  assert_equal "$status" 1
 }

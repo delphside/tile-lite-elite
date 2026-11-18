@@ -1,5 +1,5 @@
 # Local preview stack — builds and runs the exact same images
-# scripts/deploy.sh would ship to production, but on this machine (e.g.
+# Turpin ships to production, but on this machine (e.g.
 # inside WSL) instead of the Oracle VM, against its own persistent data
 # volume. The point: catch "does this migration actually apply, does the
 # server boot" before either ever reaches the real VM. See
@@ -15,10 +15,12 @@ name: tile-lite-elite-preview
 
 services:
   server:
-    # Explicit image tag (matches Compose's default project-service name) so a
-    # CI `docker buildx bake` and a later `docker compose up --no-build` agree
-    # on exactly which image to run — see the e2e job in .github/workflows/ci.yml.
-    image: tile-lite-elite-preview-server
+    # Turpin sets `TURPIN_IMAGE_SERVER` to the image it pulled or built locally,
+    # with `pull_policy: never`; the fallback name is the tag a CI `docker
+    # buildx bake` and a later `docker compose up --no-build` agree on — see
+    # the e2e job in .github/workflows/ci.yml.
+    image: ${TURPIN_IMAGE_SERVER:-tile-lite-elite-preview-server}
+    pull_policy: never
     build:
       context: .
       target: runtime-server
@@ -30,8 +32,10 @@ services:
       # Rate limits — how often a caller may ask, tunable without a rebuild.
       # Read once when the router is built, so a change takes a container
       # restart (`docker compose up -d server`) rather than a new image. Set
-      # them in `.env` beside the secrets, which deploy.sh never touches, so a
-      # tuned host keeps its numbers across every redeploy.
+      # them in the preview's `.env`, in its Turpin state folder, beside the
+      # secrets. A deploy never touches that file, so a tuned host keeps its
+      # numbers across every redeploy (the data volume is another matter:
+      # each preview deploy starts it empty).
       #
       # Defaults live in crates/server-game/src/app/throttle.rs and are a
       # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
@@ -97,7 +101,8 @@ services:
         tag: "tle-preview-server"
 
   web:
-    image: tile-lite-elite-preview-web
+    image: ${TURPIN_IMAGE_WEB:-tile-lite-elite-preview-web}
+    pull_policy: never
     build:
       context: .
       target: runtime-web
@@ -109,9 +114,9 @@ services:
       # different one to run alongside routine dev work without a clash.
       - "8081:80"
     volumes:
-      # Swaps out the image's baked-in production Caddyfile (real domain,
-      # automatic HTTPS) for a plain-HTTP one — there's no domain to
-      # provision a Let's Encrypt cert for on a local machine.
+      # This environment's Caddyfile — plain HTTP, since there's no domain to
+      # provision a Let's Encrypt cert for on a local machine. The image
+      # carries none; Turpin joins the file into the deploy's folder.
       - ./Caddyfile.preview:/etc/caddy/Caddyfile:ro
     depends_on:
       - server
@@ -128,11 +133,10 @@ services:
         tag: "tle-preview-web"
 
 volumes:
-  # Deliberately persists across `docker compose down` / re-runs, same as
-  # production's tile-lite-elite-data — running deploy-preview.sh again
-  # against an already-seeded preview DB is what actually exercises "does a
-  # new migration apply to an existing database", not just a fresh one.
-  # `./scripts/deploy-preview.sh reset` wipes it on purpose when you want a
-  # clean slate.
+  # Preview is deployed by `turpin deploy preview`, and each deploy starts this
+  # volume empty: the `save-state` hook snapshots it and then empties it
+  # (docs/4.3.3). It persists across `docker compose down` and a restart,
+  # but not across a deploy, so a preview exercises a fresh database; "does a
+  # new migration apply to an existing database" is rehearsal's question.
   tile-lite-elite-preview-data:
     name: tile-lite-elite-preview-data

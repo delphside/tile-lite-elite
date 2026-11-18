@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# pre-deploy (host): refuses where the database's highest applied migration is
+# beyond the pulled image's `org.tileliteelite.schema` label, since that image
+# would fail sqlx's startup check and never boot. No database yet passes. Each
+# Docker call is within 30 s (design 545 §3). Reads only.
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_IMAGE_SERVER
+
+known="$(bounded 30 docker image inspect --format '{{ index .Config.Labels "org.tileliteelite.schema" }}' "$TURPIN_IMAGE_SERVER")"
+[[ "$known" =~ ^[0-9]+$ ]] || die "$TURPIN_IMAGE_SERVER carries no org.tileliteelite.schema label, so it cannot judge"
+
+# Inside a container: the file, then its highest applied migration.
+probe='f=/data/tile-lite-elite.sqlite3
+if [ -f "$f" ]; then sqlite3 -readonly "$f" "select coalesce(max(version), 0) from _sqlx_migrations"; else echo none; fi'
+
+container="$(server_containers 30 | head -n 1)"
+if [[ -n "$container" ]]; then
+  applied="$(bounded 30 docker exec "$container" sh -c "$probe")"
+elif bounded 30 docker volume inspect "$(tle_volume)" > /dev/null 2>&1; then
+  applied="$(bounded 30 docker run --rm -v "$(tle_volume):/data:ro" --entrypoint sh "$TURPIN_IMAGE_SERVER" -c "$probe")"
+else
+  applied=none
+fi
+
+if [[ "$applied" == none ]]; then
+  echo "pre-deploy: no database yet, so nothing is ahead of the image" >&2
+  exit 0
+fi
+[[ "$applied" =~ ^[0-9]+$ ]] || die "the database's migration number read as '$applied', so it cannot judge"
+if ((applied > known)); then
+  die "the database is at migration $applied, but this image only knows up to $known: it would fail sqlx's startup check and never boot. Migrations do not run backwards: restore the snapshot taken before the deploy that applied it."
+fi
+echo "pre-deploy: the database is at migration $applied, this image knows up to $known" >&2

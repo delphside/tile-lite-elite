@@ -156,7 +156,9 @@ jobs:
           docker rm "$CID" > /dev/null
           export PATH="$RUNNER_TEMP/caddy-bin:$PATH"
           caddy version
-          REQUIRE_CADDY=1 bats scripts/tests
+          # turpin/tests are the build-once hooks' (#545): Bats with stub
+          # `docker` and `curl`, beside the shell tooling's.
+          REQUIRE_CADDY=1 bats scripts/tests turpin/tests
 
       # -D warnings makes any clippy or rustc warning fail the build. Scoped to
       # this repo's crates (old-crates carry many pre-existing warnings we don't
@@ -312,6 +314,13 @@ jobs:
       # `up --no-build` below) and builds both services against the one shared,
       # cached `builder` stage. Deps/app still recompile on a source change (no
       # cargo-chef here).
+      # The Dockerfile copies the payload `turpin build` stages in
+      # `.turpin-payload`; this build has none, so the folder is empty, which the
+      # Dockerfile allows (#545 §2.5). The e2e stack mounts `./Caddyfile.preview`
+      # from this checkout, so the working directory stays the checkout.
+      - name: Stage the empty payload
+        run: mkdir -p .turpin-payload
+
       - name: Build the preview images (cached)
         uses: docker/bake-action@v7
         with:

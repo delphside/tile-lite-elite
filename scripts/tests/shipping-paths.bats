@@ -165,11 +165,95 @@ commit_file() {   # <path> <message>
 
 # The real profile, not the fakes: 4743613a renamed programme.toml to
 # app-profile.toml and left the old name in non_shipping, so the rename itself
-# was reported as reaching the image.
-@test "under the real profile, the profile file itself does not reach the image" {
+# was reported as reaching the image. Since the image carries Turpin's payload
+# (`ships.carries_payload`), the pattern is gone and the file ships only where
+# an edit changes the keys a host reads; with nothing staged, none does.
+real_paths() {   # <path>... -> the ones the real profile says reach the image
   local root
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-  run env -u PROGRAMME_PROFILE python3 "$root/programme/scripts/board/board-shipping.py" -C "$root" paths <<< "app-profile.toml"
+  printf '%s\n' "$@" | env -u PROGRAMME_PROFILE python3 "$root/programme/scripts/board/board-shipping.py" -C "$root" paths
+}
+
+@test "under the real profile, an unedited profile file does not reach the image" {
+  run real_paths app-profile.toml
   assert_success
   assert_output ""
+}
+
+# The payload copies the host files' sources and the hooks into the image, though
+# `scripts/`, `docs/` and `.md` paths do not ship.
+@test "under the real profile, every host file's source and the hooks reach the image" {
+  run real_paths scripts/operate/backup-to-oci.sh \
+    scripts/operate/check-log-hygiene-nightly.sh \
+    scripts/operate/check-log-hygiene.py \
+    scripts/operate/upload.sh \
+    scripts/operate/systemd/tile-lite-elite-backup.timer \
+    scripts/operate/systemd/tile-lite-elite-log-check.service \
+    scripts/operate/profile.d/tile-lite-elite-sa.sh \
+    docs/4.4.7-log-events.md \
+    turpin/hooks/smoke turpin/hooks/lib.sh
+  assert_success
+  assert_line "scripts/operate/backup-to-oci.sh"
+  assert_line "scripts/operate/check-log-hygiene-nightly.sh"
+  assert_line "scripts/operate/check-log-hygiene.py"
+  assert_line "scripts/operate/upload.sh"
+  assert_line "scripts/operate/systemd/tile-lite-elite-backup.timer"
+  assert_line "scripts/operate/systemd/tile-lite-elite-log-check.service"
+  assert_line "scripts/operate/profile.d/tile-lite-elite-sa.sh"
+  assert_line "docs/4.4.7-log-events.md"
+  assert_line "turpin/hooks/smoke"
+  assert_line "turpin/hooks/lib.sh"
+}
+
+@test "under the real profile, every other script, document and markdown file, and the hooks' tests, do not" {
+  run real_paths scripts/deliver/verify.sh \
+    scripts/operate/systemd/notes.txt \
+    scripts/operate/profile.d/notes.txt \
+    docs/4.3.3-testing-ci-and-release.md \
+    docs/4.4.1-configuration.md \
+    README.md \
+    scripts/operate/clean-test-accounts.sh \
+    scripts/operate/restore-backup.sh \
+    scripts/tests/shipping-paths.bats \
+    turpin/tests/x.bats \
+    turpin/tests/helpers.bash
+  assert_success
+  assert_output ""
+}
+
+# T13: the real profile, edited between two commits of a scratch repository. An
+# edit to a key only the board reads ships nothing; one to a key a host reads
+# (`shipping.HOST_READS`) ships.
+profile_edit_range() {   # <sed expression> -> the status of `board-shipping.py range` for that edit
+  local root repo
+  root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+  repo="$BATS_TEST_TMPDIR/profile-repo"
+  rm -rf "$repo"
+  git init -q "$repo"
+  git -C "$repo" config user.email t@t
+  git -C "$repo" config user.name t
+  cp "$root/app-profile.toml" "$repo/app-profile.toml"
+  git -C "$repo" add -A
+  git -C "$repo" commit -q -m base
+  sed -i "$1" "$repo/app-profile.toml"
+  git -C "$repo" diff --quiet && { echo "the edit changed nothing" >&2; return 99; }
+  git -C "$repo" commit -q -am edit
+  env -u PROGRAMME_PROFILE python3 "$root/programme/scripts/board/board-shipping.py" -C "$repo" range HEAD^ HEAD
+}
+
+@test "under the real profile, an edit to a key only the board reads does not ship" {
+  run profile_edit_range 's|^stamp_form = .*|stamp_form = "app <X.Y.Z> api <M.N>: <what>"|'
+  assert_equal "$status" 1
+}
+
+@test "under the real profile, an edit to a key a host reads ships" {
+  run profile_edit_range 's|^fallback = .*|fallback = "see docs/4.3.6"|'
+  assert_success
+}
+
+@test "under the real profile, the Dockerfile and a crate still reach the image" {
+  run real_paths Dockerfile crates/server-game/src/app.rs
+  assert_success
+  assert_line "Dockerfile"
+  assert_line "crates/server-game/src/app.rs"
 }

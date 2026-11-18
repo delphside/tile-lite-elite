@@ -1,20 +1,29 @@
 # Pinned explicitly rather than left to derive from the containing
-# directory's basename — that basename also determines the image tags
-# `docker compose build` produces (`<name>-server`, `<name>-web`), which
-# `scripts/deploy.sh` references by their exact tag, so an unpinned name
-# would silently break `docker save` the moment the directory's renamed.
+# directory's basename — that basename also determines the container names
+# Compose makes and the labels (`com.docker.compose.project`) the operational
+# scripts find the server container by, so an unpinned name would silently
+# start a fresh project the moment the directory's renamed.
 name: tile-lite-elite
+
+# **Images.** Turpin runs this file with `TURPIN_IMAGE_SERVER` and
+# `TURPIN_IMAGE_WEB` set to the digests it pulled, and `pull_policy: never` so
+# Compose never goes to a registry itself; the fallback names are what a
+# `docker compose build` by hand tags. The `build:` blocks are for Turpin's
+# builder and by-hand builds. One image set runs on every environment: what
+# differs between them is its `.env` and the Caddyfile mounted below.
 
 services:
   server:
+    image: ${TURPIN_IMAGE_SERVER:-tile-lite-elite-server}
+    pull_policy: never
     build:
       context: .
       target: runtime-server
       args:
-        # Git short SHA, set by scripts/deploy.sh — see docs/operations.md's
-        # "Versioning" section. Empty when built by hand (`docker compose
-        # build` directly), which is fine: it just means no `+build`
-        # suffix on the reported app version.
+        # The commit's short SHA, set by the `build` hook (turpin/hooks/build)
+        # — see docs/operations.md's "Versioning" section. Empty when built by
+        # hand (`docker compose build` directly), which is fine: it just means
+        # no `+build` suffix on the reported app version.
         TILE_LITE_ELITE_BUILD_ID: ${TILE_LITE_ELITE_BUILD_ID:-}
     environment:
       TILE_LITE_ELITE_BIND: 0.0.0.0:3000
@@ -22,12 +31,14 @@ services:
       # Only used to build the link inside a password-reset email — see
       # AppState::public_base_url's doc comment in crates/server-game/src/app.rs.
       TILE_LITE_ELITE_PUBLIC_BASE_URL: ${TILE_LITE_ELITE_PUBLIC_BASE_URL:-https://tileliteelite.com}
-      # `${VAR}` substitution reads from a `.env` file Compose auto-loads
-      # from this same directory — NOT the `environment:` block above,
-      # which would commit the real secret to git. `deploy.sh` never
-      # touches `.env`, so it's created once on the VM by hand (see
-      # docs/operations.md's Configuration section) and survives every
-      # redeploy untouched, same as the deploy SSH key's own handling.
+      # `${VAR}` substitution reads from the environment's `.env` — NOT the
+      # `environment:` block above, which would commit the real secret to git.
+      # Under Turpin that file is in the environment's state folder
+      # (/var/lib/turpin/tile-lite-elite/ENV/.env), and Compose is given it by
+      # `--env-file`. A deploy never touches it, so it's created once on the VM
+      # by hand (see docs/operations.md's Configuration section) and survives
+      # every redeploy. Until 0.10.3, the fallback `deploy.sh` has Compose
+      # auto-load a `.env` beside this file instead, which it also never touches.
       # Missing/empty RESEND_API_KEY just means EmailConfig has no
       # provider configured — every email-triggering flow still works,
       # it logs the message instead of sending it (see crates/server-game/src/email.rs).
@@ -44,8 +55,8 @@ services:
       # Rate limits — how often a caller may ask, tunable without a rebuild.
       # Read once when the router is built, so a change takes a container
       # restart (`docker compose up -d server`) rather than a new image. Set
-      # them in `.env` beside the secrets, which deploy.sh never touches, so a
-      # tuned host keeps its numbers across every redeploy.
+      # them in the environment's `.env` beside the secrets, which a deploy
+      # never touches, so a tuned host keeps its numbers across every redeploy.
       #
       # Defaults live in crates/server-game/src/app/throttle.rs and are a
       # first guess for a 2 vCPU box; ./scripts/check-rate-limits.sh asserts
@@ -85,6 +96,8 @@ services:
     # gets rejected by the app itself, same as it would locally.
 
   web:
+    image: ${TURPIN_IMAGE_WEB:-tile-lite-elite-web}
+    pull_policy: never
     build:
       context: .
       target: runtime-web
@@ -97,7 +110,8 @@ services:
     environment:
       # Hostnames Caddy serves and obtains certificates for, read by the
       # {$SITE_ADDRESS} placeholder in the Caddyfile. Any other host sets its
-      # own in the `.env` beside this file.
+      # own in the environment's `.env` (its Turpin state folder's; until
+      # 0.10.3 the fallback `deploy.sh` reads one beside this file).
       #
       # The default is repeated here rather than left to the Caddyfile's own
       # {$SITE_ADDRESS:...} fallback, because Compose always *sets* the
@@ -142,6 +156,9 @@ services:
       # empty one is a valid config that behaves wrongly.
       REHEARSAL_ACCESS_KEY: ${REHEARSAL_ACCESS_KEY:-no-rehearsal-key-configured}
     volumes:
+      # This environment's Caddyfile, from the project directory: Turpin joins
+      # the file into each deploy's folder, so the image carries none.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Caddy's obtained TLS certificates live here — without this, a
       # container recreation (not just a restart) would silently re-request
       # a fresh certificate from Let's Encrypt every time.
