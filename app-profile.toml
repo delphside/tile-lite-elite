@@ -104,6 +104,8 @@ url_variable = "TARGET_URL"
 role = "rehearsal"
 login = "oci-instance-principal"
 project = "tile-lite-elite"
+# As production's, from the same measurement.
+pull_timeout = 60
 
 [environments.production]
 env = ["PROD_URL"]
@@ -113,8 +115,9 @@ role = "production"
 login = "oci-instance-principal"
 project = "tile-lite-elite"
 url = "https://tileliteelite.com"
-# Turpin's default, unmeasured; set from rehearsal's first cold pull.
-pull_timeout = 300
+# Rehearsal's cold pulls of both images, login included, took 16 s and 18 s
+# (2026-11-18, #555 S36): about three times the first.
+pull_timeout = 60
 
 [hosts.production]
 # Read by programme/scripts/board/board-hosts.py over ssh, read-only (#360).
