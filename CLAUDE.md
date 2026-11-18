@@ -64,9 +64,9 @@
 - The scripted production checks are `scripts/deliver/verify.sh`,
   `scripts/operate/check-hosts.sh` (the programme's `board-hosts.py`, which the
   `host-currency` activity also runs), `turpin status ENV` with Turpin's reads
-  of production's state, and the `/health` reads. Anything else against
-  production (an admin CLI listing, a database query, a log dump) the owner
-  runs.
+  of production's state, and the `/health` reads. Rehearsal's access is
+  closed, so `scripts/deliver/seed-rehearsal.sh` falls under the programme's
+  rule on copying production's data.
 
 ## Where the detail is
 
