@@ -103,8 +103,12 @@ admin() {
     # many matched, and reported "1 of 9" as though the rest had been refused.
     # Measured 2026-09-17 against rehearsal. `deploy.sh` carries the same fix
     # and the same note; this is the second place to need it.
+    # The host has no compose file of ours: the server is found by its Compose
+    # labels, and exactly one must match.
     rehearsal) ssh -n -o BatchMode=yes tile-lite-elite-rehearsal \
-                 "docker compose -f ~/tile-lite-elite/docker-compose.yml exec -T server tile-lite-elite-admin $*" ;;
+                 "c=\$(docker ps -q --filter label=com.docker.compose.project=tile-lite-elite --filter label=com.docker.compose.service=server --filter status=running); \
+                  [ \"\$(printf '%s' \"\$c\" | grep -c .)\" = 1 ] || { echo 'expected one running server container' >&2; exit 1; }; \
+                  docker exec \"\$c\" tile-lite-elite-admin $*" ;;
   esac
 } < /dev/null
 # **stdin closed for every backend, not just ssh.**

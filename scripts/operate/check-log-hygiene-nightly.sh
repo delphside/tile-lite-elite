@@ -21,10 +21,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SINCE="${SINCE:-yesterday}"
 EXCEPTIONS="${EXCEPTIONS:-$HOME/log-hygiene-exceptions.log}"
-PAR_URL="${PAR_URL:-}"
-if [[ -z "$PAR_URL" && -r "$HOME/.tile-lite-elite-backup-par" ]]; then
-  PAR_URL="$(< "$HOME/.tile-lite-elite-backup-par")"
-fi
+# shellcheck source=upload.sh
+. "$HERE/upload.sh"
+tle_upload_init || exit 1
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="$(mktemp)"; trap 'rm -f "$OUT" "$OUT.marker"' EXIT
@@ -34,13 +33,8 @@ OUT="$(mktemp)"; trap 'rm -f "$OUT" "$OUT.marker"' EXIT
 if journalctl CONTAINER_TAG=tle-server -o cat --since "$SINCE" \
    | python3 "$HERE/check-log-hygiene.py" --source production - > "$OUT" 2>&1; then
   printf '%s clean\n' "$STAMP" >> "$EXCEPTIONS"
-  # From a file, not stdin: OCI rejects chunked uploads with 501. See the note
-  # in backup-to-oci.sh.
-  if [[ -n "$PAR_URL" ]]; then
-    printf '%s\n' "$STAMP" > "$OUT.marker"
-    curl --fail --silent --show-error --max-time 60 \
-      -T "$OUT.marker" "${PAR_URL}marker-logcheck-ok"
-  fi
+  printf '%s\n' "$STAMP" > "$OUT.marker"
+  tle_upload "$OUT.marker" marker-logcheck-ok 60 || { echo "error: marker upload failed" >&2; exit 1; }
   exit 0
 fi
 

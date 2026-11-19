@@ -38,9 +38,12 @@ from, never written to.
 Refuses (exit 1) when:
   - no snapshot name is given and production has none yet
     -> "error: no snapshot found on production ($PROD_HOST)."
+  - `turpin-host compose` refuses on the rehearsal host (no current deploy,
+    lock held), or ssh fails, before the restore completes
+    -> "seed-rehearsal: the restore did not complete ..."
   - the rehearsal host does not answer /health within 60s of the
     restore (its own database may be mid-restart; check with
-    'docker compose logs --tail=50 server' over ssh)
+    'turpin-host compose tile-lite-elite rehearsal logs --tail=50 server' over ssh)
     -> "warning: no /health within 60s. ..."
 
 The copy carries real accounts (email addresses, password hashes), so
@@ -49,6 +52,11 @@ comment above on why it is configured like production for that reason.
 EOF
   exit 0
 fi
+
+# Rehearsal's address, key and compose command, which rehearsal-target.sh names once.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/deliver/rehearsal-target.sh
+. "$HERE/rehearsal-target.sh"
 
 PROD_HOST="${PROD_DEPLOY_HOST:-129.151.69.246}"
 PROD_KEY="${PROD_DEPLOY_SSH_KEY:-$HOME/.ssh/oracle_tile_lite_elite}"
@@ -93,18 +101,23 @@ scp "${REH_SCP[@]}" "$TMP/$SNAPSHOT" "ubuntu@$REHEARSAL_HOST:$REMOTE_DIR/snapsho
 # volume before unpacking rather than untarring over the top, or the WAL and
 # shm sidecars of the *current* database survive and replay onto the
 # restored file.
+# The stop, the restore and the start all go through `turpin-host compose`,
+# which runs Compose against the current deploy under the environment's lock,
+# so the restore runs in the current deploy's own server image (not a
+# `:latest` that may be another build's) and the old folder's compose file
+# never starts the old images. It refuses where rehearsal has no current
+# deploy or the lock is held, and then this stops.
 ssh "${REH_SSH[@]}" "ubuntu@$REHEARSAL_HOST" "
     set -e
     cd $REMOTE_DIR
-    docker compose stop server > /dev/null
-    docker run --rm \
-        -v tile-lite-elite-data:/data \
+    $REHEARSAL_COMPOSE stop server > /dev/null
+    $REHEARSAL_COMPOSE run --rm --no-deps \
         -v \"\$PWD/snapshots\":/snapshots:ro \
         --entrypoint sh \
-        tile-lite-elite-server:latest \
+        server \
         -c 'rm -rf /data/* /data/.[!.]* 2>/dev/null; tar xzf /snapshots/seeded-$SNAPSHOT -C /data'
-    docker compose up -d
-"
+    $REHEARSAL_COMPOSE up -d
+" || { echo "seed-rehearsal: the restore did not complete (turpin-host compose refused, or ssh failed): rehearsal may be stopped." >&2; exit 1; }
 
 echo "==> Waiting for the rehearsal host to come back"
 for _ in $(seq 1 30); do
@@ -116,5 +129,5 @@ for _ in $(seq 1 30); do
   fi
   sleep 2
 done
-echo "warning: no /health within 60s. Check: ssh in and 'docker compose logs --tail=50 server'" >&2
+echo "warning: no /health within 60s. Check: ssh in and 'turpin-host compose tile-lite-elite rehearsal logs --tail=50 server'" >&2
 exit 1

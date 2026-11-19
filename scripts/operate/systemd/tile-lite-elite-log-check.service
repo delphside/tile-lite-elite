@@ -1,18 +1,20 @@
 # The nightly log hygiene check (#174). Reads the day's journal, validates it
 # against docs/4.4.7's schema, writes exceptions to its own log, and refreshes a
-# marker object only on a clean run.
+# marker object only on a clean run. It runs on rehearsal and production; it
+# does not take the deploy lock, since it only reads the journal.
 #
-# Reads and writes nothing else — no accounts, no email, no driving of flows.
+# Reads and writes nothing else (bar TLE_UPLOAD from the .env) — no accounts, no email, no driving of flows.
 # The rare events are covered in CI, by the regression suite.
 #
-# **Three files travel together** into /opt/tile-lite-elite/, because the
+# **Four files travel together** into /opt/tile-lite-elite/, because the
 # validator is useless without the schema and the schema is a repository
-# document: check-log-hygiene-nightly.sh, check-log-hygiene.py, and
-# docs/4.4.7-log-events.md. There is no checkout on this host — deploy.sh ships
-# images, not source — so they are copied by the delivery, which is also why they
-# appear in the project's artefact list as `production:` entries distinct from
-# their repository originals. A logging change that does not re-copy them leaves
-# the host validating against last month's schema.
+# document: check-log-hygiene-nightly.sh, check-log-hygiene.py, upload.sh (shared
+# with the backup), and
+# docs/4.4.7-log-events.md. There is no checkout on this host, so they are the
+# image's payload: Turpin installs them as host files (`[[turpin.host_files]]`
+# in app-profile.toml) at each deploy, and a change to one ships in the image.
+# Until 0.10.3, the fallback deploy.sh still copies them. A deploy that does
+# not install them leaves the host validating against last month's schema.
 [Unit]
 Description=Tile Lite Elite — validate the day's log against docs/4.4.7
 

@@ -62,9 +62,9 @@ COPY old-crates ./old-crates
 
 # Baked into both binaries via `option_env!` (see each crate's
 # `app_version()`) as SemVer build metadata, e.g. `0.2.0+a1c9f02`. Passed
-# through from docker-compose.yml's `build.args`, which scripts/deploy.sh
-# sets to the current git short SHA — see docs/operations.md's
-# "Versioning" section. Placed just before the two build steps below
+# through from docker-compose.yml's `build.args`, which the `build` hook
+# (turpin/hooks/build) sets to the commit's short SHA — see
+# docs/operations.md's "Versioning" section. Placed just before the two build steps below
 # rather than at the top of the stage, so a rebuild of the same commit
 # (same ARG value) still hits Docker's layer cache.
 ARG TILE_LITE_ELITE_BUILD_ID
@@ -79,31 +79,25 @@ RUN cargo build --release -p server-game -p admin-cli
 # actual IP or domain, with no rebuild needed if that changes.
 RUN cd crates/ui && CARGO_INCREMENTAL=0 TILE_LITE_ELITE_API_BASE_URL="" dx build --platform web --release
 
-# Identifies the bundle in /srv by its *contents* — a hash of every file dx
-# produced. An already-running tab fetches this to decide whether reloading
-# would land it on different code; see `watch_for_new_bundle` in
-# crates/ui/src/app.rs.
+# Identifies the bundle in /srv by the build id, the commit it was built from.
+# An already-running tab fetches this to decide whether reloading would land
+# it on different code; see `watch_for_new_bundle` in crates/ui/src/app.rs.
 #
-# Contents rather than a version number, so it changes when the client
-# changes and not otherwise. The workspace version moves on every deploy
-# (deploy.sh bumps the patch), so using it here would reload every open tab
-# after a server-only release — 0.4.16 changed `games.rs` alone and left
-# `crates/ui` untouched, and nobody needed to reload for it. This also keeps
-# the signal off `API_VERSION`, which is a statement about the wire contract
-# and has no business moving because a button was fixed.
+# So every deploy of a new commit asks open tabs to reload, a server-only one
+# included. A hash of the bundle would not avoid that: the build id is compiled
+# into the wasm, so the bundle changes on every commit anyway. The workspace
+# version is not used either: a rebuild of the same version at another commit
+# would then go unnoticed. And the signal stays off `API_VERSION`, which is a
+# statement about the wire contract.
 #
 # It has to come from the *web* container rather than /health, because the
 # one moment it matters is the deploy window where the new server is already
 # up and this container still serves the old bundle; /health would report the
 # new version and send the tab into a reload loop against unchanged code.
 #
-# It holds the **build id** — the commit — rather than a hash of the bundle.
-# A hash was the same information the long way round: it only ever changed
-# because the build id is compiled into the wasm, so it was an indirection over
-# the commit that could not tell you which commit it meant. The id can, which
-# lets a tab compare three things it now knows — its own build, this
-# container's, and the server's — and tell "a deploy is in flight" apart from
-# "there is new code for me".
+# The tab compares three ids it knows, its own build, this container's and
+# the server's, which tells "a deploy is in flight" apart from "there is new
+# code for me".
 #
 # Written only when there is an id to write. A dev build sets no
 # TILE_LITE_ELITE_BUILD_ID, and no file is better than an empty one: Caddy's
@@ -142,6 +136,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=builder /workspace/target/release/server-game /usr/local/bin/server-game
 COPY --from=builder /workspace/target/release/tile-lite-elite-admin /usr/local/bin/tile-lite-elite-admin
 
+# Turpin's payload (delphside/programme#117): what a host runs to deploy this
+# image set, at /turpin/. `turpin build` assembles it into `.turpin-payload/`
+# before the build; a build by hand or in CI makes the folder empty first
+# (`mkdir -p .turpin-payload`), which copies nothing and still builds. It holds
+# no secret and no environment's configuration: the compose files and the
+# Caddyfiles are joined at deploy, from the payload, never from this image.
+COPY .turpin-payload/ /turpin/
+
 # Not published by docker-compose.yml — reachable only from the `web`
 # (Caddy) container over the compose network. `tile-lite-elite-admin` is run via
 # `docker compose exec server tile-lite-elite-admin ...`, which is a genuinely
@@ -159,7 +161,8 @@ ENTRYPOINT ["/usr/local/bin/server-game"]
 
 FROM caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f AS runtime-web
 COPY --from=builder /workspace/target/dx/tile-lite-elite-ui/release/web/public /srv
-COPY Caddyfile /etc/caddy/Caddyfile
+# No Caddyfile here: each environment's is mounted by its compose file, so one
+# image runs on every environment and a Caddyfile change is not an image change.
 EXPOSE 80
 # Probes the site's own files, through a loopback-only listener the Caddyfile
 # adds for exactly this (`http://127.0.0.1:2020`). It proves routing, the file

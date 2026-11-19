@@ -21,9 +21,9 @@ CMD="$*"
 echo "$CMD" >> "$CALLS"
 case "$CMD" in
   *"grep -m1 '^REHEARSAL_ACCESS_KEY='"*) printf '%s' "${ENV_KEY:-}" ;;
-  *"printenv REHEARSAL_ACCESS_KEY"*)     printf '%s' "${LIVE_KEY:-}" ;;
+  *"exec -T web printenv REHEARSAL_ACCESS_KEY"*)     printf '%s' "${LIVE_KEY:-}" ;;
   *"openssl rand -hex 24"*)              printf '%s' "${NEW_KEY:-deadbeef}" ;;
-  *"docker compose up -d web"*)          [[ "${APPLY_EXIT:-0}" == 0 ]] || exit 1
+  *"turpin-host compose tile-lite-elite rehearsal up -d web"*) [[ "${APPLY_EXIT:-0}" == 0 ]] || exit 1
                                          echo applied ;;
   *) : ;;
 esac
@@ -50,8 +50,12 @@ writes() { grep -c "echo 'REHEARSAL_ACCESS_KEY=$1" "$CALLS" || true; }
   run "$ACCESS" grant
   assert_output --partial 'No key configured'
   assert_equal "$(writes abc123)" 1
-  # Applied with 'up -d web', not restart.
-  assert_equal "$(grep -c 'docker compose up -d web' "$CALLS")" 1
+  # Applied with 'up -d web' through turpin-host compose, not restart.
+  assert_equal "$(grep -c 'turpin-host compose tile-lite-elite rehearsal up -d web' "$CALLS")" 1
+  assert_equal "$(grep -c 'docker compose' "$CALLS")" 0
+  # Edited in Turpin's state folder, not the old checkout.
+  assert_equal "$(grep -c '/var/lib/turpin/tile-lite-elite/rehearsal/.env' "$CALLS")" 2
+  assert_equal "$(grep -c 'cd tile-lite-elite' "$CALLS")" 0
   assert_output --partial 'https://rehearsal.tileliteelite.com/unlock/abc123'
 }
 
@@ -81,6 +85,7 @@ writes() { grep -c "echo 'REHEARSAL_ACCESS_KEY=$1" "$CALLS" || true; }
   export ENV_KEY="" NEW_KEY="abc123" APPLY_EXIT=1
   run "$ACCESS" grant
   assert_equal "$status" 1
+  assert_output --partial 'apply it'
 }
 
 @test "status: no key in .env reports every device refused" {
@@ -99,5 +104,5 @@ writes() { grep -c "echo 'REHEARSAL_ACCESS_KEY=$1" "$CALLS" || true; }
   export ENV_KEY="k2" LIVE_KEY="k1"
   run "$ACCESS" status
   assert_equal "$status" 1
-  assert_output --partial "without 'docker compose up -d web'"
+  assert_output --partial "without 'turpin-host compose ... up -d web'"
 }

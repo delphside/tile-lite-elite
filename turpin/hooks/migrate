@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# migrate (host): applies the schema on its own, before the new build serves, so
+# a failure is not an outage. `server --migrate-only` in a one-off container,
+# through TURPIN_COMPOSE, within 300 s: the limit is deploy.sh's guard against an
+# image that ignores the flag and keeps running (design 545 §3).
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+need TURPIN_COMPOSE
+bounded 300 bash -c "$TURPIN_COMPOSE run --rm server --migrate-only" \
+  || die "the migrations failed: this build's schema change does not apply to the database"
