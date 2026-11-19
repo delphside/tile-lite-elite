@@ -16,7 +16,7 @@ http://127.0.0.1:2020 {
 	encode zstd gzip
 
 	route {
-		@api path /health /engines /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
+		@api path /health /engines /engines/* /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
 		reverse_proxy @api server:3000
 
 		@assets path /assets/*
