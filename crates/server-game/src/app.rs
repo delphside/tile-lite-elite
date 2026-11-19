@@ -47,6 +47,7 @@ mod games;
 mod invitations;
 mod ratings;
 mod roster;
+mod routes;
 mod scheduler;
 mod scheduler_jobs;
 mod support_mail;
@@ -58,6 +59,8 @@ mod tests;
 mod tests_account_lifecycle;
 #[cfg(test)]
 mod tests_hardening;
+#[cfg(test)]
+mod tests_routes;
 mod throttle;
 
 use self::admin::*;
@@ -193,127 +196,41 @@ impl AppState {
 }
 
 pub fn build_router(state: AppState) -> Router {
-    // Admin routes are for operating the server, not for players — no
-    // token or account, just "you're on the same machine as the server."
-    // The guard below enforces that regardless of what TILE_LITE_ELITE_BIND is
-    // set to (docs/3.2-development.md documents binding to 0.0.0.0 for LAN
-    // play, which would otherwise expose these to the whole LAN too).
-    let admin_routes = Router::new()
-        .route("/admin/users", get(admin_list_users))
-        .route("/admin/database-size", get(admin_list_database_size))
-        .route("/admin/scheduler-health", get(admin_scheduler_health))
-        .route("/admin/users/{player_id}", delete(admin_delete_user))
-        .route(
-            "/admin/users/{player_id}/sign-out",
-            post(admin_sign_out_user),
-        )
-        .route(
-            "/admin/users/{player_id}/reset-password",
-            post(admin_reset_password),
-        )
-        .route("/admin/games", get(admin_list_games))
-        .route("/admin/games/{game_id}", delete(admin_delete_game))
-        .route(
-            "/admin/games/{game_id}/force-end",
-            post(admin_force_end_game),
-        )
+    use routes::{Access, Limit};
+
+    // Every route is registered from `routes::all`, where it declares who may
+    // call it and which limiter it sits behind; this only assembles the tiers.
+    //
+    // Admin is outside every limiter: it is loopback-only, so the only caller
+    // is the operator, and throttling them mid-cleanup helps nobody. The guard
+    // enforces that whatever TILE_LITE_ELITE_BIND is set to
+    // (docs/3.2-development.md documents binding to 0.0.0.0 for LAN play,
+    // which would otherwise expose these to the whole LAN too).
+    let admin_routes = routes::router(|route| route.access == Access::Loopback)
         .layer(middleware::from_fn(require_loopback));
 
-    // Creating an account is limited hardest, and on its own: a throwaway
-    // account is how the other limits get worked around.
     let registration_routes =
-        throttle::registration(Router::new().route("/auth/register", post(register_player)));
-
-    // The rest of the unauthenticated auth surface. Each of these spends real
-    // Argon2 time whether or not the credentials are real, which is what
-    // makes them worth reaching for.
-    let heavy_auth_routes = throttle::heavy_auth(
-        Router::new()
-            .route("/auth/login", post(login_player))
-            .route("/auth/forgot-password", post(request_password_reset))
-            .route("/auth/reset-password", post(reset_password)),
-    );
-
-    let player_routes = Router::new()
-        .route("/engines", get(list_engines))
-        .route("/dictionaries/{name}", get(get_dictionary))
-        // Authentication
-        .route("/auth/validate", post(validate_session))
-        .route("/auth/logout", post(logout))
-        .route("/auth/change-password", post(change_password))
-        .route("/auth/update-details", post(update_player_details))
-        .route("/players/search", get(search_players))
-        // Rating & Stats
-        .route("/players/{player_id}/stats", get(get_player_stats))
-        .route(
-            "/players/{player_id}/rating-history",
-            get(get_player_rating_history),
-        )
-        .route("/engines/{engine_id}/stats", get(get_engine_stats))
-        .route(
-            "/engines/{engine_id}/rating-history",
-            get(get_engine_rating_history),
-        )
-        // Games
-        .route("/games", post(create_game).get(list_games))
-        .route("/games/{game_id}", get(get_game))
-        .route("/games/{game_id}/start", post(start_game))
-        .route("/games/{game_id}/reorder-seats", post(swap_seats))
-        .route("/games/{game_id}/seats", post(add_seat_to_game))
-        .route(
-            "/games/{game_id}/seats/{seat_number}/remove",
-            post(remove_seat_from_game),
-        )
-        .route(
-            "/games/{game_id}/seats/{seat_number}/withdraw",
-            post(withdraw_from_seat),
-        )
-        .route(
-            "/games/{game_id}/seats/{seat_number}/force-resign",
-            post(force_resign_seat),
-        )
-        .route("/games/{game_id}/abort", post(abort_game))
-        .route("/games/{game_id}/actions", post(submit_action))
-        .route("/games/{game_id}/chat", post(post_chat_message))
-        .route("/games/{game_id}/remove", post(remove_game_for_player))
-        .route("/games/{game_id}/preview", post(preview_move))
-        .route("/games/{game_id}/suggest", post(suggest_move))
-        .route("/games/{game_id}/events", get(game_events))
-        // Game Invitations
-        .route("/games/{game_id}/invite", post(invite_player_to_game))
-        .route(
-            "/players/{player_id}/invitations",
-            get(list_player_invitations),
-        )
-        .route(
-            "/invitations/{invitation_id}/preview",
-            get(preview_invitation),
-        )
-        .route(
-            "/invitations/{invitation_id}/accept",
-            post(accept_invitation),
-        )
-        .route(
-            "/invitations/{invitation_id}/reject",
-            post(reject_invitation),
-        );
+        throttle::registration(routes::router(|route| route.limit == Limit::Registration));
+    let heavy_auth_routes =
+        throttle::heavy_auth(routes::router(|route| route.limit == Limit::HeavyAuth));
+    let player_routes = routes::router(|route| route.limit == Limit::Authenticated);
 
     // Everything a caller does once signed in, keyed by session, then a floor
-    // under the lot. Admin is outside both: it is loopback-only, so the only
-    // caller is the operator, and throttling them mid-cleanup helps nobody.
+    // under the lot.
     let limited = throttle::global(
         registration_routes
             .merge(heavy_auth_routes)
             .merge(throttle::authenticated(player_routes)),
     );
 
+    // `/health`, with no limit of any kind: a health check that fails under
+    // load reports an outage that is not happening, and the deploy would roll
+    // back a release that was merely busy.
+    let unlimited =
+        routes::router(|route| route.limit == Limit::Unlimited && route.access != Access::Loopback);
+
     Router::new()
-        // No limit of any kind. Monitoring and deploy.sh's own smoke test call
-        // this, and it has to answer while everything else is refusing — a
-        // health check that fails under load reports an outage that is not
-        // happening, and the deploy would roll back a release that was merely
-        // busy.
-        .route("/health", get(health))
+        .merge(unlimited)
         .merge(limited)
         .merge(admin_routes)
         .layer(CorsLayer::permissive())

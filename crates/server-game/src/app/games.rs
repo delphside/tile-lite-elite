@@ -397,13 +397,21 @@ pub(crate) async fn start_game(
     headers: HeaderMap,
     Json(_request): Json<StartGameRequest>,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers).await;
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to start a game"))?;
 
     {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+
+        if !caller_may_manage_game(game, Some(&caller_player_id)) {
+            return Err(ApiProblem::forbidden(
+                "Only the game's creator can start it",
+            ));
+        }
 
         // Checked again here, not only at creation: seats can be removed
         // afterwards, and a roster taken down to one would otherwise reach
@@ -422,12 +430,6 @@ pub(crate) async fn start_game(
         {
             return Err(ApiProblem::bad_request(
                 "Every seat must be filled before the game can start",
-            ));
-        }
-
-        if !caller_may_manage_game(game, caller_player_id.as_deref()) {
-            return Err(ApiProblem::forbidden(
-                "Only the game's creator can start it",
             ));
         }
 
@@ -455,7 +457,7 @@ pub(crate) async fn start_game(
         // that case to `Rejected`, and `redact_game_state` already treats
         // `Rejected` the same as `Creator` (no racks, no chat) rather than
         // panicking, so this is safe to call unconditionally here.
-        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        let access = resolve_viewer_access(game, Some(&caller_player_id));
         (dto, access)
     };
     stats::attach_current_ratings(&state.db, &mut dto)
@@ -687,6 +689,10 @@ pub(crate) async fn remove_game_for_player(
         .get_mut(&game_id)
         .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
+    if resolve_viewer_access(game, Some(&caller_player_id)) == ViewerAccess::Rejected {
+        return Err(ApiProblem::forbidden("You are not part of this game"));
+    }
+
     game.remove_for_player(&caller_player_id)
         .map_err(ApiProblem::bad_request)?;
 
@@ -777,7 +783,9 @@ pub(crate) async fn suggest_move(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers).await;
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to ask for a suggestion"))?;
 
     expire_overdue_turn(&state, &game_id).await;
 
@@ -787,6 +795,9 @@ pub(crate) async fn suggest_move(
             .get_mut(&game_id)
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
+        if resolve_viewer_access(game, Some(&caller_player_id)) == ViewerAccess::Rejected {
+            return Err(ApiProblem::forbidden("You are not part of this game"));
+        }
         if game.status != api::GameStatus::Active {
             return Err(ApiProblem::bad_request("Game is not active"));
         }
@@ -800,7 +811,7 @@ pub(crate) async fn suggest_move(
                 "Current seat is not human-controlled",
             ));
         }
-        if caller_player_id.as_deref() != participant.player_id.as_deref() {
+        if Some(caller_player_id.as_str()) != participant.player_id.as_deref() {
             // 403, not 401 — #379, as above.
             return Err(ApiProblem::forbidden(
                 "This seat belongs to a different player",
@@ -849,7 +860,7 @@ pub(crate) async fn suggest_move(
         persistence::save_game(&state.db, game)
             .await
             .map_err(ApiProblem::from_sqlx)?;
-        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        let access = resolve_viewer_access(game, Some(&caller_player_id));
         (dto, access)
     };
     stats::attach_current_ratings(&state.db, &mut dto)
