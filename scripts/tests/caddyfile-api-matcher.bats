@@ -5,6 +5,8 @@
 # front of two plain responses, "api" for what the matcher proxies and "spa"
 # for what falls through to the web client, so what is tested is the text
 # that ships. Every route the server offers to players must answer "api".
+# Both files are held to the one list of cases below, so they also answer
+# alike for the same path.
 #
 # CI sets REQUIRE_CADDY=1 so a missing binary is a failure there; elsewhere
 # the file skips.
