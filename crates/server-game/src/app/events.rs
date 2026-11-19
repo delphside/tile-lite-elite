@@ -19,7 +19,8 @@ pub(crate) async fn game_events(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
     websocket: WebSocketUpgrade,
-) -> Response {
+) -> Result<Response, ApiProblem> {
+    let had_token = query.token.is_some();
     let player_id = match query.token {
         Some(token) => player_id_for_token(&state, &token).await,
         None => None,
@@ -28,21 +29,59 @@ pub(crate) async fn game_events(
     let access = {
         let games = state.games.read().await;
         let Some(game) = games.get(&game_id) else {
-            return (StatusCode::NOT_FOUND, "Game not found").into_response();
+            return Err(ApiProblem::new(Reason::GameNotFound, "Game not found"));
         };
         resolve_viewer_access(game, player_id.as_deref())
     };
     if access == ViewerAccess::Rejected {
-        return (
-            StatusCode::UNAUTHORIZED,
-            "Sign in and be part of this game to watch it live",
-        )
-            .into_response();
+        // Split as the HTTP routes split it: 401 for no valid credential, 403
+        // for a signed-in caller who is not in the game. A browser cannot read
+        // a refused handshake's status, so the client treats both as a failed
+        // connection.
+        return Err(match (player_id, had_token) {
+            (Some(_), _) => ApiProblem::new(Reason::NotInGame, "You are not part of this game"),
+            (None, true) => {
+                ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+            }
+            (None, false) => {
+                ApiProblem::new(Reason::SignInRequired, "Sign in to watch this game live")
+            }
+        });
     }
 
-    websocket
-        .on_upgrade(move |socket| stream_events(socket, game_id, access, state.events.subscribe()))
+    let events = state.events.subscribe();
+    let deleted = state.deleted_games.subscribe();
+    let shutdown = state.shutdown.subscribe();
+    Ok(websocket.on_upgrade(move |socket| {
+        stream_events(socket, game_id, access, events, deleted, shutdown)
+    }))
 }
+
+/// Closes the socket with `code`: **4000 plus the HTTP status the failure
+/// stands for** (docs/1.10 *Rules for every system*), or 1001 for the
+/// server going away. The peer may already have gone, so the send is
+/// best-effort.
+async fn close_with(socket: &mut WebSocket, code: u16) {
+    let _ = socket
+        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+            code,
+            reason: "".into(),
+        })))
+        .await;
+}
+
+/// Close code for a failure of the server's own while sending.
+pub(crate) const CLOSE_SERVER_ERROR: u16 = 4500;
+/// Close code for a game deleted under the socket, as a read of it answers 404.
+pub(crate) const CLOSE_GAME_DELETED: u16 = 4404;
+/// Close code for the server stopping.
+pub(crate) const CLOSE_GOING_AWAY: u16 = 1001;
+/// How long the server waits, once it has told the sockets it is stopping, for
+/// each to write its `1001` before the listener drains. A setting of the
+/// WebSocket area: a close frame is one small write on a connection that is
+/// already open, so half a second is long enough for the open sockets of one
+/// instance, and short beside the platform's own grace period for a stop.
+pub(crate) const SHUTDOWN_GRACE: Duration = Duration::from_millis(500);
 
 /// `state.events` is a single broadcast channel shared by every game on the
 /// server, not one per game — every subscriber sees every game's events
@@ -86,8 +125,50 @@ pub(crate) async fn stream_events(
     game_id: String,
     access: ViewerAccess,
     mut rx: broadcast::Receiver<GameEventDto>,
+    mut deleted: broadcast::Receiver<String>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
-    while let Ok(event) = rx.recv().await {
+    // A socket upgraded after the stop was signalled subscribed to a value it
+    // has already seen, so `changed()` would never fire for it: close it now.
+    if *shutdown.borrow_and_update() {
+        close_with(&mut socket, CLOSE_GOING_AWAY).await;
+        return;
+    }
+    loop {
+        let event = tokio::select! {
+            _ = shutdown.changed() => {
+                close_with(&mut socket, CLOSE_GOING_AWAY).await;
+                return;
+            }
+            removed = deleted.recv() => {
+                match removed {
+                    Ok(id) if id == game_id => {
+                        close_with(&mut socket, CLOSE_GAME_DELETED).await;
+                        return;
+                    }
+                    // Another game's, or this receiver fell behind: keep
+                    // listening; a game that is gone stays gone.
+                    _ => continue,
+                }
+            }
+            received = rx.recv() => match received {
+                Ok(event) => event,
+                // The sender is gone: every `AppState` has been dropped, so
+                // the server is stopping.
+                Err(broadcast::error::RecvError::Closed) => {
+                    close_with(&mut socket, CLOSE_GOING_AWAY).await;
+                    return;
+                }
+                // This socket fell behind the broadcast and missed events: a
+                // failure of the server's, which the client answers by
+                // reconnecting for the current state.
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    tracing::warn!(game_id, "a WebSocket fell behind the broadcast; closing it");
+                    close_with(&mut socket, CLOSE_SERVER_ERROR).await;
+                    return;
+                }
+            },
+        };
         if !event_belongs_to_game(&event, &game_id) {
             continue;
         }
@@ -95,11 +176,16 @@ pub(crate) async fn stream_events(
 
         let message = match serde_json::to_string(&event) {
             Ok(message) => message,
-            Err(_) => continue,
+            Err(error) => {
+                tracing::error!(game_id, %error, "a game event did not serialise; closing the socket");
+                close_with(&mut socket, CLOSE_SERVER_ERROR).await;
+                return;
+            }
         };
 
+        // A failed send is the peer's: it has gone, and there is nobody to tell.
         if socket.send(Message::Text(message.into())).await.is_err() {
-            break;
+            return;
         }
     }
 }

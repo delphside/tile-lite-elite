@@ -9,27 +9,28 @@ pub(crate) async fn swap_seats(
     headers: HeaderMap,
     Json(request): Json<SwapSeatsRequest>,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers).await;
+    let caller_player_id = require_session(&state, &headers, "Sign in to reorder seats").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
-        if !caller_may_manage_game(game, caller_player_id.as_deref()) {
-            return Err(ApiProblem::unauthorized(
+        if !caller_may_manage_game(game, Some(&caller_player_id)) {
+            return Err(ApiProblem::new(
+                Reason::NotGameCreator,
                 "Only the game's creator can reorder seats",
             ));
         }
 
         game.swap_seats(request.seat_a, request.seat_b)
-            .map_err(ApiProblem::bad_request)?;
+            .map_err(ApiProblem::from)?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await
             .map_err(ApiProblem::from_sqlx)?;
-        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        let access = resolve_viewer_access(game, Some(&caller_player_id));
         (dto, access)
     };
     stats::attach_current_ratings(&state.db, &mut dto)
@@ -55,17 +56,17 @@ pub(crate) async fn add_seat_to_game(
     headers: HeaderMap,
     Json(request): Json<api::CreateSeatRequest>,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to add a seat"))?;
+    let caller_player_id = require_session(&state, &headers, "Sign in to add a seat").await?;
 
     if matches!(request.claim, Some(api::SeatClaim::Creator)) {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::CreatorClaimMisused,
             "Only the original creator seat may use the Creator claim",
         ));
     }
     if request.kind == api::SeatKind::Human && request.claim.is_none() {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::SeatClaimMissing,
             "A human seat needs a claim: named, open, or email",
         ));
     }
@@ -74,10 +75,11 @@ pub(crate) async fn add_seat_to_game(
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::new(
+                Reason::NotGameCreator,
                 "Only the game's creator can add a seat",
             ));
         }
@@ -104,7 +106,10 @@ pub(crate) async fn add_seat_to_game(
                     .await
                     .map_err(ApiProblem::from_sqlx)?
                     .ok_or_else(|| {
-                        ApiProblem::not_found(format!("No player named '{display_name}'"))
+                        ApiProblem::new(
+                            Reason::PlayerNotFound,
+                            format!("No player named '{display_name}'"),
+                        )
                     })?
                     .display_name
             }
@@ -124,8 +129,7 @@ pub(crate) async fn add_seat_to_game(
             invited_email,
             reminder_sent_turn: None,
         };
-        game.add_seat(participant)
-            .map_err(ApiProblem::bad_request)?;
+        game.add_seat(participant).map_err(ApiProblem::from)?;
 
         persistence::save_game(&state.db, game)
             .await
@@ -157,24 +161,22 @@ pub(crate) async fn remove_seat_from_game(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to remove a seat"))?;
+    let caller_player_id = require_session(&state, &headers, "Sign in to remove a seat").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::new(
+                Reason::NotGameCreator,
                 "Only the game's creator can remove a seat",
             ));
         }
 
-        game.remove_seat(seat_number)
-            .map_err(ApiProblem::bad_request)?;
+        game.remove_seat(seat_number).map_err(ApiProblem::from)?;
 
         if let Some(pending) =
             persistence::get_pending_invitation_for_seat(&state.db, &game_id, seat_number)
@@ -220,28 +222,27 @@ pub(crate) async fn withdraw_from_seat(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to withdraw from a seat"))?;
+    let caller_player_id =
+        require_session(&state, &headers, "Sign in to withdraw from a seat").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         let holds_seat = game
             .participants
             .get(seat_number as usize)
             .is_some_and(|p| p.player_id.as_deref() == Some(caller_player_id.as_str()));
         if !holds_seat {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::new(
+                Reason::NotYourSeat,
                 "Only the player holding this seat can withdraw from it",
             ));
         }
 
-        game.withdraw_seat(seat_number)
-            .map_err(ApiProblem::bad_request)?;
+        game.withdraw_seat(seat_number).map_err(ApiProblem::from)?;
 
         let invitations = persistence::get_invitations_for_game(&state.db, &game_id)
             .await
@@ -286,24 +287,23 @@ pub(crate) async fn force_resign_seat(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to force-resign a seat"))?;
+    let caller_player_id =
+        require_session(&state, &headers, "Sign in to force-resign a seat").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::new(
+                Reason::NotGameCreator,
                 "Only the game's creator can force-resign a seat",
             ));
         }
 
-        game.force_resign(seat_number)
-            .map_err(ApiProblem::bad_request)?;
+        game.force_resign(seat_number).map_err(ApiProblem::from)?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await
@@ -348,23 +348,22 @@ pub(crate) async fn abort_game(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to abort a game"))?;
+    let caller_player_id = require_session(&state, &headers, "Sign in to abort a game").await?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::new(
+                Reason::NotGameCreator,
                 "Only the game's creator can abort a game",
             ));
         }
 
-        game.abort().map_err(ApiProblem::bad_request)?;
+        game.abort().map_err(ApiProblem::from)?;
         let dto = game.to_dto();
         persistence::save_game(&state.db, game)
             .await

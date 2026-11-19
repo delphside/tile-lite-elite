@@ -14,14 +14,35 @@
 //! Output is a plain aligned table by default and machine-readable JSON
 //! under `--json` — the server's own DTOs, re-serialized, so a script gets
 //! the full record rather than whatever the table had room for.
+//!
+//! **Exit status says why the run stopped** (docs/1.10 *What a script's exit
+//! status means*), read from the reason the server answers with (`exit_for`).
+//! `EXIT_CODES` below is the one list of the codes, and what `--help` prints.
+//! A failure prints the body's `detail`, never reqwest's text; under `--json`
+//! it prints the body to stdout, as a success does.
 
+use api::{ErrorType, Reason};
 use clap::{Parser, Subcommand};
 use unicode_width::UnicodeWidthStr;
+
+/// **The one list of this tool's exit codes**, as `--help` prints it:
+/// docs/1.10's table as this tool reads it. The module doc and 4.3.4 point
+/// here rather than restating it.
+const EXIT_CODES: &str = "\
+Exit codes:
+  0   completed
+  1   the server refused the request: a business error, such as a missing user
+  2   a fundamental error: a credential or a setting is at fault, such as a
+      server address that is not loopback or not a URL
+  64  a usage error: a bad flag or a missing argument
+  70  an unexpected error: a defect, or an answer this tool cannot read
+  75  the server was busy or unreachable; a later retry may work";
 
 #[derive(Parser)]
 #[command(
     name = "tile-lite-elite-admin",
-    about = "Administer a tile-lite-elite server (users, games). Must run on the same machine as the server."
+    about = "Administer a tile-lite-elite server (users, games). Must run on the same machine as the server.",
+    after_help = EXIT_CODES
 )]
 struct Cli {
     /// Base URL of the server's HTTP API. Must resolve to loopback from the
@@ -129,7 +150,24 @@ enum GamesAction {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    std::process::exit(guarded(run));
+}
+
+/// A panic in this tool is *unexpected*: exit 70, never Rust's 101.
+fn guarded(run: impl FnOnce() -> i32 + std::panic::UnwindSafe) -> i32 {
+    std::panic::catch_unwind(run).unwrap_or(EXIT_UNEXPECTED)
+}
+
+fn run() -> i32 {
+    // clap's own usage error exits 2, which here means a fundamental error.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let usage_error = error.use_stderr();
+            let _ = error.print();
+            return if usage_error { EXIT_USAGE } else { 0 };
+        }
+    };
     let client = reqwest::blocking::Client::new();
     let output = Output { json: cli.json };
 
@@ -140,9 +178,158 @@ fn main() {
         Command::SchedulerHealth => run_scheduler_health(&client, &cli.server, output),
     };
 
-    if let Err(error) = result {
-        eprintln!("error: {error}");
-        std::process::exit(1);
+    match result {
+        Ok(()) => 0,
+        Err(failure) => {
+            failure.report(output);
+            failure.exit
+        }
+    }
+}
+
+const EXIT_BUSINESS: i32 = 1;
+const EXIT_FUNDAMENTAL: i32 = 2;
+const EXIT_USAGE: i32 = 64;
+const EXIT_UNEXPECTED: i32 = 70;
+const EXIT_BLIP: i32 = 75;
+
+/// Why a run stopped: the exit status, the sentence for the operator, and the
+/// server's body where there was one.
+#[derive(Debug)]
+struct Failure {
+    exit: i32,
+    detail: String,
+    status: Option<u16>,
+    body: Option<Box<api::ApiError>>,
+}
+
+impl Failure {
+    /// An answer the server sent, classified by its reason.
+    fn from_problem(status: u16, problem: api::ApiError) -> Self {
+        Self {
+            exit: exit_for(status, &problem),
+            detail: problem.sentence().to_string(),
+            status: Some(status),
+            body: Some(Box::new(problem)),
+        }
+    }
+
+    /// An error of this tool's or an answer it cannot read: *unexpected*.
+    fn unexpected(detail: impl Into<String>) -> Self {
+        Self {
+            exit: EXIT_UNEXPECTED,
+            detail: detail.into(),
+            status: None,
+            body: None,
+        }
+    }
+
+    /// The connection was refused or timed out: a *blip*.
+    fn unreachable(url: &str) -> Self {
+        Self {
+            exit: EXIT_BLIP,
+            detail: format!(
+                "Could not reach the server at {url}. Check that it is running, then try again."
+            ),
+            status: None,
+            body: None,
+        }
+    }
+
+    /// A setting of the operator's is at fault, and a retry will not clear it:
+    /// a *fundamental* technical error, exit 2.
+    fn misconfigured(detail: impl Into<String>) -> Self {
+        Self {
+            exit: EXIT_FUNDAMENTAL,
+            detail: detail.into(),
+            status: None,
+            body: None,
+        }
+    }
+
+    /// What `--json` prints: the server's own body, or one in the same shape
+    /// for a failure that never reached the server's answer.
+    fn body_for_json(&self) -> api::ApiError {
+        if let Some(body) = &self.body {
+            return (**body).clone();
+        }
+        let error_type = if self.exit == EXIT_BLIP || self.exit == EXIT_FUNDAMENTAL {
+            ErrorType::Technical
+        } else {
+            ErrorType::Unexpected
+        };
+        api::ApiError {
+            message: self.detail.clone(),
+            status: self.status.unwrap_or(0),
+            detail: self.detail.clone(),
+            outcome: "fatal".to_string(),
+            error_type: Some(error_type),
+            blip: self.exit == EXIT_BLIP,
+            domain: "tile-lite-elite-admin".to_string(),
+            ..api::ApiError::default()
+        }
+    }
+
+    /// Under `--json` the body goes to stdout, as a success's does and with
+    /// nothing on stderr; otherwise the sentence goes to stderr, after the
+    /// table of games where the refusal names some.
+    fn report(&self, output: Output) {
+        if output.json {
+            match serde_json::to_string_pretty(&self.body_for_json()) {
+                Ok(rendered) => println!("{rendered}"),
+                Err(_) => println!("{{\"detail\":\"{}\"}}", self.detail),
+            }
+            return;
+        }
+        if let Some(body) = &self.body
+            && !body.blocking_games.is_empty()
+        {
+            eprintln!("{}", self.detail);
+            eprintln!();
+            print_table(
+                &["ID", "STATUS", "LAST ACTIVITY (UTC)", "SEATS"],
+                body.blocking_games
+                    .iter()
+                    .map(|game| {
+                        vec![
+                            game.id.clone(),
+                            format!("{:?}", game.status).to_lowercase(),
+                            format_timestamp(game.last_activity_at),
+                            api::describe_seats(game.status, &game.participants),
+                        ]
+                    })
+                    .collect(),
+            );
+            return;
+        }
+        eprintln!("error: {}", self.detail);
+    }
+}
+
+/// **The exit status for an answer**, by its reason's type (docs/1.10). A
+/// reason this build does not know, or a body from a server that predates
+/// reasons, is read by its status.
+fn exit_for(status: u16, problem: &api::ApiError) -> i32 {
+    match problem.reason {
+        // The loopback guard is a business error to the server, but for this
+        // tool it is a setting at fault: `--server` does not name loopback.
+        Some(Reason::AdminLoopbackOnly) => EXIT_FUNDAMENTAL,
+        Some(Reason::Unknown) | None => exit_for_status(status),
+        Some(reason) => match reason.error_type() {
+            ErrorType::Business => EXIT_BUSINESS,
+            ErrorType::Technical if reason.blip() => EXIT_BLIP,
+            ErrorType::Technical => EXIT_FUNDAMENTAL,
+            _ => EXIT_UNEXPECTED,
+        },
+    }
+}
+
+fn exit_for_status(status: u16) -> i32 {
+    match status {
+        401 => EXIT_FUNDAMENTAL,
+        429 | 502 | 503 | 504 => EXIT_BLIP,
+        400..=499 => EXIT_BUSINESS,
+        _ => EXIT_UNEXPECTED,
     }
 }
 
@@ -172,7 +359,7 @@ fn run_size(
     client: &reqwest::blocking::Client,
     server: &str,
     output: Output,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     let rows: Vec<api::AdminDatabaseSizeDto> = check_response(
         client
             .get(format!("{server}/admin/database-size"))
@@ -224,7 +411,7 @@ fn run_scheduler_health(
     client: &reqwest::blocking::Client,
     server: &str,
     output: Output,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     let rows: Vec<api::AdminSchedulerJobHealthDto> = check_response(
         client
             .get(format!("{server}/admin/scheduler-health"))
@@ -266,7 +453,7 @@ fn run_users(
     server: &str,
     output: Output,
     action: UsersAction,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     match action {
         UsersAction::List => {
             let users: Vec<api::AdminPlayerSummaryDto> = check_response(
@@ -369,7 +556,7 @@ fn run_games(
     server: &str,
     output: Output,
     action: GamesAction,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     match action {
         GamesAction::List {
             status,
@@ -514,9 +701,9 @@ fn print_table(headers: &[&str], rows: Vec<Vec<String>>) {
     }
 }
 
-fn print_json<T: serde::Serialize>(value: &T) -> Result<(), String> {
+fn print_json<T: serde::Serialize>(value: &T) -> Result<(), Failure> {
     let rendered = serde_json::to_string_pretty(value)
-        .map_err(|error| format!("could not render: {error}"))?;
+        .map_err(|_| Failure::unexpected("The result could not be rendered as JSON."))?;
     println!("{rendered}");
     Ok(())
 }
@@ -549,48 +736,37 @@ fn format_timestamp_seconds(epoch_seconds: i64) -> String {
         .unwrap_or_else(|| epoch_seconds.to_string())
 }
 
-fn fmt_err(error: reqwest::Error) -> String {
-    format!(
-        "could not reach {}: {error}",
-        error.url().map(|u| u.as_str()).unwrap_or("server")
-    )
+/// A transport failure, in the operator's words and never reqwest's. **Only a
+/// connection that was refused or timed out is a blip** (75). An address that
+/// is not a usable URL is the operator's setting at fault (2); anything else,
+/// such as an answer this tool cannot read, is unexpected (70).
+fn fmt_err(error: reqwest::Error) -> Failure {
+    if error.is_builder() {
+        Failure::misconfigured("The server address is not a usable URL. Check --server.")
+    } else if error.is_connect() || error.is_timeout() {
+        Failure::unreachable(error.url().map(|u| u.as_str()).unwrap_or("the server"))
+    } else if error.is_decode() || error.is_body() {
+        Failure::unexpected("The server answered with something this tool cannot read.")
+    } else {
+        Failure::unexpected("The request to the server failed in a way this tool did not expect.")
+    }
 }
 
 fn check_response(
     response: reqwest::blocking::Response,
-) -> Result<reqwest::blocking::Response, String> {
+) -> Result<reqwest::blocking::Response, Failure> {
     if response.status().is_success() {
         return Ok(response);
     }
-    let status = response.status();
+    let status = response.status().as_u16();
+    // A body this tool cannot parse is *unexpected*, whatever the status: a
+    // proxy's page is not an answer from the server.
     let Ok(problem) = response.json::<api::ApiError>() else {
-        return Err(status.to_string());
+        return Err(Failure::unexpected(format!(
+            "The server answered {status} with something this tool cannot read."
+        )));
     };
-    // A refusal that names games gets the same table `games list` prints, so
-    // an operator does not have to translate between two descriptions of the
-    // same thing. Printed here rather than folded into the error string
-    // because it is output, not a reason — the reason follows it.
-    if !problem.blocking_games.is_empty() {
-        eprintln!("{status}: {}", problem.message);
-        eprintln!();
-        print_table(
-            &["ID", "STATUS", "LAST ACTIVITY (UTC)", "SEATS"],
-            problem
-                .blocking_games
-                .iter()
-                .map(|game| {
-                    vec![
-                        game.id.clone(),
-                        format!("{:?}", game.status).to_lowercase(),
-                        format_timestamp(game.last_activity_at),
-                        api::describe_seats(game.status, &game.participants),
-                    ]
-                })
-                .collect(),
-        );
-        std::process::exit(1);
-    }
-    Err(format!("{status}: {}", problem.message))
+    Err(Failure::from_problem(status, problem))
 }
 
 /// A 16-character password from a charset with visually-ambiguous
@@ -612,7 +788,7 @@ fn resolve_user(
     client: &reqwest::blocking::Client,
     server: &str,
     user: &str,
-) -> Result<String, String> {
+) -> Result<String, Failure> {
     let users: Vec<api::AdminPlayerSummaryDto> = check_response(
         client
             .get(format!("{server}/admin/users"))
@@ -699,5 +875,54 @@ mod tests {
             ["expire_overdue_turns", "2026-07-26 13:52:02", "2"]
         );
         assert_eq!(rows[1], ["send_move_time_reminders", "never", "0"]);
+    }
+
+    /// T12: a panic in the tool exits 70, not Rust's 101.
+    #[test]
+    fn a_panic_exits_70() {
+        assert_eq!(guarded(|| panic!("a defect in the tool")), 70);
+        assert_eq!(guarded(|| 0), 0);
+        assert_eq!(guarded(|| 1), 1);
+    }
+
+    /// T12: a connection that times out is a blip, said without reqwest's text.
+    #[test]
+    fn a_timeout_is_a_blip_in_the_operators_words() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        // Accepts, then says nothing.
+        std::thread::spawn(move || {
+            let held: Vec<_> = listener.incoming().take(1).collect();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            drop(held);
+        });
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(150))
+            .build()
+            .unwrap();
+        let error = client
+            .get(format!("http://{address}/admin/users"))
+            .send()
+            .expect_err("nothing answers");
+        let failure = fmt_err(error);
+        assert_eq!(failure.exit, 75);
+        assert!(failure.detail.contains("Could not reach the server"));
+        assert!(!failure.detail.contains("error sending request"));
+        assert!(!failure.detail.contains("timed out"));
+    }
+
+    /// The classification, row by row, from the design's table.
+    #[test]
+    fn exit_for_reads_the_type_and_the_loopback_exception() {
+        let problem = |reason| api::ApiError {
+            reason: Some(reason),
+            ..api::ApiError::default()
+        };
+        assert_eq!(exit_for(404, &problem(Reason::PlayerNotFound)), 1);
+        assert_eq!(exit_for(403, &problem(Reason::AdminLoopbackOnly)), 2);
+        assert_eq!(exit_for(401, &problem(Reason::SignInRequired)), 2);
+        assert_eq!(exit_for(429, &problem(Reason::TooManyRequests)), 75);
+        assert_eq!(exit_for(503, &problem(Reason::ServiceBusy)), 75);
+        assert_eq!(exit_for(500, &problem(Reason::Internal)), 70);
     }
 }
