@@ -1097,6 +1097,15 @@ async fn the_refusal_says_who_is_in_each_game_and_where_it_has_got_to() {
         blocking.last_activity_at > 0,
         "the listing shows last activity, so this must carry it too"
     );
+    // #548: the sweep counts from when a game ended, and takes only finished
+    // and aborted games, so the advice to wait must say both.
+    assert!(
+        problem.message.contains("a week after it ended")
+            && problem.message.contains("finished or aborted")
+            && !problem.message.contains("last activity"),
+        "the refusal names the sweep's clock: {}",
+        problem.message
+    );
 
     // Free of counts and agreement — the list carries the detail, and there
     // may be one game or a dozen in any mix of states.
