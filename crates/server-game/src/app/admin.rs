@@ -159,9 +159,8 @@ pub(crate) async fn admin_delete_user(
                 "That account cannot be deleted yet. The games below still refer to \
                  it. Please wait until they are gone, then delete the account. A \
                  finished or aborted game is removed automatically a week after it \
-                 ended, and an invitation goes with the game holding it. A game still \
-                 waiting or in play stays until it ends, so delete it first if the \
-                 account must go now.",
+                 ended, and an invitation goes with the game holding it. A game that has \
+                 not ended stays until it does.",
                 blocking,
             ));
         }
