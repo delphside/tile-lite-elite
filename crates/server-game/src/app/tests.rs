@@ -6660,7 +6660,9 @@ async fn named_invitation_shows_up_and_claims_the_seat_on_accept() {
         Some(&mallory.session_token),
     )
     .await;
-    assert_eq!(stolen.status(), StatusCode::UNAUTHORIZED);
+    // Signed in and not allowed is 403, not 401 (#450): a 401 would tell
+    // the client its session had ended and sign Mallory out.
+    assert_eq!(stolen.status(), StatusCode::FORBIDDEN);
 
     let accepted: GameStateDto = read_json(
         send_empty_auth(

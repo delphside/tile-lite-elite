@@ -40,7 +40,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
 
                 api = component "Transport API" "The routes, the functions that say who is calling, and the error responses." "Axum" {
                     properties {
-                        "artefact" "crates/server-game/src/app.rs, crates/server-game/src/app/common.rs, crates/server-game/src/app/error.rs"
+                        "artefact" "crates/server-game/src/app.rs, crates/server-game/src/app/routes.rs, crates/server-game/src/app/common.rs, crates/server-game/src/app/error.rs"
                     }
                 }
                 throttle = component "Rate limiting" "How often a caller may ask, on every public route but /health." "tower_governor" {
