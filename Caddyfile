@@ -133,11 +133,11 @@ http://127.0.0.1:2020 {
 			not header_regexp Cookie "(^|;[ ]*)rehearsal={$REHEARSAL_ACCESS_KEY}([;]|$)"
 		}
 		handle @rehearsal_locked {
-			respond "Rehearsal is locked. Run ./scripts/rehearsal-access.sh grant and scan the code." 403
+			respond "Rehearsal is locked. Run ./scripts/deliver/rehearsal-access.sh grant and scan the code." 403
 		}
 		# --- end rehearsal access control ---------------------------------
 
-		@api path /health /engines /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
+		@api path /health /engines /engines/* /auth/* /games /games/* /players/* /invitations/* /dictionaries/*
 		reverse_proxy @api server:3000
 
 		# dx's web build fingerprints every file under /assets with a

@@ -31,7 +31,7 @@ STUB
 }
 
 @test "403 from a keyed host passes" {
-  check 403 "Rehearsal is locked. Run ./scripts/rehearsal-access.sh grant and scan the code."
+  check 403 "Rehearsal is locked. Run ./scripts/deliver/rehearsal-access.sh grant and scan the code."
   assert_output --partial 'PASS a key is configured'
 }
 
