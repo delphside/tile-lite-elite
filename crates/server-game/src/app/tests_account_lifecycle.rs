@@ -1115,7 +1115,9 @@ async fn the_refusal_says_who_is_in_each_game_and_where_it_has_got_to() {
         problem.message
     );
     assert!(
-        problem.message.contains("wait") && !problem.message.contains("Delete those games"),
+        problem.message.contains("Please wait until they are gone")
+            && !problem.message.contains("Delete those games")
+            && !problem.message.contains("delete it"),
         "waiting is the advice — deleting somebody else's game to hurry a \
          cleanup along is not: {}",
         problem.message
