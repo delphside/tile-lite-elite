@@ -157,9 +157,11 @@ pub(crate) async fn admin_delete_user(
             // the account is visible in the seats.
             return Err(ApiProblem::blocked_by_games(
                 "That account cannot be deleted yet. The games below still refer to \
-                 it. Please wait until they are gone, then delete the account. Games \
-                 are removed automatically from a week after their last activity, and \
-                 an invitation goes with the game holding it.",
+                 it. Please wait until they are gone, then delete the account. A \
+                 finished or aborted game is removed automatically a week after it \
+                 ended, and an invitation goes with the game holding it. A game still \
+                 waiting or in play stays until it ends, so delete it first if the \
+                 account must go now.",
                 blocking,
             ));
         }
