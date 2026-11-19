@@ -307,7 +307,7 @@ pub(crate) async fn accept_invitation(
                 "This invitation is no longer available — it may already have been claimed",
             ),
             persistence::ClaimInvitationError::NotYourInvitation => {
-                ApiProblem::unauthorized("This invitation was not sent to you")
+                ApiProblem::forbidden("This invitation was not sent to you")
             }
         })?;
 

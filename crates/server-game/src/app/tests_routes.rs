@@ -54,8 +54,9 @@ impl World {
         }
     }
 
-    /// A router of its own for every request, so the rate limiters (which
-    /// the walk would otherwise exhaust) never answer in place of a handler.
+    /// A router of its own for every request, so no request's effects reach
+    /// the next. The rate limiters are off under `cfg(test)`, so nothing here
+    /// tests which tier a route sits in.
     fn router(&self) -> Router {
         build_router(self.state.clone())
     }

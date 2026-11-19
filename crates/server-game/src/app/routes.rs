@@ -23,8 +23,9 @@ pub(super) enum Access {
     /// A player seated in the game, or its creator; a handler may narrow it
     /// to the seat or the turn. 401 without a session, 403 for anyone else.
     Game,
-    /// The game's creator only (`caller_may_manage_game`). 401 without a
-    /// session, 403 for anyone else, a seated player included.
+    /// The game's creator only (`caller_may_manage_game`, which lets a game
+    /// with no recorded creator be managed by any seated player). 401 without
+    /// a session, 403 for anyone else, a seated player included.
     Creator,
     /// The operator, on the host. 403 from anywhere else.
     Loopback,
