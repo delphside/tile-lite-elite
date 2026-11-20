@@ -155,12 +155,17 @@ pub(crate) async fn admin_delete_user(
             // describe them ends up either wrong or written three ways — while
             // the rows say all of it already, including why each one counts:
             // the account is visible in the seats.
+            // The period is read from the setting, never written into the
+            // text, so the message cannot outlive a change to it.
             return Err(ApiProblem::blocked_by_games(
-                "That account cannot be deleted yet. The games below still refer to \
-                 it. Please wait until they are gone, then delete the account. A \
-                 finished or aborted game is removed automatically a week after it \
-                 ended, and an invitation goes with the game holding it. A game that has \
-                 not ended stays until it does.",
+                format!(
+                    "That account cannot be deleted yet. The games below still refer \
+                     to it. Please wait until they are gone, then delete the account. \
+                     A finished or aborted game is removed automatically {} after it \
+                     ended, and an invitation goes with the game holding it. A game \
+                     that has not ended stays until it does.",
+                    format_duration_days_hours(COMPLETED_GAME_RETENTION.as_secs())
+                ),
                 blocking,
             ));
         }
