@@ -62,15 +62,15 @@ pub(crate) async fn invite_player_to_game(
         .get(&game_id)
         .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
-    if game.status != api::GameStatus::Waiting {
-        return Err(ApiProblem::bad_request(
-            "Game must be in waiting state to invite players",
+    if !caller_may_manage_game(game, Some(&inviting_player_id)) {
+        return Err(ApiProblem::forbidden(
+            "Only the game's creator can invite players",
         ));
     }
 
-    if !caller_may_manage_game(game, Some(&inviting_player_id)) {
-        return Err(ApiProblem::unauthorized(
-            "Only the game's creator can invite players",
+    if game.status != api::GameStatus::Waiting {
+        return Err(ApiProblem::bad_request(
+            "Game must be in waiting state to invite players",
         ));
     }
 
@@ -307,7 +307,7 @@ pub(crate) async fn accept_invitation(
                 "This invitation is no longer available — it may already have been claimed",
             ),
             persistence::ClaimInvitationError::NotYourInvitation => {
-                ApiProblem::unauthorized("This invitation was not sent to you")
+                ApiProblem::forbidden("This invitation was not sent to you")
             }
         })?;
 

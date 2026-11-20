@@ -9,6 +9,11 @@
 
 use super::*;
 
+/// How long a completed game, finished or aborted, is kept after it ended
+/// (RET-1). Anything that tells a person this period reads it from here.
+pub(crate) const COMPLETED_GAME_RETENTION: std::time::Duration =
+    std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
 /// Records what the database holds, once a day.
 ///
 /// Hung off the same lazy path as the other sweeps rather than given a
@@ -54,7 +59,7 @@ pub(crate) async fn record_database_size(state: &AppState) {
 /// zero rows, and removing an already-removed key from the map is a no-op.
 pub(crate) async fn expire_old_terminal_games(state: &AppState) {
     let now = now_unix_seconds();
-    let cutoff = now - 7 * 24 * 60 * 60;
+    let cutoff = now - COMPLETED_GAME_RETENTION.as_secs() as i64;
     let stale_ids = match persistence::list_terminal_game_ids_older_than(&state.db, cutoff).await {
         Ok(ids) => ids,
         Err(error) => {
@@ -71,7 +76,11 @@ pub(crate) async fn expire_old_terminal_games(state: &AppState) {
         match persistence::delete_game(&state.db, &game_id).await {
             Ok(_) => {
                 games.remove(&game_id);
-                tracing::info!(game_id, "terminal game auto-deleted after 7 days");
+                tracing::info!(
+                    game_id,
+                    retention = %format_duration_days_hours(COMPLETED_GAME_RETENTION.as_secs()),
+                    "terminal game auto-deleted after its retention period"
+                );
             }
             Err(error) => {
                 tracing::error!(game_id, %error, "failed to auto-delete expired game");

@@ -9,7 +9,9 @@ pub(crate) async fn swap_seats(
     headers: HeaderMap,
     Json(request): Json<SwapSeatsRequest>,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers).await;
+    let caller_player_id = authenticated_player_id(&state, &headers)
+        .await
+        .ok_or_else(|| ApiProblem::unauthorized("Sign in to reorder seats"))?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
@@ -17,8 +19,8 @@ pub(crate) async fn swap_seats(
             .get_mut(&game_id)
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
-        if !caller_may_manage_game(game, caller_player_id.as_deref()) {
-            return Err(ApiProblem::unauthorized(
+        if !caller_may_manage_game(game, Some(&caller_player_id)) {
+            return Err(ApiProblem::forbidden(
                 "Only the game's creator can reorder seats",
             ));
         }
@@ -29,7 +31,7 @@ pub(crate) async fn swap_seats(
         persistence::save_game(&state.db, game)
             .await
             .map_err(ApiProblem::from_sqlx)?;
-        let access = resolve_viewer_access(game, caller_player_id.as_deref());
+        let access = resolve_viewer_access(game, Some(&caller_player_id));
         (dto, access)
     };
     stats::attach_current_ratings(&state.db, &mut dto)
@@ -77,7 +79,7 @@ pub(crate) async fn add_seat_to_game(
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::forbidden(
                 "Only the game's creator can add a seat",
             ));
         }
@@ -168,7 +170,7 @@ pub(crate) async fn remove_seat_from_game(
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::forbidden(
                 "Only the game's creator can remove a seat",
             ));
         }
@@ -235,7 +237,7 @@ pub(crate) async fn withdraw_from_seat(
             .get(seat_number as usize)
             .is_some_and(|p| p.player_id.as_deref() == Some(caller_player_id.as_str()));
         if !holds_seat {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::forbidden(
                 "Only the player holding this seat can withdraw from it",
             ));
         }
@@ -297,7 +299,7 @@ pub(crate) async fn force_resign_seat(
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::forbidden(
                 "Only the game's creator can force-resign a seat",
             ));
         }
@@ -359,7 +361,7 @@ pub(crate) async fn abort_game(
             .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
 
         if !caller_may_manage_game(game, Some(&caller_player_id)) {
-            return Err(ApiProblem::unauthorized(
+            return Err(ApiProblem::forbidden(
                 "Only the game's creator can abort a game",
             ));
         }

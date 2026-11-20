@@ -33,11 +33,17 @@ pub(crate) async fn game_events(
         resolve_viewer_access(game, player_id.as_deref())
     };
     if access == ViewerAccess::Rejected {
-        return (
-            StatusCode::UNAUTHORIZED,
-            "Sign in and be part of this game to watch it live",
-        )
-            .into_response();
+        return match player_id {
+            None => (
+                StatusCode::UNAUTHORIZED,
+                "Sign in and be part of this game to watch it live",
+            ),
+            Some(_) => (
+                StatusCode::FORBIDDEN,
+                "Only a player in this game can watch it live",
+            ),
+        }
+        .into_response();
     }
 
     websocket

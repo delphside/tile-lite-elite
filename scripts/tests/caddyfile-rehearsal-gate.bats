@@ -81,6 +81,20 @@ PROD=tileliteelite.com
   assert_output 403
 }
 
+# #519: the refusal names the access script where it is, so the person
+# reading it can run it as written.
+@test "a keyed host: the locked response names the access script by its real path" {
+  start_caddy abc123
+  run curl -s -H "Host: $REH" "http://127.0.0.1:$PORT/games"
+  assert_output --partial "./scripts/deliver/rehearsal-access.sh grant"
+}
+
+@test "a keyless host: the refusal names the access script by its real path" {
+  start_caddy no-rehearsal-key-configured
+  run curl -s -H "Host: $REH" "http://127.0.0.1:$PORT/games"
+  assert_output --partial "./scripts/deliver/rehearsal-access.sh grant"
+}
+
 @test "a keyed host: /health and production's hostname are open without a cookie" {
   start_caddy abc123
   run req $REH /health
