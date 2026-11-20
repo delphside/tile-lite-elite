@@ -1100,8 +1100,10 @@ async fn the_refusal_says_who_is_in_each_game_and_where_it_has_got_to() {
     // #548: the sweep counts from when a game ended, and takes only finished
     // and aborted games, so the advice to wait must say both.
     assert!(
-        problem.message.contains("a week after it ended")
-            && problem.message.contains("finished or aborted")
+        problem.message.contains(&format!(
+            "{} after it ended",
+            format_duration_days_hours(COMPLETED_GAME_RETENTION.as_secs())
+        )) && problem.message.contains("finished or aborted")
             && !problem.message.contains("last activity"),
         "the refusal names the sweep's clock: {}",
         problem.message
