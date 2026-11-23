@@ -22,9 +22,17 @@ gives. Keep `None owed:` where 1.1's *what owes none* row covers the change;
 otherwise replace it with the record. The *Review record* check reports, as
 warnings on its run, anything in the record the weekly digest cannot read; it
 passes either way.
+
+The `Claims:` line names the files this pull request expects to change, in
+the form
+[1.2](https://github.com/delphside/programme/blob/main/docs/1.2-change-lifecycle.md#naming-the-files-a-change-will-touch)
+gives, so that another thread's `board-overlap.py` lists it before that thread
+edits one; keep it current.
 -->
 
 Refs #N
+
+Claims:
 
 ## What is being requested
 
