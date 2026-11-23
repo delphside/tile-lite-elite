@@ -19,7 +19,8 @@ one, for a change that serves an activity.
 *Review rounds* is the review record, in the form
 [1.1](https://github.com/delphside/programme/blob/main/docs/1.1-programme-tooling.md#claudes-tooling)
 gives. Keep `None owed:` where 1.1's *what owes none* row covers the change;
-otherwise replace it with the record.
+otherwise replace it with the record. `board-review-record.py` checks the
+record on the pull request.
 -->
 
 Refs #N

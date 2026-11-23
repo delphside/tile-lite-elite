@@ -1,0 +1,49 @@
+# Reports, on each pull request, whether its *Review rounds* record is one the
+# weekly digest can read (the programme's docs/1.1 *Claude's tooling* gives
+# the form, docs/1.4 what the digest counts). It reports and never gates: the
+# job passes whatever it finds, and each finding is a warning on the run, for
+# whoever writes the record to fix before the merge rather than after the
+# week's digest has miscounted it (the W47 and W48 digests, lesson 1).
+#
+# The check is `board-review-record.py`, the programme's shared code, run from
+# the head of the programme's `main` rather than this repository's pin: the
+# weekly digest reads every record with the programme's current parser, so
+# that is the one a record must satisfy. The body comes from the event, so the
+# run needs no token. A pull request a bot opened owes no record, and is
+# skipped.
+name: Review record
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+# A later edit supersedes an earlier run of the same pull request.
+concurrency:
+  group: review-record-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: report the review record
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    # One checkout and one read of a body.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: delphside/programme
+          ref: main
+          path: .programme-live
+
+      - name: Check the record
+        shell: bash
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "$BODY" | python3 .programme-live/scripts/board/board-review-record.py | tee report.txt
+          { echo '### Review record'; echo; sed 's/^/    /' report.txt; } >> "$GITHUB_STEP_SUMMARY"
+          sed -n 's/^WARN /::warning title=Review record::/p' report.txt
