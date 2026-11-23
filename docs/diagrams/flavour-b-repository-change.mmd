@@ -38,7 +38,7 @@ flowchart TB
     BR -->|"`**$ gh pr create --reviewer**`"| PR
     PR -.->|"the owner ticks and approves"| BR
     BR -->|"`1.9 · step 1: **$ git rebase** origin/main and re-stamp
-**$ git push --force-with-lease**`"| BR
+**$ git push --force-with-lease --force-if-includes**`"| BR
     BR -->|"`1.9 · step 3: **$ git merge --ff-only**`"| MAIN
     MAIN --> LIVE
     MAIN -->|"`1.10 · **$ git branch -d** locally; the repository deletes the remote`"| BR
