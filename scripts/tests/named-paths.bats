@@ -19,14 +19,17 @@ setup() {
 
 # named_paths <root>: each distinct scripts/... path or glob named in those files
 # and in e2e/, with the `programme/` in front of it when it is the submodule's.
+# A workflow that checks out the programme's `main` into `.programme-live/` names
+# the programme's path, so that is checked in the submodule as `programme/`.
 # e2e builds some with path.join('..', 'scripts', 'develop', 'x.sh'), which no
 # `scripts/` pattern sees, so those are joined first.
 named_paths() {
   local root="$1" files=()
   mapfile -t files < <(find "$root/e2e" -path '*/node_modules' -prune -o -type f \( -name '*.ts' -o -name package.json \) -print 2>/dev/null)
   {
-    grep -sohE '(programme/)?scripts/[A-Za-z0-9_./*-]*[A-Za-z0-9_*]' \
-      "$root"/.claude/*.sh "$root"/.github/workflows/*.yml "${files[@]}" /dev/null
+    grep -sohE '(\.programme-live/|programme/)?scripts/[A-Za-z0-9_./*-]*[A-Za-z0-9_*]' \
+      "$root"/.claude/*.sh "$root"/.github/workflows/*.yml "${files[@]}" /dev/null \
+      | sed 's#^\.programme-live/#programme/#'
     grep -sohE "'scripts'(, *'[^']+')+" "${files[@]}" /dev/null | sed -E "s/', *'/\//g; s/'//g"
   } | sort -u
 }
