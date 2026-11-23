@@ -20,7 +20,8 @@ setup() {
 # named_paths <root>: each distinct scripts/... path or glob named in those files
 # and in e2e/, with the `programme/` in front of it when it is the submodule's.
 # A workflow that checks out the programme's `main` into `.programme-live/` names
-# the programme's path, so that is checked in the submodule as `programme/`.
+# the programme's path, so that is checked in the submodule as `programme/`: the
+# pin stands in for `main`, so a script new on `main` needs the pin moved first.
 # e2e builds some with path.join('..', 'scripts', 'develop', 'x.sh'), which no
 # `scripts/` pattern sees, so those are joined first.
 named_paths() {
