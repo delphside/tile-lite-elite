@@ -34,17 +34,16 @@ pub(crate) async fn get_dictionary(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<String, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to fetch a dictionary"))?;
+    require_session(&state, &headers, "Sign in to fetch a dictionary").await?;
 
     match name.as_str() {
         "sowpods" => Ok(rules_shared::sowpods_word_list().to_string()),
         "enable2k" => Ok(rules_shared::enable2k_word_list().to_string()),
         "german" => Ok(rules_shared::german_word_list().to_string()),
         "spanish" => Ok(rules_shared::spanish_word_list().to_string()),
-        _ => Err(ApiProblem::not_found(format!(
-            "Unknown dictionary '{name}'"
-        ))),
+        _ => Err(ApiProblem::new(
+            Reason::DictionaryNotFound,
+            format!("Unknown dictionary '{name}'"),
+        )),
     }
 }

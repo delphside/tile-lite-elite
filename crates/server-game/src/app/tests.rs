@@ -6091,10 +6091,10 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for ThreadLocalWriter {
 /// with `.text()`, and clears this thread's capture slot on drop
 /// (including on an assertion panic) so a later test whose OS thread
 /// gets reused by the harness never inherits a stale sink.
-struct LogCapture(CapturedLog);
+pub(super) struct LogCapture(CapturedLog);
 
 impl LogCapture {
-    fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         self.0.text()
     }
 }
@@ -6107,7 +6107,7 @@ impl Drop for LogCapture {
 
 /// Starts capturing this thread's `tracing` output, readable via the
 /// returned guard's `.text()` once the request under test has completed.
-fn start_capturing_log_on_this_thread() -> LogCapture {
+pub(super) fn start_capturing_log_on_this_thread() -> LogCapture {
     install_test_subscriber();
     let log = CapturedLog::default();
     LOG_SINK.with(|sink| *sink.borrow_mut() = Some(log.clone()));

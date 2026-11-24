@@ -95,6 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // support-mail poller when configured — everything else this server does
     // lazily stays lazy; see `docs/3.7`.
     spawn_scheduler(state.clone());
+    let shutdown_state = state.clone();
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(bind.parse::<SocketAddr>()?).await?;
 
@@ -122,10 +123,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     });
 
+    // The platform asks a container to stop with SIGTERM. Telling the
+    // WebSockets first lets each close with 1001, *going away*, which a client
+    // reads as "reconnect". The listener's drain does not wait for upgraded
+    // connections (hyper hands them to the application), so `begin_shutdown`
+    // itself waits a bounded moment for the sockets to write the frame.
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(async move {
+        stop_requested().await;
+        tracing::info!("stop requested; closing WebSockets and draining");
+        shutdown_state.begin_shutdown().await;
+    })
     .await?;
     Ok(())
+}
+
+/// Resolves when the process is asked to stop: Ctrl-C, or SIGTERM, which is
+/// what the container runtime and systemd send.
+async fn stop_requested() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut stream) => {
+                stream.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
 }

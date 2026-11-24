@@ -9,7 +9,8 @@ pub(crate) async fn register_player(
     let display_name = request.display_name.trim();
     let email = request.email.trim();
     if display_name.is_empty() || email.is_empty() || request.password.is_empty() {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::RegistrationIncomplete,
             "User ID, email, and password are all required",
         ));
     }
@@ -19,7 +20,10 @@ pub(crate) async fn register_player(
         .map_err(ApiProblem::from_sqlx)?
         .is_some()
     {
-        return Err(ApiProblem::bad_request("That User ID is already taken"));
+        return Err(ApiProblem::new(
+            Reason::DisplayNameTaken,
+            "That User ID is already taken",
+        ));
     }
 
     let password_hash = hash_password_bounded(&state, &request.password).await?;
@@ -31,7 +35,11 @@ pub(crate) async fn register_player(
     persistence::create_player(&state.db, &player_id, display_name, email, &password_hash)
         .await
         .map_err(|error| {
-            ApiProblem::from_sqlx_or_duplicate(error, "That User ID is already taken")
+            ApiProblem::from_sqlx_or_duplicate(
+                error,
+                Reason::DisplayNameTaken,
+                "That User ID is already taken",
+            )
         })?;
 
     let session_token = Uuid::new_v4().to_string();
@@ -94,7 +102,7 @@ pub(crate) async fn login_player(
         // The vagueness is untouched and must stay: the same error is returned
         // whether the account is unknown or the password is wrong, and this
         // wording is equally silent about which half failed.
-        ApiProblem::bad_request("Incorrect User ID or password")
+        ApiProblem::new(Reason::SignInFailed, "Incorrect User ID or password")
     };
 
     let player = persistence::get_player_by_name(&state.db, &display_name)
@@ -156,12 +164,16 @@ pub(crate) async fn validate_session(
     // session would still validate here until the lazy sweep removed it.
     let player_id = player_id_for_token(&state, &request.session_token)
         .await
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     let player = persistence::get_player_by_id(&state.db, &player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     Ok(Json(PlayerDto {
         id: player.id,
@@ -200,9 +212,7 @@ pub(crate) async fn search_players(
     headers: HeaderMap,
     Query(query): Query<SearchPlayersQuery>,
 ) -> Result<Json<Vec<String>>, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to search players"))?;
+    require_session(&state, &headers, "Sign in to search players").await?;
 
     let prefix = query.q.trim();
     if prefix.is_empty() {
@@ -219,18 +229,21 @@ pub(crate) async fn change_password(
     headers: HeaderMap,
     Json(request): Json<ChangePasswordRequest>,
 ) -> Result<StatusCode, ApiProblem> {
-    let player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to change your password"))?;
+    let player_id = require_session(&state, &headers, "Sign in to change your password").await?;
 
     if request.new_password.is_empty() {
-        return Err(ApiProblem::bad_request("A new password is required"));
+        return Err(ApiProblem::new(
+            Reason::NewPasswordRequired,
+            "A new password is required",
+        ));
     }
 
     let player = persistence::get_player_by_id(&state.db, &player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     // Requiring the current password (rather than trusting the session
     // token alone) matters specifically for "remember me" sessions, which
@@ -242,7 +255,10 @@ pub(crate) async fn change_password(
             player_id,
             "password change rejected: wrong current password"
         );
-        return Err(ApiProblem::bad_request("Current password is incorrect"));
+        return Err(ApiProblem::new(
+            Reason::CurrentPasswordWrong,
+            "Current password is incorrect",
+        ));
     }
 
     let new_hash = hash_password_bounded(&state, &request.new_password).await?;
@@ -271,9 +287,7 @@ pub(crate) async fn update_player_details(
     headers: HeaderMap,
     Json(request): Json<api::UpdatePlayerDetailsRequest>,
 ) -> Result<Json<api::PlayerDto>, ApiProblem> {
-    let player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to update your details"))?;
+    let player_id = require_session(&state, &headers, "Sign in to update your details").await?;
 
     // `Some("")` (field present but blank) is a validation error; `None`
     // (field omitted) just means "leave this one alone" — trim first so a
@@ -283,19 +297,25 @@ pub(crate) async fn update_player_details(
         .as_deref()
         .is_some_and(|value| value.trim().is_empty())
     {
-        return Err(ApiProblem::bad_request("User ID cannot be blank"));
+        return Err(ApiProblem::new(
+            Reason::DisplayNameBlank,
+            "User ID cannot be blank",
+        ));
     }
     if request
         .email
         .as_deref()
         .is_some_and(|value| value.trim().is_empty())
     {
-        return Err(ApiProblem::bad_request("Email cannot be blank"));
+        return Err(ApiProblem::new(Reason::EmailBlank, "Email cannot be blank"));
     }
     let display_name = request.display_name.as_deref().map(str::trim);
     let email = request.email.as_deref().map(str::trim);
     if display_name.is_none() && email.is_none() {
-        return Err(ApiProblem::bad_request("Nothing to update"));
+        return Err(ApiProblem::new(
+            Reason::NothingToUpdate,
+            "Nothing to update",
+        ));
     }
 
     // Same uniqueness rule as registration — email deliberately isn't
@@ -307,20 +327,29 @@ pub(crate) async fn update_player_details(
             .map_err(ApiProblem::from_sqlx)?
         && existing.id != player_id
     {
-        return Err(ApiProblem::bad_request("That User ID is already taken"));
+        return Err(ApiProblem::new(
+            Reason::DisplayNameTaken,
+            "That User ID is already taken",
+        ));
     }
 
     // Same race as registration — #380 R5.
     persistence::update_player_details(&state.db, &player_id, display_name, email)
         .await
         .map_err(|error| {
-            ApiProblem::from_sqlx_or_duplicate(error, "That User ID is already taken")
+            ApiProblem::from_sqlx_or_duplicate(
+                error,
+                Reason::DisplayNameTaken,
+                "That User ID is already taken",
+            )
         })?;
 
     let player = persistence::get_player_by_id(&state.db, &player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     tracing::info!(player_id, "player details updated");
 
@@ -350,7 +379,10 @@ pub(crate) async fn request_password_reset(
 ) -> Result<StatusCode, ApiProblem> {
     let email = request.email.trim().to_string();
     if email.is_empty() {
-        return Err(ApiProblem::bad_request("An email address is required"));
+        return Err(ApiProblem::new(
+            Reason::EmailRequired,
+            "An email address is required",
+        ));
     }
 
     if let Some(player) = persistence::get_player_by_email(&state.db, &email)
@@ -399,10 +431,18 @@ pub(crate) async fn reset_password(
     Json(request): Json<ResetPasswordRequest>,
 ) -> Result<StatusCode, ApiProblem> {
     if request.new_password.is_empty() {
-        return Err(ApiProblem::bad_request("A new password is required"));
+        return Err(ApiProblem::new(
+            Reason::NewPasswordRequired,
+            "A new password is required",
+        ));
     }
 
-    let invalid = || ApiProblem::bad_request("This reset link is invalid or has expired");
+    let invalid = || {
+        ApiProblem::new(
+            Reason::ResetLinkInvalid,
+            "This reset link is invalid or has expired",
+        )
+    };
 
     let record =
         persistence::get_password_reset_token_by_hash(&state.db, &hash_token(&request.token))
@@ -500,12 +540,16 @@ where
     // actually waited, and a second is a reasonable floor for "try again".
     // Only the synchronisation needed fixing.
     .map_err(|_| {
-        ApiProblem::unavailable(
+        ApiProblem::new(
+            Reason::ServiceBusy,
             "The server is busy — please try again.",
-            super::throttle::retry_after(0),
         )
+        .with_retry_after(super::throttle::retry_after(0))
     })?
-    .map_err(|_| ApiProblem::internal("hashing capacity unavailable"))?;
+    .map_err(|error| {
+        tracing::error!(%error, request_id = current_request_id(), "hashing capacity unavailable");
+        ApiProblem::internal()
+    })?;
 
     tokio::task::spawn_blocking(move || {
         // Held for the duration of the work, released when this closure ends.
@@ -513,7 +557,10 @@ where
         work()
     })
     .await
-    .map_err(|error| ApiProblem::internal(format!("password hashing failed: {error}")))
+    .map_err(|error| {
+        tracing::error!(%error, request_id = current_request_id(), "password hashing failed");
+        ApiProblem::internal()
+    })
 }
 
 /// `hash_password`, bounded. See `with_hash_permit`.
@@ -524,7 +571,10 @@ pub(crate) async fn hash_password_bounded(
     let password = password.to_owned();
     with_hash_permit(state, move || hash_password(&password))
         .await?
-        .map_err(ApiProblem::internal)
+        .map_err(|error| {
+            tracing::error!(%error, request_id = current_request_id(), "password hashing failed");
+            ApiProblem::internal()
+        })
 }
 
 /// `verify_password`, bounded. See `with_hash_permit`.
