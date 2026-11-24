@@ -49,6 +49,13 @@ pub(crate) async fn admin_scheduler_health(
     Json(rows)
 }
 
+/// R3 (#402): what the server has counted of its own symptoms since it
+/// started. Reads atomics in memory and never the database, so it answers
+/// while the database does not.
+pub(crate) async fn admin_metrics(State(state): State<AppState>) -> Json<api::AdminMetricsDto> {
+    Json(state.metrics.snapshot())
+}
+
 pub(crate) async fn require_loopback(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     request: Request,

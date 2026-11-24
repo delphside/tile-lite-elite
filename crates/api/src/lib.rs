@@ -94,9 +94,12 @@ use serde::{Deserialize, Serialize};
 // answer 403 rather than 401, and starting a game or asking for a suggestion
 // without a session answers 401 rather than 403 (docs/4.4.3's *401 against
 // 403*). #606.
+// 2.18 — `GET /admin/metrics` joins the admin surface, for #402's R3 (the
+// server's counts of its own symptoms). Minor by the 2.15 precedent:
+// loopback-only, one client, ships in the same container. #609.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 2,
-    minor: 17,
+    minor: 18,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -1056,6 +1059,70 @@ pub struct AdminSchedulerJobHealthDto {
     pub errored_last_pass: u64,
 }
 
+/// What the server has counted of its own symptoms since the process started,
+/// for `GET /admin/metrics` (#402 R3): numbers that only grow, read by
+/// `sa metrics` and by WP C's poller as differences between two reads. It holds
+/// counts and bounds and no label that grows with use.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdminMetricsDto {
+    /// When this process started, epoch seconds UTC, as the other admin
+    /// DTOs carry a time.
+    pub started_at: i64,
+    /// Every response, by the class of its status.
+    pub responses: AdminResponseCountsDto,
+    /// Every error response, by the reason's `error_type`.
+    pub errors: AdminErrorTypeCountsDto,
+    /// Responses with status 429, apart from 503s.
+    pub too_many_requests: u64,
+    /// Responses with status 503, apart from 429s.
+    pub service_unavailable: u64,
+    /// Panics `CatchPanicLayer` caught.
+    pub panics_caught: u64,
+    /// Requests to the events route that were not upgraded: any 4xx or 5xx.
+    pub websocket_handshake_failures: u64,
+    /// Time to the response's head, for every request.
+    pub latency: AdminLatencyDto,
+}
+
+/// Responses by the class of their status, named after RFC 9110's. A request
+/// is in exactly one field.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdminResponseCountsDto {
+    /// 1xx: a WebSocket's 101.
+    pub informational: u64,
+    /// 2xx.
+    pub success: u64,
+    /// 3xx.
+    pub redirection: u64,
+    /// 4xx.
+    pub client_error: u64,
+    /// 5xx.
+    pub server_error: u64,
+}
+
+/// Error responses by the reason's `error_type`. An error is in exactly one
+/// field.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdminErrorTypeCountsDto {
+    pub business: u64,
+    pub technical: u64,
+    pub unexpected: u64,
+    /// A 4xx or 5xx that carried no reason. Zero while every error is built
+    /// by `ApiProblem`; a nonzero value is a defect in the layering.
+    pub unclassified: u64,
+}
+
+/// A histogram of the time to each response's head.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AdminLatencyDto {
+    /// Upper bounds in milliseconds, ascending, inclusive.
+    pub bounds_ms: Vec<u64>,
+    /// `counts[i]` requests took more than `bounds_ms[i - 1]` and at most
+    /// `bounds_ms[i]`. One longer than `bounds_ms`: the last counts the
+    /// requests that took longer than every bound.
+    pub counts: Vec<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AdminPlayerSummaryDto {
     pub id: String,
@@ -1376,12 +1443,12 @@ mod reason_tests {
 
     /// T18
     #[test]
-    fn the_api_version_is_2_17() {
+    fn the_api_version_is_2_18() {
         assert_eq!(
             API_VERSION,
             ApiVersion {
                 major: 2,
-                minor: 17
+                minor: 18
             }
         );
     }

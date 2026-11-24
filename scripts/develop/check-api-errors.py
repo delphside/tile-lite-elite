@@ -13,7 +13,10 @@ exits by it.
   1. **The `Reason` enum in `crates/api` and the *Reasons* table in 4.4.3**, both
      ways and row by row: a reason without a row, a row without a reason, and a
      row whose status, type or blip differs from the enum's `class` match. A row
-     with no status is a failure, not a note.
+     with no status is a failure, not a note. **So is a row whose *Counted in*
+     is not what its status and type give** (#609): the `responses` class, the
+     `errors` type, and `too_many_requests` or `service_unavailable` for a 429
+     or a 503, which is what the counting layer adds one to.
   2. **Every message the server can construct, with its reason**: each is looked
      up on a line of 4.4.3 that names the reason as `` `SIGN_IN_REQUIRED` `` and
      states the status the enum gives that reason, in bold (`**401**`). A message
@@ -198,6 +201,21 @@ def table_rows(doc: str, heading: str) -> list[list[str]]:
     return rows[1:]  # without the header
 
 
+def counted_in(status: int, kind: str) -> str:
+    """The *Counted in* cell a reason's status and type give (#609).
+
+    The counting layer adds one to the `responses` field of the status's class
+    and to the `errors` field of the reason's type, and a 429 or a 503 is also
+    counted apart. Every reason answers a 4xx or a 5xx.
+    """
+    cells = ["client_error" if status < 500 else "server_error", kind]
+    if status == 429:
+        cells.append("too_many_requests")
+    if status == 503:
+        cells.append("service_unavailable")
+    return ", ".join(f"`{cell}`" for cell in cells)
+
+
 def compare_reasons(doc: str, reasons: dict[str, tuple[int, str, bool]]) -> list[str]:
     """The *Reasons* table against the enum, both ways, row by row."""
     problems = []
@@ -207,8 +225,11 @@ def compare_reasons(doc: str, reasons: dict[str, tuple[int, str, bool]]) -> list
     by_code = {}
     for cells in rows:
         match = re.fullmatch(r"`([A-Z][A-Z_]*)`", cells[0]) if cells else None
-        if not match or len(cells) < 6:
-            problems.append(f"a row of the Reasons table is not `REASON` | status | type | blip | …: {cells[:1]}")
+        if not match or len(cells) < 7:
+            problems.append(
+                "a row of the Reasons table is not `REASON` | status | type | blip | … | … | counted in: "
+                f"{cells[:1]}"
+            )
             continue
         by_code[match.group(1)] = cells
     expected = {code_of(v): (v, c) for v, c in reasons.items()}
@@ -226,6 +247,9 @@ def compare_reasons(doc: str, reasons: dict[str, tuple[int, str, bool]]) -> list
             problems.append(f"{code}: the Reasons table says type {cells[2]!r}, the enum says {kind!r}")
         if cells[3].lower() != ("yes" if blip else "no"):
             problems.append(f"{code}: the Reasons table says blip {cells[3]!r}, the enum says {'yes' if blip else 'no'!r}")
+        counted = counted_in(status, kind)
+        if cells[6] != counted:
+            problems.append(f"{code}: the Reasons table says it is counted in {cells[6]}, the rule gives {counted}")
     for code in by_code:
         if code not in expected:
             problems.append(f"the Reasons table has a row for {code}, which is not a Reason")

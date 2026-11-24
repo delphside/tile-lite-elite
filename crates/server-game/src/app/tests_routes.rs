@@ -220,7 +220,7 @@ impl World {
         let uri = self.uri(route);
         // A WebSocket handshake cannot be made by `oneshot`: the extractor
         // wants a real connection's upgrade machinery.
-        if route.path == "/games/{game_id}/events" {
+        if route.path == routes::EVENTS_PATH {
             let uri = match token {
                 Some(token) => format!("{uri}?token={token}"),
                 None => uri,

@@ -48,6 +48,10 @@ pub(super) enum Verb {
     Delete,
 }
 
+/// The events route's path, read by its row in `all` and by the counting layer
+/// (`metrics.rs`), so the two cannot differ.
+pub(super) const EVENTS_PATH: &str = "/games/{game_id}/events";
+
 pub(super) struct Route {
     /// Read by the tests, which compare it with docs/4.4.3.
     #[cfg_attr(not(test), allow(dead_code))]
@@ -137,7 +141,7 @@ pub(super) fn all() -> Vec<Route> {
         row(Post, "/games/{game_id}/suggest",  Game, Authenticated, suggest_move),
         // The token comes from the query: a browser cannot set headers on a
         // WebSocket handshake.
-        row(Get,  "/games/{game_id}/events",   Game, Authenticated, game_events),
+        row(Get,  EVENTS_PATH,                 Game, Authenticated, game_events),
         // Game Invitations
         row(Post, "/games/{game_id}/invite",   Creator, Authenticated, invite_player_to_game),
         row(Get,  "/players/{player_id}/invitations",       Owner,   Authenticated, list_player_invitations),
@@ -151,6 +155,7 @@ pub(super) fn all() -> Vec<Route> {
         row(Get,    "/admin/users",                  Loopback, Unlimited, admin_list_users),
         row(Get,    "/admin/database-size",          Loopback, Unlimited, admin_list_database_size),
         row(Get,    "/admin/scheduler-health",       Loopback, Unlimited, admin_scheduler_health),
+        row(Get,    "/admin/metrics",                Loopback, Unlimited, admin_metrics),
         row(Delete, "/admin/users/{player_id}",      Loopback, Unlimited, admin_delete_user),
         row(Post,   "/admin/users/{player_id}/sign-out",       Loopback, Unlimited, admin_sign_out_user),
         row(Post,   "/admin/users/{player_id}/reset-password", Loopback, Unlimited, admin_reset_password),
