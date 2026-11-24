@@ -76,6 +76,7 @@ pub(crate) async fn expire_old_terminal_games(state: &AppState) {
         match persistence::delete_game(&state.db, &game_id).await {
             Ok(_) => {
                 games.remove(&game_id);
+                let _ = state.deleted_games.send(game_id.clone());
                 tracing::info!(
                     game_id,
                     retention = %format_duration_days_hours(COMPLETED_GAME_RETENTION.as_secs()),

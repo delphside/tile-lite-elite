@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use api::Reason;
 use api::{
     BoardCellDto, ChatMessageDto, DirectionDto, EngineProfileDto, GameStateDto, GameStatus,
     MoveCandidateDto, MoveRecordDto, ParticipantDto, PositionDto, PremiumDto, RackDto,
@@ -16,6 +17,68 @@ use rules_shared::{
 use serde::{Deserialize, Serialize};
 
 use crate::persistence::InvitationRecord;
+
+/// **A refusal by a game's own rules**, naming its `Reason` so the handler that
+/// passes it on has no status to choose: `ApiProblem` takes the reason and the
+/// sentence as they are. The sentence is the rules engine's own for a move,
+/// which is why a rule's refusal is `MoveRefused` until #71 Core gives each
+/// `ApplyError` variant a reason of its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    pub reason: Reason,
+    pub message: String,
+    /// The value outside a limit the API states, where the refusal is one.
+    pub violation: Option<api::Violation>,
+}
+
+impl Refusal {
+    pub fn new(reason: Reason, message: impl Into<String>) -> Self {
+        Self {
+            reason,
+            message: message.into(),
+            violation: None,
+        }
+    }
+
+    /// **A defect the caller cannot fix**: the body says the one 500 sentence
+    /// and nothing of the cause, which goes to the log under the request's ID
+    /// (an engine's id, a join error, a `Debug` of a rule's own error).
+    pub fn defect(reason: Reason, cause: impl std::fmt::Display) -> Self {
+        tracing::error!(
+            %cause,
+            request_id = crate::app::error::current_request_id(),
+            "a game rule reached a state it should not"
+        );
+        Self::new(reason, crate::app::error::INTERNAL_MESSAGE)
+    }
+
+    /// Says which value crossed which limit.
+    pub fn with_violation(mut self, field: &str, value: u64, limit: u64) -> Self {
+        self.violation = Some(api::Violation {
+            field: field.to_string(),
+            value,
+            limit,
+            reason: self.reason,
+        });
+        self
+    }
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+/// `refusal!(reason, "words {}", value)`: a `Refusal` whose sentence is
+/// built at run time. The literal stays the macro's first string so
+/// `scripts/develop/check-api-errors.py` reads it as it reads
+/// `Refusal::new(reason, "words")`.
+macro_rules! refusal {
+    ($reason:expr, $($words:tt)+) => {
+        Refusal::new($reason, format!($($words)+))
+    };
+}
 
 #[derive(Clone)]
 pub struct EngineRegistry {
@@ -81,7 +144,7 @@ pub struct ChatMessageRecord {
 
 /// Cap on a single chat message's length — plain hygiene, not intended to be
 /// user-configurable.
-const MAX_CHAT_MESSAGE_LEN: usize = 1000;
+pub(crate) const MAX_CHAT_MESSAGE_LEN: usize = 1000;
 
 /// What a specific caller (identified by `player_id`, or `None` if not
 /// logged in) is allowed to see of a game's full state. Distinct from
@@ -508,19 +571,25 @@ impl GameSession {
     /// `game_invitations` rows (keyed by `seat_number`) ever going stale,
     /// since a pending invitation only exists for an unclaimed seat, and
     /// none can exist once every seat has a real occupant.
-    pub fn swap_seats(&mut self, seat_a: u8, seat_b: u8) -> Result<(), String> {
+    pub fn swap_seats(&mut self, seat_a: u8, seat_b: u8) -> Result<(), Refusal> {
         if self.status != GameStatus::Waiting {
-            return Err("Seats can only be reordered before the game starts".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotWaiting,
+                "Seats can only be reordered before the game starts",
+            ));
         }
         if self.participants.iter().any(|participant| {
             participant.kind == SeatKind::Human && participant.player_id.is_none()
         }) {
-            return Err("Every seat must be filled before seats can be reordered".to_string());
+            return Err(Refusal::new(
+                Reason::SeatsNotFilled,
+                "Every seat must be filled before seats can be reordered",
+            ));
         }
         let a = seat_a as usize;
         let b = seat_b as usize;
         if a >= self.participants.len() || b >= self.participants.len() {
-            return Err("Unknown seat".to_string());
+            return Err(Refusal::new(Reason::UnknownSeat, "Unknown seat"));
         }
         if a != b {
             self.participants.swap(a, b);
@@ -538,9 +607,12 @@ impl GameSession {
     /// fresh Human seat starts unclaimed with no invitation of its own —
     /// sending one is a separate, explicit follow-up call (see
     /// `invite_player_to_game` in app.rs), not part of adding the seat.
-    pub fn add_seat(&mut self, mut seat: ParticipantState) -> Result<(), String> {
+    pub fn add_seat(&mut self, mut seat: ParticipantState) -> Result<(), Refusal> {
         if self.status != GameStatus::Waiting {
-            return Err("Seats can only be added before the game starts".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotWaiting,
+                "Seats can only be added before the game starts",
+            ));
         }
         seat.seat_number = self.participants.len() as u8;
         self.participants.push(seat);
@@ -560,17 +632,23 @@ impl GameSession {
     /// number). The caller is responsible for keeping any `game_invitations`
     /// rows for those renumbered seats in sync — `GameSession` has no
     /// notion of invitations at all, that's a persistence-layer concern.
-    pub fn remove_seat(&mut self, seat_number: u8) -> Result<(), String> {
+    pub fn remove_seat(&mut self, seat_number: u8) -> Result<(), Refusal> {
         if self.status != GameStatus::Waiting {
-            return Err("Seats can only be removed before the game starts".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotWaiting,
+                "Seats can only be removed before the game starts",
+            ));
         }
         let index = seat_number as usize;
         let participant = self
             .participants
             .get(index)
-            .ok_or_else(|| "Unknown seat".to_string())?;
+            .ok_or_else(|| Refusal::new(Reason::UnknownSeat, "Unknown seat"))?;
         if participant.player_id.is_some() && participant.player_id == self.creator_player_id {
-            return Err("The creator's own seat can't be removed".to_string());
+            return Err(Refusal::new(
+                Reason::CreatorSeatProtected,
+                "The creator's own seat can't be removed",
+            ));
         }
         self.participants.remove(index);
         for (new_index, participant) in self.participants.iter_mut().enumerate() {
@@ -586,19 +664,28 @@ impl GameSession {
     /// deletes it outright. The caller is responsible for flipping that
     /// seat's invitation back to `"rejected"`, same
     /// persistence-is-a-separate-concern reasoning as `remove_seat`.
-    pub fn withdraw_seat(&mut self, seat_number: u8) -> Result<(), String> {
+    pub fn withdraw_seat(&mut self, seat_number: u8) -> Result<(), Refusal> {
         if self.status != GameStatus::Waiting {
-            return Err("A seat can only be withdrawn before the game starts".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotWaiting,
+                "A seat can only be withdrawn before the game starts",
+            ));
         }
         let participant = self
             .participants
             .get_mut(seat_number as usize)
-            .ok_or_else(|| "Unknown seat".to_string())?;
+            .ok_or_else(|| Refusal::new(Reason::UnknownSeat, "Unknown seat"))?;
         if participant.player_id.is_none() {
-            return Err("That seat isn't claimed".to_string());
+            return Err(Refusal::new(
+                Reason::SeatNotClaimed,
+                "That seat isn't claimed",
+            ));
         }
         if participant.player_id == self.creator_player_id {
-            return Err("The creator's own seat can't be withdrawn".to_string());
+            return Err(Refusal::new(
+                Reason::CreatorSeatProtected,
+                "The creator's own seat can't be withdrawn",
+            ));
         }
         participant.player_id = None;
         self.mark_changed();
@@ -841,21 +928,30 @@ impl GameSession {
         player_id: &str,
         display_name: &str,
         body: String,
-    ) -> Result<(), String> {
+    ) -> Result<(), Refusal> {
         if !matches!(
             resolve_viewer_access(self, Some(player_id)),
             ViewerAccess::Participant { .. }
         ) {
-            return Err("Only seated players can chat in this game".to_string());
+            return Err(Refusal::new(
+                Reason::NotSeated,
+                "Only seated players can chat in this game",
+            ));
         }
         let body = body.trim().to_string();
         if body.is_empty() {
-            return Err("Chat message cannot be empty".to_string());
-        }
-        if body.chars().count() > MAX_CHAT_MESSAGE_LEN {
-            return Err(format!(
-                "Chat message cannot exceed {MAX_CHAT_MESSAGE_LEN} characters"
+            return Err(Refusal::new(
+                Reason::ChatEmpty,
+                "Chat message cannot be empty",
             ));
+        }
+        let length = body.chars().count();
+        if length > MAX_CHAT_MESSAGE_LEN {
+            return Err(refusal!(
+                Reason::ChatTooLong,
+                "Chat message cannot exceed {MAX_CHAT_MESSAGE_LEN} characters"
+            )
+            .with_violation("body", length as u64, MAX_CHAT_MESSAGE_LEN as u64));
         }
         self.messages.push(ChatMessageRecord {
             id: uuid::Uuid::new_v4().to_string(),
@@ -872,7 +968,7 @@ impl GameSession {
         &mut self,
         seat_number: u8,
         candidate: MoveCandidate,
-    ) -> Result<(), String> {
+    ) -> Result<(), Refusal> {
         ensure_active_turn(self, seat_number)?;
         // Human turn wall-clock (seconds resolution, from turn_started_at); a
         // bot move overwrites this with its precise compute time in
@@ -888,20 +984,23 @@ impl GameSession {
         let participant = self
             .participants
             .get_mut(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
         let validated = rules_engine
             .validate_game_move(&self.state, Some(&participant.rack), &candidate)
-            .map_err(|error| format_move_error(&error))?;
+            .map_err(|error| Refusal::new(Reason::MoveRefused, format_move_error(&error)))?;
 
         for placement in &candidate.tiles {
             if !participant.rack.consume_tile(placement.tile) {
-                return Err("Rack no longer matches move".to_string());
+                return Err(Refusal::new(
+                    Reason::MoveRefused,
+                    "Rack no longer matches move",
+                ));
             }
         }
 
         rules_engine
             .apply_move_to_game(&mut self.state, &validated)
-            .map_err(|error| format!("{error:?}"))?;
+            .map_err(|error| Refusal::defect(Reason::Internal, format!("{error:?}")))?;
 
         participant.score += validated.score.total as i32;
         refill_rack(&mut participant.rack, &mut self.bag, self.rules.rack_size);
@@ -942,7 +1041,7 @@ impl GameSession {
         Ok(())
     }
 
-    pub fn apply_pass(&mut self, seat_number: u8) -> Result<(), String> {
+    pub fn apply_pass(&mut self, seat_number: u8) -> Result<(), Refusal> {
         ensure_active_turn(self, seat_number)?;
         let move_elapsed_us =
             ((now_unix_seconds() - self.turn_started_at).max(0) as u64) * 1_000_000;
@@ -950,7 +1049,7 @@ impl GameSession {
         let participant = self
             .participants
             .get(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
         self.moves.push(MoveRecord {
             move_number: next_move_number,
             seat_number,
@@ -970,22 +1069,28 @@ impl GameSession {
         Ok(())
     }
 
-    pub fn apply_exchange(&mut self, seat_number: u8, tiles: Vec<Tile>) -> Result<(), String> {
+    pub fn apply_exchange(&mut self, seat_number: u8, tiles: Vec<Tile>) -> Result<(), Refusal> {
         ensure_active_turn(self, seat_number)?;
         let move_elapsed_us =
             ((now_unix_seconds() - self.turn_started_at).max(0) as u64) * 1_000_000;
         if self.bag.len() < tiles.len() {
-            return Err("Not enough tiles left in bag to exchange".to_string());
+            return Err(Refusal::new(
+                Reason::MoveRefused,
+                "Not enough tiles left in bag to exchange",
+            ));
         }
         let next_move_number = self.next_move_number();
         let participant = self
             .participants
             .get_mut(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
 
         for tile in &tiles {
             if !participant.rack.consume_tile(*tile) {
-                return Err("Rack does not contain exchange tiles".to_string());
+                return Err(Refusal::new(
+                    Reason::MoveRefused,
+                    "Rack does not contain exchange tiles",
+                ));
             }
         }
 
@@ -1016,7 +1121,7 @@ impl GameSession {
         Ok(())
     }
 
-    pub fn apply_resign(&mut self, seat_number: u8) -> Result<(), String> {
+    pub fn apply_resign(&mut self, seat_number: u8) -> Result<(), Refusal> {
         // A player may resign at any time, not only on their own turn — unlike
         // a scoring/pass/exchange move (which `ensure_active_turn` gates),
         // giving up doesn't require the turn. Same effect and `move_type`
@@ -1024,14 +1129,20 @@ impl GameSession {
         // resignation (distinct from the creator's `force_resign`). Ownership —
         // that the caller holds this seat — is enforced by the handler.
         if self.status != GameStatus::Active {
-            return Err("The game must be active to resign".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotActive,
+                "The game must be active to resign",
+            ));
         }
         let participant = self
             .participants
             .get(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
         if participant.resigned {
-            return Err("That seat has already resigned".to_string());
+            return Err(Refusal::new(
+                Reason::SeatAlreadyResigned,
+                "That seat has already resigned",
+            ));
         }
         self.finish_via_resignation(seat_number, "resign", "resigned")
     }
@@ -1044,21 +1155,30 @@ impl GameSession {
     /// is. Same effect otherwise: see `finish_via_resignation` — this seat
     /// drops out, everyone else keeps playing (the whole game only ends
     /// once at most one active seat remains).
-    pub fn force_resign(&mut self, seat_number: u8) -> Result<(), String> {
+    pub fn force_resign(&mut self, seat_number: u8) -> Result<(), Refusal> {
         if self.status != GameStatus::Active {
-            return Err("The game must be active to force-resign a seat".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotActive,
+                "The game must be active to force-resign a seat",
+            ));
         }
         let participant = self
             .participants
             .get(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
         if participant.player_id.as_deref() == self.creator_player_id.as_deref()
             && participant.player_id.is_some()
         {
-            return Err("The creator's own seat can't be force-resigned".to_string());
+            return Err(Refusal::new(
+                Reason::CreatorSeatProtected,
+                "The creator's own seat can't be force-resigned",
+            ));
         }
         if participant.resigned {
-            return Err("That seat has already resigned".to_string());
+            return Err(Refusal::new(
+                Reason::SeatAlreadyResigned,
+                "That seat has already resigned",
+            ));
         }
         self.finish_via_resignation(
             seat_number,
@@ -1124,12 +1244,12 @@ impl GameSession {
         seat_number: u8,
         move_type: &str,
         reason: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), Refusal> {
         let next_move_number = self.next_move_number();
         let participant = self
             .participants
             .get_mut(seat_number as usize)
-            .ok_or_else(|| format!("Unknown seat {seat_number}"))?;
+            .ok_or_else(|| refusal!(Reason::UnknownSeat, "Unknown seat {seat_number}"))?;
         participant.resigned = true;
         let description = format!("{} {reason}", participant.display_name);
         self.return_rack_to_bag(seat_number);
@@ -1164,9 +1284,12 @@ impl GameSession {
     /// `admin_force_end` record onto a game that needed no intervention.
     /// The guard is what makes the command idempotent-by-refusal rather
     /// than destructive on a mistyped id.
-    pub fn admin_force_finish(&mut self) -> Result<(), String> {
+    pub fn admin_force_finish(&mut self) -> Result<(), Refusal> {
         if self.status == GameStatus::Finished || self.status == GameStatus::Aborted {
-            return Err("The game has already ended".to_string());
+            return Err(Refusal::new(
+                Reason::GameAlreadyEnded,
+                "The game has already ended",
+            ));
         }
         let next_move_number = self.next_move_number();
         self.moves.push(MoveRecord {
@@ -1191,9 +1314,12 @@ impl GameSession {
     /// `Aborted` state, distinct from a played-out `Finished`. Allowed from
     /// `Waiting` (cancel before it starts) or `Active`; a game that's already
     /// terminal is rejected so an abort can't overwrite a real result.
-    pub fn abort(&mut self) -> Result<(), String> {
+    pub fn abort(&mut self) -> Result<(), Refusal> {
         if self.status == GameStatus::Finished || self.status == GameStatus::Aborted {
-            return Err("The game has already ended".to_string());
+            return Err(Refusal::new(
+                Reason::GameAlreadyEnded,
+                "The game has already ended",
+            ));
         }
         for participant in &mut self.participants {
             participant.resigned = true;
@@ -1227,9 +1353,12 @@ impl GameSession {
     /// button that had just been clicked. An aborted game is exactly the
     /// kind you most want out of your list: it has no result and will never
     /// gain one.
-    pub fn remove_for_player(&mut self, player_id: &str) -> Result<(), String> {
+    pub fn remove_for_player(&mut self, player_id: &str) -> Result<(), Refusal> {
         if !matches!(self.status, GameStatus::Finished | GameStatus::Aborted) {
-            return Err("Only games that are over can be removed".to_string());
+            return Err(Refusal::new(
+                Reason::GameNotOver,
+                "Only games that are over can be removed",
+            ));
         }
         // A seated caller (including a creator who also claimed a seat,
         // e.g. the "vs Engine"/"Play Friend" presets) has their own seat to
@@ -1251,7 +1380,10 @@ impl GameSession {
             self.mark_changed();
             return Ok(());
         }
-        Err("You are not a participant in this game".to_string())
+        Err(Refusal::new(
+            Reason::NotParticipant,
+            "You are not a participant in this game",
+        ))
     }
 
     /// Runs the current seat's engine (if any) and applies its chosen action
@@ -1267,7 +1399,7 @@ impl GameSession {
         &mut self,
         engines: &EngineRegistry,
         engine_timeout: Duration,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, Refusal> {
         if self.status != GameStatus::Active {
             return Ok(false);
         }
@@ -1275,28 +1407,32 @@ impl GameSession {
         let current = self
             .participants
             .get(self.current_seat as usize)
-            .ok_or_else(|| "Current seat missing".to_string())?;
+            .ok_or_else(|| {
+                Refusal::defect(Reason::Internal, "the current seat is not in the game")
+            })?;
 
         if current.kind != SeatKind::Engine {
             return Ok(false);
         }
 
-        let engine_id = current
-            .engine_id
-            .clone()
-            .ok_or_else(|| "Engine seat missing engine id".to_string())?;
-        let engine = engines
-            .find(&engine_id)
-            .ok_or_else(|| format!("Unknown engine: {engine_id}"))?;
+        let engine_id = current.engine_id.clone().ok_or_else(|| {
+            Refusal::defect(Reason::EngineFailed, "an engine seat has no engine id")
+        })?;
+        let engine = engines.find(&engine_id).ok_or_else(|| {
+            Refusal::defect(Reason::EngineFailed, format!("unknown engine {engine_id}"))
+        })?;
         if !engine
             .metadata()
             .supported_variants
             .iter()
             .any(|variant| variant == &self.variant)
         {
-            return Err(format!(
-                "Engine '{engine_id}' does not support the '{}' variant",
-                self.variant
+            return Err(Refusal::defect(
+                Reason::EngineFailed,
+                format!(
+                    "engine {engine_id} does not support the {} variant",
+                    self.variant
+                ),
             ));
         }
         let rack = current.rack;
@@ -1328,8 +1464,9 @@ impl GameSession {
         let response = match outcome {
             Ok(Ok(response)) => response,
             Ok(Err(join_error)) => {
-                return Err(format!(
-                    "Engine '{engine_id}' panicked while choosing a move: {join_error}"
+                return Err(Refusal::defect(
+                    Reason::EngineFailed,
+                    format!("engine {engine_id} panicked while choosing a move: {join_error}"),
                 ));
             }
             Err(_elapsed) => {
@@ -1527,12 +1664,15 @@ pub(crate) fn now_unix_seconds() -> i64 {
         .as_secs() as i64
 }
 
-fn ensure_active_turn(session: &GameSession, seat_number: u8) -> Result<(), String> {
+fn ensure_active_turn(session: &GameSession, seat_number: u8) -> Result<(), Refusal> {
     if session.status != GameStatus::Active {
-        return Err("Game is not active".to_string());
+        return Err(Refusal::new(Reason::GameNotActive, "Game is not active"));
     }
     if session.current_seat != seat_number {
-        return Err(format!("It is not seat {seat_number}'s turn"));
+        return Err(refusal!(
+            Reason::NotYourTurn,
+            "It is not seat {seat_number}'s turn"
+        ));
     }
     Ok(())
 }
@@ -1594,9 +1734,10 @@ fn board_to_dto(board: &BoardState, alphabet: &Alphabet) -> Vec<BoardCellDto> {
         .collect()
 }
 
-pub fn board_from_dto(cells: &[BoardCellDto], alphabet: &Alphabet) -> Result<BoardState, String> {
+pub fn board_from_dto(cells: &[BoardCellDto], alphabet: &Alphabet) -> Result<BoardState, Refusal> {
     if cells.len() != BoardState::WIDTH * BoardState::HEIGHT {
-        return Err(format!(
+        return Err(refusal!(
+            Reason::MoveRefused,
             "Expected {} board cells, got {}",
             BoardState::WIDTH * BoardState::HEIGHT,
             cells.len()
@@ -1656,12 +1797,16 @@ fn premium_from_dto(premium: PremiumDto) -> rules_shared::Premium {
 pub fn move_candidate_from_dto(
     candidate: MoveCandidateDto,
     rules: &VariantRules,
-) -> Result<MoveCandidate, String> {
+) -> Result<MoveCandidate, Refusal> {
     let start = candidate.start;
     if start.x >= rules.width || start.y >= rules.height {
-        return Err(format!(
+        return Err(refusal!(
+            Reason::MoveRefused,
             "Start square ({}, {}) is outside the {}x{} board",
-            start.x, start.y, rules.width, rules.height
+            start.x,
+            start.y,
+            rules.width,
+            rules.height
         ));
     }
     let direction = match candidate.direction {
@@ -1669,10 +1814,14 @@ pub fn move_candidate_from_dto(
         DirectionDto::Vertical => Direction::Vertical,
     };
     if candidate.tiles.is_empty() {
-        return Err("A move must place at least one tile".to_string());
+        return Err(Refusal::new(
+            Reason::MoveRefused,
+            "A move must place at least one tile",
+        ));
     }
     if candidate.tiles.len() > rules.rack_size as usize {
-        return Err(format!(
+        return Err(refusal!(
+            Reason::MoveRefused,
             "A move places at most {} tiles, not {}",
             rules.rack_size,
             candidate.tiles.len()
@@ -1688,14 +1837,20 @@ pub fn move_candidate_from_dto(
             .checked_add(placement.offset)
             .is_some_and(|end| end < limit);
         if !within_board {
-            return Err(format!(
+            return Err(refusal!(
+                Reason::MoveRefused,
                 "Offset {} from ({}, {}) runs off the board",
-                placement.offset, start.x, start.y
+                placement.offset,
+                start.x,
+                start.y
             ));
         }
         let tile = tile_from_dto(placement.tile, &rules.alphabet)?;
         if matches!(tile, Tile::Blank { acting_as: None }) {
-            return Err("A blank must say which letter it stands for".to_string());
+            return Err(Refusal::new(
+                Reason::MoveRefused,
+                "A blank must say which letter it stands for",
+            ));
         }
         tiles.push(TilePlacement {
             offset: placement.offset,
@@ -1741,10 +1896,13 @@ pub fn move_candidate_to_dto(candidate: &MoveCandidate, alphabet: &Alphabet) -> 
 /// what our own client would, so one outside the alphabet is refused rather
 /// than assumed away. (Until it was, it was an `expect`, and a panic here
 /// happened under the games lock.)
-fn to_rules_letter(s: &str, alphabet: &Alphabet) -> Result<Letter, String> {
-    alphabet
-        .to_letter(s)
-        .ok_or_else(|| format!("'{s}' is not a letter in this game's alphabet"))
+fn to_rules_letter(s: &str, alphabet: &Alphabet) -> Result<Letter, Refusal> {
+    alphabet.to_letter(s).ok_or_else(|| {
+        refusal!(
+            Reason::MoveRefused,
+            "'{s}' is not a letter in this game's alphabet"
+        )
+    })
 }
 
 fn to_dto_letter(letter: Letter, alphabet: &Alphabet) -> String {
@@ -1754,7 +1912,7 @@ fn to_dto_letter(letter: Letter, alphabet: &Alphabet) -> String {
         .to_string()
 }
 
-pub fn tile_from_dto(tile: TileDto, alphabet: &Alphabet) -> Result<Tile, String> {
+pub fn tile_from_dto(tile: TileDto, alphabet: &Alphabet) -> Result<Tile, Refusal> {
     Ok(match tile {
         TileDto::Letter { letter } => Tile::Letter(to_rules_letter(&letter, alphabet)?),
         TileDto::Blank { acting_as } => Tile::Blank {

@@ -53,23 +53,23 @@ pub(crate) async fn invite_player_to_game(
     headers: HeaderMap,
     Json(request): Json<InvitePlayerRequest>,
 ) -> Result<Json<GameInvitationDto>, ApiProblem> {
-    let inviting_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to invite players"))?;
+    let inviting_player_id = require_session(&state, &headers, "Sign in to invite players").await?;
 
     let games = state.games.read().await;
     let game = games
         .get(&game_id)
-        .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
 
     if !caller_may_manage_game(game, Some(&inviting_player_id)) {
-        return Err(ApiProblem::forbidden(
+        return Err(ApiProblem::new(
+            Reason::NotGameCreator,
             "Only the game's creator can invite players",
         ));
     }
 
     if game.status != api::GameStatus::Waiting {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::GameNotWaiting,
             "Game must be in waiting state to invite players",
         ));
     }
@@ -78,9 +78,10 @@ pub(crate) async fn invite_player_to_game(
         .participants
         .iter()
         .find(|p| p.seat_number == request.seat_number)
-        .ok_or_else(|| ApiProblem::bad_request("No such seat"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::UnknownSeat, "No such seat"))?;
     if seat.kind != api::SeatKind::Human || seat.player_id.is_some() {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::SeatNotInvitable,
             "That seat is not open to be invited to",
         ));
     }
@@ -89,13 +90,15 @@ pub(crate) async fn invite_player_to_game(
         .map_err(ApiProblem::from_sqlx)?
         .is_some()
     {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::SeatInvitationPending,
             "This seat already has a pending invitation",
         ));
     }
 
     if request.invited_display_name.is_some() && request.invited_email.is_some() {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::InvitationTargetAmbiguous,
             // **A player, not a User ID** — owner, 2026-09-09. The invitation
             // flow is about a person you are inviting into a game, and within
             // the game a person is a player. D48's distinction is credential
@@ -115,7 +118,10 @@ pub(crate) async fn invite_player_to_game(
                 .await
                 .map_err(ApiProblem::from_sqlx)?
                 .ok_or_else(|| {
-                    ApiProblem::not_found(format!("No player named '{display_name}'"))
+                    ApiProblem::new(
+                        Reason::PlayerNotFound,
+                        format!("No player named '{display_name}'"),
+                    )
                 })?,
         ),
         None => None,
@@ -125,7 +131,9 @@ pub(crate) async fn invite_player_to_game(
     let inviting_player = persistence::get_player_by_id(&state.db, &inviting_player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     let invitation_id = Uuid::new_v4().to_string();
     let record = persistence::create_invitation(
@@ -203,11 +211,11 @@ pub(crate) async fn list_player_invitations(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<GameInvitationDto>>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to see your invitations"))?;
+    let caller_player_id =
+        require_session(&state, &headers, "Sign in to see your invitations").await?;
     if caller_player_id != player_id {
-        return Err(ApiProblem::forbidden(
+        return Err(ApiProblem::new(
+            Reason::NotYourInvitations,
             "You can only see your own invitations",
         ));
     }
@@ -273,11 +281,11 @@ pub(crate) async fn preview_invitation(
     let invitation = persistence::get_invitation_by_id(&state.db, &invitation_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::not_found("Invitation not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::InvitationNotFound, "Invitation not found"))?;
     let inviter = persistence::get_player_by_id(&state.db, &invitation.inviting_player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::not_found("Invitation not found"))?;
+        .ok_or_else(|| ApiProblem::new(Reason::InvitationNotFound, "Invitation not found"))?;
 
     Ok(Json(api::InvitationPreviewDto {
         inviting_player_display_name: inviter.display_name,
@@ -290,9 +298,8 @@ pub(crate) async fn accept_invitation(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<api::GameStateDto>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to accept an invitation"))?;
+    let caller_player_id =
+        require_session(&state, &headers, "Sign in to accept an invitation").await?;
 
     // Race-safe: for an open invitation, this is where "first to accept
     // wins" is actually decided (an atomic DB update, not a check-then-act
@@ -301,14 +308,16 @@ pub(crate) async fn accept_invitation(
         .await
         .map_err(|error| match error {
             persistence::ClaimInvitationError::NotFound => {
-                ApiProblem::not_found("Invitation not found")
+                ApiProblem::new(Reason::InvitationNotFound, "Invitation not found")
             }
-            persistence::ClaimInvitationError::NoLongerAvailable => ApiProblem::bad_request(
+            persistence::ClaimInvitationError::NoLongerAvailable => ApiProblem::new(
+                Reason::InvitationUnavailable,
                 "This invitation is no longer available — it may already have been claimed",
             ),
-            persistence::ClaimInvitationError::NotYourInvitation => {
-                ApiProblem::forbidden("This invitation was not sent to you")
-            }
+            persistence::ClaimInvitationError::NotYourInvitation => ApiProblem::new(
+                Reason::NotYourInvitation,
+                "This invitation was not sent to you",
+            ),
         })?;
 
     // Needed to fill in the seat's real display name below — an Open
@@ -319,13 +328,15 @@ pub(crate) async fn accept_invitation(
     let claimant = persistence::get_player_by_id(&state.db, &caller_player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?
-        .ok_or_else(|| ApiProblem::unauthorized("Session is invalid or has expired"))?;
+        .ok_or_else(|| {
+            ApiProblem::new(Reason::SessionExpired, "Session is invalid or has expired")
+        })?;
 
     let (mut dto, access) = {
         let mut games = state.games.write().await;
         let game = games
             .get_mut(&record.game_id)
-            .ok_or_else(|| ApiProblem::not_found("Game not found"))?;
+            .ok_or_else(|| ApiProblem::new(Reason::GameNotFound, "Game not found"))?;
         // Through the method, not inline: `claim_seat` bumps `version`, and
         // without that the state change reaches no client at all — not by
         // broadcast, and not by an explicit Refresh either.
@@ -366,9 +377,8 @@ pub(crate) async fn reject_invitation(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, ApiProblem> {
-    let caller_player_id = authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to reject an invitation"))?;
+    let caller_player_id =
+        require_session(&state, &headers, "Sign in to reject an invitation").await?;
 
     let invitations = persistence::get_invitations_for_player(&state.db, &caller_player_id)
         .await
@@ -380,10 +390,11 @@ pub(crate) async fn reject_invitation(
             // Either it doesn't exist, or it's an open invitation with no
             // single invitee — either way, there's nothing for this caller
             // to reject.
-            ApiProblem::not_found("Invitation not found")
+            ApiProblem::new(Reason::InvitationNotFound, "Invitation not found")
         })?;
     if invitation.status != "pending" {
-        return Err(ApiProblem::bad_request(
+        return Err(ApiProblem::new(
+            Reason::InvitationAlreadyAnswered,
             "This invitation has already been responded to",
         ));
     }

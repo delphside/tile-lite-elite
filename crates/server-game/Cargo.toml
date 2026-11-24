@@ -17,9 +17,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "net", "time", "signal"] }
 tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "set-header"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "set-header", "catch-panic"] }
 tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
@@ -41,4 +41,4 @@ anyhow = "1"
 # an interval's first-tick and no-pile-up behaviour without a real clock.
 # Cargo unions this with the main tokio entry above for test builds only, so
 # `test-util` never reaches the image.
-tokio = { version = "1", features = ["test-util"] }
+tokio = { version = "1", features = ["test-util", "io-util"] }

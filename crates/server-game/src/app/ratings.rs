@@ -10,9 +10,7 @@ pub(crate) async fn get_player_stats(
     headers: HeaderMap,
     Path(player_id): Path<String>,
 ) -> Result<Json<api::PlayerStatsDto>, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to view stats"))?;
+    require_session(&state, &headers, "Sign in to view stats").await?;
     let stats = stats::get_subject_stats(&state.db, "player", &player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?;
@@ -24,9 +22,7 @@ pub(crate) async fn get_player_rating_history(
     headers: HeaderMap,
     Path(player_id): Path<String>,
 ) -> Result<Json<Vec<api::RatingPointDto>>, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to view rating history"))?;
+    require_session(&state, &headers, "Sign in to view rating history").await?;
     let history = stats::get_rating_history(&state.db, "player", &player_id)
         .await
         .map_err(ApiProblem::from_sqlx)?;
@@ -41,9 +37,7 @@ pub(crate) async fn get_engine_stats(
     headers: HeaderMap,
     Path(engine_id): Path<String>,
 ) -> Result<Json<api::PlayerStatsDto>, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to view stats"))?;
+    require_session(&state, &headers, "Sign in to view stats").await?;
     let stats = stats::get_subject_stats(&state.db, "engine", &engine_id)
         .await
         .map_err(ApiProblem::from_sqlx)?;
@@ -55,9 +49,7 @@ pub(crate) async fn get_engine_rating_history(
     headers: HeaderMap,
     Path(engine_id): Path<String>,
 ) -> Result<Json<Vec<api::RatingPointDto>>, ApiProblem> {
-    authenticated_player_id(&state, &headers)
-        .await
-        .ok_or_else(|| ApiProblem::unauthorized("Sign in to view rating history"))?;
+    require_session(&state, &headers, "Sign in to view rating history").await?;
     let history = stats::get_rating_history(&state.db, "engine", &engine_id)
         .await
         .map_err(ApiProblem::from_sqlx)?;

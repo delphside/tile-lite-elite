@@ -88,9 +88,15 @@ use serde::{Deserialize, Serialize};
 // row): a sign-in is now required where one was optional, and a request the
 // board or alphabet cannot address is refused as a 400. Old clients still
 // work; a signed-in one sees no difference.
+// 2.17 — an error answers RFC 9457 Problem Details, `application/problem+json`,
+// with `message` kept beside `detail` and a `reason` that classifies it; every
+// response carries `x-request-id`; nine refusals by the application's own rules
+// answer 403 rather than 401, and starting a game or asking for a suggestion
+// without a session answers 401 rather than 403 (docs/4.4.3's *401 against
+// 403*). #606.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 2,
-    minor: 16,
+    minor: 17,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -528,9 +534,302 @@ pub enum GameEventDto {
     GameFinished { game: GameStateDto },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Whose problem an error is, and what to do about it: the programme's
+/// scheme (docs/1.10 *Errors: one scheme for every system*). `Technical`
+/// splits into a *blip*, which a retry may clear, and a *fundamental* error,
+/// which it will not; `Reason::blip` says which.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ErrorType {
+    /// The caller's request: a 4xx other than 401 and 429.
+    Business,
+    /// The service or the credential: 401, 429 and 503.
+    Technical,
+    /// A defect: 500.
+    Unexpected,
+    /// A type this build does not know: a newer server's. Read as a defect,
+    /// since nothing is known of it. Never sent.
+    #[serde(other)]
+    Unknown,
+}
+
+/// **The one classification of a failure.** A refusal names a `Reason`, and
+/// the reason decides its status, its type and whether a retry may clear it;
+/// the body, the `request refused` log line and the admin CLI's exit status
+/// all read `class` and nothing else. A reason is stable and never reused once
+/// shipped. `docs/4.4.3-api-schema.md`'s *Reasons* table lists each one, and
+/// `scripts/develop/check-api-errors.py` keeps the two in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
+pub enum Reason {
+    SignInRequired,
+    SessionExpired,
+    SignInFailed,
+    RegistrationIncomplete,
+    DisplayNameTaken,
+    DisplayNameBlank,
+    EmailBlank,
+    EmailRequired,
+    NewPasswordRequired,
+    CurrentPasswordWrong,
+    NothingToUpdate,
+    ResetLinkInvalid,
+    NotGameCreator,
+    NotYourSeat,
+    NotSeated,
+    NotInGame,
+    NotYourInvitation,
+    NotYourInvitations,
+    AdminLoopbackOnly,
+    GameNotFound,
+    PlayerNotFound,
+    InvitationNotFound,
+    DictionaryNotFound,
+    UnknownVariant,
+    TooFewSeats,
+    SeatClaimMissing,
+    CreatorClaimMisused,
+    MoveTimeLimitOutOfRange,
+    SeatsNotFilled,
+    GameNotWaiting,
+    GameNotActive,
+    GameAlreadyEnded,
+    GameNotOver,
+    NotParticipant,
+    UnknownSeat,
+    SeatNotClaimed,
+    CreatorSeatProtected,
+    SeatAlreadyResigned,
+    NotYourTurn,
+    MoveRefused,
+    ChatEmpty,
+    ChatTooLong,
+    EngineFailed,
+    NoSeatToSuggestFor,
+    InvitationTargetAmbiguous,
+    SeatNotInvitable,
+    SeatInvitationPending,
+    InvitationUnavailable,
+    InvitationAlreadyAnswered,
+    AccountHasGames,
+    AccountSignedIn,
+    UnknownStatusFilter,
+    MalformedRequest,
+    NoSuchRoute,
+    MethodNotAllowed,
+    BodyTooLarge,
+    UnsupportedMediaType,
+    InvalidBody,
+    TooManyRequests,
+    ServiceBusy,
+    Internal,
+    /// A reason a newer server sends, which this build does not know: read by
+    /// its status. The server never sends it.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Reason {
+    /// Every reason the server can send, in the order of `class`.
+    pub const ALL: &'static [Reason] = &[
+        Self::SignInRequired,
+        Self::SessionExpired,
+        Self::SignInFailed,
+        Self::RegistrationIncomplete,
+        Self::DisplayNameTaken,
+        Self::DisplayNameBlank,
+        Self::EmailBlank,
+        Self::EmailRequired,
+        Self::NewPasswordRequired,
+        Self::CurrentPasswordWrong,
+        Self::NothingToUpdate,
+        Self::ResetLinkInvalid,
+        Self::NotGameCreator,
+        Self::NotYourSeat,
+        Self::NotSeated,
+        Self::NotInGame,
+        Self::NotYourInvitation,
+        Self::NotYourInvitations,
+        Self::AdminLoopbackOnly,
+        Self::GameNotFound,
+        Self::PlayerNotFound,
+        Self::InvitationNotFound,
+        Self::DictionaryNotFound,
+        Self::UnknownVariant,
+        Self::TooFewSeats,
+        Self::SeatClaimMissing,
+        Self::CreatorClaimMisused,
+        Self::MoveTimeLimitOutOfRange,
+        Self::SeatsNotFilled,
+        Self::GameNotWaiting,
+        Self::GameNotActive,
+        Self::GameAlreadyEnded,
+        Self::GameNotOver,
+        Self::NotParticipant,
+        Self::UnknownSeat,
+        Self::SeatNotClaimed,
+        Self::CreatorSeatProtected,
+        Self::SeatAlreadyResigned,
+        Self::NotYourTurn,
+        Self::MoveRefused,
+        Self::ChatEmpty,
+        Self::ChatTooLong,
+        Self::EngineFailed,
+        Self::NoSeatToSuggestFor,
+        Self::InvitationTargetAmbiguous,
+        Self::SeatNotInvitable,
+        Self::SeatInvitationPending,
+        Self::InvitationUnavailable,
+        Self::InvitationAlreadyAnswered,
+        Self::AccountHasGames,
+        Self::AccountSignedIn,
+        Self::UnknownStatusFilter,
+        Self::MalformedRequest,
+        Self::NoSuchRoute,
+        Self::MethodNotAllowed,
+        Self::BodyTooLarge,
+        Self::UnsupportedMediaType,
+        Self::InvalidBody,
+        Self::TooManyRequests,
+        Self::ServiceBusy,
+        Self::Internal,
+    ];
+
+    /// **The classification, and the only one**: status, type, blip.
+    const fn class(self) -> (u16, ErrorType, bool) {
+        match self {
+            Self::SignInRequired => (401, ErrorType::Technical, false),
+            Self::SessionExpired => (401, ErrorType::Technical, false),
+            Self::SignInFailed => (400, ErrorType::Business, false),
+            Self::RegistrationIncomplete => (400, ErrorType::Business, false),
+            Self::DisplayNameTaken => (400, ErrorType::Business, false),
+            Self::DisplayNameBlank => (400, ErrorType::Business, false),
+            Self::EmailBlank => (400, ErrorType::Business, false),
+            Self::EmailRequired => (400, ErrorType::Business, false),
+            Self::NewPasswordRequired => (400, ErrorType::Business, false),
+            Self::CurrentPasswordWrong => (400, ErrorType::Business, false),
+            Self::NothingToUpdate => (400, ErrorType::Business, false),
+            Self::ResetLinkInvalid => (400, ErrorType::Business, false),
+            Self::NotGameCreator => (403, ErrorType::Business, false),
+            Self::NotYourSeat => (403, ErrorType::Business, false),
+            Self::NotSeated => (403, ErrorType::Business, false),
+            Self::NotInGame => (403, ErrorType::Business, false),
+            Self::NotYourInvitation => (403, ErrorType::Business, false),
+            Self::NotYourInvitations => (403, ErrorType::Business, false),
+            Self::AdminLoopbackOnly => (403, ErrorType::Business, false),
+            Self::GameNotFound => (404, ErrorType::Business, false),
+            Self::PlayerNotFound => (404, ErrorType::Business, false),
+            Self::InvitationNotFound => (404, ErrorType::Business, false),
+            Self::DictionaryNotFound => (404, ErrorType::Business, false),
+            Self::UnknownVariant => (400, ErrorType::Business, false),
+            Self::TooFewSeats => (400, ErrorType::Business, false),
+            Self::SeatClaimMissing => (400, ErrorType::Business, false),
+            Self::CreatorClaimMisused => (400, ErrorType::Business, false),
+            Self::MoveTimeLimitOutOfRange => (400, ErrorType::Business, false),
+            Self::SeatsNotFilled => (400, ErrorType::Business, false),
+            Self::GameNotWaiting => (400, ErrorType::Business, false),
+            Self::GameNotActive => (400, ErrorType::Business, false),
+            Self::GameAlreadyEnded => (400, ErrorType::Business, false),
+            Self::GameNotOver => (400, ErrorType::Business, false),
+            Self::NotParticipant => (400, ErrorType::Business, false),
+            Self::UnknownSeat => (400, ErrorType::Business, false),
+            Self::SeatNotClaimed => (400, ErrorType::Business, false),
+            Self::CreatorSeatProtected => (400, ErrorType::Business, false),
+            Self::SeatAlreadyResigned => (400, ErrorType::Business, false),
+            Self::NotYourTurn => (400, ErrorType::Business, false),
+            Self::MoveRefused => (400, ErrorType::Business, false),
+            Self::ChatEmpty => (400, ErrorType::Business, false),
+            Self::ChatTooLong => (400, ErrorType::Business, false),
+            Self::EngineFailed => (500, ErrorType::Unexpected, false),
+            Self::NoSeatToSuggestFor => (400, ErrorType::Business, false),
+            Self::InvitationTargetAmbiguous => (400, ErrorType::Business, false),
+            Self::SeatNotInvitable => (400, ErrorType::Business, false),
+            Self::SeatInvitationPending => (400, ErrorType::Business, false),
+            Self::InvitationUnavailable => (400, ErrorType::Business, false),
+            Self::InvitationAlreadyAnswered => (400, ErrorType::Business, false),
+            Self::AccountHasGames => (400, ErrorType::Business, false),
+            Self::AccountSignedIn => (400, ErrorType::Business, false),
+            Self::UnknownStatusFilter => (400, ErrorType::Business, false),
+            Self::MalformedRequest => (400, ErrorType::Business, false),
+            Self::NoSuchRoute => (404, ErrorType::Business, false),
+            Self::MethodNotAllowed => (405, ErrorType::Business, false),
+            Self::BodyTooLarge => (413, ErrorType::Business, false),
+            Self::UnsupportedMediaType => (415, ErrorType::Business, false),
+            Self::InvalidBody => (422, ErrorType::Business, false),
+            Self::TooManyRequests => (429, ErrorType::Technical, true),
+            Self::ServiceBusy => (503, ErrorType::Technical, true),
+            Self::Internal => (500, ErrorType::Unexpected, false),
+            Self::Unknown => (500, ErrorType::Unexpected, false),
+        }
+    }
+
+    /// The HTTP status this reason answers.
+    pub const fn status(self) -> u16 {
+        self.class().0
+    }
+
+    pub const fn error_type(self) -> ErrorType {
+        self.class().1
+    }
+
+    /// `true` for a technical error a retry may clear; `false` for every
+    /// other reason.
+    pub const fn blip(self) -> bool {
+        self.class().2
+    }
+}
+
+/// One value outside a limit the API states, as RFC 9457's extension member
+/// `violations` carries it (docs/1.10 *The result object*).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Violation {
+    /// The request field at fault.
+    pub field: String,
+    /// What was sent: a length in characters, or a number of seconds.
+    pub value: u64,
+    /// The bound it crossed.
+    pub limit: u64,
+    pub reason: Reason,
+}
+
+/// An error body: RFC 9457 Problem Details (`application/problem+json`) with
+/// the scheme's members as extensions, and the old `message` kept beside
+/// `detail` for a client built before 2.17. Every member added at 2.17 is
+/// `#[serde(default)]`, so a body from an older server still reads.
+///
+/// `type` is left out, so it is `about:blank`; `reason` is the machine code.
+/// The body never carries a driver's, a framework's or a panic's words.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ApiError {
+    /// The sentence for the player, as before 2.17. Equal to `detail`.
+    #[serde(default)]
     pub message: String,
+    /// The status's reason phrase (RFC 9457 `title`).
+    #[serde(default)]
+    pub title: String,
+    /// The HTTP status, repeated (RFC 9457 `status`).
+    #[serde(default)]
+    pub status: u16,
+    /// The sentence for the player: what happened and the next step.
+    #[serde(default)]
+    pub detail: String,
+    /// Always `fatal`: a failed request is fatal to that request.
+    #[serde(default)]
+    pub outcome: String,
+    /// docs/1.10's `type`, sent as `error_type` because RFC 9457 owns `type`.
+    #[serde(default)]
+    pub error_type: Option<ErrorType>,
+    /// `true` for a technical blip. Always sent.
+    #[serde(default)]
+    pub blip: bool,
+    #[serde(default)]
+    pub reason: Option<Reason>,
+    #[serde(default)]
+    pub domain: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub violations: Vec<Violation>,
     /// Games standing in the way of whatever was refused, for a client that
     /// wants to show them rather than reprint a sentence about them. Empty
     /// and omitted for every other error, so a client that ignores it sees
@@ -541,6 +840,21 @@ pub struct ApiError {
     /// crate least able to know how it will be read.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocking_games: Vec<AdminGameSummaryDto>,
+    /// This request's ID, as `x-request-id` carries it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<String>,
+}
+
+impl ApiError {
+    /// The sentence to show: `detail`, then `message` for a body from before
+    /// 2.17.
+    pub fn sentence(&self) -> &str {
+        if self.detail.is_empty() {
+            &self.message
+        } else {
+            &self.detail
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -964,5 +1278,111 @@ mod describe_seats_tests {
             ],
         );
         assert_eq!(summary, "Alice 1 vs Bob 2 vs Carol 3");
+    }
+}
+
+#[cfg(test)]
+mod reason_tests {
+    use super::*;
+
+    /// T1: every reason has one status, type and blip, and the status is one
+    /// its type allows (docs/1.10 *The type of an error*).
+    #[test]
+    fn every_reason_is_classified_consistently() {
+        for &reason in Reason::ALL {
+            let status = reason.status();
+            let allowed = match reason.error_type() {
+                ErrorType::Business => {
+                    (400..500).contains(&status) && status != 401 && status != 429
+                }
+                ErrorType::Technical => matches!(status, 401 | 429 | 503),
+                ErrorType::Unexpected | ErrorType::Unknown => status == 500,
+            };
+            assert!(
+                allowed,
+                "{reason:?}: {status} is not allowed for {:?}",
+                reason.error_type()
+            );
+            assert_eq!(
+                reason.blip(),
+                matches!(reason, Reason::TooManyRequests | Reason::ServiceBusy),
+                "{reason:?}: a blip is a 429 or a 503"
+            );
+            if reason.blip() {
+                assert!(matches!(status, 429 | 503));
+            }
+        }
+        assert_eq!(Reason::SignInRequired.status(), 401);
+        assert_eq!(Reason::SessionExpired.error_type(), ErrorType::Technical);
+        assert_eq!(Reason::Internal.error_type(), ErrorType::Unexpected);
+    }
+
+    #[test]
+    fn every_reason_serialises_upper_snake_case_and_reads_back() {
+        for &reason in Reason::ALL {
+            let json = serde_json::to_string(&reason).expect("a reason serialises");
+            let name = json.trim_matches('"');
+            assert!(
+                !name.is_empty()
+                    && name.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+                    && !name.starts_with('_')
+                    && !name.ends_with('_'),
+                "{json}"
+            );
+            assert_eq!(serde_json::from_str::<Reason>(&json).ok(), Some(reason));
+        }
+        assert_eq!(
+            serde_json::to_string(&Reason::NotGameCreator).unwrap(),
+            "\"NOT_GAME_CREATOR\""
+        );
+    }
+
+    #[test]
+    fn an_error_type_this_build_does_not_know_reads_as_unknown() {
+        let kind: ErrorType = serde_json::from_str("\"a_newer_type\"").unwrap();
+        assert_eq!(kind, ErrorType::Unknown);
+        let body: ApiError =
+            serde_json::from_str(r#"{"detail":"d","error_type":"a_newer_type","status":418}"#)
+                .unwrap();
+        assert_eq!(body.error_type, Some(ErrorType::Unknown));
+        assert_eq!(body.sentence(), "d");
+        // The engine's faults are defects, whatever they were once.
+        assert_eq!(Reason::EngineFailed.status(), 500);
+        assert_eq!(Reason::EngineFailed.error_type(), ErrorType::Unexpected);
+    }
+
+    #[test]
+    fn a_reason_this_build_does_not_know_reads_as_unknown() {
+        let reason: Reason = serde_json::from_str("\"A_NEWER_REASON\"").unwrap();
+        assert_eq!(reason, Reason::Unknown);
+        assert!(!Reason::ALL.contains(&Reason::Unknown));
+    }
+
+    /// T11: a body from a server older than 2.17 still reads, and says its
+    /// sentence through `sentence`.
+    #[test]
+    fn an_old_message_only_body_reads() {
+        let old: ApiError = serde_json::from_str(r#"{"message":"Game not found"}"#).unwrap();
+        assert_eq!(old.sentence(), "Game not found");
+        assert_eq!(old.reason, None);
+        assert!(!old.blip);
+        let new: ApiError = serde_json::from_str(
+            r#"{"detail":"d","message":"m","reason":"GAME_NOT_FOUND","error_type":"business","status":404}"#,
+        )
+        .unwrap();
+        assert_eq!(new.sentence(), "d");
+        assert_eq!(new.reason, Some(Reason::GameNotFound));
+    }
+
+    /// T18
+    #[test]
+    fn the_api_version_is_2_17() {
+        assert_eq!(
+            API_VERSION,
+            ApiVersion {
+                major: 2,
+                minor: 17
+            }
+        );
     }
 }
