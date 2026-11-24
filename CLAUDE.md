@@ -21,7 +21,7 @@
 
 ## The session on the web
 
-- The application's own notes issue is #441.
+- The application's own notes issue is #643 *Notes for the local session*.
 
 ## Changes
 
