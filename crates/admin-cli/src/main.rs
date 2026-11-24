@@ -87,6 +87,13 @@ enum Command {
     /// count. Times are UTC, to the second, because the fastest job runs
     /// every five seconds and a stall would hide inside a minute.
     SchedulerHealth,
+    /// What the server has counted of its own symptoms since it started:
+    /// responses by status class and error type, 429s and 503s, caught panics,
+    /// WebSocket handshake failures and latency in buckets.
+    ///
+    /// The numbers only grow until the server restarts, which a new start time
+    /// shows. This is the command the monitoring poller runs, with `--json`.
+    Metrics,
 }
 
 #[derive(Subcommand)]
@@ -176,6 +183,7 @@ fn run() -> i32 {
         Command::Games { action } => run_games(&client, &cli.server, output, action),
         Command::Size => run_size(&client, &cli.server, output),
         Command::SchedulerHealth => run_scheduler_health(&client, &cli.server, output),
+        Command::Metrics => run_metrics(&client, &cli.server, output),
     };
 
     match result {
@@ -444,6 +452,83 @@ fn scheduler_health_rows(rows: &[api::AdminSchedulerJobHealthDto]) -> Vec<Vec<St
                     .unwrap_or_else(|| "never".to_string()),
                 row.errored_last_pass.to_string(),
             ]
+        })
+        .collect()
+}
+
+/// The counters, one row each, then the latency buckets with their bounds.
+fn run_metrics(
+    client: &reqwest::blocking::Client,
+    server: &str,
+    output: Output,
+) -> Result<(), Failure> {
+    let metrics: api::AdminMetricsDto = check_response(
+        client
+            .get(format!("{server}/admin/metrics"))
+            .send()
+            .map_err(fmt_err)?,
+    )?
+    .json()
+    .map_err(fmt_err)?;
+    if output.json {
+        return print_json(&metrics);
+    }
+    println!(
+        "Counted since {} UTC",
+        format_timestamp_seconds(metrics.started_at)
+    );
+    println!();
+    print_table(&["COUNTER", "COUNT"], metrics_counter_rows(&metrics));
+    println!();
+    print_table(
+        &["LATENCY", "COUNT"],
+        metrics_latency_rows(&metrics.latency),
+    );
+    Ok(())
+}
+
+fn metrics_counter_rows(metrics: &api::AdminMetricsDto) -> Vec<Vec<String>> {
+    let responses = &metrics.responses;
+    let errors = &metrics.errors;
+    [
+        ("responses: informational (1xx)", responses.informational),
+        ("responses: success (2xx)", responses.success),
+        ("responses: redirection (3xx)", responses.redirection),
+        ("responses: client error (4xx)", responses.client_error),
+        ("responses: server error (5xx)", responses.server_error),
+        ("errors: business", errors.business),
+        ("errors: technical", errors.technical),
+        ("errors: unexpected", errors.unexpected),
+        ("errors: unclassified", errors.unclassified),
+        ("too many requests (429)", metrics.too_many_requests),
+        ("service unavailable (503)", metrics.service_unavailable),
+        ("panics caught", metrics.panics_caught),
+        (
+            "websocket handshake failures",
+            metrics.websocket_handshake_failures,
+        ),
+    ]
+    .into_iter()
+    .map(|(name, count)| vec![name.to_string(), count.to_string()])
+    .collect()
+}
+
+/// One row per bucket, named by its bounds: `<= 10 ms`, `<= 50 ms` and so on,
+/// then `> 60000 ms` for the one that took longer than every bound.
+fn metrics_latency_rows(latency: &api::AdminLatencyDto) -> Vec<Vec<String>> {
+    latency
+        .counts
+        .iter()
+        .enumerate()
+        .map(|(index, count)| {
+            let name = match latency.bounds_ms.get(index) {
+                Some(bound) => format!("<= {bound} ms"),
+                None => match latency.bounds_ms.last() {
+                    Some(last) => format!("> {last} ms"),
+                    None => "all".to_string(),
+                },
+            };
+            vec![name, count.to_string()]
         })
         .collect()
 }
@@ -875,6 +960,67 @@ mod tests {
             ["expire_overdue_turns", "2026-07-26 13:52:02", "2"]
         );
         assert_eq!(rows[1], ["send_move_time_reminders", "never", "0"]);
+    }
+
+    fn sample_metrics() -> api::AdminMetricsDto {
+        api::AdminMetricsDto {
+            started_at: 1_785_073_922,
+            responses: api::AdminResponseCountsDto {
+                informational: 3,
+                success: 412,
+                redirection: 1,
+                client_error: 9,
+                server_error: 2,
+            },
+            errors: api::AdminErrorTypeCountsDto {
+                business: 6,
+                technical: 3,
+                unexpected: 2,
+                unclassified: 0,
+            },
+            too_many_requests: 1,
+            service_unavailable: 4,
+            panics_caught: 5,
+            websocket_handshake_failures: 7,
+            latency: api::AdminLatencyDto {
+                bounds_ms: vec![10, 50],
+                counts: vec![380, 31, 8],
+            },
+        }
+    }
+
+    /// T14: every counter is printed, each once, under a name, and the start
+    /// time is UTC to the second.
+    #[test]
+    fn metrics_print_each_counter_and_bucket() {
+        let rows = metrics_counter_rows(&sample_metrics());
+        let want: [[&str; 2]; 13] = [
+            ["responses: informational (1xx)", "3"],
+            ["responses: success (2xx)", "412"],
+            ["responses: redirection (3xx)", "1"],
+            ["responses: client error (4xx)", "9"],
+            ["responses: server error (5xx)", "2"],
+            ["errors: business", "6"],
+            ["errors: technical", "3"],
+            ["errors: unexpected", "2"],
+            ["errors: unclassified", "0"],
+            ["too many requests (429)", "1"],
+            ["service unavailable (503)", "4"],
+            ["panics caught", "5"],
+            ["websocket handshake failures", "7"],
+        ];
+        assert_eq!(rows.len(), want.len());
+        for (row, want) in rows.iter().zip(want) {
+            assert_eq!(row, &want);
+        }
+        let latency = metrics_latency_rows(&sample_metrics().latency);
+        assert_eq!(latency[0], ["<= 10 ms", "380"]);
+        assert_eq!(latency[1], ["<= 50 ms", "31"]);
+        assert_eq!(latency[2], ["> 50 ms", "8"]);
+        assert_eq!(
+            format_timestamp_seconds(sample_metrics().started_at),
+            "2026-07-26 13:52:02"
+        );
     }
 
     /// T12: a panic in the tool exits 70, not Rust's 101.

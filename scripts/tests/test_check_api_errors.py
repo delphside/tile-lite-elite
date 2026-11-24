@@ -116,16 +116,16 @@ DOC = """
 
 ### Reasons
 
-| Reason | Status | Type | Blip | What the caller does | What is logged |
-| --- | --- | --- | --- | --- | --- |
-| `SIGN_IN_REQUIRED` | **401** | technical | no | Sign in | a line |
-| `GAME_NOT_FOUND` | **404** | business | no | Nothing | a line |
-| `NOT_YOUR_SEAT` | **403** | business | no | Nothing | a line |
-| `GAME_NOT_WAITING` | **400** | business | no | Fix it | a line |
-| `UNKNOWN_SEAT` | **400** | business | no | Fix it | a line |
-| `NOT_YOUR_TURN` | **400** | business | no | Fix it | a line |
-| `MOVE_REFUSED` | **400** | business | no | Fix it | a line |
-| `INTERNAL` | **500** | unexpected | no | Report it | a line |
+| Reason | Status | Type | Blip | What the caller does | What is logged | Counted in |
+| --- | --- | --- | --- | --- | --- | --- |
+| `SIGN_IN_REQUIRED` | **401** | technical | no | Sign in | a line | `client_error`, `technical` |
+| `GAME_NOT_FOUND` | **404** | business | no | Nothing | a line | `client_error`, `business` |
+| `NOT_YOUR_SEAT` | **403** | business | no | Nothing | a line | `client_error`, `business` |
+| `GAME_NOT_WAITING` | **400** | business | no | Fix it | a line | `client_error`, `business` |
+| `UNKNOWN_SEAT` | **400** | business | no | Fix it | a line | `client_error`, `business` |
+| `NOT_YOUR_TURN` | **400** | business | no | Fix it | a line | `client_error`, `business` |
+| `MOVE_REFUSED` | **400** | business | no | Fix it | a line | `client_error`, `business` |
+| `INTERNAL` | **500** | unexpected | no | Report it | a line | `server_error`, `unexpected` |
 
 | | |
 | --- | --- |
@@ -222,12 +222,12 @@ class CheckApiErrors(Cases):
 
     def test_every_reason_needs_a_row(self):
         """a reason in the enum and not in the Reasons table fails, and so does the reverse"""
-        row = "| `UNKNOWN_SEAT` | **400** | business | no | Fix it | a line |\n"
+        row = "| `UNKNOWN_SEAT` | **400** | business | no | Fix it | a line | `client_error`, `business` |\n"
         status, out = check(DOC.replace(row, ""))
         self.expect("missing row", 1, status)
         self.assertIn("UNKNOWN_SEAT", out)
         self.assertIn("no row in the Reasons table", out)
-        status, out = check(DOC.replace(row, row + "| `GAME_OVER` | **400** | business | no | Fix it | a line |\n"))
+        status, out = check(DOC.replace(row, row + "| `GAME_OVER` | **400** | business | no | Fix it | a line | `client_error`, `business` |\n"))
         self.expect("extra row", 1, status)
         self.assertIn("GAME_OVER, which is not a Reason", out)
         status, out = check(DOC.replace("### Reasons", "### Causes"))
@@ -247,6 +247,41 @@ class CheckApiErrors(Cases):
                 status, out = check(DOC.replace(row, changed))
                 self.expect("exit", 1, status)
                 self.assertIn(expected, out)
+
+    def test_a_reasons_row_says_what_the_layer_counts_it_in(self):
+        """T13 (#609): *Counted in* is what the status and type give, and a row that says otherwise fails"""
+        row = "| `GAME_NOT_FOUND` | **404** | business | no | Nothing | a line | `client_error`, `business` |"
+        self.assertIn(row, DOC)
+        for name, changed, expected in [
+            ("the class", row.replace("`client_error`", "`server_error`"),
+             "counted in `server_error`, `business`, the rule gives `client_error`, `business`"),
+            ("the type", row.replace("`business` |", "`technical` |"),
+             "the rule gives `client_error`, `business`"),
+            ("a 429 apart", row.replace("`business` |", "`business`, `too_many_requests` |"),
+             "the rule gives `client_error`, `business`"),
+            ("nothing", row.replace(" | `client_error`, `business` |", " |"),
+             "is not `REASON`"),
+        ]:
+            with self.subTest(name):
+                status, out = check(DOC.replace(row, changed))
+                self.expect("exit", 1, status)
+                self.assertIn(expected, out)
+        # A 429 and a 503 are counted apart, and no other status is.
+        counted = {
+            (401, "technical"): "`client_error`, `technical`",
+            (429, "technical"): "`client_error`, `technical`, `too_many_requests`",
+            (500, "unexpected"): "`server_error`, `unexpected`",
+            (503, "technical"): "`server_error`, `technical`, `service_unavailable`",
+        }
+        spec = importlib.util.spec_from_file_location("check_api_errors", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for (status, kind), cell in counted.items():
+            self.expect(f"{status}", cell, module.counted_in(status, kind))
+        # And the real 4.4.3 says it for every reason the real enum has.
+        reasons, problems = module.classes(module.API.read_text())
+        self.expect("the real enum", [], problems)
+        self.expect("the real table", [], module.compare_reasons(module.DOC.read_text(), reasons))
 
     def test_the_status_table_carries_the_enums_type(self):
         """the Type column of the status table is the type of every reason answering it"""

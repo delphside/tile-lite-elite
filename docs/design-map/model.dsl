@@ -28,7 +28,7 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                     "artefact" "Caddyfile"
                 }
             }
-            cli = container "Admin CLI" "Administers accounts and games, and reads the database size and scheduler health." "Rust" {
+            cli = container "Admin CLI" "Administers accounts and games, and reads the database size, scheduler health and symptom counters." "Rust" {
                 properties {
                     "artefact" "crates/admin-cli"
                 }
@@ -118,6 +118,11 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
                         "artefact" "crates/server-game/src/persistence.rs"
                     }
                 }
+                metrics = component "Metrics" "Counts every response, by status class and error type, with caught panics, WebSocket handshake failures and latency, in atomics the admin endpoint reads." {
+                    properties {
+                        "artefact" "crates/server-game/src/app/metrics.rs"
+                    }
+                }
                 supportMail = component "Support-mail poller" "Starts the service desk's intake workflow when new support mail arrives." {
                     properties {
                         "artefact" "crates/server-game/src/app/support_mail.rs"
@@ -183,6 +188,8 @@ workspace "Tile Lite Elite" "The design map: the application as it is on main." 
         tle.server.auth -> tle.server.store "reads and writes player, session and password-reset rows"
         tle.server.adminApi -> tle.server.store "reads and writes player, session and game rows, reads the database-size history"
         tle.server.adminApi -> tle.server.scheduler "reads the scheduler's health"
+        tle.server.adminApi -> tle.server.metrics "reads the counters"
+        tle.server.api -> tle.server.metrics "counts every response in"
         tle.server.store -> tle.server.ratings "settles the ratings of a finished game"
         tle.server.games -> tle.server.ratings "attaches ratings to the GameStateDto"
         tle.server.roster -> tle.server.ratings "attaches ratings to the GameStateDto"

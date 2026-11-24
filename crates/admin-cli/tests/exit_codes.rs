@@ -252,3 +252,115 @@ fn a_malformed_server_address_is_a_fundamental_error() {
         .unwrap();
     assert_eq!(admin(dead, &["size"]).status.code(), Some(75));
 }
+
+fn sample_metrics() -> api::AdminMetricsDto {
+    api::AdminMetricsDto {
+        started_at: 1_785_073_922,
+        responses: api::AdminResponseCountsDto {
+            informational: 3,
+            success: 412,
+            redirection: 0,
+            client_error: 9,
+            server_error: 0,
+        },
+        errors: api::AdminErrorTypeCountsDto {
+            business: 6,
+            technical: 3,
+            unexpected: 0,
+            unclassified: 0,
+        },
+        too_many_requests: 1,
+        service_unavailable: 0,
+        panics_caught: 0,
+        websocket_handshake_failures: 2,
+        latency: api::AdminLatencyDto {
+            bounds_ms: vec![10, 50, 100, 250, 500, 1_000, 5_000, 60_000],
+            counts: vec![380, 31, 8, 3, 1, 1, 0, 0, 0],
+        },
+    }
+}
+
+/// T14: `metrics` exits by the reason it is answered with, as every command
+/// does (R9), and says the detail and nothing of reqwest's.
+#[test]
+fn metrics_exits_by_the_reason_it_is_answered_with() {
+    for (reason, expected) in [
+        (Reason::AdminLoopbackOnly, 2),
+        (Reason::ServiceBusy, 75),
+        (Reason::Internal, 70),
+        (Reason::NoSuchRoute, 1),
+    ] {
+        let detail = format!("The detail for {reason:?}.");
+        let address = stub(
+            reason.status(),
+            "application/problem+json",
+            problem_body(reason, &detail),
+        );
+        let output = admin(address, &["metrics"]);
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "{reason:?}: {}",
+            text(&output.stderr)
+        );
+        assert!(text(&output.stderr).contains(&detail));
+        assert!(output.stdout.is_empty(), "{reason:?}: nothing on stdout");
+    }
+    let dead = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    assert_eq!(admin(dead, &["metrics"]).status.code(), Some(75));
+}
+
+/// T14: the table names each counter and bucket with the start time in UTC,
+/// and `--json` prints the DTO unchanged.
+#[test]
+fn metrics_prints_a_table_and_under_json_the_dto() {
+    let dto = sample_metrics();
+    let body = serde_json::to_string(&dto).unwrap();
+    let address = stub(200, "application/json", body);
+
+    let table = admin(address, &["metrics"]);
+    assert_eq!(table.status.code(), Some(0), "{}", text(&table.stderr));
+    let table = text(&table.stdout);
+    assert!(table.contains("2026-07-26 13:52:02 UTC"), "{table}");
+    // Whole rows, name and count, so two swapped labels fail.
+    for (name, count) in [
+        ("responses: informational (1xx)", "3"),
+        ("responses: success (2xx)", "412"),
+        ("responses: redirection (3xx)", "0"),
+        ("responses: client error (4xx)", "9"),
+        ("responses: server error (5xx)", "0"),
+        ("errors: business", "6"),
+        ("errors: technical", "3"),
+        ("errors: unexpected", "0"),
+        ("errors: unclassified", "0"),
+        ("too many requests (429)", "1"),
+        ("service unavailable (503)", "0"),
+        ("panics caught", "0"),
+        ("websocket handshake failures", "2"),
+        ("<= 10 ms", "380"),
+        ("<= 50 ms", "31"),
+        ("<= 100 ms", "8"),
+        ("<= 250 ms", "3"),
+        ("<= 500 ms", "1"),
+        ("<= 1000 ms", "1"),
+        ("<= 5000 ms", "0"),
+        ("<= 60000 ms", "0"),
+        ("> 60000 ms", "0"),
+    ] {
+        let line = table
+            .lines()
+            .find(|line| line.trim_start().starts_with(name))
+            .unwrap_or_else(|| panic!("{name} in {table}"));
+        let cells: Vec<&str> = line.split("  ").filter(|c| !c.trim().is_empty()).collect();
+        assert_eq!((cells[0].trim(), cells[1].trim()), (name, count), "{line}");
+    }
+
+    let json = admin(address, &["--json", "metrics"]);
+    assert_eq!(json.status.code(), Some(0));
+    let printed: api::AdminMetricsDto =
+        serde_json::from_slice(&json.stdout).expect("the DTO on stdout");
+    assert_eq!(printed, dto);
+}

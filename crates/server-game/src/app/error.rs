@@ -241,7 +241,7 @@ impl ApiProblem {
 
     /// Split from `into_response` so a test can make serialising fail, the one
     /// failure inside the error path.
-    fn render(
+    pub(super) fn render(
         self,
         serialize: impl FnOnce(&ApiError) -> Result<Vec<u8>, serde_json::Error>,
     ) -> Response {
@@ -276,9 +276,13 @@ impl ApiProblem {
                 "request refused"
             ),
         }
+        // The reason the response carries, for `metrics::count_response`, which
+        // reads the classification here and never re-derives it from the status.
+        let mut carried = reason;
         let (status, bytes) = match serialize(&self.body()) {
             Ok(bytes) => (self.status(), bytes),
             Err(error) => {
+                carried = Reason::Internal;
                 tracing::error!(%error, request_id = current_request_id(), "an error body did not serialise; answering the fixed one");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -287,6 +291,7 @@ impl ApiProblem {
             }
         };
         let mut response = (status, bytes).into_response();
+        response.extensions_mut().insert(carried);
         response.headers_mut().insert(
             axum::http::header::CONTENT_TYPE,
             axum::http::HeaderValue::from_static(PROBLEM_JSON),
@@ -335,7 +340,11 @@ pub(crate) fn panic_response(panic: Box<dyn std::any::Any + Send + 'static>) -> 
     // panic's text can echo a value (an `unwrap` on a parse of the caller's).
     let words = without_values(&words);
     tracing::error!(panic = %words, request_id = current_request_id(), "a handler panicked");
-    ApiProblem::internal().into_response()
+    let mut response = ApiProblem::internal().into_response();
+    // Counted once as a panic by the layer, and also as the 500 of type
+    // `unexpected` it is.
+    response.extensions_mut().insert(metrics::PanicCaught);
+    response
 }
 
 /// **axum's own rejections answer with the body.** A malformed JSON body, a

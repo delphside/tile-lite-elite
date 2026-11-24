@@ -545,6 +545,63 @@ mod tests {
         }
     }
 
+    /// T3 (#609): the limiter's own refusals, which a layer builds and no handler
+    /// does, are counted as the reason says: a keyed limit's 429 and the floor's
+    /// 503 are `technical`, each in its own counter, and none is `unclassified`.
+    #[tokio::test]
+    async fn the_limiters_refusals_are_counted_by_their_reason() {
+        for (refuse, status, own_429) in [
+            (
+                keyed_refusal as fn(u32) -> ApiProblem,
+                StatusCode::TOO_MANY_REQUESTS,
+                true,
+            ),
+            (
+                floor_refusal as fn(u32) -> ApiProblem,
+                StatusCode::SERVICE_UNAVAILABLE,
+                false,
+            ),
+        ] {
+            let config = GovernorConfigBuilder::default()
+                .period(std::time::Duration::from_millis(3000))
+                .burst_size(1)
+                .key_extractor(ClientAddress)
+                .finish()
+                .expect("a valid config");
+            // The limited route is merged into the production router, so the
+            // refusal passes through every layer production has, the counting
+            // one included.
+            let state =
+                crate::app::tests::create_test_state(&crate::app::tests::test_database_url()).await;
+            let metrics = state.metrics.clone();
+            let limited = Router::new().route("/", get(|| async { "ok" })).layer(
+                GovernorLayer::new(std::sync::Arc::new(config))
+                    .error_handler(move |error| refusal(error, refuse)),
+            );
+            let app = crate::app::build_router_with(state, limited);
+
+            let served = app
+                .clone()
+                .oneshot(forwarded("203.0.113.41"))
+                .await
+                .unwrap();
+            assert_eq!(served.status(), StatusCode::OK);
+            let refused = app.oneshot(forwarded("203.0.113.41")).await.unwrap();
+            assert_eq!(refused.status(), status);
+
+            let counted = metrics.snapshot();
+            assert_eq!(counted.responses.success, 1);
+            assert_eq!(
+                counted.responses.client_error + counted.responses.server_error,
+                1
+            );
+            assert_eq!(counted.errors.technical, 1);
+            assert_eq!(counted.errors.unclassified, 0);
+            assert_eq!(counted.too_many_requests, u64::from(own_429));
+            assert_eq!(counted.service_unavailable, u64::from(!own_429));
+        }
+    }
+
     /// The key is the caller Caddy reports, not the proxy that relayed it —
     /// otherwise every request on the internet shares one bucket and the
     /// first abuser locks out everyone.

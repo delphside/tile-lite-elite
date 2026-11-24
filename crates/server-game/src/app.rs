@@ -46,6 +46,7 @@ pub(crate) mod error;
 mod events;
 mod games;
 mod invitations;
+mod metrics;
 mod ratings;
 mod roster;
 mod routes;
@@ -62,6 +63,8 @@ mod tests_account_lifecycle;
 mod tests_errors;
 #[cfg(test)]
 mod tests_hardening;
+#[cfg(test)]
+mod tests_metrics;
 #[cfg(test)]
 mod tests_routes;
 mod throttle;
@@ -134,6 +137,11 @@ pub struct AppState {
     /// The service desk's mail poller (`support_mail.rs`). `None` when its
     /// two settings are not both present, and then its job is not scheduled.
     pub(crate) support_mail: Option<Arc<support_mail::SupportMail>>,
+    /// What the server has counted of its own symptoms since this state was
+    /// made (#402 R3): written by `metrics::count_response`, read by
+    /// `admin_metrics`. In the state and not a `static`, so each test has its
+    /// own.
+    pub(crate) metrics: Arc<metrics::Metrics>,
 }
 
 /// Read a concurrency limit from the environment, falling back to a default
@@ -197,6 +205,7 @@ impl AppState {
             engine_limit,
             scheduler_health: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             support_mail: None,
+            metrics: Arc::new(metrics::Metrics::new()),
         })
     }
 
@@ -300,6 +309,14 @@ fn build_router_with(state: AppState, extra: Router<AppState>) -> Router {
         // through individual handlers below are for the *why* on top of it
         // (which player, which game, why a request was rejected).
         .layer(TraceLayer::new_for_http())
+        // Counts the response the caller will see: outside the panic layer and
+        // the rewrite, so a panic's 500, axum's rewritten 400 and a CORS
+        // preflight's answer are all counted, and inside the request ID, which
+        // it does not need (#402 R3).
+        .layer(middleware::from_fn_with_state(
+            state.metrics.clone(),
+            metrics::count_response,
+        ))
         // Outermost, so that every layer above and every response, a CORS
         // preflight and a panic's 500 included, runs inside the request's ID.
         .layer(middleware::from_fn(request_id_layer))
