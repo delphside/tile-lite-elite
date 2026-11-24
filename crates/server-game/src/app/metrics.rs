@@ -21,7 +21,7 @@ use axum::extract::MatchedPath;
 use super::*;
 
 /// **The upper bounds of the latency histogram, in milliseconds**, inclusive
-/// and ascending: nine buckets with the overflow one. A product setting held in
+/// and ascending: one bucket per bound and one for the overflow. A product setting held in
 /// this one module (docs/1.10), listed in 4.4.1's *Server timings held in
 /// code*, with where each number comes from. Moving one is a code change and a
 /// release, and the body carries the bounds so a reader is never told wrong.
@@ -75,7 +75,7 @@ pub(crate) struct Observed {
 }
 
 /// The counters: five classes, four types, two statuses, the panics, the
-/// handshakes and nine buckets, 22 in all.
+/// handshakes and one latency bucket per bound with one for the overflow.
 #[derive(Debug)]
 pub(crate) struct Metrics {
     started_at: i64,

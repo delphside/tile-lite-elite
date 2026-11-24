@@ -994,13 +994,25 @@ mod tests {
     #[test]
     fn metrics_print_each_counter_and_bucket() {
         let rows = metrics_counter_rows(&sample_metrics());
-        let counts: Vec<&str> = rows.iter().map(|row| row[1].as_str()).collect();
-        assert_eq!(
-            counts,
-            [
-                "3", "412", "1", "9", "2", "6", "3", "2", "0", "1", "4", "5", "7"
-            ]
-        );
+        let want: [[&str; 2]; 13] = [
+            ["responses: informational (1xx)", "3"],
+            ["responses: success (2xx)", "412"],
+            ["responses: redirection (3xx)", "1"],
+            ["responses: client error (4xx)", "9"],
+            ["responses: server error (5xx)", "2"],
+            ["errors: business", "6"],
+            ["errors: technical", "3"],
+            ["errors: unexpected", "2"],
+            ["errors: unclassified", "0"],
+            ["too many requests (429)", "1"],
+            ["service unavailable (503)", "4"],
+            ["panics caught", "5"],
+            ["websocket handshake failures", "7"],
+        ];
+        assert_eq!(rows.len(), want.len());
+        for (row, want) in rows.iter().zip(want) {
+            assert_eq!(row, &want);
+        }
         let latency = metrics_latency_rows(&sample_metrics().latency);
         assert_eq!(latency[0], ["<= 10 ms", "380"]);
         assert_eq!(latency[1], ["<= 50 ms", "31"]);

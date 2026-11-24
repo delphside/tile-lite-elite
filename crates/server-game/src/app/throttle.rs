@@ -568,17 +568,17 @@ mod tests {
                 .key_extractor(ClientAddress)
                 .finish()
                 .expect("a valid config");
-            let metrics = std::sync::Arc::new(crate::app::metrics::Metrics::new());
-            let app = Router::new()
-                .route("/", get(|| async { "ok" }))
-                .layer(
-                    GovernorLayer::new(std::sync::Arc::new(config))
-                        .error_handler(move |error| refusal(error, refuse)),
-                )
-                .layer(axum::middleware::from_fn_with_state(
-                    metrics.clone(),
-                    crate::app::metrics::count_response,
-                ));
+            // The limited route is merged into the production router, so the
+            // refusal passes through every layer production has, the counting
+            // one included.
+            let state =
+                crate::app::tests::create_test_state(&crate::app::tests::test_database_url()).await;
+            let metrics = state.metrics.clone();
+            let limited = Router::new().route("/", get(|| async { "ok" })).layer(
+                GovernorLayer::new(std::sync::Arc::new(config))
+                    .error_handler(move |error| refusal(error, refuse)),
+            );
+            let app = crate::app::build_router_with(state, limited);
 
             let served = app
                 .clone()

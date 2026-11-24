@@ -325,18 +325,37 @@ fn metrics_prints_a_table_and_under_json_the_dto() {
     assert_eq!(table.status.code(), Some(0), "{}", text(&table.stderr));
     let table = text(&table.stdout);
     assert!(table.contains("2026-07-26 13:52:02 UTC"), "{table}");
-    for name in [
-        "client error (4xx)",
-        "errors: business",
-        "too many requests (429)",
-        "service unavailable (503)",
-        "panics caught",
-        "websocket handshake failures",
-        "<= 10 ms",
-        "<= 60000 ms",
-        "> 60000 ms",
+    // Whole rows, name and count, so two swapped labels fail.
+    for (name, count) in [
+        ("responses: informational (1xx)", "3"),
+        ("responses: success (2xx)", "412"),
+        ("responses: redirection (3xx)", "0"),
+        ("responses: client error (4xx)", "9"),
+        ("responses: server error (5xx)", "0"),
+        ("errors: business", "6"),
+        ("errors: technical", "3"),
+        ("errors: unexpected", "0"),
+        ("errors: unclassified", "0"),
+        ("too many requests (429)", "1"),
+        ("service unavailable (503)", "0"),
+        ("panics caught", "0"),
+        ("websocket handshake failures", "2"),
+        ("<= 10 ms", "380"),
+        ("<= 50 ms", "31"),
+        ("<= 100 ms", "8"),
+        ("<= 250 ms", "3"),
+        ("<= 500 ms", "1"),
+        ("<= 1000 ms", "1"),
+        ("<= 5000 ms", "0"),
+        ("<= 60000 ms", "0"),
+        ("> 60000 ms", "0"),
     ] {
-        assert!(table.contains(name), "{name} in {table}");
+        let line = table
+            .lines()
+            .find(|line| line.trim_start().starts_with(name))
+            .unwrap_or_else(|| panic!("{name} in {table}"));
+        let cells: Vec<&str> = line.split("  ").filter(|c| !c.trim().is_empty()).collect();
+        assert_eq!((cells[0].trim(), cells[1].trim()), (name, count), "{line}");
     }
 
     let json = admin(address, &["--json", "metrics"]);
